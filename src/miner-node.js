@@ -21,6 +21,7 @@ import { SimpleGossip } from './network/gossip.js';
 import { validateResultWork } from './validation/result-validator.js';
 import { calculateBlockRewards, BLOCK_REWARD_POH, POH_DECIMALS } from './rewards/reward.js';
 import { computeVerdictWithExistingPoh } from './compute/poh-adapter.js';
+import { getBrain, getBrainDataDir } from './compute/adapters/real-poh.js';
 import fs from 'fs';
 import path from 'path';
 import { ChainStore } from './storage/chain-store.js';
@@ -32,7 +33,8 @@ import { resolveRpcConfig } from './rpc/resolver.js';
 // Well-known production bootnodes. Used when no bootnodes are configured
 // (e.g. fresh GUI onboarding). Individual users can override via config.bootnodes.
 const DEFAULT_BOOTNODES = [
-  'https://bootnode.proofofhuman.ge',
+  // 'https://bootnode.proofofhuman.ge',
+  'http://localhost:8080'
 ];
 
 export class PohMinerNode {
@@ -543,6 +545,125 @@ export class PohMinerNode {
         }));
       }
 
+      // ── Ollama chat/generate proxy (/api/chat, /api/generate, /api/models) ──
+      // Lets developers talk directly to the miner's local LLM.
+      const ollamaBase = this.config.ollamaUrl || 'http://localhost:11434';
+      const ollamaProxyPaths = ['/api/chat', '/api/generate', '/api/embeddings'];
+      const isOllamaProxy = ollamaProxyPaths.includes(url.pathname) ||
+        url.pathname === '/api/models';
+
+      if (isOllamaProxy) {
+        const targetPath = url.pathname === '/api/models'
+          ? '/api/tags'
+          : url.pathname;
+        const targetUrl = new URL(targetPath, ollamaBase);
+        const proxyReq = http.request({
+          hostname: targetUrl.hostname,
+          port: parseInt(targetUrl.port) || 11434,
+          path: targetUrl.pathname + (targetUrl.search || ''),
+          method: req.method,
+          headers: { 'Content-Type': 'application/json' },
+        }, (proxyRes) => {
+          res.removeHeader('Content-Type');
+          Object.entries(proxyRes.headers).forEach(([k, v]) => res.setHeader(k, v));
+          res.statusCode = proxyRes.statusCode;
+          proxyRes.pipe(res);
+        });
+        proxyReq.on('error', (e) => {
+          res.statusCode = 502;
+          res.setHeader('Content-Type', 'application/json');
+          res.end(JSON.stringify({ error: 'Ollama unavailable: ' + e.message }));
+        });
+        req.pipe(proxyReq);
+        return;
+      }
+
+      // ── Brain state API (/api/brain/*) ────────────────────────────────────────
+      if (url.pathname === '/api/brain/state') {
+        const brainDir = getBrainDataDir();
+        try {
+          const weights = brainDir && fs.existsSync(path.join(brainDir, 'weights.json'))
+            ? JSON.parse(fs.readFileSync(path.join(brainDir, 'weights.json'), 'utf8'))
+            : {};
+          const feedbackCount = brainDir && fs.existsSync(path.join(brainDir, 'feedback.json'))
+            ? JSON.parse(fs.readFileSync(path.join(brainDir, 'feedback.json'), 'utf8')).length
+            : 0;
+          const stateSummary = brainDir && fs.existsSync(path.join(brainDir, 'brain_state.md'))
+            ? fs.readFileSync(path.join(brainDir, 'brain_state.md'), 'utf8').slice(0, 2000)
+            : '';
+          return res.end(JSON.stringify({
+            dataDir: brainDir,
+            weightsCount: Object.keys(weights).length,
+            feedbackCount,
+            stateSummary,
+            model: this.config.model || process.env.OLLAMA_MODEL || 'qwen2.5:1.5b',
+            ollamaUrl: ollamaBase,
+          }));
+        } catch (e) {
+          res.statusCode = 500;
+          return res.end(JSON.stringify({ error: e.message }));
+        }
+      }
+
+      if (req.method === 'GET' && url.pathname === '/api/brain/weights') {
+        const brainDir = getBrainDataDir();
+        const weightsPath = brainDir && path.join(brainDir, 'weights.json');
+        if (weightsPath && fs.existsSync(weightsPath)) {
+          return res.end(fs.readFileSync(weightsPath));
+        }
+        return res.end(JSON.stringify({}));
+      }
+
+      if (req.method === 'POST' && url.pathname === '/api/brain/feedback') {
+        let body = '';
+        req.on('data', c => body += c);
+        req.on('end', async () => {
+          try {
+            const { address, aiVerdict, correction, comment, signals } = JSON.parse(body);
+            if (!address || !aiVerdict || !correction) {
+              res.statusCode = 400;
+              return res.end(JSON.stringify({ error: 'address, aiVerdict, correction required' }));
+            }
+            const b = await getBrain();
+            if (b && typeof b.onVerdictFeedback === 'function') {
+              await b.onVerdictFeedback(address, aiVerdict, correction, comment || '', signals || []);
+              return res.end(JSON.stringify({ ok: true }));
+            }
+            res.statusCode = 503;
+            res.end(JSON.stringify({ error: 'Brain not loaded' }));
+          } catch (e) {
+            res.statusCode = 500;
+            res.end(JSON.stringify({ error: e.message }));
+          }
+        });
+        return;
+      }
+
+      if (req.method === 'POST' && url.pathname === '/api/brain/vote') {
+        let body = '';
+        req.on('data', c => body += c);
+        req.on('end', async () => {
+          try {
+            const { method, voteType, vote, stakeWeight, feedback } = JSON.parse(body);
+            if (!method || !voteType || !vote) {
+              res.statusCode = 400;
+              return res.end(JSON.stringify({ error: 'method, voteType, vote required' }));
+            }
+            const b = await getBrain();
+            if (b && typeof b.onVote === 'function') {
+              await b.onVote(method, voteType, vote, stakeWeight || 1, feedback || null);
+              return res.end(JSON.stringify({ ok: true }));
+            }
+            res.statusCode = 503;
+            res.end(JSON.stringify({ error: 'Brain not loaded' }));
+          } catch (e) {
+            res.statusCode = 500;
+            res.end(JSON.stringify({ error: e.message }));
+          }
+        });
+        return;
+      }
+
       res.statusCode = 404;
       res.end(JSON.stringify({ error: 'Not found' }));
     });
@@ -562,10 +683,17 @@ export class PohMinerNode {
     server.listen(port, () => {
       console.log(`[PoH-Miner] Wallet API listening on http://localhost:${port}`);
       console.log(`   Wallet: curl "http://localhost:${port}/api/wallet/balance?address=${this.config.wallet}"`);
-      console.log(`   Submit search/verdict job (new flow): curl -X POST http://localhost:${port}/job -d '{"payload":{"address":"bc1q..."}}'`);
+      console.log(`   Submit job: curl -X POST http://localhost:${port}/job -d '{"payload":{"address":"bc1q..."}}'`);
       console.log(`   Check status: curl http://localhost:${port}/job/<jobId>/status`);
-      console.log(`   Get verdict+profile+evidence: curl http://localhost:${port}/job/<jobId>/result`);
+      console.log(`   Verdict+profile: curl http://localhost:${port}/job/<jobId>/result`);
       console.log(`   Node info: curl http://localhost:${port}/status`);
+      console.log(`   Ollama chat: POST http://localhost:${port}/api/chat`);
+      console.log(`   Ollama generate: POST http://localhost:${port}/api/generate`);
+      console.log(`   Models: GET http://localhost:${port}/api/models`);
+      console.log(`   Brain state: GET http://localhost:${port}/api/brain/state`);
+      console.log(`   Brain weights: GET http://localhost:${port}/api/brain/weights`);
+      console.log(`   Brain feedback: POST http://localhost:${port}/api/brain/feedback`);
+      console.log(`   Brain vote: POST http://localhost:${port}/api/brain/vote`);
       console.log(`   (legacy still works: /test/job )`);
     });
 
