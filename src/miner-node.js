@@ -693,18 +693,24 @@ export class PohMinerNode {
       registerPayload.signature = this.identityWallet.sign(toSign);
     }
 
-    console.log('[PoH-Miner] Registering with bootnodes for peer discovery (with node proof)...');
+    console.log(`[PoH-Miner] Registering with bootnode(s): ${this.config.bootnodes.join(', ')}`);
+    console.log(`[PoH-Miner] Register payload: wallet=${registerPayload.wallet} host=${registerPayload.host} signed=${!!registerPayload.signature}`);
 
     for (const bootnode of this.config.bootnodes) {
       const base = bootnode.endsWith('/') ? bootnode : bootnode + '/';
 
       try {
-        // Register ourselves (now with signature proof)
-        await fetch(`${base}register`, {
+        const regRes = await fetch(`${base}register`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(registerPayload),
         });
+        const regBody = await regRes.json().catch(() => ({}));
+        if (!regRes.ok) {
+          console.warn(`[PoH-Miner] Bootnode rejected registration (${regRes.status}): ${regBody.error || JSON.stringify(regBody)}`);
+        } else {
+          console.log(`[PoH-Miner] Registered with bootnode ${bootnode} — ${regBody.peersKnown ?? '?'} peers known`);
+        }
 
         // Fetch current peer list
         const res = await fetch(`${base}peers`);
@@ -745,7 +751,7 @@ export class PohMinerNode {
     console.log('[PoH-Miner] Connecting to network...');
 
     if (this.config.bootnodes?.length > 0) {
-      console.log(`[PoH-Miner] Configured with ${this.config.bootnodes.length} bootnode(s)`);
+      console.log(`[PoH-Miner] Bootnodes: ${JSON.stringify(this.config.bootnodes)}`);
 
       await this.discoverAndRegisterWithBootnodes();
 

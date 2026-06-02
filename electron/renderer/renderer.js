@@ -42,10 +42,13 @@ function updateStatus(status) {
     if (pohAddrEl) pohAddrEl.textContent = addr;
   }
 
-  if (typeof status.pohBalance === 'number' && pohBalEl) {
-    pohBalEl.textContent = status.pohBalance + ' POH';
-  } else if (typeof status.balance === 'number' && pohBalEl) {
-    pohBalEl.textContent = status.balance.toFixed(0) + ' POH';
+  const POH_DECIMALS = 1_000_000_000;
+  const rawBal = typeof status.pohBalance === 'number' ? status.pohBalance
+               : typeof status.balance === 'number'    ? status.balance
+               : null;
+  if (rawBal !== null && pohBalEl) {
+    const poh = rawBal / POH_DECIMALS;
+    pohBalEl.textContent = poh.toFixed(poh < 1 ? 4 : 2) + ' POH';
   }
 
   // Solana identity
@@ -58,8 +61,8 @@ function updateStatus(status) {
   const walletAddressEl = document.getElementById('wallet-address');
   const walletBalanceEl = document.getElementById('wallet-balance');
   if (walletAddressEl && status.wallet) walletAddressEl.textContent = status.wallet;
-  if (walletBalanceEl && typeof status.balance === 'number') {
-    walletBalanceEl.textContent = status.balance.toFixed(2) + ' POH';
+  if (walletBalanceEl && rawBal !== null) {
+    walletBalanceEl.textContent = (rawBal / POH_DECIMALS).toFixed(4) + ' POH';
   }
 
   if (typeof status.chainHeight === 'number') {
@@ -108,6 +111,17 @@ if (window.pohMinerAPI) {
         onboardingDiv.classList.remove('hidden');
         showOnboardingStep('welcome');
       }
+    });
+  }
+
+  // Listen for command from main process (authoritative) to show the main miner UI
+  if (window.pohMinerAPI?.onShowMainApp) {
+    window.pohMinerAPI.onShowMainApp(() => {
+      console.log('[Onboarding] Received show-main-app from main process');
+      const onboardingDiv = document.getElementById('onboarding');
+      const mainAppDiv = document.getElementById('main-app');
+      if (onboardingDiv) onboardingDiv.classList.add('hidden');
+      if (mainAppDiv) mainAppDiv.classList.remove('hidden');
     });
   }
 
@@ -358,12 +372,12 @@ async function checkAndStartOnboarding() {
 
     console.log('[Onboarding] Status check:', status);
 
-    if (status.hasPohWallet) {
-      // User already has a PoH wallet on disk or in config.
-      // Consider the wallet creation step done.
-      // For a smoother experience, go straight to main app.
+    if (status.onboarded || status.hasPohWallet) {
+      // User already has a PoH wallet on disk or in config, or onboarding was completed.
+      // Go straight to main app.
       // (Solana address and RPC can still be configured later in Settings)
       if (mainAppDiv) mainAppDiv.classList.remove('hidden');
+      if (onboardingDiv) onboardingDiv.classList.add('hidden');
 
       // Make sure the miner is running
       if (window.pohMinerAPI?.miner?.start) {
@@ -372,7 +386,7 @@ async function checkAndStartOnboarding() {
       return;
     }
 
-    // No PoH wallet yet → show the full onboarding wizard
+    // No PoH wallet yet and not marked onboarded → show the full onboarding wizard
     if (onboardingDiv) {
       onboardingDiv.classList.remove('hidden');
       showOnboardingStep('welcome');
@@ -396,6 +410,9 @@ function showOnboardingStep(step) {
 
 window.goToStep = function(step) {
   showOnboardingStep(step);
+  if (step === 'evm') initOnboardEvmStep();
+  else if (step === 'solana-rpc') initOnboardSolanaRpcStep();
+  else if (step === 'other-chains') initOnboardOtherChainsStep();
 };
 
 window.createPohWallet = async function() {
@@ -463,29 +480,20 @@ window.saveSolanaAndContinue = function() {
     return;
   }
   currentOnboardingData.solanaAddress = input;
-  goToStep('rpc');
+  goToStep('etherscan');
 };
 
 window.completeOnboarding = async function() {
-  const etherscan = document.getElementById('onboard-etherscan')?.value.trim() || '';
-  const solanaRpc = document.getElementById('onboard-solana-rpc')?.value.trim() || '';
-
   const payload = {
     pohWallet: currentOnboardingData.pohWallet,
     solanaAddress: currentOnboardingData.solanaAddress,
-    etherscanApiKey: etherscan,
-    // You can expand rpc config here later
   };
 
   await window.pohMinerAPI.onboarding.complete(payload);
 
-  // Cleanest way to exit onboarding without double-start races:
-  // Reload the window so main process re-evaluates isOnboarded with the fresh config
-  // and starts the miner cleanly (protected by the new guard).
   try {
     window.location.reload();
   } catch (e) {
-    // Fallback (should rarely happen)
     document.getElementById('onboarding').classList.add('hidden');
     document.getElementById('main-app').classList.remove('hidden');
     try {
@@ -495,13 +503,322 @@ window.completeOnboarding = async function() {
 };
 
 window.openFullRpcSettings = function() {
-  // Close onboarding temporarily and show main app so user can use the full RPC panel
   document.getElementById('onboarding').classList.add('hidden');
   document.getElementById('main-app').classList.remove('hidden');
-  
-  // Scroll to RPC section in sidebar
-  const rpcSection = document.querySelector('.sidebar');
-  if (rpcSection) rpcSection.scrollIntoView({ behavior: 'smooth' });
+  if (typeof showSettings === 'function') {
+    showSettings();
+  }
+};
+
+// =====================================================
+// Onboarding Step: Etherscan API Key
+// =====================================================
+
+window.saveEtherscanAndContinue = async function() {
+  const key = document.getElementById('ob-etherscan-key')?.value.trim() || '';
+  const statusEl = document.getElementById('ob-etherscan-status');
+
+  if (key && window.pohMinerAPI?.rpc?.saveEtherscanKey) {
+    try {
+      await window.pohMinerAPI.rpc.saveEtherscanKey(key);
+      if (statusEl) { statusEl.textContent = 'Key saved.'; statusEl.style.color = '#22c55e'; }
+    } catch (err) {
+      if (statusEl) { statusEl.textContent = 'Failed to save key — try again.'; statusEl.style.color = '#f87171'; }
+      return;
+    }
+  }
+
+  goToStep('evm');
+};
+
+// =====================================================
+// Onboarding Step: EVM Provider
+// =====================================================
+
+async function initOnboardEvmStep() {
+  if (window._obEvmInited) return;
+  window._obEvmInited = true;
+
+  if (!window.pohMinerAPI?.rpc) return;
+
+  const netSel = document.getElementById('ob-evm-network');
+  const provSel = document.getElementById('ob-evm-provider');
+  const apiKeyIn = document.getElementById('ob-evm-apikey');
+  const previewEl = document.getElementById('ob-evm-preview');
+  const saveBtn = document.getElementById('ob-evm-save-btn');
+  const bulkBtn = document.getElementById('ob-evm-bulk-btn');
+  const statusEl = document.getElementById('ob-evm-status');
+
+  try {
+    const grouped = await window.pohMinerAPI.rpc.getNetworksGrouped();
+    const evmNets = grouped['EVM'] || [];
+
+    netSel.innerHTML = '<option value="">Select EVM network...</option>';
+    evmNets.forEach(net => {
+      const opt = document.createElement('option');
+      opt.value = net.id;
+      opt.textContent = net.label;
+      netSel.appendChild(opt);
+    });
+
+    netSel.addEventListener('change', async () => {
+      const networkId = netSel.value;
+      provSel.innerHTML = '<option value="">Loading...</option>';
+      provSel.disabled = true;
+      previewEl.textContent = '';
+      statusEl.textContent = '';
+
+      if (!networkId) {
+        provSel.innerHTML = '<option value="">Select network first</option>';
+        updateObEvmBulkBtn();
+        return;
+      }
+
+      const providers = await window.pohMinerAPI.rpc.getProvidersForNetwork(networkId);
+      provSel.innerHTML = '<option value="">Select provider...</option>';
+      providers.forEach(p => {
+        const opt = document.createElement('option');
+        opt.value = p.id;
+        opt.textContent = p.name + (p.description ? ` — ${p.description}` : '');
+        provSel.appendChild(opt);
+      });
+      provSel.disabled = false;
+      updateObEvmBulkBtn();
+    });
+
+    provSel.addEventListener('change', () => { updateObEvmPreview(); updateObEvmBulkBtn(); });
+    apiKeyIn.addEventListener('input', updateObEvmPreview);
+    saveBtn.addEventListener('click', saveObEvmNetwork);
+    bulkBtn.addEventListener('click', bulkObEvmApply);
+
+  } catch (err) {
+    console.error('Failed to init onboard EVM step:', err);
+  }
+
+  async function updateObEvmPreview() {
+    const networkId = netSel.value;
+    const providerId = provSel.value;
+    const apiKey = apiKeyIn.value.trim();
+    previewEl.textContent = '';
+    if (!networkId || !providerId || !apiKey) return;
+    try {
+      const url = await window.pohMinerAPI.rpc.previewUrl({ networkId, providerId, apiKey });
+      if (url) previewEl.innerHTML = `<span style="color:#666">Preview:</span> <span style="color:#22c55e">${url}</span>`;
+    } catch {}
+  }
+
+  function updateObEvmBulkBtn() {
+    const evmFriendly = ['alchemy', 'quicknode', 'ankr', 'getblock'];
+    bulkBtn.disabled = !evmFriendly.includes(provSel.value);
+    bulkBtn.style.opacity = bulkBtn.disabled ? '0.4' : '1';
+  }
+
+  async function saveObEvmNetwork() {
+    const networkId = netSel.value;
+    const provider = provSel.value;
+    const apiKey = apiKeyIn.value.trim();
+
+    if (!networkId || !provider || !apiKey) {
+      statusEl.textContent = 'Select network, provider and enter key';
+      statusEl.style.color = '#f87171';
+      return;
+    }
+
+    statusEl.textContent = 'Saving...';
+    statusEl.style.color = '#888';
+
+    try {
+      await window.pohMinerAPI.rpc.saveNetworkConfig({ networkId, provider, apiKey });
+      const netLabel = netSel.options[netSel.selectedIndex].text;
+      statusEl.textContent = `Saved: ${netLabel} → ${provider}`;
+      statusEl.style.color = '#22c55e';
+      apiKeyIn.value = '';
+      previewEl.textContent = '';
+    } catch (err) {
+      statusEl.textContent = 'Save failed: ' + err.message;
+      statusEl.style.color = '#f87171';
+    }
+  }
+
+  async function bulkObEvmApply() {
+    const provider = provSel.value;
+    const apiKey = apiKeyIn.value.trim();
+    if (!provider || !apiKey) {
+      statusEl.textContent = 'Select provider and enter key first';
+      statusEl.style.color = '#f87171';
+      return;
+    }
+    if (!confirm('Apply this provider + key to ALL EVM chains?')) return;
+
+    statusEl.textContent = 'Applying to all EVM chains...';
+    statusEl.style.color = '#888';
+
+    try {
+      const result = await window.pohMinerAPI.rpc.bulkApplyEvm({ provider, apiKey });
+      statusEl.textContent = `Applied to ${result.appliedTo} EVM chains`;
+      statusEl.style.color = '#22c55e';
+      apiKeyIn.value = '';
+      previewEl.textContent = '';
+    } catch (err) {
+      statusEl.textContent = 'Failed: ' + err.message;
+      statusEl.style.color = '#f87171';
+    }
+  }
+}
+
+// =====================================================
+// Onboarding Step: Solana RPC Provider
+// =====================================================
+
+async function initOnboardSolanaRpcStep() {
+  if (window._obSolRpcInited) return;
+  window._obSolRpcInited = true;
+
+  if (!window.pohMinerAPI?.rpc) return;
+
+  const provSel = document.getElementById('ob-sol-provider');
+  const apiKeyIn = document.getElementById('ob-sol-apikey');
+  const previewEl = document.getElementById('ob-sol-preview');
+  const saveBtn = document.getElementById('ob-sol-save-btn');
+  const statusEl = document.getElementById('ob-sol-status');
+
+  try {
+    const providers = await window.pohMinerAPI.rpc.getProvidersForNetwork('solana');
+    provSel.innerHTML = '<option value="">Select provider...</option>';
+    providers.forEach(p => {
+      const opt = document.createElement('option');
+      opt.value = p.id;
+      opt.textContent = p.name + (p.description ? ` — ${p.description}` : '');
+      opt.dataset.requiresKey = p.requiresKey ? '1' : '0';
+      provSel.appendChild(opt);
+    });
+
+    const updatePreview = async () => {
+      const providerId = provSel.value;
+      const apiKey = apiKeyIn.value.trim();
+      previewEl.textContent = '';
+      if (!providerId || !apiKey) return;
+      try {
+        const url = await window.pohMinerAPI.rpc.previewUrl({ networkId: 'solana', providerId, apiKey });
+        if (url) previewEl.innerHTML = `<span style="color:#666">Preview:</span> <span style="color:#22c55e">${url}</span>`;
+      } catch {}
+    };
+
+    provSel.addEventListener('change', updatePreview);
+    apiKeyIn.addEventListener('input', updatePreview);
+
+    saveBtn.addEventListener('click', async () => {
+      const provider = provSel.value;
+      const apiKey = apiKeyIn.value.trim();
+
+      if (!provider) {
+        statusEl.textContent = 'Select a provider first';
+        statusEl.style.color = '#f87171';
+        return;
+      }
+
+      statusEl.textContent = 'Saving...';
+      statusEl.style.color = '#888';
+
+      try {
+        await window.pohMinerAPI.rpc.saveNetworkConfig({ networkId: 'solana', provider, apiKey });
+        statusEl.textContent = `Saved: ${provider}`;
+        statusEl.style.color = '#22c55e';
+        apiKeyIn.value = '';
+        previewEl.textContent = '';
+      } catch (err) {
+        statusEl.textContent = 'Save failed';
+        statusEl.style.color = '#f87171';
+      }
+    });
+
+  } catch (err) {
+    console.error('Failed to init onboard Solana RPC step:', err);
+  }
+}
+
+// =====================================================
+// Onboarding Step: Other Chains (BTC, TON, TRON, XLM)
+// =====================================================
+
+async function initOnboardOtherChainsStep() {
+  if (window._obOtherChainsInited) return;
+  window._obOtherChainsInited = true;
+
+  if (!window.pohMinerAPI?.rpc) return;
+
+  for (const chainId of ['btc', 'ton', 'tron', 'xlm']) {
+    try {
+      const provSel = document.getElementById(`ob-${chainId}-provider`);
+      if (!provSel) continue;
+
+      const providers = await window.pohMinerAPI.rpc.getProvidersForNetwork(chainId);
+      provSel.innerHTML = '<option value="">Select provider...</option>';
+      providers.forEach(p => {
+        const opt = document.createElement('option');
+        opt.value = p.id;
+        opt.textContent = p.name + (p.description ? ` — ${p.description}` : '');
+        opt.dataset.requiresKey = p.requiresKey ? '1' : '0';
+        provSel.appendChild(opt);
+      });
+
+      provSel.addEventListener('change', () => {
+        const selected = provSel.options[provSel.selectedIndex];
+        const requiresKey = selected?.dataset.requiresKey === '1';
+        const wrap = document.getElementById(`ob-${chainId}-apikey-wrap`);
+        if (wrap) wrap.style.display = requiresKey ? '' : 'none';
+      });
+
+    } catch (err) {
+      console.error(`Failed to load providers for ${chainId}:`, err);
+    }
+  }
+}
+
+window.saveOtherChain = async function(chainId) {
+  const provSel = document.getElementById(`ob-${chainId}-provider`);
+  const apiKeyIn = document.getElementById(`ob-${chainId}-apikey`);
+  const statusEl = document.getElementById(`ob-${chainId}-status`);
+  const badge = document.getElementById(`ob-${chainId}-badge`);
+
+  const provider = provSel?.value;
+  const selected = provSel?.options[provSel?.selectedIndex];
+  const requiresKey = selected?.dataset.requiresKey === '1';
+  const apiKey = apiKeyIn?.value.trim() || '';
+
+  if (!provider) {
+    if (statusEl) { statusEl.textContent = 'Select a provider'; statusEl.style.color = '#f87171'; }
+    return;
+  }
+  if (requiresKey && !apiKey) {
+    if (statusEl) { statusEl.textContent = 'Enter your API key'; statusEl.style.color = '#f87171'; }
+    return;
+  }
+
+  try {
+    await window.pohMinerAPI.rpc.saveNetworkConfig({ networkId: chainId, provider, apiKey });
+    if (statusEl) { statusEl.textContent = 'Saved!'; statusEl.style.color = '#22c55e'; }
+    if (badge) {
+      badge.textContent = 'Configured';
+      badge.className = 'text-xs px-2 py-0.5 rounded-full bg-green-900/40 text-green-400';
+    }
+    if (apiKeyIn) apiKeyIn.value = '';
+  } catch (err) {
+    if (statusEl) { statusEl.textContent = 'Save failed'; statusEl.style.color = '#f87171'; }
+  }
+};
+
+window.skipOtherChain = function(chainId) {
+  const badge = document.getElementById(`ob-${chainId}-badge`);
+  const statusEl = document.getElementById(`ob-${chainId}-status`);
+  const card = document.getElementById(`ob-${chainId}-card`);
+
+  if (badge) {
+    badge.textContent = 'Skipped';
+    badge.className = 'text-xs px-2 py-0.5 rounded-full bg-zinc-800 text-zinc-600';
+  }
+  if (statusEl) statusEl.textContent = '';
+  if (card) card.style.opacity = '0.5';
 };
 
 // =====================================================
@@ -572,19 +889,34 @@ if (document.readyState === 'loading') {
   checkAndStartOnboarding();
 }
 
-// Safety net: if we're still in a weird state after 3 seconds, force onboarding
-setTimeout(() => {
+// Safety net: after 3 seconds, double-check the onboarding status.
+// If the user actually has a wallet / is onboarded, make sure we show the main app
+// (prevents stale UI state or race conditions).
+setTimeout(async () => {
   const onboardingDiv = document.getElementById('onboarding');
   const mainAppDiv = document.getElementById('main-app');
 
-  if (mainAppDiv && !mainAppDiv.classList.contains('hidden') && onboardingDiv && onboardingDiv.classList.contains('hidden')) {
-    // We're showing main UI but probably shouldn't be
-    console.warn('[Onboarding] Safety timeout triggered - forcing onboarding wizard');
-    if (mainAppDiv) mainAppDiv.classList.add('hidden');
-    if (onboardingDiv) {
+  try {
+    if (!window.pohMinerAPI?.onboarding?.getStatus) return;
+
+    const status = await window.pohMinerAPI.onboarding.getStatus();
+
+    if (status.onboarded || status.hasPohWallet) {
+      // User should be in the main app
+      if (onboardingDiv) onboardingDiv.classList.add('hidden');
+      if (mainAppDiv) mainAppDiv.classList.remove('hidden');
+
+      // Try to ensure miner is running
+      if (window.pohMinerAPI?.miner?.start) {
+        window.pohMinerAPI.miner.start().catch(() => {});
+      }
+    } else if (mainAppDiv && mainAppDiv.classList.contains('hidden') && onboardingDiv && onboardingDiv.classList.contains('hidden')) {
+      // Nothing visible — show onboarding as fallback
       onboardingDiv.classList.remove('hidden');
       showOnboardingStep('welcome');
     }
+  } catch (e) {
+    // ignore
   }
 }, 3000);
 
@@ -616,6 +948,16 @@ window.forceShowOnboarding = function() {
     }
   }
   console.log('%c[Dev] Onboarding screen forced visible. You can now go through the wizard.', 'color:#22c55e');
+};
+
+// Helper to force the main miner UI (useful for recovery)
+window.showMainApp = function() {
+  const onboardingDiv = document.getElementById('onboarding');
+  const mainAppDiv = document.getElementById('main-app');
+
+  if (onboardingDiv) onboardingDiv.classList.add('hidden');
+  if (mainAppDiv) mainAppDiv.classList.remove('hidden');
+  console.log('%c[Dev] Main app UI forced visible.', 'color:#22c55e');
 };
 
 // If we're stuck on startup, expose a quick way to recover
