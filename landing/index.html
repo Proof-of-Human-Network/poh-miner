@@ -6,6 +6,10 @@
   <title>PoH Miner • Power the AI Brain of Digital Identity</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://fonts.googleapis.com/css2?family=Iceland&display=swap" rel="stylesheet">
+  <!-- PoH favicons (self-contained in landing/ for direct / sub-CID use; also staged at root for full site) -->
+  <link rel="icon" type="image/svg+xml" href="poh-miner.svg">
+  <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
+  <link rel="shortcut icon" href="favicon.ico">
   <style>
     :root {
       --bg: #000000;
@@ -62,7 +66,8 @@
     <div class="max-w-7xl mx-auto px-8 h-20 flex items-center justify-between">
       <div class="flex items-center gap-x-4">
         <div class="flex items-center gap-x-3">
-          <span class="font-display text-[60px]">PoH Miner</span>
+          <img src="poh-miner.svg" alt="PoH Logo" width="48" height="48" style="vertical-align: middle;" />
+          <span class="font-display text-[60px]">Miner</span>
         </div>
       </div>
       <div class="flex items-center gap-x-9 text-[22px]">
@@ -143,99 +148,7 @@
       </div>
     </div>
 
-    <!-- Real GeoIP Demo -->
-    <div class="mt-16 max-w-2xl mx-auto glass p-8 rounded-[4px]">
-      <div class="text-[#22c55e] text-sm tracking-widest mb-2">REAL GEO-IP DETECTION</div>
-      <h3 class="font-display text-[45px] mb-4">See your real advantage</h3>
-      
-      <button onclick="detectRealLocation()" 
-              class="mb-6 px-6 py-2.5 bg-white text-black rounded-[4px] text-sm hover:bg-[#22c55e] hover:text-black transition">
-        Detect my real country
-      </button>
-
-      <div id="geo-result" class="text-sm text-white/80 min-h-[60px]">
-        Click above to see which countries' jobs you would win most often.
-      </div>
-    </div>
-  </div>
-
-  <!-- How it works -->
-  <div id="how" class="border-t border-white/10 bg-[#050505]">
-    <div class="max-w-6xl mx-auto px-8 p-40">
-      <h2 class="font-display text-[78px] leading-none  text-center mb-16">How the network actually works</h2>
-      
-      <div class="grid md:grid-cols-3 gap-6">
-        <div class="glass p-8 rounded-[4px]">
-          <div class="text-[#22c55e] mb-4 text-sm tracking-widest">01</div>
-          <h3 class="text-[45px] tracking-tight mb-4">You run a node</h3>
-          <p class="text-white/70">Install once on any machine. Your node joins the global mesh and advertises its location and capabilities.</p>
-        </div>
-        <div class="glass p-8 rounded-[4px]">
-          <div class="text-[#22c55e] mb-4 text-sm tracking-widest">02</div>
-          <h3 class="text-[45px] tracking-tight mb-4">Real jobs arrive</h3>
-          <p class="text-white/70">When someone requests a digital identity scan on proofofhuman.ge, the job enters the shared mempool with geographic metadata.</p>
-        </div>
-        <div class="glass p-8 rounded-[4px]">
-          <div class="text-[#22c55e] mb-4 text-sm tracking-widest">03</div>
-          <h3 class="text-[45px] tracking-tight mb-4">You win or lose the race</h3>
-          <p class="text-white/70">Low-latency nodes near the requester have a natural advantage. First valid result using the real POH brain wins the reward in POH.</p>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Non-Tech About Section -->
-  <div class="max-w-5xl mx-auto px-6 p-40">
-    <div class="max-w-3xl mx-auto text-center">
-      <h2 class="font-display text-[64px] leading-none  mb-6">What is PoH Miner, really?</h2>
-      <div class="text-lg text-white/80 space-y-4">
-        <p>
-          The internet is being flooded with AI. Proving that a real human is behind an action is becoming one of the most important problems of our time.
-        </p>
-        <p>
-          PoH Miner is the decentralized compute network that powers Proof of Human — the most advanced open system for verifying humans vs machines at scale.
-        </p>
-        <p>
-          Instead of wasting electricity on meaningless math, miners run real AI models and sophisticated signal checks on actual user requests. 
-          The better and faster they do the real work, the more they earn.
-        </p>
-        <p class="text-white/60 text-base">
-          This is mining that actually matters.
-        </p>
-      </div>
-    </div>
-  </div>
-
-  <!-- Blockchain & Mining Pitch -->
-  <div class="max-w-5xl mx-auto px-6 p-40 border-t border-white/10">
-    <div class="text-center mb-10">
-      <h2 class="font-display text-[72px] leading-none">A real blockchain.<br>Real work. Real rewards.</h2>
-      <p class="mt-4 text-[30px] text-white/70 max-w-2xl mx-auto">
-        Every block contains verified scan results produced by actual inference. 
-        Miners earn fixed POH rewards per block + fees from the jobs they win.
-      </p>
-    </div>
-
-    <div class="grid md:grid-cols-3 gap-6 max-w-4xl mx-auto text-center">
-      <div class="glass p-6 rounded-[4px]">
-        <div class="text-[45px] text-[#22c55e] mb-2">1 POH</div>
-        <div class="font-semibold">per block</div>
-        <div class="text-sm text-white/60 mt-1">Fixed subsidy for producing valid blocks with real POH work</div>
-      </div>
-      <div class="glass p-6 rounded-[4px]">
-        <div class="text-[45px] text-[#22c55e] mb-2">FCFS</div>
-        <div class="font-semibold">First-come-first-serve</div>
-        <div class="text-sm text-white/60 mt-1">Lowest latency + fastest correct inference wins the fee</div>
-      </div>
-      <div class="glass p-6 rounded-[4px]">
-        <div class="text-[45px] text-[#22c55e] mb-2">Proof + Slashing</div>
-        <div class="font-semibold">Quality protected</div>
-        <div class="text-sm text-white/60 mt-1">Miners must evaluate most live signals or get rejected & slashed</div>
-      </div>
-    </div>
-  </div>
-
-  <!-- CTA: Ready to contribute real compute? -->
+    <!-- CTA: Ready to contribute real compute? -->
   <div id="start" class="max-w-5xl mx-auto px-6 p-40 border-t border-white/10">
     <div class="text-center mb-10">
       <h2 class="font-display text-[78px] leading-none ">Ready to contribute real compute?</h2>
@@ -431,6 +344,98 @@
         Works on Raspberry Pi, VPS (set inferenceMode=cpu), Mac Mini, gaming PCs, and any spare hardware.
       </div>
 
+    </div>
+  </div>
+
+    <!-- Real GeoIP Demo -->
+    <div class="mt-16 max-w-2xl mx-auto glass p-8 rounded-[4px]">
+      <div class="text-[#22c55e] text-sm tracking-widest mb-2">REAL GEO-IP DETECTION</div>
+      <h3 class="font-display text-[45px] mb-4">See your real advantage</h3>
+      
+      <button onclick="detectRealLocation()" 
+              class="mb-6 px-6 py-2.5 bg-white text-black rounded-[4px] text-sm hover:bg-[#22c55e] hover:text-black transition">
+        Detect my real country
+      </button>
+
+      <div id="geo-result" class="text-sm text-white/80 min-h-[60px]">
+        Click above to see which countries' jobs you would win most often.
+      </div>
+    </div>
+  </div>
+
+  <!-- How it works -->
+  <div id="how" class="border-t border-white/10 bg-[#050505]">
+    <div class="max-w-6xl mx-auto px-8 p-40">
+      <h2 class="font-display text-[78px] leading-none  text-center mb-16">How the network actually works</h2>
+      
+      <div class="grid md:grid-cols-3 gap-6">
+        <div class="glass p-8 rounded-[4px]">
+          <div class="text-[#22c55e] mb-4 text-sm tracking-widest">01</div>
+          <h3 class="text-[45px] tracking-tight mb-4">You run a node</h3>
+          <p class="text-white/70">Install once on any machine. Your node joins the global mesh and advertises its location and capabilities.</p>
+        </div>
+        <div class="glass p-8 rounded-[4px]">
+          <div class="text-[#22c55e] mb-4 text-sm tracking-widest">02</div>
+          <h3 class="text-[45px] tracking-tight mb-4">Real jobs arrive</h3>
+          <p class="text-white/70">When someone requests a digital identity scan on proofofhuman.ge, the job enters the shared mempool with geographic metadata.</p>
+        </div>
+        <div class="glass p-8 rounded-[4px]">
+          <div class="text-[#22c55e] mb-4 text-sm tracking-widest">03</div>
+          <h3 class="text-[45px] tracking-tight mb-4">You win or lose the race</h3>
+          <p class="text-white/70">Low-latency nodes near the requester have a natural advantage. First valid result using the real POH brain wins the reward in POH.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Non-Tech About Section -->
+  <div class="max-w-5xl mx-auto px-6 p-40">
+    <div class="max-w-3xl mx-auto text-center">
+      <h2 class="font-display text-[64px] leading-none  mb-6">What is PoH Miner, really?</h2>
+      <div class="text-lg text-white/80 space-y-4">
+        <p>
+          The internet is being flooded with AI. Proving that a real human is behind an action is becoming one of the most important problems of our time.
+        </p>
+        <p>
+          PoH Miner is the decentralized compute network that powers Proof of Human — the most advanced open system for verifying humans vs machines at scale.
+        </p>
+        <p>
+          Instead of wasting electricity on meaningless math, miners run real AI models and sophisticated signal checks on actual user requests. 
+          The better and faster they do the real work, the more they earn.
+        </p>
+        <p class="text-white/60 text-base">
+          This is mining that actually matters.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Blockchain & Mining Pitch -->
+  <div class="max-w-5xl mx-auto px-6 p-40 border-t border-white/10">
+    <div class="text-center mb-10">
+      <h2 class="font-display text-[72px] leading-none">A real blockchain.<br>Real work. Real rewards.</h2>
+      <p class="mt-4 text-[30px] text-white/70 max-w-2xl mx-auto">
+        Every block contains verified scan results produced by actual inference. 
+        Miners earn fixed POH rewards per block + fees from the jobs they win.
+      </p>
+    </div>
+
+    <div class="grid md:grid-cols-3 gap-6 max-w-4xl mx-auto text-center">
+      <div class="glass p-6 rounded-[4px]">
+        <div class="text-[45px] text-[#22c55e] mb-2">1 POH</div>
+        <div class="font-semibold">per block</div>
+        <div class="text-sm text-white/60 mt-1">Fixed subsidy for producing valid blocks with real POH work</div>
+      </div>
+      <div class="glass p-6 rounded-[4px]">
+        <div class="text-[45px] text-[#22c55e] mb-2">FCFS</div>
+        <div class="font-semibold">First-come-first-serve</div>
+        <div class="text-sm text-white/60 mt-1">Lowest latency + fastest correct inference wins the fee</div>
+      </div>
+      <div class="glass p-6 rounded-[4px]">
+        <div class="text-[45px] text-[#22c55e] mb-2">Proof + Slashing</div>
+        <div class="font-semibold">Quality protected</div>
+        <div class="text-sm text-white/60 mt-1">Miners must evaluate most live signals or get rejected & slashed</div>
+      </div>
     </div>
   </div>
 
@@ -644,26 +649,53 @@
       draw();
     }
 
-    // Load some real data from the project where possible
+    function fmtNum(n) {
+      if (n >= 1_000_000) return (n / 1_000_000).toFixed(1).replace(/\.0$/, '') + 'M';
+      if (n >= 1_000)     return (n / 1_000).toFixed(1).replace(/\.0$/, '') + 'k';
+      return n.toLocaleString();
+    }
+
     async function loadRealStats() {
+      const BOOTNODE = 'https://bootnode.proofofhuman.ge';
+
+      // Run all three fetches in parallel
+      const [signalsRes, peersRes, chainRes] = await Promise.allSettled([
+        fetch('https://proofofhuman.ge/methods/verifyer', { cache: 'no-store' }),
+        fetch(`${BOOTNODE}/peers`,      { cache: 'no-store' }),
+        fetch(`${BOOTNODE}/chain/tip`,  { cache: 'no-store' }),
+      ]);
+
+      // VERIFIED SIGNALS
       try {
-        // VERIFIED SIGNALS — pull live count directly from the public verifier
-        const res = await fetch('https://proofofhuman.ge/methods/verifyer', { cache: 'no-store' });
-        if (res.ok) {
-          const signals = await res.json();
-          if (Array.isArray(signals)) {
-            document.getElementById('methods-count').textContent = signals.length.toLocaleString();
+        if (signalsRes.status === 'fulfilled' && signalsRes.value.ok) {
+          const signals = await signalsRes.value.json();
+          if (Array.isArray(signals))
+            document.getElementById('methods-count').textContent = fmtNum(signals.length);
+        }
+      } catch { document.getElementById('methods-count').textContent = '—'; }
+
+      // ACTIVE COMPUTE NODES
+      try {
+        if (peersRes.status === 'fulfilled' && peersRes.value.ok) {
+          const data = await peersRes.value.json();
+          const count = data.count ?? (Array.isArray(data.peers) ? data.peers.length : null);
+          if (count !== null)
+            document.getElementById('node-count').textContent = fmtNum(count);
+        }
+      } catch { document.getElementById('node-count').textContent = '—'; }
+
+      // VERDICTS DELIVERED + POH DISTRIBUTED (derived from chain height)
+      // Each block = 1 verified scan, 1 POH distributed to miners
+      try {
+        if (chainRes.status === 'fulfilled' && chainRes.value.ok) {
+          const tip = await chainRes.value.json();
+          const height = tip.height ?? tip.block?.height ?? 0;
+          if (height > 0) {
+            document.getElementById('jobs-count').textContent = fmtNum(height);
+            document.getElementById('poh-paid').textContent   = fmtNum(height); // 1 POH per block
           }
         }
-      } catch (e) {
-        // Fallback if the live endpoint is unreachable
-        document.getElementById('methods-count').textContent = '2,847';
-      }
-
-      // These would be real in production
-      document.getElementById('node-count').textContent = '1,312';
-      document.getElementById('jobs-count').textContent = '184k';
-      document.getElementById('poh-paid').textContent = '942k';
+      } catch { /* leave as — */ }
     }
 
     async function detectRealLocation() {
