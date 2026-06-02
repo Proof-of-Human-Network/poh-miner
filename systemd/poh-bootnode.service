@@ -1,0 +1,28 @@
+[Unit]
+Description=PoH Miner Network Bootnode
+After=network.target
+
+[Service]
+Type=simple
+User=poh
+Group=poh
+WorkingDirectory=/opt/poh-bootnode
+ExecStart=/usr/bin/node src/bootnode.js --port 8080 --data-dir /var/lib/poh-bootnode
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=poh-bootnode
+
+# Security hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/poh-bootnode
+
+# Resource limits
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target
