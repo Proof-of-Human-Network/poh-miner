@@ -39,3 +39,9 @@ maven
 # Other
 *.pem
 *.key
+
+# Binaries and large assets
+*.apk
+*.exe
+*.dmg
+landing/binaries/
