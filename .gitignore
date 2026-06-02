@@ -1,0 +1,41 @@
+# Dependencies
+node_modules/
+package-lock.json
+yarn.lock
+
+# Build / dist
+dist/
+build/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# Project specific for miner-network
+node_modules/
+data/
+.poh-miner/
+.poh-bootnode/
+dist/
+npm_recovery_codes.txt
+pip_token
+cargo_token
+maven
+
+# Other
+*.pem
+*.key
