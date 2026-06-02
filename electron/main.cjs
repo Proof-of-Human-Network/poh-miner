@@ -5,6 +5,7 @@ const fs = require('fs');
 
 let mainWindow;
 let minerNode = null;
+let isStartingMiner = false;
 const logs = [];
 
 function sendLog(message) {
@@ -56,7 +57,27 @@ function createWindow() {
       sendLog(`[Startup] onboarded=${!!config.onboarded}, hasWallet=${!!(config.pohWallet || config.wallet)} → isOnboarded=${isOnboarded}`);
 
       if (isOnboarded) {
+        // Silently ensure Ollama is running before starting the miner
+        isOllamaRunning().then(async (running) => {
+          if (!running) {
+            sendLog('[Setup] Ollama not running — attempting to start...');
+            const inPath = await ollamaInPath();
+            if (inPath) {
+              await startOllamaService();
+              sendLog('[Setup] Ollama service started.');
+            } else {
+              sendLog('[Setup] WARNING: Ollama not installed. Brain inference will fail. Run: curl -fsSL https://ollama.com/install.sh | sh');
+            }
+          }
+        }).catch(() => {});
+
         startMiner();
+        // Tell the renderer to show the main miner UI (authoritative from main process)
+        setTimeout(() => {
+          if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send('show-main-app');
+          }
+        }, 150);
       } else {
         sendLog('Waiting for onboarding to complete...');
         // Tell the renderer to show the onboarding wizard
@@ -77,10 +98,12 @@ function createWindow() {
 
 async function startMiner() {
   // Prevent double-start (this is the main guard)
-  if (minerNode) {
-    sendLog('Miner is already running — ignoring duplicate start request.');
+  // Also guard while an async start is in progress (prevents races during dynamic import etc.)
+  if (minerNode || isStartingMiner) {
+    sendLog('Miner is already running or starting — ignoring duplicate start request.');
     return;
   }
+  isStartingMiner = true;
 
   try {
     sendLog('Starting PoH Miner Node...');
@@ -132,6 +155,8 @@ async function startMiner() {
     console.error(err);
     // Reset so a future retry can work (e.g. after killing the conflicting process)
     minerNode = null;
+  } finally {
+    isStartingMiner = false;
   }
 }
 
@@ -222,6 +247,8 @@ ipcMain.handle('get-status', () => {
   if (wallet && minerNode.walletManager) {
     balance = minerNode.walletManager.getBalance(wallet);
   }
+
+  console.log(balance)
 
   return {
     wallet,
@@ -436,9 +463,147 @@ ipcMain.handle('onboarding:reset', async () => {
 });
 
 ipcMain.handle('miner:start', async () => {
-  if (!minerNode) {
-    startMiner();
-    return { started: true };
+  // Always delegate to startMiner() — it has robust guards against duplicates and races
+  startMiner();
+  return { started: true };
+});
+
+// ── Ollama / AI setup IPC ────────────────────────────────────────────────────
+
+const { execFile, spawn: spawnProc } = require('child_process');
+const https = require('https');
+const os = require('os');
+
+function sendSetupProgress(msg) {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('setup:progress', msg);
   }
-  return { started: false, reason: 'Already running' };
+}
+
+async function isOllamaRunning() {
+  return new Promise((resolve) => {
+    const req = require('http').request(
+      { hostname: 'localhost', port: 11434, path: '/api/tags', method: 'GET', timeout: 3000 },
+      (res) => resolve(res.statusCode === 200)
+    );
+    req.on('error', () => resolve(false));
+    req.on('timeout', () => { req.destroy(); resolve(false); });
+    req.end();
+  });
+}
+
+function ollamaInPath() {
+  return new Promise((resolve) => {
+    execFile('which', ['ollama'], (err) => resolve(!err));
+  });
+}
+
+function startOllamaService() {
+  return new Promise((resolve) => {
+    const proc = spawnProc('ollama', ['serve'], {
+      detached: true, stdio: 'ignore',
+      env: { ...process.env },
+    });
+    proc.unref();
+    // Give it 3 seconds to start
+    setTimeout(resolve, 3000);
+  });
+}
+
+function installOllama() {
+  return new Promise((resolve, reject) => {
+    sendSetupProgress({ status: 'installing', message: 'Downloading Ollama...' });
+    const platform = process.platform;
+    if (platform === 'linux' || platform === 'darwin') {
+      // Official one-liner installer
+      const proc = spawnProc('sh', ['-c', 'curl -fsSL https://ollama.com/install.sh | sh'], {
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+      proc.stdout.on('data', d => sendSetupProgress({ status: 'installing', message: d.toString().trim() }));
+      proc.stderr.on('data', d => sendSetupProgress({ status: 'installing', message: d.toString().trim() }));
+      proc.on('close', (code) => {
+        if (code === 0) resolve();
+        else reject(new Error(`Ollama install exited ${code}`));
+      });
+    } else {
+      reject(new Error('Auto-install not supported on this OS. Download from https://ollama.com'));
+    }
+  });
+}
+
+// Check Ollama + model status without installing anything
+ipcMain.handle('setup:check', async () => {
+  const running = await isOllamaRunning();
+  const inPath = await ollamaInPath();
+  let models = [];
+  if (running) {
+    try {
+      const res = await fetch('http://localhost:11434/api/tags');
+      const data = await res.json();
+      models = (data.models || []).map(m => m.name || m.model).filter(Boolean);
+    } catch (_) {}
+  }
+  return { running, inPath, models };
+});
+
+// Install Ollama if missing, then start it
+ipcMain.handle('setup:install', async () => {
+  try {
+    const inPath = await ollamaInPath();
+    if (!inPath) {
+      await installOllama();
+      sendSetupProgress({ status: 'installed', message: 'Ollama installed.' });
+    }
+    const running = await isOllamaRunning();
+    if (!running) {
+      sendSetupProgress({ status: 'starting', message: 'Starting Ollama service...' });
+      await startOllamaService();
+    }
+    const nowRunning = await isOllamaRunning();
+    return { ok: nowRunning, error: nowRunning ? null : 'Ollama did not start — try running "ollama serve" manually' };
+  } catch (e) {
+    return { ok: false, error: e.message };
+  }
+});
+
+// Pull a model with streaming progress
+ipcMain.handle('setup:pull-model', async (_event, model = 'qwen2.5:1.5b') => {
+  return new Promise((resolve) => {
+    sendSetupProgress({ status: 'pulling', message: `Pulling ${model}...`, model });
+    const req = require('http').request(
+      {
+        hostname: 'localhost', port: 11434, path: '/api/pull',
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+      },
+      (res) => {
+        let buf = '';
+        res.on('data', (chunk) => {
+          buf += chunk.toString();
+          const lines = buf.split('\n');
+          buf = lines.pop();
+          for (const line of lines) {
+            if (!line.trim()) continue;
+            try {
+              const evt = JSON.parse(line);
+              const pct = evt.total ? Math.round((evt.completed / evt.total) * 100) : null;
+              sendSetupProgress({ status: 'pulling', message: evt.status, model, pct, total: evt.total, completed: evt.completed });
+              if (evt.status === 'success') {
+                resolve({ ok: true });
+              }
+            } catch (_) {}
+          }
+        });
+        res.on('end', () => {
+          sendSetupProgress({ status: 'ready', message: `${model} ready.`, model });
+          resolve({ ok: true });
+        });
+      }
+    );
+    req.on('error', (e) => {
+      sendSetupProgress({ status: 'error', message: e.message });
+      resolve({ ok: false, error: e.message });
+    });
+    req.write(JSON.stringify({ name: model, stream: true }));
+    req.end();
+  });
 });

@@ -185,8 +185,58 @@
   <div id="onboarding" class="hidden fixed inset-0 bg-black z-50 flex items-center justify-center p-6">
     <div class="w-full max-w-[720px]">
       
+      <!-- AI Setup Screen (shown when Ollama / model not ready) -->
+      <div id="step-ai-setup" class="onboarding-step hidden">
+        <div class="text-center mb-8">
+          <div class="inline-flex items-center gap-x-3 mb-4">
+            <div class="w-9 h-9 rounded-full bg-[#22c55e] flex items-center justify-center">
+              <span class="text-black font-bold text-2xl">P</span>
+            </div>
+            <span class="font-display text-4xl tracking-tight">PoH Miner</span>
+          </div>
+          <h1 class="font-display text-5xl leading-none tracking-tighter mb-2">AI Engine Setup</h1>
+          <p class="text-zinc-400 mt-2">Setting up the local AI needed to verify human identities.</p>
+        </div>
+        <div class="glass rounded-3xl p-6 border border-white/10 space-y-4">
+          <!-- Status rows -->
+          <div class="flex items-center gap-3">
+            <span id="setup-ollama-icon" class="text-xl">⏳</span>
+            <div class="flex-1">
+              <div class="text-sm font-medium">Ollama inference engine</div>
+              <div id="setup-ollama-status" class="text-xs text-zinc-500">Checking...</div>
+            </div>
+          </div>
+          <div class="flex items-center gap-3">
+            <span id="setup-model-icon" class="text-xl">⏳</span>
+            <div class="flex-1">
+              <div class="text-sm font-medium">qwen2.5:1.5b model</div>
+              <div id="setup-model-status" class="text-xs text-zinc-500">Waiting...</div>
+            </div>
+            <!-- Progress bar -->
+            <div id="setup-progress-wrap" class="hidden w-28">
+              <div class="h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+                <div id="setup-progress-bar" class="h-full bg-[#22c55e] transition-all" style="width:0%"></div>
+              </div>
+              <div id="setup-progress-pct" class="text-xs text-zinc-500 text-right mt-0.5">0%</div>
+            </div>
+          </div>
+          <div id="setup-log" class="text-xs text-zinc-600 min-h-[1.2em] break-all"></div>
+        </div>
+        <div class="mt-6 text-center">
+          <button id="setup-continue-btn" onclick="goToStep('welcome')" disabled
+                  class="px-8 py-3 bg-[#22c55e] text-black font-semibold rounded-2xl disabled:opacity-30 disabled:cursor-not-allowed">
+            Continue
+          </button>
+          <div class="mt-3">
+            <button onclick="goToStep('welcome')" class="text-xs text-zinc-600 hover:text-zinc-400 underline">
+              Skip (Ollama required to mine — set up manually later)
+            </button>
+          </div>
+        </div>
+      </div>
+
       <!-- Welcome Screen -->
-      <div id="step-welcome" class="onboarding-step">
+      <div id="step-welcome" class="onboarding-step hidden">
         <div class="text-center mb-10">
           <div class="inline-flex items-center gap-x-3 mb-4">
             <div class="w-9 h-9 rounded-full bg-[#22c55e] flex items-center justify-center">

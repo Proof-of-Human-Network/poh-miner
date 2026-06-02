@@ -32,6 +32,9 @@ contextBridge.exposeInMainWorld('pohMinerAPI', {
   onEnterOnboardingMode: (callback) => {
     ipcRenderer.on('enter-onboarding-mode', () => callback());
   },
+  onShowMainApp: (callback) => {
+    ipcRenderer.on('show-main-app', () => callback());
+  },
 
   // Onboarding API (top-level)
   onboarding: {
@@ -39,5 +42,13 @@ contextBridge.exposeInMainWorld('pohMinerAPI', {
     createPohWallet: () => ipcRenderer.invoke('onboarding:create-poh-wallet'),
     complete: (data) => ipcRenderer.invoke('onboarding:complete', data),
     reset: () => ipcRenderer.invoke('onboarding:reset'),
-  }
+  },
+
+  // Ollama / AI setup
+  setup: {
+    check: () => ipcRenderer.invoke('setup:check'),
+    install: () => ipcRenderer.invoke('setup:install'),
+    pullModel: (model) => ipcRenderer.invoke('setup:pull-model', model),
+    onProgress: (cb) => ipcRenderer.on('setup:progress', (_e, msg) => cb(msg)),
+  },
 });

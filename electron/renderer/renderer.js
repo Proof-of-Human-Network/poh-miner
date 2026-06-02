@@ -102,14 +102,19 @@ if (window.pohMinerAPI) {
 
   // Listen for explicit command from main process to enter onboarding
   if (window.pohMinerAPI?.onEnterOnboardingMode) {
-    window.pohMinerAPI.onEnterOnboardingMode(() => {
+    window.pohMinerAPI.onEnterOnboardingMode(async () => {
       console.log('[Onboarding] Received force enter onboarding from main process');
       const onboardingDiv = document.getElementById('onboarding');
       const mainAppDiv = document.getElementById('main-app');
       if (mainAppDiv) mainAppDiv.classList.add('hidden');
       if (onboardingDiv) {
         onboardingDiv.classList.remove('hidden');
-        showOnboardingStep('welcome');
+        // Run AI setup check first; skip to welcome if setup not available
+        if (window.pohMinerAPI?.setup?.check) {
+          await runAiSetupStep();
+        } else {
+          showOnboardingStep('welcome');
+        }
       }
     });
   }
@@ -396,6 +401,100 @@ async function checkAndStartOnboarding() {
     console.error('Onboarding check failed:', err);
     // Last resort: show main UI
     if (mainAppDiv) mainAppDiv.classList.remove('hidden');
+  }
+}
+
+// ── AI Setup step ─────────────────────────────────────────────────────────────
+async function runAiSetupStep() {
+  showOnboardingStep('ai-setup');
+
+  const ollamaIcon   = document.getElementById('setup-ollama-icon');
+  const ollamaStatus = document.getElementById('setup-ollama-status');
+  const modelIcon    = document.getElementById('setup-model-icon');
+  const modelStatus  = document.getElementById('setup-model-status');
+  const progressWrap = document.getElementById('setup-progress-wrap');
+  const progressBar  = document.getElementById('setup-progress-bar');
+  const progressPct  = document.getElementById('setup-progress-pct');
+  const logEl        = document.getElementById('setup-log');
+  const continueBtn  = document.getElementById('setup-continue-btn');
+  const MODEL        = 'qwen2.5:1.5b';
+
+  // Listen for streaming progress from main process
+  window.pohMinerAPI.setup.onProgress((msg) => {
+    if (logEl) logEl.textContent = msg.message || '';
+    if (msg.status === 'pulling' && msg.pct != null) {
+      if (progressWrap) progressWrap.classList.remove('hidden');
+      if (progressBar) progressBar.style.width = msg.pct + '%';
+      if (progressPct) progressPct.textContent = msg.pct + '%';
+      if (modelStatus) modelStatus.textContent = `Downloading… ${msg.pct}%`;
+    }
+    if (msg.status === 'ready') {
+      if (modelIcon) modelIcon.textContent = '✅';
+      if (modelStatus) modelStatus.textContent = 'Ready';
+      if (progressWrap) progressWrap.classList.add('hidden');
+      if (continueBtn) continueBtn.disabled = false;
+    }
+    if (msg.status === 'error') {
+      if (modelIcon) modelIcon.textContent = '❌';
+      if (modelStatus) modelStatus.textContent = msg.message;
+    }
+  });
+
+  // 1. Check current state
+  const state = await window.pohMinerAPI.setup.check();
+
+  // Ollama status
+  if (state.running) {
+    if (ollamaIcon) ollamaIcon.textContent = '✅';
+    if (ollamaStatus) ollamaStatus.textContent = 'Running';
+  } else if (state.inPath) {
+    if (ollamaIcon) ollamaIcon.textContent = '⚙️';
+    if (ollamaStatus) ollamaStatus.textContent = 'Installed but not running — starting...';
+  } else {
+    if (ollamaIcon) ollamaIcon.textContent = '⬇️';
+    if (ollamaStatus) ollamaStatus.textContent = 'Not installed — installing...';
+  }
+
+  // Model status
+  const hasModel = state.models && state.models.some(m => m.startsWith('qwen2.5:1.5b') || m === MODEL);
+  if (hasModel) {
+    if (modelIcon) modelIcon.textContent = '✅';
+    if (modelStatus) modelStatus.textContent = 'Ready';
+  } else {
+    if (modelIcon) modelIcon.textContent = '⬇️';
+    if (modelStatus) modelStatus.textContent = 'Will download (~900 MB)';
+  }
+
+  // If everything is fine, skip to welcome
+  if (state.running && hasModel) {
+    if (continueBtn) continueBtn.disabled = false;
+    showOnboardingStep('welcome');
+    return;
+  }
+
+  // 2. Install / start Ollama if needed
+  if (!state.running) {
+    const result = await window.pohMinerAPI.setup.install();
+    if (result.ok) {
+      if (ollamaIcon) ollamaIcon.textContent = '✅';
+      if (ollamaStatus) ollamaStatus.textContent = 'Running';
+    } else {
+      if (ollamaIcon) ollamaIcon.textContent = '❌';
+      if (ollamaStatus) ollamaStatus.textContent = result.error || 'Failed';
+      if (logEl) logEl.textContent = 'Install Ollama manually from https://ollama.com then restart.';
+      if (continueBtn) continueBtn.disabled = false;
+      return;
+    }
+  }
+
+  // 3. Pull model if missing
+  if (!hasModel) {
+    if (modelStatus) modelStatus.textContent = 'Downloading qwen2.5:1.5b (~900 MB)...';
+    if (progressWrap) progressWrap.classList.remove('hidden');
+    await window.pohMinerAPI.setup.pullModel(MODEL);
+  } else {
+    if (continueBtn) continueBtn.disabled = false;
+    showOnboardingStep('welcome');
   }
 }
 
