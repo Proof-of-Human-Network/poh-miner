@@ -19,7 +19,8 @@ import { detectMyCountry, getCountryProximityMultiplier } from './jobs/geo.js';
 import { getMethodsManager } from './signals/methods-manager.js';
 import { SimpleGossip } from './network/gossip.js';
 import { validateResultWork } from './validation/result-validator.js';
-import { calculateBlockRewards, BLOCK_REWARD_POH } from './rewards/reward.js';
+import { calculateBlockRewards, BLOCK_REWARD_POH, POH_DECIMALS } from './rewards/reward.js';
+import { computeVerdictWithExistingPoh } from './compute/poh-adapter.js';
 import fs from 'fs';
 import path from 'path';
 import { ChainStore } from './storage/chain-store.js';
@@ -28,25 +29,32 @@ import { RewardClaimStore } from './storage/reward-claim-store.js';
 import http from 'http';
 import { resolveRpcConfig } from './rpc/resolver.js';
 
+// Well-known production bootnodes. Used when no bootnodes are configured
+// (e.g. fresh GUI onboarding). Individual users can override via config.bootnodes.
+const DEFAULT_BOOTNODES = [
+  'https://bootnode.proofofhuman.ge',
+];
+
 export class PohMinerNode {
   constructor(config) {
     // Resolve new friendly RPC format ("rpc" + providers) into legacy format
     const resolvedRpc = resolveRpcConfig(config);
 
     this.config = {
+      // Spread raw config first so explicit defaults below take precedence
+      ...config,
       wallet: config.wallet,
       ollamaUrl: config.ollamaUrl || 'http://localhost:11434',
       computeEnabled: config.computeEnabled !== false,
       inferenceMode: config.inferenceMode || 'auto',
       model: config.model || 'qwen2.5:1.5b',
       region: config.region || null,
-      bootnodes: config.bootnodes || [],   // List of bootnode addresses for block sync
+      // Fall back to well-known bootnodes when none are configured (e.g. fresh GUI install)
+      bootnodes: config.bootnodes?.length ? config.bootnodes : DEFAULT_BOOTNODES,
       rpcEndpoints: resolvedRpc.rpcEndpoints,
       solanaRpc: resolvedRpc.solanaRpc,
-      // Keep raw new-style config for GUI / debugging
       rpc: config.rpc || {},
       rpcOverrides: config.rpcOverrides || {},
-      ...config,
     };
 
     this.chain = [];
@@ -57,6 +65,9 @@ export class PohMinerNode {
     this._applyRpcEndpoints();
 
     this.jobQueue = new JobQueue();
+    // Per-job status + full results for the "search -> poll status -> get verdict/profile/evidence" flow
+    // (enables any frontend to connect directly to a discovered node via its walletApiPort)
+    this.jobResults = new Map(); // jobId -> {id, status:'queued'|'computing'|'done'|'error', job, result:ScanResult|null, error?:string, createdAt, updatedAt}
     this.myLatencyProfile = null; // populated on startup
     this.currentDifficulty = 4;
     this.gossip = new SimpleGossip(this.config.wallet || 'unknown-miner');
@@ -102,6 +113,20 @@ export class PohMinerNode {
     } else {
       this.config.pohWallet = pohWallet;
       this.config.wallet = pohWallet; // keep both in sync for now
+    }
+
+    // Ensure we have a local wallet with signing keys (for protected bootnode registration)
+    const identityAddr = this.config.pohWallet || this.config.wallet;
+    this.identityWallet = this.walletManager.loadWallet(identityAddr);
+    if (!this.identityWallet) {
+      this.identityWallet = this.walletManager.createWallet();
+      // If no prior identity, adopt the created one (keeps old solana-as-wallet cases using separate signer)
+      if (!this.config.pohWallet) {
+        this.config.pohWallet = this.identityWallet.address;
+      }
+      if (!this.config.wallet) {
+        this.config.wallet = this.identityWallet.address;
+      }
     }
 
     console.log(`[PoH-Miner] Starting node for wallet ${this.config.wallet}`);
@@ -274,8 +299,18 @@ export class PohMinerNode {
    */
   startWalletApiServer(port = 3456) {
     const server = http.createServer((req, res) => {
-      res.setHeader('Content-Type', 'application/json');
+      // CORS support for browser clients (e.g. dev frontend on :5173 calling miner :3456)
       res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+      res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+      res.setHeader('Access-Control-Max-Age', '86400');
+
+      if (req.method === 'OPTIONS') {
+        res.statusCode = 204;
+        return res.end();
+      }
+
+      res.setHeader('Content-Type', 'application/json');
 
       const url = new URL(req.url, `http://${req.headers.host}`);
 
@@ -348,6 +383,166 @@ export class PohMinerNode {
         return;
       }
 
+      // === Job endpoints: "search -> check status -> verdict/profile/evidence" ===
+      // These are available on *every* poh-miner node. Frontend (or any client) can
+      // discover nodes via bootnode /peers then talk directly to e.g. http://<host>:<walletApiPort>/job
+      // for a self-contained verdict flow without going through central checker.
+
+      const isJobPost = req.method === 'POST' && (url.pathname === '/job' || url.pathname === '/search' || url.pathname === '/verdict');
+      if (isJobPost || (req.method === 'POST' && url.pathname === '/test/job')) {
+        let body = '';
+        req.on('data', chunk => body += chunk);
+        req.on('end', async () => {
+          try {
+            const rawJob = JSON.parse(body);
+
+            // Normalize a bit
+            const job = {
+              id: rawJob.id || (url.pathname === '/test/job' ? `test-${Date.now()}-${Math.random().toString(36).slice(2, 8)}` : `job-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`),
+              type: rawJob.type || 'verdict',
+              payload: rawJob.payload || { address: rawJob.address },
+              fee: rawJob.fee || 10_000_000,
+              originCountry: rawJob.originCountry || rawJob.originRegion,
+              ...rawJob,
+            };
+
+            if (!job.payload?.address) {
+              res.statusCode = 400;
+              return res.end(JSON.stringify({ error: 'payload.address is required for verdict jobs' }));
+            }
+
+            console.log(`[PoH-Miner] Received job via ${url.pathname}: ${job.id} (${job.type}) for ${job.payload.address}`);
+
+            // Record for status polling immediately (non-blocking)
+            this._recordJob(job);
+
+            // Respond fast with jobId + poll urls (key for "check job status" flow)
+            const base = `http://${req.headers.host}`;
+            const resp = {
+              accepted: true,
+              jobId: job.id,
+              status: 'queued',
+              statusUrl: `${base}/job/${job.id}/status`,
+              resultUrl: `${base}/job/${job.id}/result`,
+              message: 'Job accepted. Poll status or result URL.',
+            };
+
+            // Fire background compute (do not block the HTTP response)
+            setImmediate(() => {
+              this._processJobInBackground(job).catch(e => console.error('[job bg]', e));
+            });
+
+            // Also support legacy /test/job callers by including the old fields
+            if (url.pathname === '/test/job') {
+              resp.message = 'Job submitted. Use /job/' + job.id + '/result (or check logs).';
+            }
+
+            return res.end(JSON.stringify(resp));
+          } catch (e) {
+            res.statusCode = 400;
+            res.end(JSON.stringify({ error: e.message }));
+          }
+        });
+        return;
+      }
+
+      // GET job status + result (the "check job status -> verdict" part)
+      if (req.method === 'GET' && url.pathname.startsWith('/job/')) {
+        const parts = url.pathname.split('/').filter(Boolean); // ['job', id, 'status'|'result' ?]
+        const jobId = parts[1];
+        const action = parts[2] || 'status';
+        const rec = this._getJobRecord(jobId);
+
+        if (!rec) {
+          // Fallback: check submissionHistory for legacy test jobs (summary only)
+          const hist = (this.submissionHistory || []).find(h => h.requestId === jobId);
+          if (hist) {
+            return res.end(JSON.stringify({
+              jobId,
+              status: hist.isValid ? 'done' : 'error',
+              isValid: hist.isValid,
+              realPohUsed: hist.realPohUsed,
+              signalsEvaluated: hist.signalsEvaluated,
+              liveCount: hist.liveCount,
+              note: 'limited info from legacy history; full result may be in chain or logs'
+            }));
+          }
+          res.statusCode = 404;
+          return res.end(JSON.stringify({ error: 'job not found', jobId }));
+        }
+
+        if (action === 'status') {
+          return res.end(JSON.stringify({
+            jobId: rec.id,
+            status: rec.status,
+            createdAt: rec.createdAt,
+            updatedAt: rec.updatedAt,
+            address: rec.job?.payload?.address,
+            error: rec.error || undefined,
+          }));
+        }
+
+        if (action === 'result') {
+          if (rec.status !== 'done' || !rec.result) {
+            res.statusCode = 202; // Accepted, still processing
+            return res.end(JSON.stringify({
+              jobId: rec.id,
+              status: rec.status,
+              message: 'not ready yet',
+              poll: `/job/${jobId}/status`,
+            }));
+          }
+          const r = rec.result; // ScanResult
+          // Return shape friendly for frontends: verdict + profile + evidence (signals etc)
+          return res.end(JSON.stringify({
+            jobId: rec.id,
+            address: r.address,
+            verdict: r.verdict,
+            confidence: r.confidence,
+            reasoning: r.reasoning,
+            profile: r.profile || null,
+            evidence: {
+              signalsUsed: r.signalsUsed,
+              methodsHash: r.methodsHash,
+              methodsCount: r.methodsCount,
+              computationTimeMs: r.computationTimeMs,
+              realPohUsed: r.realPohUsed,
+              modelUsed: r.modelUsed,
+              isValidWork: r.isValidWork,
+            },
+            minerWallet: r.minerWallet,
+            deliveredAt: r.deliveredAt,
+          }));
+        }
+
+        res.statusCode = 404;
+        return res.end(JSON.stringify({ error: 'unknown job action', jobId, action }));
+      }
+
+      // Optional: list recent jobs on this node (useful for debug / frontend)
+      if (req.method === 'GET' && url.pathname === '/jobs') {
+        const list = this.jobResults ? Array.from(this.jobResults.values()).slice(-50).map(r => ({
+          jobId: r.id,
+          status: r.status,
+          address: r.job?.payload?.address,
+          verdict: r.result?.verdict || null,
+          createdAt: r.createdAt,
+        })) : [];
+        return res.end(JSON.stringify({ jobs: list, count: list.length }));
+      }
+
+      // Lightweight node info (so frontends can introspect a chosen node)
+      if (req.method === 'GET' && (url.pathname === '/status' || url.pathname === '/node')) {
+        const s = typeof this.getStatus === 'function' ? this.getStatus() : {};
+        const active = this.jobResults ? Array.from(this.jobResults.values()).filter(r => ['queued','computing'].includes(r.status)).length : 0;
+        return res.end(JSON.stringify({
+          ...s,
+          activeJobs: active,
+          walletApiPort: port,
+          version: 'poh-miner-network',
+        }));
+      }
+
       res.statusCode = 404;
       res.end(JSON.stringify({ error: 'Not found' }));
     });
@@ -366,7 +561,12 @@ export class PohMinerNode {
 
     server.listen(port, () => {
       console.log(`[PoH-Miner] Wallet API listening on http://localhost:${port}`);
-      console.log(`   Try: curl "http://localhost:${port}/api/wallet/balance?address=${this.config.wallet}"`);
+      console.log(`   Wallet: curl "http://localhost:${port}/api/wallet/balance?address=${this.config.wallet}"`);
+      console.log(`   Submit search/verdict job (new flow): curl -X POST http://localhost:${port}/job -d '{"payload":{"address":"bc1q..."}}'`);
+      console.log(`   Check status: curl http://localhost:${port}/job/<jobId>/status`);
+      console.log(`   Get verdict+profile+evidence: curl http://localhost:${port}/job/<jobId>/result`);
+      console.log(`   Node info: curl http://localhost:${port}/status`);
+      console.log(`   (legacy still works: /test/job )`);
     });
 
     this.walletApiServer = server;
@@ -466,25 +666,44 @@ export class PohMinerNode {
   async discoverAndRegisterWithBootnodes() {
     if (!this.config.bootnodes || this.config.bootnodes.length === 0) return;
 
-    const myInfo = {
-      wallet: this.config.pohWallet || this.config.wallet,
+    const walletAddr = this.config.pohWallet || this.config.wallet;
+    const ts = Date.now();
+    const methodsHash = this.methodsManager?.hash || 'unknown';
+
+    const baseInfo = {
+      wallet: walletAddr,
       host: this._getPublicHost(),
       walletApiPort: this.config.walletApiPort || 3456,
       p2pPort: this.config.p2pPort || null,
       region: this.myLocation?.country || null,
+      timestamp: ts,
+      methodsHash,
     };
 
-    console.log('[PoH-Miner] Registering with bootnodes for peer discovery...');
+    // Attach proof that we are a real running poh-miner node (possess local wallet privkey)
+    let registerPayload = { ...baseInfo };
+    if (this.identityWallet && typeof this.identityWallet.sign === 'function') {
+      const toSign = JSON.stringify({
+        wallet: baseInfo.wallet,
+        host: baseInfo.host,
+        timestamp: ts,
+        methodsHash,
+      });
+      registerPayload.signingPublicKey = this.identityWallet.signingPublicKey;
+      registerPayload.signature = this.identityWallet.sign(toSign);
+    }
+
+    console.log('[PoH-Miner] Registering with bootnodes for peer discovery (with node proof)...');
 
     for (const bootnode of this.config.bootnodes) {
       const base = bootnode.endsWith('/') ? bootnode : bootnode + '/';
 
       try {
-        // Register ourselves
+        // Register ourselves (now with signature proof)
         await fetch(`${base}register`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(myInfo),
+          body: JSON.stringify(registerPayload),
         });
 
         // Fetch current peer list
@@ -494,14 +713,15 @@ export class PohMinerNode {
           this.knownPeers = data.peers || [];
 
           // Filter out ourselves
-          this.knownPeers = this.knownPeers.filter(p => p.wallet !== myInfo.wallet);
+          this.knownPeers = this.knownPeers.filter(p => p.wallet !== walletAddr);
 
           console.log(`[PoH-Miner] Discovered ${this.knownPeers.length} peers from ${bootnode}`);
 
           if (this.knownPeers.length > 0) {
             console.log('[PoH-Miner] Known peers:');
             this.knownPeers.forEach(p => {
-              console.log(`  - ${p.wallet?.slice(0,10)}... @ ${p.host}:${p.walletApiPort} (${p.region || 'unknown region'})`);
+              const v = p.signingPublicKey ? '✓verified' : 'unverified';
+              console.log(`  - ${p.wallet?.slice(0,10)}... @ ${p.host}:${p.walletApiPort} (${p.region || 'unknown region'}) [${v}]`);
             });
           }
         }
@@ -527,8 +747,11 @@ export class PohMinerNode {
     if (this.config.bootnodes?.length > 0) {
       console.log(`[PoH-Miner] Configured with ${this.config.bootnodes.length} bootnode(s)`);
 
-      // === Node Discovery via Bootnodes (NEW) ===
       await this.discoverAndRegisterWithBootnodes();
+
+      // Re-register every 8 minutes so we stay in the bootnode peer list
+      // (bootnode prunes peers that haven't been seen for 10 minutes)
+      setInterval(() => this.discoverAndRegisterWithBootnodes(), 8 * 60 * 1000);
     } else {
       console.log('[PoH-Miner] No bootnodes configured — running in local/dev mode only');
     }
@@ -573,6 +796,7 @@ export class PohMinerNode {
         const prevHash = await this.chain[currentHeight].getHash();
         if (newBlock.previousHash === prevHash) {
           this.chain.push(newBlock);
+          this.chainStore.saveChain(this.chain);  // persist gossiped blocks so chain state survives restart
           console.log(`[PoH-Miner] Accepted block #${newBlock.height} from ${from?.slice(0,8)}`);
 
           // Credit any worker rewards this node earned in the received block
@@ -659,7 +883,7 @@ export class PohMinerNode {
       this.walletManager.credit(this.config.wallet, worker.amount);
 
       console.log(
-        `[PoH-Miner] Credited ${worker.amount} POH (worker) from block #${block.height} to ${this.config.wallet}`
+        `[PoH-Miner] Credited ${(worker.amount / POH_DECIMALS).toFixed(4)} POH (worker) from block #${block.height} to ${this.config.wallet}`
       );
     });
   }
@@ -670,6 +894,7 @@ export class PohMinerNode {
     // In real network: subscribe to gossip topic "new-jobs"
     this.onNewJob = (rawJob) => {
       const job = this.jobQueue.addJob(rawJob);
+      this._recordJob(job); // make status/result queryable even for network-originated jobs
 
       const minerInfo = {
         country: this.myLocation?.country,
@@ -682,10 +907,12 @@ export class PohMinerNode {
       if (score > 0 && this.config.computeEnabled) {
         const geoNote = job.originCountry ? ` [from: ${job.originCountry}]` : '';
         console.log(`[PoH-Miner] New job ${job.id} (${job.type})${geoNote} → score: ${score}`);
+        // compute will update the jobResults rec
         this.computeAndSubmitJob(job);
       } else {
         const reason = score === 0 ? 'different continent / low priority' : 'compute disabled';
         console.log(`[PoH-Miner] Ignoring job ${job.id} (${reason})`);
+        this._updateJob(job.id, { status: 'ignored', error: reason });
       }
     };
   }
@@ -729,13 +956,84 @@ export class PohMinerNode {
         methodsHash: verdict.methodsHash,
         methodsCount: verdict.methodsCount,
         realPohUsed: verdict.realPohUsed ?? false,
+        profile: verdict.profile,
       });
 
       await this.submitResult(job, result);
       this.jobQueue.markCompleted(job.id);
 
+      // Make full result available for /job/:id/result queries (verdict + profile + evidence)
+      if (this.jobResults && this.jobResults.has(job.id)) {
+        const rec = this.jobResults.get(job.id);
+        rec.result = result;
+        rec.status = 'done';
+        rec.updatedAt = Date.now();
+      } else if (this.jobResults) {
+        // In case job was not pre-recorded (e.g. via gossip path)
+        this.jobResults.set(job.id, {
+          id: job.id,
+          status: 'done',
+          job,
+          result,
+          error: null,
+          createdAt: start,
+          updatedAt: Date.now(),
+        });
+      }
+
+      return result;
     } catch (err) {
       console.error('[PoH-Miner] Job computation failed:', err.message);
+      if (this.jobResults && this.jobResults.has(job.id)) {
+        const rec = this.jobResults.get(job.id);
+        rec.status = 'error';
+        rec.error = err.message;
+        rec.updatedAt = Date.now();
+      }
+      return null;
+    }
+  }
+
+  /**
+   * Record a job for status/result polling (used by direct /job API + internal paths).
+   */
+  _recordJob(job) {
+    if (!this.jobResults) this.jobResults = new Map();
+    if (this.jobResults.has(job.id)) return; // don't overwrite
+    this.jobResults.set(job.id, {
+      id: job.id,
+      status: 'queued',
+      job,
+      result: null,
+      error: null,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    });
+    if (this.jobQueue) {
+      this.jobQueue.addJob(job);
+    }
+  }
+
+  _updateJob(jobId, patch) {
+    const rec = this.jobResults && this.jobResults.get(jobId);
+    if (rec) {
+      Object.assign(rec, patch);
+      rec.updatedAt = Date.now();
+    }
+  }
+
+  _getJobRecord(jobId) {
+    return this.jobResults ? this.jobResults.get(jobId) : null;
+  }
+
+  async _processJobInBackground(job) {
+    const jobId = job.id;
+    this._updateJob(jobId, { status: 'computing' });
+    try {
+      await this.computeAndSubmitJob(job);
+      // computeAndSubmitJob updates the rec to 'done' + result when successful
+    } catch (e) {
+      this._updateJob(jobId, { status: 'error', error: e.message });
     }
   }
 
@@ -759,8 +1057,15 @@ export class PohMinerNode {
       // Record for history and strike detection
       this._recordSubmission(false, request.id, { ...workValidation, realPohUsed: result.realPohUsed });
 
-      // Apply slashing / reputation penalty for malicious or lazy submissions
-      this.applySlashing(0.15);
+      // Do not slash for simulation fallbacks (dev/testing) or non-realPoh
+      const isSim = result.methodsHash && String(result.methodsHash).startsWith('sim-');
+      const isReal = result.realPohUsed === true;
+      if (!isSim) {
+        // Apply slashing / reputation penalty for malicious or lazy submissions
+        this.applySlashing(0.15);
+      } else {
+        console.log('[PoH-Miner] Simulation result (dev fallback) — skipping self-slash');
+      }
       return; // Do not propagate bad work
     }
 
@@ -853,12 +1158,13 @@ export class PohMinerNode {
 
     if (await newBlock.meetsDifficulty()) {
       this.chain.push(newBlock);
+      this.chainStore.saveChain(this.chain);  // persist local blocks so they survive restart
       console.log(`[PoH-Miner] Produced block #${newBlock.height} (nonce ${newBlock.nonce}) — minted fixed ${BLOCK_REWARD_POH} POH | included ${validResultsForBlock.length} validated scan results`);
 
       // Credit the proposer reward (only the producer claims this)
       if (this.config.wallet && coinbase.proposerReward > 0) {
         this.walletManager.credit(this.config.wallet, coinbase.proposerReward);
-        console.log(`[PoH-Miner] Credited ${coinbase.proposerReward} POH (proposer) to ${this.config.wallet}`);
+        console.log(`[PoH-Miner] Credited ${(coinbase.proposerReward / POH_DECIMALS).toFixed(4)} POH (proposer) to ${this.config.wallet}`);
       }
 
       // Credit any worker rewards this node earned (works for both produced and received blocks)
