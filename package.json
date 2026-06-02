@@ -1,0 +1,135 @@
+{
+  "name": "poh-miner",
+  "version": "0.1.0",
+  "description": "Run the PoH Miner Network. Earn POH by contributing compute (great on Mac Mini, PCs, servers).",
+  "type": "module",
+  "main": "electron/main.cjs",
+  "bin": {
+    "poh-miner": "src/cli.js"
+  },
+  "pkg": {
+    "assets": [
+      "landing/**/*",
+      "scripts/**/*"
+    ],
+    "targets": [
+      "node18-linux-x64",
+      "node18-linux-arm64",
+      "node18-macos-x64",
+      "node18-macos-arm64",
+      "node18-win-x64"
+    ],
+    "outputPath": "dist/bin"
+  },
+  "scripts": {
+    "start": "electron --no-sandbox .",
+    "start:headless": "node start.js",
+    "dev": "node --watch start.js",
+    "easy": "bash scripts/easy-start.sh",
+    "demo": "node scripts/demo-geo-race.js",
+    "demo:geo": "node scripts/demo-geo-race.js",
+    "start:local": "node scripts/start-local-network.js",
+    "serve:landing": "node scripts/serve-landing.js",
+    "start:node": "node src/miner-node.js",
+    "test:job": "node scripts/submit-test-job.js",
+    "build:bin": "pkg . --compress GZip",
+    "build:deb": "bash scripts/build-deb.sh",
+    "build:electron": "electron-builder",
+    "build:electron:mac": "electron-builder --mac",
+    "build:electron:win": "electron-builder --win",
+    "build:electron:linux": "electron-builder --linux",
+    "build:electron:all": "electron-builder -mwl",
+    "build:all": "npm run build:bin && npm run build:deb",
+    "dist": "electron-builder",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:integration": "RUN_INTEGRATION=1 node test/integration/run-integration.js"
+  },
+  "keywords": [
+    "proof-of-work",
+    "decentralized-ai",
+    "poh",
+    "proof-of-human",
+    "mac-mini",
+    "apple-silicon",
+    "useful-compute"
+  ],
+  "license": "MIT",
+  "devDependencies": {
+    "@yao-pkg/pkg": "^5.8.1",
+    "electron-builder": "^24.13.3",
+    "png-to-ico": "^3.0.1",
+    "sharp": "^0.34.5",
+    "vitest": "^1.6.1"
+  },
+  "dependencies": {
+    "electron": "^31.4.0"
+  },
+  "build": {
+    "appId": "ge.proofofhuman.pohminer",
+    "productName": "PoH Miner",
+    "directories": {
+      "output": "dist/electron"
+    },
+    "files": [
+      "electron/**/*",
+      "src/**/*",
+      "landing/**/*",
+      "package.json",
+      "node_modules/**/*"
+    ],
+    "mac": {
+      "category": "public.app-category.utilities",
+      "icon": "assets/icons/poh-miner-1024.png",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ]
+    },
+    "win": {
+      "icon": "assets/icons/poh-miner.ico",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "linux": {
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        },
+        {
+          "target": "deb",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ],
+      "category": "Network;Utility;",
+      "icon": "assets/icons"
+    },
+    "deb": {
+      "depends": []
+    }
+  }
+}
