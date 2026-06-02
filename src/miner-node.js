@@ -22,6 +22,7 @@ import { validateResultWork } from './validation/result-validator.js';
 import { calculateBlockRewards, BLOCK_REWARD_POH, POH_DECIMALS } from './rewards/reward.js';
 import { computeVerdictWithExistingPoh } from './compute/poh-adapter.js';
 import { getBrain, getBrainDataDir } from './compute/adapters/real-poh.js';
+import { BrainSync } from './brain/brain-sync.js';
 import fs from 'fs';
 import path from 'path';
 import { ChainStore } from './storage/chain-store.js';
@@ -130,6 +131,10 @@ export class PohMinerNode {
         this.config.wallet = this.identityWallet.address;
       }
     }
+
+    // BrainSync initialized lazily after brain data dir is set (happens on first compute)
+    // We create it here so it's ready when connectToNetwork runs.
+    this.brainSync = null; // populated in _initBrainSync()
 
     console.log(`[PoH-Miner] Starting node for wallet ${this.config.wallet}`);
 
@@ -625,12 +630,23 @@ export class PohMinerNode {
               return res.end(JSON.stringify({ error: 'address, aiVerdict, correction required' }));
             }
             const b = await getBrain();
-            if (b && typeof b.onVerdictFeedback === 'function') {
-              await b.onVerdictFeedback(address, aiVerdict, correction, comment || '', signals || []);
-              return res.end(JSON.stringify({ ok: true }));
+            if (!b?.onVerdictFeedback) {
+              res.statusCode = 503;
+              return res.end(JSON.stringify({ error: 'Brain not loaded' }));
             }
-            res.statusCode = 503;
-            res.end(JSON.stringify({ error: 'Brain not loaded' }));
+            await b.onVerdictFeedback(address, aiVerdict, correction, comment || '', signals || []);
+
+            // Broadcast to network
+            if (!this.brainSync) this._initBrainSync();
+            if (this.brainSync) {
+              this.brainSync.publishFeedback(
+                { address, aiVerdict, correction, comment, signals },
+                this.peers,
+                this.config.bootnodes
+              ).catch(() => {});
+            }
+
+            return res.end(JSON.stringify({ ok: true, broadcast: !!this.brainSync }));
           } catch (e) {
             res.statusCode = 500;
             res.end(JSON.stringify({ error: e.message }));
@@ -650,18 +666,90 @@ export class PohMinerNode {
               return res.end(JSON.stringify({ error: 'method, voteType, vote required' }));
             }
             const b = await getBrain();
-            if (b && typeof b.onVote === 'function') {
-              await b.onVote(method, voteType, vote, stakeWeight || 1, feedback || null);
-              return res.end(JSON.stringify({ ok: true }));
+            if (!b?.onVote) {
+              res.statusCode = 503;
+              return res.end(JSON.stringify({ error: 'Brain not loaded' }));
             }
-            res.statusCode = 503;
-            res.end(JSON.stringify({ error: 'Brain not loaded' }));
+            await b.onVote(method, voteType, vote, stakeWeight || 1, feedback || null);
+
+            // Broadcast to network
+            if (!this.brainSync) this._initBrainSync();
+            if (this.brainSync) {
+              this.brainSync.publishWeightUpdate(
+                { method, voteType, vote, stakeWeight, feedback },
+                this.peers,
+                this.config.bootnodes
+              ).catch(() => {});
+            }
+
+            return res.end(JSON.stringify({ ok: true, broadcast: !!this.brainSync }));
           } catch (e) {
             res.statusCode = 500;
             res.end(JSON.stringify({ error: e.message }));
           }
         });
         return;
+      }
+
+      // Receive brain events pushed by other miners (real-time peer broadcast)
+      if (req.method === 'POST' && url.pathname === '/api/brain/sync/event') {
+        let body = '';
+        req.on('data', c => body += c);
+        req.on('end', async () => {
+          try {
+            const event = JSON.parse(body);
+            if (!this.brainSync) this._initBrainSync();
+            if (!this.brainSync) return res.end(JSON.stringify({ ok: false, reason: 'brain sync not ready' }));
+
+            const brain = await getBrain().catch(() => null);
+            const applied = await this.brainSync.applyEvent(event, brain);
+            return res.end(JSON.stringify({ ok: true, applied }));
+          } catch (e) {
+            res.statusCode = 400;
+            res.end(JSON.stringify({ error: e.message }));
+          }
+        });
+        return;
+      }
+
+      // ── Methods list (/methods) ───────────────────────────────────────────────
+      // Returns the network-synced active methods merged with this node's weights.
+      // Frontend uses this as the voting queue when routing through a peer.
+      if (req.method === 'GET' && url.pathname === '/methods') {
+        getMethodsManager().then(mm => {
+          const methods = mm ? mm.getActiveMethods() : [];
+          const brainDir = getBrainDataDir();
+          const weights = brainDir && fs.existsSync(path.join(brainDir, 'weights.json'))
+            ? JSON.parse(fs.readFileSync(path.join(brainDir, 'weights.json'), 'utf8'))
+            : {};
+          const result = methods.map(m => ({
+            ...m,
+            weight: weights[m.id] ?? 1.0,
+            score: weights[m.id] ?? 1.0,
+          }));
+          res.end(JSON.stringify(result));
+        }).catch(e => {
+          res.statusCode = 500;
+          res.end(JSON.stringify({ error: e.message }));
+        });
+        return;
+      }
+
+      // ── Cached profile by address (/profile/:address) ─────────────────────────
+      // Returns the enriched profile from the most recent completed job for this
+      // address. Frontend calls this after a decentralized scan for the profile card.
+      const profileMatch = url.pathname.match(/^\/profile\/([^/]+)$/);
+      if (req.method === 'GET' && profileMatch) {
+        const address = decodeURIComponent(profileMatch[1]);
+        const jobs = this.jobResults ? Array.from(this.jobResults.values()) : [];
+        const rec = jobs
+          .filter(r => r.job?.payload?.address === address && r.status === 'done' && r.result?.profile)
+          .sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))[0];
+        if (rec?.result?.profile) {
+          return res.end(JSON.stringify(rec.result.profile));
+        }
+        res.statusCode = 404;
+        return res.end(JSON.stringify({ error: 'No profile cached for this address' }));
       }
 
       res.statusCode = 404;
@@ -694,6 +782,9 @@ export class PohMinerNode {
       console.log(`   Brain weights: GET http://localhost:${port}/api/brain/weights`);
       console.log(`   Brain feedback: POST http://localhost:${port}/api/brain/feedback`);
       console.log(`   Brain vote: POST http://localhost:${port}/api/brain/vote`);
+      console.log(`   Brain sync (peer push): POST http://localhost:${port}/api/brain/sync/event`);
+      console.log(`   Methods list: GET http://localhost:${port}/methods`);
+      console.log(`   Cached profile: GET http://localhost:${port}/profile/<address>`);
       console.log(`   (legacy still works: /test/job )`);
     });
 
@@ -874,18 +965,48 @@ export class PohMinerNode {
     return process.env.POH_PUBLIC_HOST || 'localhost';
   }
 
+  _initBrainSync() {
+    if (this.brainSync) return;
+    const brainDataDir = getBrainDataDir();
+    if (!brainDataDir) return;
+    this.brainSync = new BrainSync({
+      brainDataDir,
+      identityWallet: this.identityWallet,
+      walletApiPort: this.config.walletApiPort || 3456,
+    });
+    console.log('[PoH-Miner] BrainSync initialized');
+  }
+
   async connectToNetwork() {
     // Real version: libp2p, gossipsub, or simple WebSocket mesh between miners
     console.log('[PoH-Miner] Connecting to network...');
+
+    // Initialize brain sync (needs brain data dir set by first compute call,
+    // but we do a best-effort init here — it will be re-tried on first API call)
+    this._initBrainSync();
 
     if (this.config.bootnodes?.length > 0) {
       console.log(`[PoH-Miner] Bootnodes: ${JSON.stringify(this.config.bootnodes)}`);
 
       await this.discoverAndRegisterWithBootnodes();
 
+      // Pull brain events accumulated on the bootnode since our last sync
+      if (this.brainSync) {
+        const brain = await getBrain().catch(() => null);
+        await this.brainSync.pullFromBootnodes(this.config.bootnodes, brain);
+      }
+
       // Re-register every 8 minutes so we stay in the bootnode peer list
-      // (bootnode prunes peers that haven't been seen for 10 minutes)
       setInterval(() => this.discoverAndRegisterWithBootnodes(), 8 * 60 * 1000);
+
+      // Re-sync brain events every 5 minutes (picks up any events we missed)
+      setInterval(async () => {
+        if (!this.brainSync) this._initBrainSync();
+        if (this.brainSync) {
+          const brain = await getBrain().catch(() => null);
+          await this.brainSync.pullFromBootnodes(this.config.bootnodes, brain);
+        }
+      }, 5 * 60 * 1000);
     } else {
       console.log('[PoH-Miner] No bootnodes configured — running in local/dev mode only');
     }
