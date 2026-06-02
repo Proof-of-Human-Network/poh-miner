@@ -1,0 +1,49 @@
+{
+  "_comment": "This is a local development config. The GUI (electron) will usually write to ~/.poh-miner/config.json instead.",
+
+  "wallet": "YOUR_SOLANA_ADDRESS_HERE",
+
+  "ollamaUrl": "http://localhost:11434",
+  "model": "qwen2.5:1.5b",
+  "inferenceMode": "auto",
+
+  "autoStart": true,
+  "region": "auto",
+
+  "bootnodes": [
+    "http://localhost:8080"
+  ],
+
+  "pohWallet": "",
+  "solanaAddress": "",
+
+  "rpc": {
+    "solana": {
+      "provider": "helius",
+      "apiKey": ""
+    },
+    "1": {
+      "provider": "alchemy",
+      "apiKey": ""
+    },
+    "8453": {
+      "provider": "alchemy",
+      "apiKey": ""
+    },
+    "42161": {
+      "provider": "alchemy",
+      "apiKey": ""
+    }
+  },
+
+  "rpcOverrides": {
+    "btc": "https://mempool.space/api",
+    "tron": "",
+    "ton": "",
+    "xlm": "https://horizon.stellar.org"
+  },
+
+  "etherscanApiKey": "",
+
+  "onboarded": false
+}

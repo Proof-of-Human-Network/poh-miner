@@ -1,0 +1,125 @@
+/**
+ * Extensive Integration Tests for PoH Miner Network
+ *
+ * These tests exercise the *full* miner stack with the real POH checker/brain
+ * (loaded from the sibling `dev/` directory).
+ *
+ * They are only executed when running:
+ *   yarn test:integration     (or npm run test:integration)
+ *
+ * They will be skipped (via describe.skip) during normal `yarn test`.
+ */
+
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import {
+  hasRealPohChecker,
+  startTestMiner,
+  stopTestMiner,
+  submitTestJob,
+  waitForRealResult,
+  waitForBlock,
+} from './helpers.js';
+
+const shouldRun = process.env.RUN_INTEGRATION === '1';
+
+// Use describe.skip when the env var is not set.
+// This prevents Vitest from even trying to run the suite during normal `npm test`.
+const integrationSuite = shouldRun ? describe : describe.skip;
+
+integrationSuite('Full Miner + Real POH Checker Integration', () => {
+  let miner;
+
+  beforeAll(async () => {
+    if (!hasRealPohChecker()) {
+      console.warn('\n[Integration] Real POH checker (dev/) not found. Skipping full integration tests.\n');
+      return;
+    }
+
+    // Start a real miner that loads the actual checker/brain
+    miner = await startTestMiner({
+      wallet: 'integration-test-miner',
+      inferenceMode: 'cpu', // Use CPU for CI / reliable testing
+      computeEnabled: true,
+    });
+  });
+
+  afterAll(async () => {
+    if (miner) {
+      await stopTestMiner(miner);
+    }
+  });
+
+  it('should start a miner that loads the real POH checker', async () => {
+    if (!hasRealPohChecker()) return;
+
+    // The miner should have successfully loaded the real modules
+    expect(miner).toBeDefined();
+    // In real mode, the compute adapter should be active
+    expect(miner.config.computeEnabled).toBe(true);
+  });
+
+  it('should compute a job using the real POH brain (not simulation)', async () => {
+    if (!hasRealPohChecker()) return;
+
+    const job = submitTestJob(miner, {
+      payload: { address: 'bc1qrealintegrationtest' },
+      fee: 50000000,
+    });
+
+    // Wait for the miner to actually process this job with real computation
+    let realResult;
+    try {
+      realResult = await waitForRealResult(miner, 60000);
+    } catch (e) {
+      // If it times out, the test will fail below
+    }
+
+    expect(realResult).toBeDefined();
+    expect(realResult.realPohUsed).toBe(true); // This is the critical assertion
+    expect(realResult.verdict).toBeDefined();
+    expect(realResult.profile).toBeDefined(); // Full POH output required
+    expect(realResult.reasoning).toBeDefined();
+    expect(realResult.methodsHash).toBeDefined();
+  });
+
+  it('should produce a block containing a validated real ScanResult', async () => {
+    if (!hasRealPohChecker()) return;
+
+    // Submit another job
+    submitTestJob(miner, {
+      payload: { address: 'bc1qblockproductiontest' },
+      fee: 30000000,
+    });
+
+    // Wait for block production that includes real work
+    const block = await waitForBlock(miner, 90000);
+
+    expect(block).toBeDefined();
+    expect(block.scanResults).toBeDefined();
+    expect(Array.isArray(block.scanResults)).toBe(true);
+
+    // At least one result in the block should be real
+    const hasRealResult = block.scanResults.some(r => r.realPohUsed === true);
+    expect(hasRealResult).toBe(true);
+  });
+
+  it('should enforce work quality rules on real results', async () => {
+    if (!hasRealPohChecker()) return;
+
+    // This test submits a job and then inspects whether the produced
+    // result would pass the strict validation rules from the yellow paper.
+    submitTestJob(miner, {
+      payload: { address: 'bc1qqualitytest' },
+      fee: 25000000,
+    });
+
+    const result = await waitForRealResult(miner, 60000);
+
+    // These are the core requirements from the yellow paper + result-validator
+    expect(result.methodsHash).toBeDefined();
+    expect(result.verdict).toBeDefined();
+    expect(result.profile).toBeDefined();
+    expect(result.reasoning).toBeDefined();
+    expect(result.signalsUsed).toBeGreaterThan(0);
+  });
+});

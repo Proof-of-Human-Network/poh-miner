@@ -1,0 +1,49 @@
+{
+  "_comment": "Copy this file to config.json (or ~/.poh-miner/config.json). This is the current recommended format used by both CLI and the Electron GUI (onboarding + RPC settings).",
+
+  "wallet": "YOUR_SOLANA_ADDRESS_HERE",
+
+  "ollamaUrl": "http://localhost:11434",
+  "model": "qwen2.5:1.5b",
+  "inferenceMode": "auto",
+
+  "autoStart": true,
+  "region": "auto",
+
+  "bootnodes": [
+    "http://your-bootnode-ip:8080"
+  ],
+
+  "rpc": {
+    "solana": {
+      "provider": "helius",
+      "apiKey": "YOUR_HELIUS_KEY"
+    },
+    "1": {
+      "provider": "alchemy",
+      "apiKey": "YOUR_ALCHEMY_KEY"
+    },
+    "8453": {
+      "provider": "alchemy",
+      "apiKey": "YOUR_ALCHEMY_KEY"
+    },
+    "42161": {
+      "provider": "alchemy",
+      "apiKey": "YOUR_ALCHEMY_KEY"
+    }
+  },
+
+  "rpcOverrides": {
+    "btc": "https://mempool.space/api",
+    "tron": "",
+    "ton": "",
+    "xlm": "https://horizon.stellar.org"
+  },
+
+  "etherscanApiKey": "YOUR_ETHERSCAN_KEY_HERE",
+
+  "pohWallet": "",
+  "solanaAddress": "",
+
+  "onboarded": false
+}
