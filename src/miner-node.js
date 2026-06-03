@@ -17,7 +17,7 @@ import { PohBlock } from './core/block.js';
 import { JobQueue } from './jobs/job-queue.js';
 import { detectMyCountry, getCountryProximityMultiplier } from './jobs/geo.js';
 import { getMethodsManager } from './signals/methods-manager.js';
-import { SimpleGossip } from './network/gossip.js';
+import { P2PGossip } from './network/p2p-gossip.js';
 import { validateResultWork } from './validation/result-validator.js';
 import { calculateBlockRewards, BLOCK_REWARD_POH, POH_DECIMALS } from './rewards/reward.js';
 import { computeVerdictWithExistingPoh } from './compute/poh-adapter.js';
@@ -73,7 +73,10 @@ export class PohMinerNode {
     this.jobResults = new Map(); // jobId -> {id, status:'queued'|'computing'|'done'|'error', job, result:ScanResult|null, error?:string, createdAt, updatedAt}
     this.myLatencyProfile = null; // populated on startup
     this.currentDifficulty = 4;
-    this.gossip = new SimpleGossip(this.config.wallet || 'unknown-miner');
+    this.gossip = new P2PGossip(
+      this.config.wallet || 'unknown-miner',
+      () => this.peers || []   // live peer list — updated by discoverAndRegisterWithBootnodes
+    );
     this.chainStore = new ChainStore();
     this.walletManager = new WalletManager();
     this.rewardClaimStore = new RewardClaimStore();
@@ -548,6 +551,23 @@ export class PohMinerNode {
           walletApiPort: port,
           version: 'poh-miner-network',
         }));
+      }
+
+      // ── P2P gossip receive endpoint ───────────────────────────────────────────
+      if (req.method === 'POST' && url.pathname === '/gossip') {
+        let body = '';
+        req.on('data', c => body += c);
+        req.on('end', async () => {
+          try {
+            const envelope = JSON.parse(body);
+            await this.gossip.receive(envelope);
+            res.end(JSON.stringify({ ok: true }));
+          } catch (e) {
+            res.statusCode = 400;
+            res.end(JSON.stringify({ error: e.message }));
+          }
+        });
+        return;
       }
 
       // ── Ollama chat/generate proxy (/api/chat, /api/generate, /api/models) ──
