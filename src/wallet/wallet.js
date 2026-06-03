@@ -114,8 +114,9 @@ export class Wallet {
 }
 
 export class WalletManager {
-  constructor() {
-    ensureDir(WALLETS_DIR);
+  constructor(walletsDir) {
+    this.walletsDir = walletsDir || WALLETS_DIR;
+    ensureDir(this.walletsDir);
   }
 
   createWallet() {
@@ -125,13 +126,13 @@ export class WalletManager {
   }
 
   saveWallet(wallet) {
-    const file = path.join(WALLETS_DIR, `${wallet.address}.json`);
+    const file = path.join(this.walletsDir, `${wallet.address}.json`);
     fs.writeFileSync(file, JSON.stringify(wallet.toJSON(), null, 2));
     return file;
   }
 
   loadWallet(address) {
-    const file = path.join(WALLETS_DIR, `${address}.json`);
+    const file = path.join(this.walletsDir, `${address}.json`);
     if (!fs.existsSync(file)) return null;
     const data = JSON.parse(fs.readFileSync(file, 'utf8'));
     const w = Wallet.fromJSON(data);
@@ -144,8 +145,8 @@ export class WalletManager {
   }
 
   listWallets() {
-    if (!fs.existsSync(WALLETS_DIR)) return [];
-    return fs.readdirSync(WALLETS_DIR)
+    if (!fs.existsSync(this.walletsDir)) return [];
+    return fs.readdirSync(this.walletsDir)
       .filter(f => f.endsWith('.json'))
       .map(f => f.replace('.json', ''));
   }
@@ -211,7 +212,17 @@ export class WalletManager {
     }
     const total = tx.amount + (tx.fee || 0);
     if ((sender.balance || 0) < total) return 'insufficient balance';
-    if (!tx.verify()) return 'invalid signature';
+    // Verify signature against the sender's STORED public key — not the key
+    // claimed inside the transaction. This prevents an attacker from signing
+    // with their own key while claiming to spend from someone else's address.
+    if (!tx.signature) return 'invalid signature';
+    if (!sender.signingPublicKey) return 'sender has no registered signing key';
+    if (tx.signingPublicKey && tx.signingPublicKey !== sender.signingPublicKey) {
+      return 'invalid signature';
+    }
+    if (!Wallet.verifySignature(sender.signingPublicKey, tx.txHash, tx.signature)) {
+      return 'invalid signature';
+    }
 
     sender.balance -= total;
     sender.nonce   += 1;

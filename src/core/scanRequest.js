@@ -110,6 +110,6 @@ export class ScanResult {
       realPohUsed: this.realPohUsed,
       profileFp: this.profile ? crypto.createHash('sha256').update(JSON.stringify(this.profile)).digest('hex').slice(0, 12) : null,
     });
-    return 'sha256:' + Buffer.from(data).toString('base64').slice(0, 32);
+    return crypto.createHash('sha256').update(data).digest('hex');
   }
 }
