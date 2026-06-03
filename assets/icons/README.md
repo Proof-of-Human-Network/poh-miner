@@ -1,44 +1,28 @@
 # Icons
 
-This folder contains icons generated from `poh-miner.svg` (a green network/brain symbol).
+This folder contains icons generated from the official PoH logo in brand kit (svg/logo no bg.svg and variants), copied to assets/logos/ and assets/icons/poh-miner.svg as canonical.
 
-## Generated Files
+## Files
 
-| File                        | Purpose                     | Used By          |
-|----------------------------|-----------------------------|------------------|
-| `poh-miner.svg`            | Source (edit this)          | All platforms    |
-| `poh-miner-*.png`          | Raster icons (various sizes)| Linux fallback   |
-| `poh-miner-1024.png`       | High-res PNG                | macOS fallback   |
-| `poh-miner.ico`            | Windows icon                | Windows          |
-| `poh-miner.iconset/`       | macOS iconset folder        | Generate .icns   |
+- `poh-miner.svg` — Source vector (edit this for design changes)
+- `poh-miner-*.png` — Raster versions in various sizes
+- `poh-miner.ico` — Windows icon
+- `poh-miner.iconset/` — macOS iconset (convert to .icns on macOS)
 
-## macOS (.icns)
+## How to generate .icns (macOS only)
 
-The best quality macOS icon requires a `.icns` file.
-
-**On a Mac**, run:
+On a Mac, run:
 
 ```bash
 iconutil -c icns assets/icons/poh-miner.iconset -o assets/icons/poh-miner.icns
 ```
 
-Then update `package.json` build config to use:
-```json
-"icon": "assets/icons/poh-miner.icns"
-```
+Then delete the .iconset folder if desired.
 
-## Regenerating Icons
+## Regenerating icons
 
-After modifying `poh-miner.svg`, simply run:
+After editing the SVG, run:
 
 ```bash
 node scripts/generate-icons.js
 ```
-
-## Requirements
-
-The generation script uses:
-- `sharp` (SVG → high quality PNG)
-- `png-to-ico` (.ico creation)
-
-These are listed as devDependencies.
