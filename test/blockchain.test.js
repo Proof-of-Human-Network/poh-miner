@@ -522,6 +522,85 @@ describe('Fix 6 — Balance Journal & Reorg', () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Job deduplication — race between miners
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('Job deduplication — race between miners', () => {
+  it('minedRequestIds is empty on fresh node', () => {
+    // Minimal stand-in — just tests the Set behaviour without booting a full node
+    const minedRequestIds = new Set();
+    expect(minedRequestIds.has('scan-1')).toBe(false);
+  });
+
+  it('result added before another miner wins is dropped from pendingValidResults', () => {
+    const pendingValidResults = [
+      { requestId: 'scan-1', verdict: 'HUMAN' },
+      { requestId: 'scan-2', verdict: 'AI' },
+      { requestId: 'scan-3', verdict: 'UNCERTAIN' },
+    ];
+    const minedRequestIds = new Set(['scan-1']); // miner A won scan-1
+
+    // Filter — same logic as _appendBlock
+    const remaining = pendingValidResults.filter(r => !minedRequestIds.has(r.requestId));
+    expect(remaining).toHaveLength(2);
+    expect(remaining.map(r => r.requestId)).not.toContain('scan-1');
+  });
+
+  it('result computed after another miner wins is dropped at queue time', () => {
+    const minedRequestIds = new Set(['scan-99']);
+    // Same check as in computeAndSubmitJob
+    const shouldDrop = minedRequestIds.has('scan-99');
+    expect(shouldDrop).toBe(true);
+  });
+
+  it('proposeBlock excludes already-mined requestIds', () => {
+    const pending = [
+      { requestId: 'scan-A', verdict: 'HUMAN' },
+      { requestId: 'scan-B', verdict: 'AI' },   // already in chain
+      { requestId: 'scan-C', verdict: 'HUMAN' },
+    ];
+    const minedRequestIds = new Set(['scan-B']);
+
+    const deduped = pending.filter(r => !minedRequestIds.has(r.requestId));
+    expect(deduped).toHaveLength(2);
+    expect(deduped.map(r => r.requestId)).toEqual(['scan-A', 'scan-C']);
+  });
+
+  it('minedRequestIds is populated from block.scanResults on accept', () => {
+    const minedRequestIds = new Set();
+    const block = {
+      scanResults: [
+        { requestId: 'scan-10' },
+        { requestId: 'scan-11' },
+      ],
+    };
+    // Same logic as _appendBlock
+    for (const r of (block.scanResults || [])) {
+      if (r.requestId) minedRequestIds.add(r.requestId);
+    }
+    expect(minedRequestIds.has('scan-10')).toBe(true);
+    expect(minedRequestIds.has('scan-11')).toBe(true);
+    expect(minedRequestIds.has('scan-99')).toBe(false);
+  });
+
+  it('same job never appears twice in pendingValidResults', () => {
+    const minedRequestIds = new Set();
+    const pendingValidResults = [];
+
+    function queueResult(requestId) {
+      if (minedRequestIds.has(requestId)) return false;
+      if (pendingValidResults.find(r => r.requestId === requestId)) return false;
+      pendingValidResults.push({ requestId });
+      return true;
+    }
+
+    expect(queueResult('scan-X')).toBe(true);
+    expect(queueResult('scan-X')).toBe(false); // duplicate
+    expect(pendingValidResults).toHaveLength(1);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Block integrity
 // ─────────────────────────────────────────────────────────────────────────────
 

@@ -67,8 +67,11 @@ export class PohMinerNode {
     this.chain = [];
     this.peers = [];
     this.knownPeers = [];
-    this.orphanPool = new Map(); // previousHash → PohBlock[]  (Fix 3)
-    this.txMempool = null;       // initialized after walletManager is ready (Fix 4)
+    this.orphanPool = new Map();   // previousHash → PohBlock[]
+    this.txMempool = null;         // initialized after walletManager is ready
+    // Set of requestIds already included in a mined block. Used to prevent
+    // the same scan job being computed and rewarded twice across the network.
+    this.minedRequestIds = new Set();
 
     // Apply custom RPC endpoints from config into process.env so the loaded checker uses them
     this._applyRpcEndpoints();
@@ -872,7 +875,14 @@ export class PohMinerNode {
     const persisted = this.chainStore.loadChain();
     if (persisted.length > 0) {
       this.chain = persisted.map(b => PohBlock.fromJSON ? PohBlock.fromJSON(b) : new PohBlock(b));
-      console.log(`[PoH-Miner] Loaded ${this.chain.length} blocks from disk`);
+      // Rebuild minedRequestIds from the persisted chain so we never re-compute
+      // a job that was already included in a block before a restart.
+      for (const block of this.chain) {
+        for (const r of (block.scanResults || [])) {
+          if (r.requestId) this.minedRequestIds.add(r.requestId);
+        }
+      }
+      console.log(`[PoH-Miner] Loaded ${this.chain.length} blocks from disk (${this.minedRequestIds.size} known request IDs)`);
     }
 
     // 2. If still empty, create genesis
@@ -1182,6 +1192,24 @@ export class PohMinerNode {
       }
     }
     if (appliedTxHashes.length) this.txMempool.onBlockApplied(appliedTxHashes);
+
+    // Register all scan results in this block as mined — drop any pending
+    // results for the same requestIds so miners don't re-mine them.
+    let dropped = 0;
+    for (const r of (block.scanResults || [])) {
+      if (r.requestId) {
+        if (this.minedRequestIds.has(r.requestId)) continue; // already known
+        this.minedRequestIds.add(r.requestId);
+      }
+    }
+    const before = this.pendingValidResults.length;
+    this.pendingValidResults = this.pendingValidResults.filter(
+      r => !this.minedRequestIds.has(r.requestId)
+    );
+    dropped = before - this.pendingValidResults.length;
+    if (dropped > 0) {
+      console.log(`[PoH-Miner] Dropped ${dropped} pending result(s) already mined in block #${block.height}`);
+    }
 
     // Abort current mining immediately — we need to mine on the new tip
     this._abortMining();
@@ -1550,6 +1578,12 @@ export class PohMinerNode {
       try { result.sign(this.identityWallet); } catch { /* non-fatal */ }
     }
 
+    // Another miner may have won this job while we were computing — drop it.
+    if (this.minedRequestIds.has(request.id)) {
+      console.log(`[PoH-Miner] Job ${request.id} already mined by another node — dropping result`);
+      return;
+    }
+
     // Record successful submission
     this._recordSubmission(true, request.id, { ...workValidation, realPohUsed: result.realPohUsed });
 
@@ -1640,6 +1674,15 @@ export class PohMinerNode {
       coinbase.proposerReward = Math.floor(coinbase.proposerReward * reputationMultiplier);
     }
 
+    // Final guard: exclude any result whose requestId is already in the chain.
+    // This catches results that slipped through between _appendBlock and here.
+    const dedupedResults = validResultsForBlock.filter(
+      r => !this.minedRequestIds.has(r.requestId)
+    );
+    if (dedupedResults.length < validResultsForBlock.length) {
+      console.log(`[PoH-Miner] Filtered ${validResultsForBlock.length - dedupedResults.length} duplicate result(s) before block inclusion`);
+    }
+
     // Include pending transactions (fee-ordered, up to 100 per block)
     const pendingTxs = this.txMempool.getPending(100);
 
@@ -1648,7 +1691,7 @@ export class PohMinerNode {
       previousHash: await previous.getHash(),
       timestamp: Date.now(),
       minerWallet: this.config.wallet,
-      scanResults: validResultsForBlock,
+      scanResults: dedupedResults,
       transactions: pendingTxs.map(t => t.toJSON()),
       coinbaseReward: coinbase,
       difficulty: this.currentDifficulty,
@@ -1662,6 +1705,11 @@ export class PohMinerNode {
     if (newBlock.meetsDifficultySync()) {
       // Sign the block with our identity key after PoW is solved
       if (this.identityWallet) newBlock.sign(this.identityWallet);
+
+      // Mark these requestIds as mined so no peer or restart re-mines them
+      for (const r of dedupedResults) {
+        if (r.requestId) this.minedRequestIds.add(r.requestId);
+      }
 
       this.chain.push(newBlock);
       this.chainStore.saveChain(this.chain);  // persist local blocks so they survive restart
