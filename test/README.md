@@ -1,54 +1,64 @@
-# Automated Tests for PoH Miner Network
+# Tests
 
-This directory contains the automated test suite for the POH Miner Network.
-
-## Running Tests
+## Running
 
 ```bash
-# Run all tests once
-npm test
-
-# Run tests in watch mode (recommended during development)
-npm run test:watch
+npm test                   # all unit tests (vitest)
+npm run test:watch         # watch mode
+npm run test:integration   # integration tests (requires dev/ checker)
 ```
 
-## Test Structure
+## Unit Tests
 
-- `wallet.test.js` — Tests for `Wallet` and `WalletManager` (balance, transfers, persistence)
-- `job-queue.test.js` — Tests for job scoring, geo preference, load/reputation penalties
-- `result-validator.test.js` — Tests for the work validation logic (signal coverage, methodsHash, etc.)
+| File | Tests | What's covered |
+|---|---|---|
+| `blockchain.test.js` | 49 | All 6 blockchain fixes + job deduplication + block integrity |
+| `wallet.test.js` | 2 | Wallet generation, JSON round-trip |
+| `job-queue.test.js` | — | Job scoring, geo preference, reputation |
+| `result-validator.test.js` | — | Signal coverage, methodsHash consensus, work validation |
 
-## Adding New Tests
+### blockchain.test.js suites
 
-1. Create a new file in `test/` ending with `.test.js`
-2. Use Vitest's `describe` / `it` / `expect` API
-3. Mock network-dependent modules when necessary (see `result-validator.test.js` for example)
+| Suite | Tests | What |
+|---|---|---|
+| Fix 1 — P2P Gossip | 5 | Local delivery, dedup by ID, TTL relay, path loop prevention |
+| Fix 2 — Signatures | 5 | Block sign/verify, result sign/verify, tamper detection, wrong-key rejection |
+| Fix 3 — chainWork | 4 | BigInt accumulation, ordering, empty chain, difficulty scaling |
+| Fix 4 — Transactions & Double-Spend | 9 | Apply, nonce replay, double-spend mempool lock, forgery rejection, dedup, lock release, sequential nonces, deterministic hash, revert |
+| Fix 5 — Proof of Work | 8 | Nonce found, leading zeros, AbortSignal, pre-aborted, difficulty adjust up/down, hash determinism |
+| Fix 6 — Balance Journal | 6 | Record, entry pruning, disk persistence, balance reversal, idempotent rollback |
+| Job deduplication | 6 | minedRequestIds, pendingValidResults filter, post-compute drop, proposeBlock guard, populate from block, queue-time dedup |
+| Block integrity | 3 | JSON round-trip, field change changes hash, async == sync hash |
 
-## Integration / End-to-End Tests (Full Miner + Real Checker)
+Each test uses isolated temp directories — no interference with `~/.poh-miner`.
 
-Located in `test/integration/`.
+## Integration Tests (`test/integration/`)
 
-These tests are meant to exercise the **complete system**, including loading and running the real POH checker/brain from the sibling `dev/` directory (exactly as a production miner would).
-
-### Running
+Exercise the complete system with the real dev/ checker + brain:
 
 ```bash
-yarn test:integration
+RUN_INTEGRATION=1 npm run test:integration
 ```
 
-The entry point is `run-integration.js`. It will automatically skip (with a message) if the real checker is not present.
+Skips automatically if `dev/` is not present.
 
-This is the place to add the kind of extensive, "run full miner with checker" tests based on the README and Yellow Paper that you requested.
+## Adding Tests
 
-Current harness lives in `helpers.js`. You can expand `run-integration.js` with more scenarios (multi-miner racing, real result validation, block production with actual inference work, etc.).
+Tests use **vitest** with ESM. Use dynamic `import()` inside each `it()` to keep module caches isolated:
 
-## Philosophy
+```js
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import os from 'os';
+import fs from 'fs';
 
-We prioritize testing the **pure logic** pieces that are critical for correctness and security:
+describe('My feature', () => {
+  let dir;
+  beforeEach(() => { dir = fs.mkdtempSync(os.tmpdir() + '/poh-test-'); });
+  afterEach(() => { fs.rmSync(dir, { recursive: true, force: true }); });
 
-- Wallet accounting
-- Job routing / geo preference
-- Result validation & anti-cheat rules
-- Reputation mechanics
-
-Heavy integration with the real POH brain (`dev/`) or live network calls are tested via the existing demo scripts (`scripts/demo-*.js`, `scripts/submit-test-job.js`) rather than unit tests.
+  it('does something', async () => {
+    const { MyClass } = await import('../src/my-module.js');
+    expect(new MyClass()).toBeDefined();
+  });
+});
+```

@@ -1,383 +1,275 @@
-# PoH Miner Network — Proof of Human Compute Layer
+# PoH Miner Network
 
-**This is the new base layer.**
+Decentralized compute layer for the Proof of Humanity network. Miners race to evaluate wallet identity using the existing PoH checker + AI brain, earn POH token for valid work, and collectively maintain an immutable record of every verified identity on a shared blockchain.
 
-## 🚀 Getting Started as a Miner (Production Flow)
+---
 
-### 1. One-time Setup
+## Quick Start
+
+### GUI (recommended for non-technical users)
+
+Download the latest `.deb` / `.AppImage` / `.dmg` from the releases page. On install, Ollama and the `qwen2.5:1.5b` model are downloaded automatically.
+
+### CLI
 
 ```bash
-cd Desktop/poh/poh-miner-network
+# Install dependencies once
 npm install
-```
 
-### 2. Create or use a wallet
-
-The node will automatically create a wallet on first run if none is configured.
-
-To manage wallets manually:
-
-```bash
-poh-miner wallet create          # creates a new wallet
-poh-miner wallet list
-poh-miner wallet balance <addr>
-```
-
-### 3. Configure bootnodes (important for real network use)
-
-After cloning the repo, the easiest way is to use a **local config** next to the code:
-
-```bash
-cd poh-miner-network
+# Copy example config and fill in your wallet + bootnodes
 cp config.example.json config.json
-# or: cp config.example.json .poh-miner/config.json
+
+# Start mining
+npm start
+# or: node src/cli.js start
 ```
 
-Then edit `config.json` (or `.poh-miner/config.json`) and add your bootnodes + wallet:
+### Docker
+
+```bash
+docker run -v ~/.poh-miner:/root/.poh-miner ghcr.io/poh/miner:latest
+```
+
+---
+
+## Configuration
+
+Config file is loaded from the first location that exists (in order):
+
+1. `POH_CONFIG` env var (full path)
+2. `./.poh-miner/config.json`
+3. `./config.json`
+4. `~/.poh-miner/config.json`
+
+Minimal example:
 
 ```json
 {
-  "wallet": "your-solana-address-here",
-  "bootnodes": [
-    "http://your-bootnode-ip:8080",
-    "http://backup-bootnode-ip:8080"
-  ],
+  "wallet": "pohYourAddressHere",
+  "bootnodes": ["https://bootnode.proofofhuman.ge"],
+  "solanaAddress": "YourSolanaAddress",
   "inferenceMode": "auto",
-  "solanaRpc": "https://api.mainnet-beta.solana.com"
+  "model": "qwen2.5:1.5b",
+  "walletApiPort": 3456
 }
 ```
 
-**Config file locations (in order of precedence):**
+| Field | Default | Description |
+|---|---|---|
+| `wallet` | auto-created | PoH address that earns rewards |
+| `bootnodes` | production bootnode | Peer discovery + chain sync entry points |
+| `inferenceMode` | `auto` | `cpu` / `gpu` / `auto` |
+| `model` | `qwen2.5:1.5b` | Ollama model used by the brain |
+| `walletApiPort` | `3456` | Port for the local API server |
+| `computeEnabled` | `true` | Set `false` to run as relay-only |
 
-1. `POH_CONFIG` env var (full path)
-2. `./.poh-miner/config.json` (local)
-3. `./config.json` (project root — recommended after `git clone`)
-4. `~/.poh-miner/config.json` (global, for installed use)
+RPC endpoints can be configured per-chain under the `rpc` key — see `config.example.json`.
 
-`poh-miner init` will create the most appropriate location automatically (local when inside the source tree).
+---
 
-### 4. Start the miner
+## Architecture
 
-```bash
-poh-miner start
+```
+┌──────────────────────────────────────────────────────────────────┐
+│                   App Layer  (proofofhuman.ge)                   │
+│   Frontend  ·  Profiles  ·  Voting  ·  Conviction Curves        │
+└───────────────────────────┬──────────────────────────────────────┘
+                            │  submits scan jobs  ▼  reads results
+┌───────────────────────────▼──────────────────────────────────────┐
+│                    PoH Miner Network  (this repo)                │
+│                                                                  │
+│   ┌──────────────┐  P2P gossip (blocks, txs, status)            │
+│   │  Miner Node  │◄────────────────────────────►  Miner Node   │
+│   │              │                                              │
+│   │ • PoW mining │  ← race to compute first valid verdict →    │
+│   │ • LLM brain  │                                              │
+│   │ • Chain sync │  ← bootnode for peer discovery / catch-up → │
+│   │ • Wallet API │                                              │
+│   └──────────────┘                                              │
+│                                                                  │
+│   IPFS durability layer (chain snapshots, brain state, peers)   │
+└──────────────────────────────────────────────────────────────────┘
 ```
 
-The node will:
-- Use the nearest config it finds (local `config.json` or `.poh-miner/config.json` is preferred after cloning)
-- Auto-create a wallet if needed
-- Sync the chain from your bootnodes (if any are configured)
-- Start participating in the network (job racing + block production)
+### Block Contents
 
-### Running a Bootnode (for operators)
+Each block contains:
+
+- `height`, `previousHash`, `timestamp`, `minerWallet`
+- `scanResults[]` — verified wallet verdicts (requestId, address, verdict, confidence, reasoning, signalsUsed, minerWallet, signature)
+- `transactions[]` — signed POH token transfers with nonces
+- `coinbaseReward` — 1 POH per block: 60% to proposer, 40% split among workers
+- `nonce`, `difficulty`, `chainWork` — PoW fields (cumulative)
+- `minerSignature`, `minerSigningPublicKey` — ed25519 block authentication
+
+---
+
+## What Syncs Between Nodes
+
+| Data | How |
+|---|---|
+| New blocks | P2P gossip `new-block` (flood-fill, TTL=4) |
+| Pending transactions | P2P gossip `new-tx` |
+| Node status (methodsHash, region, load) | P2P gossip `node-status` |
+| Chain history (cold start) | HTTP pull from bootnode `/chain/blocks` |
+| Verified signals (canonical set + hash) | HTTP from proofofhuman.ge + IPFS fallback |
+| Brain feedback events | Peer-to-peer push + bootnode `/brain/events` |
+| Signal weight updates | Same as brain feedback |
+| Peer records (host:port) | Bootnode `/peers` + IPFS peer directory |
+| IPFS CIDs (chain, brain, peers) | Bootnode `/ipfs/latest` + `/ipfs/update` |
+
+---
+
+## Blockchain Properties
+
+| Property | Implementation |
+|---|---|
+| **Consensus** | Longest-chain (heaviest chainWork) |
+| **PoW** | SHA-256, target N leading zeros, auto-adjusts to 30 s/block |
+| **Fork resolution** | Orphan pool + chainWork comparison; reorg with journal rollback |
+| **Transactions** | Account model with nonces (replay protection) + ed25519 signatures |
+| **Double-spend** | Pending balance lock in mempool + nonce validation at application |
+| **Block signatures** | Proposer signs block hash with ed25519 identity key |
+| **Result signatures** | Every scan result signed by computing miner |
+
+---
+
+## Wallet API (port 3456 by default)
+
+Every miner exposes an HTTP API for the mobile wallet and external tools.
+
+### Chain & Wallet
+
+| Endpoint | Description |
+|---|---|
+| `GET /status` | Node status, chain height, reputation |
+| `GET /api/wallet/balance?address=<addr>` | Balance in μPOH |
+| `GET /api/wallet/transactions?address=<addr>` | Transaction history |
+| `POST /api/wallet/send` | Transfer POH (`{from,to,amount,privateKey}`) |
+| `POST /api/tx/submit` | Submit a signed `PoHTransaction` |
+| `GET /api/tx/pending` | Inspect mempool |
+
+### Jobs (scan requests)
+
+| Endpoint | Description |
+|---|---|
+| `POST /job` | Submit a scan job, returns `{jobId, statusUrl, resultUrl}` |
+| `GET /job/:id/status` | Poll: `queued / computing / done / error` |
+| `GET /job/:id/result` | Full verdict + profile + evidence when done |
+| `GET /jobs` | List active jobs |
+| `POST /gossip` | Receive P2P gossip envelopes from peers |
+
+### LLM & Brain
+
+| Endpoint | Description |
+|---|---|
+| `POST /api/chat` | Streaming chat with local Ollama (proxied) |
+| `POST /api/generate` | Ollama generate (proxied) |
+| `GET /api/models` | List models available on this node's Ollama |
+| `GET /api/brain/state` | Current weights count, feedback count, model info |
+| `GET /api/brain/weights` | Full `weights.json` |
+| `POST /api/brain/feedback` | Submit human correction `{address, aiVerdict, correction, comment, signals}` |
+| `POST /api/brain/vote` | Submit signal weight vote `{method, voteType, vote, stakeWeight}` |
+| `POST /api/brain/sync/event` | Receive brain event pushed by a peer |
+
+---
+
+## IPFS Durability Layer
+
+Miners automatically pin data to IPFS and share CIDs via the bootnode.
+
+| What | When | CID shared as |
+|---|---|---|
+| Chain snapshot (last 500 blocks) | Every 100 blocks | `chain` |
+| Brain state (weights + pools) | After every feedback/vote + every 30 min | `brain` |
+| Own peer record (host:port signed) | After every bootnode registration | `selfPeer` |
+| Peer directory (all known peers) | Bootnode pins every 60 s after changes | `peers` |
+
+CIDs are cached locally in `~/.poh-miner/ipfs_cid_cache.json`. If the bootnode is unreachable at startup, the node uses cached CIDs to discover peers from IPFS directly.
+
+Configure a pinning service via env vars:
+
+```bash
+IPFS_API_URL=https://api.pinata.cloud/pinning/pinFileToIPFS
+IPFS_API_KEY=yourPinataJWT
+```
+
+Without configuration, the node uses a local Kubo daemon if one is running.
+
+---
+
+## Bootnode Endpoints
+
+```
+GET  /chain/tip
+GET  /chain/blocks?from=0&to=100
+POST /submit-block
+POST /register          (signed peer registration)
+GET  /peers             (verified peer list with host:port)
+POST /brain/events      (receive signed brain events)
+GET  /brain/events?since=<ts>
+GET  /brain/stats
+GET  /ipfs/latest       (latest chain, brain, peers CIDs)
+POST /ipfs/update       (miners push new CIDs)
+```
+
+Running your own bootnode:
 
 ```bash
 node src/bootnode.js --port 8080 --data-dir ~/.poh-bootnode
 ```
 
-Then tell other miners to use your IP in their `bootnodes` list.
+---
+
+## Running Tests
+
+```bash
+npm test                  # 49 unit tests (vitest)
+npm run test:watch        # watch mode
+npm run test:integration  # end-to-end (requires dev/ checker)
+```
+
+Tests cover: P2P gossip, block/result signatures, chainWork fork resolution, transactions + nonces, double-spend protection, PoW mining + abort, balance journal rollback, and job deduplication.
 
 ---
 
-**This is the new base layer.**
-
-The original POH application (signals, checker, profiles, voting, conviction curves, frontend) becomes the **"App Layer"** that runs **on top of** this decentralized Proof-of-Work network operated by Bitcoin miners (and other hardware operators).
-
-## Core Idea
-
-- **Miners and compute operators** run this software on companion hardware (Raspberry Pi, mini-PC, Mac Mini, gaming PC, VPS, etc.).
-- They are rewarded in **POH tokens** for two things:
-  1. Producing blocks (via useful compute + lightweight PoW).
-  2. Being the **first** to correctly compute and deliver a scan/verdict/profile result when requested (first-come-first-serve).
-- Every miner syncs the same chain (blocks contain state transitions, verified verdicts, new methods, weight updates, etc.).
-- On a user scan request (from the existing POH frontend or direct API), the request is broadcast to the miner network.
-- All participating miners race to run the existing POH software (`checker` + `brain.analyzeHumanness` + signal evaluation) and return the result.
-- The first valid, correctly formatted response wins the fee + block reward share.
-
-This turns expensive, always-on mining hardware + electricity into a **decentralized, economically aligned inference + verification compute network** for Proof of Humanity.
-
-## Why This Makes Sense
-
-- Operators with reliable always-on hardware and cheap electricity have natural advantages.
-- LLM inference + complex signal evaluation is "useful work".
-- First-come-first-serve + cryptographic verification creates a natural market for fast, correct answers.
-- Existing POH logic (all the signal types, the brain, profiles, etc.) becomes the workload instead of being re-written.
-
-## Accessibility: Designed to Run on *Any* Device
-
-**Goal**: Anyone with spare compute should be able to participate — not just Bitcoin miners.
-
-Examples of target users:
-- Operator with reliable hardware (Raspberry Pi 5, mini-PC, Mac Mini, gaming PC, VPS, etc.)
-- Person who bought a **Mac Mini** (M1/M2/M3/M4) for local AI work
-- Someone with an old gaming PC or server sitting idle
-- Tech-savvy user on Windows or Linux
-
-See **[README-EASY-INSTALL.md](./README-EASY-INSTALL.md)** for the current easiest way to get running.
-
-### Current Ease of Installation
-
-| Platform       | Method                              | Difficulty |
-|----------------|-------------------------------------|------------|
-| macOS / Linux  | `curl ... \| bash` (easy-start.sh)  | Very Easy  |
-| Windows        | PowerShell installer                | Easy       |
-| Any device     | Docker                              | Easy       |
-
-We are actively working toward native installers and single binaries.
-
-**Mac Mini users** are a first-class target. The system is optimized for Apple Silicon.
-
-## Geographic & Latency-Aware Job Routing
-
-Not all compute is equal when it comes to user experience.
-
-- A scan request coming from a user in **Georgia** (country) should prefer miners with low ping to Georgia.
-- A user in Singapore should not have to wait for a slow response from a node in Europe.
-
-### How it will work
-
-1. **Job Mempool / Global Job Queue**
-   - Scan requests enter a shared "mempool" (broadcast across the PoH miner network).
-   - Jobs are not immediately assigned — miners can see pending jobs.
-
-2. **Miner Self-Reporting**
-   - Every miner periodically reports:
-     - Approximate region (or coordinates)
-     - Measured ping/latency to a set of global anchor points (or to major cities)
-     - Current load / queue depth
-
-3. **Smart Job Selection (First-Come-First-Serve with preference)**
-   - When a new job appears, miners can decide whether to compete based on:
-     - Their estimated latency to the requester
-     - Job fee size
-     - Their current load
-   - Low-latency miners have a natural advantage (they can start computing earlier and submit faster).
-
-4. **Implementation options** (we will start simple):
-   - Early versions: Optional `preferred_region` or `max_latency_ms` on the job.
-   - Later: Fully decentralized scoring where each miner calculates a "suitability score" = `fee / (latency + compute_time_estimate)`.
-
-This creates a natural, market-driven geographic distribution of compute without central assignment.
-
-## How to Start the Project
-
-### Easiest way (recommended)
-
-The preferred distribution method is **IPFS** (decentralized).
-
-#### Option 1: Script (curl)
-```bash
-# Mac / Linux
-curl -fsSL https://ipfs.io/ipfs/<LATEST_CID>/scripts/easy-start.sh | bash
-```
-
-#### Option 2: Pre-built Packages (Double-click to start)
-We publish ready-made binaries and packages to IPFS:
-
-- `.deb` (Debian/Ubuntu) — install with double-click or `dpkg -i`
-- `.AppImage` (Universal Linux) — just make executable and run
-- Standalone binaries for macOS and Windows
-
-See the latest binary CID in `ipfs/binaries.txt`.
-
-**Build commands:**
-```bash
-npm run build:bin     # Create standalone executables
-npm run build:deb     # Create .deb package
-npm run build:all
-```
-
-Then run `./scripts/publish-to-ipfs.sh` to publish everything (scripts + binaries) and update the CID files.
-
-End users can download the latest binary directly with:
-```bash
-./scripts/download-latest.sh --install
-```
-
-You can switch between GPU and CPU mode at any time:
+## Building
 
 ```bash
-poh-miner set-mode cpu     # Force CPU (great for VPS)
-poh-miner set-mode gpu     # Force GPU
-poh-miner set-mode auto    # Let Ollama decide
+npm run build:bin          # standalone binaries (pkg)
+npm run build:deb          # .deb package (requires fpm)
+npm run build:electron     # Electron desktop app
+npm run build:electron:all # all platforms
 ```
 
-### Other useful commands
-
-```bash
-npm run demo          # Run geographic job preference demo
-npm run serve:landing # View the promotional landing page at http://localhost:4321
-npm run easy          # One-command installer for new machines
-```
-
-### Quick start for developers
-
-```bash
-npm install
-npm start
-```
-
-### Running Automated Tests
-
-```bash
-npm test                    # Run unit tests
-npm run test:watch          # Watch mode for unit tests
-npm run test:integration    # Run heavy integration tests (requires real POH dev/ checker)
-```
-
-See [test/README.md](./test/README.md) for details, including how to run full end-to-end tests with the real checker and brain.
-
-See `start.js` for the main entry point.
-
-### Submitting a test wallet scan / checker job (for developers)
-
-Once a miner is running (it exposes the Wallet API on port 3456 by default), you can submit a "verdict" job that will make it run the real POH checker on an address:
-
-```bash
-# Basic (replace the address)
-curl -X POST http://localhost:3456/test/job \
-  -H "Content-Type: application/json" \
-  -d '{
-    "type": "verdict",
-    "payload": { "address": "bc1qyouraddresshere" },
-    "fee": 25000000,
-    "originCountry": "US"
-  }'
-```
-
-Or use the helper script (it will use the HTTP endpoint if available, or fall back to running a local miner):
-
-```bash
-node scripts/send-test-checker-job.js bc1qyouraddresshere
-```
-
-If you get `{"error":"Not found"}`, restart your miner (the code change for the `/test/job` handler needs to be loaded).
-
-The job will trigger `computeAndSubmitJob` → the real `runFullCheck` (if the dev/ checker is present) and you will see the result in the miner's logs and `submissionHistory`.
-
-#### New: search -> status -> verdict/profile/evidence flow (for frontends)
-
-Every running miner now exposes a proper job API on its wallet port (default 3456). A frontend (e.g. `~/Desktop/poh/dev/frontend`) can:
-
-1. Discover live nodes: `GET https://bootnode.proofofhuman.ge/peers` (only nodes that proved they run valid poh-miner-network code via signed register are listed with `verified: true`).
-
-2. Pick a node and talk directly to it (using its `host` + `walletApiPort`):
-
-```bash
-# Submit a search/verdict (returns immediately with jobId)
-curl -X POST http://<node-host>:<port>/job \
-  -H "Content-Type: application/json" \
-  -d '{"payload": {"address": "bc1qyouraddresshere"}}'
-
-# Poll status
-curl http://<node-host>:<port>/job/<jobId>/status
-
-# Get full verdict + profile + evidence (signalsUsed etc)
-curl http://<node-host>:<port>/job/<jobId>/result
-```
-
-The `/job` endpoint (and legacy `/test/job`) now accept async and provide `/status` + `/result` URLs.
-
-`/peers` from bootnode now includes `verified`, `signingPublicKey`, `methodsHash` for each miner so clients can prefer real nodes.
-
-(Protection on `/register`: requires fresh timestamp + ed25519 signature over (wallet,host,timestamp,methodsHash) using the node's local wallet signing key. Random POSTs without a real running miner are rejected.)
+The `.deb` postinst script installs Ollama and pulls `qwen2.5:1.5b` automatically on first install.
 
 ---
 
-**Current Status**
-
-Core racing, block production, and geographic job preference are working and demonstrated.
-
-**New promotional landing page** (matching proofofhuman.ge style):  
-→ [landing/index.html](./landing/index.html)
-
-See also:
-- [README-EASY-INSTALL.md](./README-EASY-INSTALL.md)
-- [README-JOB-SYSTEM.md](./README-JOB-SYSTEM.md)
-
-Next priorities:
-1. Production-grade easy install experience (binaries + one-click)
-2. Real P2P job broadcasting + persistent mempool
-3. Full integration with the existing POH checker + AI brain as the workload
-
-See `docs/reward-mechanics-design.md` for current thinking on native token production, quantum resistance, and Tendermint-based consensus.
-
-## Architecture Overview (Target)
+## Project Layout
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                    App Layer (existing POH)                 │
-│  Frontend, Profiles, Voting, Conviction Curves, Listing...  │
-└───────────────────────────────┬─────────────────────────────┘
-                                │ talks to
-┌───────────────────────────────▼─────────────────────────────┐
-│              PoH Miner Network (this repo)                  │
-│                                                             │
-│  • Block production (PoW + useful compute)                  │
-│  • On-demand scan/verdict racing (first valid response)     │
-│  • State sync across all miner nodes                        │
-│  • POH token issuance + distribution to compute providers   │
-│                                                             │
-│  Miners run:                                                │
-│  - Existing POH checker + brain (as compute workload)       │
-│  - Lightweight chain client                                 │
-│  - Optional future: hardware attestation for reputation     │
-└─────────────────────────────────────────────────────────────┘
+src/
+  core/           block.js, scanRequest.js, transaction.js
+  consensus/      pow.js, chain-selection.js
+  network/        p2p-gossip.js
+  signals/        methods-manager.js (canonical signal set sync)
+  compute/        poh-adapter.js → delegates to dev/src checker + brain
+  brain/          brain-sync.js (network-wide brain state sync)
+  storage/        chain-store.js, balance-journal.js, ipfs-store.js, ipfs-sync.js
+  wallet/         wallet.js (ed25519 keys, nonces, balances)
+  rewards/        reward.js (1 POH/block, 60/40 split)
+  jobs/           job-queue.js, geo.js
+  validation/     result-validator.js
+  rpc/            resolver.js, networks.js
+  miner-node.js   main orchestrator
+  bootnode.js     peer discovery + chain relay + IPFS registry
+  cli.js
+
+electron/         GUI app (Electron)
+  renderer/       index.html, renderer.js (Logs tab + Chat tab)
+  main.cjs        IPC + Ollama auto-install
+
+landing/          Promotional landing page
+test/             vitest unit tests
 ```
-
-## Block Contents (High Level)
-
-Each block contains:
-- Previous block hash + height
-- Timestamp
-- List of **executed scan requests** (with winning miner's signature + result hash)
-- State transitions (new methods, weight updates, profile changes, brain state deltas)
-- Miner rewards distribution
-- Optional future: hardware attestation data in blocks
-- Small PoW nonce / difficulty target (to prevent spam / enable classic Sybil resistance)
-
-## Verified Signals Synchronization
-
-All miners on the network **must** evaluate verdicts using the exact same set of signals.
-
-- On startup and periodically, the miner fetches the latest verified signals from `https://proofofhuman.ge/methods/verifyer`.
-- The list is cached in `~/.poh-miner/methods.json`.
-- Every `ScanResult` now includes the `methodsHash` that was used.
-- Future: New methods will be published as on-chain state transitions so the network converges without relying on the HTTP endpoint.
-
-You can force a refresh anytime with:
-
-```bash
-poh-miner sync-methods
-```
-
-## Current Status
-
-This is the **initial scaffolding** for the PoH Miner Network.
-
-We are building the miner node software that:
-- Can be run on a wide variety of always-on hardware (Raspberry Pi, mini-PC, Mac Mini, gaming PC, VPS, servers)
-- Re-uses the existing POH `checker` and `brain` code as the actual computation engine
-- Participates in block production and request racing
-
-See `TODO.md` for the immediate roadmap.
-
-## Running as a Miner (Future)
-
-The long-term target is one-command installers + binaries (see the "Easiest way (recommended)" section above and the installers in `installers/`).
-
-For now, the practical way after cloning is:
-
-```bash
-cd poh-miner-network
-cp config.example.json config.json   # or use .poh-miner/config.json
-# Edit wallet + bootnodes + RPCs
-npm start
-```
-
----
-
-**This is the foundation.** The existing POH dev/ folder becomes the "application logic" that these miners execute as their Proof of Work.
-
----
-
-**This is the foundation.** The existing POH dev/ folder becomes the "application logic" that these miners execute as their Proof of Work.

@@ -1,74 +1,53 @@
-# PoH Miner Network - Immediate Implementation Roadmap
+# PoH Miner Network — Roadmap
 
-## Top Priorities (from latest feedback)
+## Completed
 
-1. **Make it stupidly easy to install and run on ANY device**
-   - Mac Mini (Apple Silicon) users are a first-class target
-   - Windows users with old PCs / gaming rigs
-   - One-click / one-command experience
-   - Auto model download + best inference backend selection
+### Core Blockchain
+- [x] Real P2P gossip — HTTP flood-fill with TTL, deduplication, loop prevention
+- [x] Block + result signatures — ed25519 identity keys, verified on receive
+- [x] chainWork — cumulative difficulty, heaviest-chain fork resolution
+- [x] Orphan pool — buffers out-of-order blocks, drains when parent arrives
+- [x] Formal transactions — PoHTransaction with nonces, ed25519 sigs, fee priority
+- [x] Double-spend protection — pending balance lock in mempool + nonce validation
+- [x] Competitive PoW — all miners mine continuously, AbortSignal on new block, 30 s target
+- [x] Reorg + balance journal — rollback wallet state and reward claims on chain switch
 
-2. **Job Queue + Mempool with geographic / ping awareness**
-   - Requests should prefer low-latency miners
-   - "Mempool of jobs" that miners can browse and intelligently select from
-   - Latency self-measurement + scoring
+### Sync & Durability
+- [x] Per-miner brain state — each miner has `~/.poh-miner/brain/` independent of dev/
+- [x] Brain event sync — signed feedback/vote events gossiped to peers + accumulated at bootnode
+- [x] IPFS chain snapshots — pinned every 100 blocks, used for cold-start bootstrap
+- [x] IPFS brain state — pinned after every learning event + every 30 min
+- [x] IPFS peer directory — bootnode pins host:port directory, miners cache for bootnode fallback
+- [x] CID cache — persists across restarts so IPFS fallback works immediately
 
-## Current Progress (Parallel Work on Both Priorities)
+### Application
+- [x] Job deduplication — `minedRequestIds` set prevents double-mining across competing nodes
+- [x] Ollama auto-install — `.deb` postinst + Electron onboarding setup screen
+- [x] LLM chat panel — streaming chatbot tab in the Electron app
+- [x] qvac SDK migration — brain uses `@qvac/sdk` native `loadModel`/`completion`, no subprocess
 
-**Easy Install Track:**
-- [x] `scripts/easy-start.sh` — one-command setup for normal humans (Mac Mini friendly)
-- [x] `src/cli.js` — simple `poh-miner` command
-- [x] Updated package.json with proper `bin`
-- [x] Documentation rewritten to target Mac Mini / non-miner users
+### Wallet (poh-miner-wallet)
+- [x] AI Screen — full PoH scanner with sanctions check, QR scan, profile view
+- [x] Multi-node failover — connects to first available, retries all on failure
+- [x] IPFS peer discovery — fetches peer directory when all configured nodes are offline
+- [x] Signed transactions — formal PoHTransaction with nonce sent to node
 
-**Geo + Job Queue Track:**
-- [x] Full `JobQueue` with originRegion + latency scoring (Georgia miner gets ~3x score vs far miners)
-- [x] `latency.js` helpers + automatic miner region detection on startup
-- [x] Miner node now intelligently filters/competes on jobs using geo data
-- [x] Working `demo-geo-race.js` proving the preference logic
+## Next Priorities
 
-**Next for Easy Install:**
-- Pre-built binaries + real installers (.pkg for Mac, .exe for Windows)
-- Auto model selection + progress bars during first setup
-- Simple status UI (even a basic web dashboard on localhost: port would help)
+### P2P (replace HTTP gossip with libp2p)
+- [ ] Replace HTTP gossip with **libp2p + GossipSub** — no bootnode needed for block propagation
+- [ ] DHT-based peer discovery (Kademlia) — remove single-point-of-failure bootnode
 
-**Next for Job System:**
-- Broadcast new jobs over real gossip
-- Allow jobs to declare `originRegion` or `requesterIp` for geo routing
-- Persist job mempool across restarts
+### Consensus
+- [ ] Slot-based block production — replace probabilistic PoW with VRF-selected proposers
+- [ ] Finality gadget — mark blocks irreversible after 2/3 validator confirmation
 
-## Phase 1 (Now - Working Skeleton)
-- [x] Core block + scan request/result types
-- [x] Basic miner node that can race on requests
-- [x] Lightweight PoW + block production
-- [x] Simple gossip stub
-- [ ] Real P2P networking (libp2p or simple WS mesh between miners)
-- [ ] Actual integration: call real `checker` + `brain.analyzeHumanness` from the existing `dev/` codebase when a request arrives
+### Economic
+- [ ] On-chain fee market — variable fees, miner tip, base fee burn
+- [ ] Stake-weighted reputation — stake POH to increase reputation cap
+- [ ] Method conviction curves — on-chain signal staking via Solana Meteora pools
 
-## Phase 2 (Make it Real)
-- [ ] Broadcast scan requests from the existing POH frontend / API into the miner network
-- [ ] Verification of submitted results (multiple miners + majority, or fraud proofs)
-- [ ] Proper reward claiming (on-chain or via the existing Solana staking contract)
-- [ ] Optional hardware attestation + reputation scoring that affects reward weight
-- [ ] Difficulty adjustment based on useful work, not just hash
-
-## Key Open Questions to Decide
-1. How do we verify a miner's result without every other miner re-running the entire (expensive) LLM + signal evaluation?
-   - Options: 
-     - Re-execution by a small committee
-     - zkML / proof of inference (very hard right now)
-     - Staking + slashing based on later human feedback (most POH-native)
-
-2. What exactly is the "Proof of Work"?
-   - Useful work only (verdicts)?
-   - Useful work + small hash PoW?
-   - (Future) Hardware attestation as an optional reputation boost?
-
-3. Block time target? (15s? 1min? 10min like BTC?)
-
-4. How does the "App Layer" (current POH) pay for computation? Direct fees in POH to the winning miner?
-
-## Next Concrete Coding Tasks
-1. Make `miner-node.js` actually import and call logic from `../dev/src/routes/checker.js` and `../dev/src/utils/brain.js`
-2. Add WebSocket-based simple mesh networking
-3. Create a small test harness that sends scan requests and sees miners race
+### Developer Experience
+- [ ] Published testnet — stable bootnode + faucet
+- [ ] REST API docs (OpenAPI spec)
+- [ ] Docker Compose for full local network (2 miners + bootnode + dev server)
