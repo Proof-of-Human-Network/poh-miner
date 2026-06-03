@@ -27,6 +27,7 @@ import { getBrain, getBrainDataDir } from './compute/adapters/real-poh.js';
 import { BrainSync } from './brain/brain-sync.js';
 import { PoHTransaction, TxMempool } from './core/transaction.js';
 import { BalanceJournal } from './storage/balance-journal.js';
+import { IPFSSync } from './storage/ipfs-sync.js';
 import fs from 'fs';
 import path from 'path';
 import { ChainStore } from './storage/chain-store.js';
@@ -151,8 +152,14 @@ export class PohMinerNode {
     }
 
     // BrainSync initialized lazily after brain data dir is set (happens on first compute)
-    // We create it here so it's ready when connectToNetwork runs.
     this.brainSync = null; // populated in _initBrainSync()
+
+    // IPFSSync — durability layer for chain + brain state
+    this.ipfsSync = new IPFSSync({
+      chain:          this.chain,          // live reference
+      bootnodes:      this.config.bootnodes,
+      identityWallet: this.identityWallet,
+    });
 
     console.log(`[PoH-Miner] Starting node for wallet ${this.config.wallet}`);
 
@@ -715,6 +722,9 @@ export class PohMinerNode {
             }
             await b.onVerdictFeedback(address, aiVerdict, correction, comment || '', signals || []);
 
+            // Pin updated brain state to IPFS (fire-and-forget)
+            this.ipfsSync.onBrainUpdated().catch(() => {});
+
             // Broadcast to network
             if (!this.brainSync) this._initBrainSync();
             if (this.brainSync) {
@@ -750,6 +760,9 @@ export class PohMinerNode {
               return res.end(JSON.stringify({ error: 'Brain not loaded' }));
             }
             await b.onVote(method, voteType, vote, stakeWeight || 1, feedback || null);
+
+            // Pin updated brain state to IPFS (fire-and-forget)
+            this.ipfsSync.onBrainUpdated().catch(() => {});
 
             // Broadcast to network
             if (!this.brainSync) this._initBrainSync();
@@ -913,7 +926,37 @@ export class PohMinerNode {
       this.chainStore.saveChain(this.chain);
     }
 
-    // 3. Sync from bootnodes (production-ready path)
+    // 3. Apply IPFS chain snapshot if it extends our local chain
+    if (this._pendingIPFSChainSnap) {
+      const snap = this._pendingIPFSChainSnap;
+      delete this._pendingIPFSChainSnap;
+      const localHeight = this.chain.length ? this.chain[this.chain.length - 1].height : -1;
+      if (snap.height > localHeight) {
+        try {
+          const blocks = snap.blocks.map(b => PohBlock.fromJSON(b));
+          // Verify chain linkage before applying
+          let valid = true;
+          for (let i = 1; i < blocks.length; i++) {
+            if (blocks[i].previousHash !== blocks[i - 1].getHashSync()) { valid = false; break; }
+          }
+          if (valid) {
+            this.chain = blocks;
+            this.chainStore.saveChain(this.chain);
+            // Rebuild minedRequestIds from IPFS snapshot
+            for (const b of this.chain) {
+              for (const r of (b.scanResults || [])) {
+                if (r.requestId) this.minedRequestIds.add(r.requestId);
+              }
+            }
+            console.log(`[PoH-Miner] Applied IPFS chain snapshot: ${this.chain.length} blocks (height ${snap.height})`);
+          }
+        } catch (e) {
+          console.warn('[PoH-Miner] Failed to apply IPFS chain snapshot:', e.message);
+        }
+      }
+    }
+
+    // 4. Sync from bootnodes (production-ready path)
     if (this.config.bootnodes && this.config.bootnodes.length > 0) {
       await this.syncFromBootnodes();
     }
@@ -1082,6 +1125,17 @@ export class PohMinerNode {
         await this.brainSync.pullFromBootnodes(this.config.bootnodes, brain);
       }
 
+      // Bootstrap from IPFS if our chain is stale or we have no brain weights yet
+      await this.ipfsSync.fetchLatestCIDs();
+      const chainSnap = await this.ipfsSync.fetchChainSnapshot();
+      if (chainSnap?.blocks?.length) {
+        console.log(`[PoH-Miner] IPFS chain snapshot available (height ${chainSnap.height}) — will be applied during syncChain`);
+        this._pendingIPFSChainSnap = chainSnap;
+      }
+
+      // Start periodic brain pinning
+      this.ipfsSync.startPeriodicBrainSync();
+
       // Re-register every 8 minutes so we stay in the bootnode peer list
       setInterval(() => this.discoverAndRegisterWithBootnodes(), 8 * 60 * 1000);
 
@@ -1236,6 +1290,9 @@ export class PohMinerNode {
 
     // Recalculate difficulty after each new block
     this.currentDifficulty = getNextDifficulty(this.chain);
+
+    // Trigger IPFS chain snapshot every 100 blocks (fire-and-forget)
+    this.ipfsSync.onBlockAppended(block).catch(() => {});
   }
 
   _storeOrphan(block) {

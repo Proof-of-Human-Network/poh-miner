@@ -56,6 +56,31 @@ function saveBrainEvents() {
 
 loadBrainEvents();
 
+// ── IPFS CID registry ──────────────────────────────────────────────────────
+// Miners push their latest pinned CIDs here; other miners and the wallet app
+// pull them as a bootstrap / fallback source when the P2P network is sparse.
+const IPFS_REGISTRY_FILE = path.join(DATA_DIR, 'ipfs_registry.json');
+
+let ipfsRegistry = {
+  chain: null,  // { cid, height, minerWallet, ts }
+  brain: null,  // { cid, minerWallet, ts }
+  history: [],  // last 20 entries for redundancy
+};
+
+function loadIPFSRegistry() {
+  try {
+    if (fs.existsSync(IPFS_REGISTRY_FILE))
+      ipfsRegistry = JSON.parse(fs.readFileSync(IPFS_REGISTRY_FILE, 'utf8'));
+  } catch { /* start fresh */ }
+}
+
+function saveIPFSRegistry() {
+  try { fs.writeFileSync(IPFS_REGISTRY_FILE, JSON.stringify(ipfsRegistry, null, 2)); }
+  catch { /* non-fatal */ }
+}
+
+loadIPFSRegistry();
+
 function pruneStalePeers() {
   const now = Date.now();
   let removed = 0;
@@ -277,6 +302,49 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
+    // ── IPFS CID registry ─────────────────────────────────────────────────────
+    if (url.pathname === '/ipfs/latest') {
+      res.end(JSON.stringify({
+        chain:     ipfsRegistry.chain  || null,
+        brain:     ipfsRegistry.brain  || null,
+        history:   (ipfsRegistry.history || []).slice(-5),
+        updatedAt: ipfsRegistry.chain?.ts || ipfsRegistry.brain?.ts || null,
+      }));
+      return;
+    }
+
+    if (req.method === 'POST' && url.pathname === '/ipfs/update') {
+      let body = '';
+      req.on('data', chunk => body += chunk);
+      req.on('end', () => {
+        try {
+          const data = JSON.parse(body);
+          const ts = data.ts || Date.now();
+
+          if (data.chain) {
+            const entry = { cid: data.chain, minerWallet: data.minerWallet, ts };
+            if (!ipfsRegistry.chain || ts > (ipfsRegistry.chain.ts || 0)) {
+              ipfsRegistry.chain = entry;
+            }
+            ipfsRegistry.history = [...(ipfsRegistry.history || []), { type: 'chain', ...entry }].slice(-20);
+          }
+          if (data.brain) {
+            const entry = { cid: data.brain, minerWallet: data.minerWallet, ts };
+            if (!ipfsRegistry.brain || ts > (ipfsRegistry.brain.ts || 0)) {
+              ipfsRegistry.brain = entry;
+            }
+            ipfsRegistry.history = [...(ipfsRegistry.history || []), { type: 'brain', ...entry }].slice(-20);
+          }
+          saveIPFSRegistry();
+          res.end(JSON.stringify({ ok: true }));
+        } catch (e) {
+          res.statusCode = 400;
+          res.end(JSON.stringify({ error: e.message }));
+        }
+      });
+      return;
+    }
+
     if (url.pathname === '/peers') {
       pruneStalePeers(); // ensure fresh list
       const peerList = Array.from(peers.values()).map(p => ({
@@ -317,4 +385,6 @@ server.listen(PORT, () => {
   console.log(`   POST /brain/events      (miners push signed brain events — feedback, weight updates)`);
   console.log(`   GET  /brain/events?since=<ts>  (miners pull brain events since timestamp)`);
   console.log(`   GET  /brain/stats       (brain event accumulator stats)`);
+  console.log(`   GET  /ipfs/latest       (latest pinned chain + brain CIDs)`);
+  console.log(`   POST /ipfs/update       (miners push new IPFS CIDs)`);
 });

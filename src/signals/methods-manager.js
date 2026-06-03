@@ -29,7 +29,13 @@ const PRIMARY_SOURCE = 'https://proofofhuman.ge/methods/verifyer';
 // Robust list of HTTP gateways (in priority order)
 const GATEWAYS = [
   'https://proofofhuman.ge/methods/verifyer',
-  'https://cloudflare-ipfs.com/ipfs/', // placeholder for when we publish to IPFS
+];
+
+// Public IPFS gateways used when lastKnownCID is set
+const IPFS_GATEWAYS = [
+  'https://ipfs.io/ipfs/',
+  'https://cloudflare-ipfs.com/ipfs/',
+  'https://gateway.pinata.cloud/ipfs/',
 ];
 
 // New: Sources for "signals that have live conviction curves" (the canonical set for miners)
@@ -127,14 +133,20 @@ export class MethodsManager {
   async fetchFromNetwork() {
     const maxRetries = 2;
 
-    for (let attempt = 0; attempt <= maxRetries; attempt++) {
-      for (const base of GATEWAYS) {
-        const url = base.includes('/ipfs/') 
-          ? base + (this.lastKnownCID || '') + '/methods.json'   // future IPFS support
-          : base;
+    // Build the full gateway list: HTTP sources first, then IPFS if CID known
+    const allSources = [...GATEWAYS];
+    if (this.lastKnownCID) {
+      for (const gw of IPFS_GATEWAYS) {
+        allSources.push(`${gw}${this.lastKnownCID}/methods.json`);
+      }
+    }
 
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      for (const url of allSources) {
+
+        const isIPFS = url.includes('/ipfs/');
         try {
-          console.log(`[MethodsManager] Fetching signals (attempt ${attempt + 1}) from ${url}...`);
+          console.log(`[MethodsManager] Fetching signals (attempt ${attempt + 1}) from ${isIPFS ? 'IPFS:' : ''}${url.slice(0, 60)}...`);
 
           const controller = new AbortController();
           const timeout = setTimeout(() => controller.abort(), 12000);
