@@ -19,12 +19,17 @@ function ensureDir(dir) {
 }
 
 export class Wallet {
-  constructor({ address, privateKey, publicKey, createdAt = Date.now() }) {
+  constructor({ address, privateKey, publicKey, createdAt = Date.now(), signingPublicKey, signingPrivateKey, balance = 0, nonce = 0 }) {
     this.address = address;
     this.privateKey = privateKey;
     this.publicKey = publicKey;
     this.createdAt = createdAt;
-    this.balance = 0; // in smallest units (we'll treat 1 POH = 1_000_000 units later)
+    this.signingPublicKey = signingPublicKey || null;
+    this.signingPrivateKey = signingPrivateKey || null;
+    this.balance = (typeof balance === 'number') ? balance : 0;
+    // Transaction nonce — incremented each time a tx from this address is mined.
+    // Prevents replay attacks: a valid tx must have nonce === account.nonce + 1.
+    this.nonce = (typeof nonce === 'number') ? nonce : 0;
   }
 
   static generate() {
@@ -33,11 +38,20 @@ export class Wallet {
     const publicKey = crypto.createHash('sha256').update(privateKey).digest('hex').slice(0, 64);
     const address = 'poh' + publicKey.slice(0, 40); // fake address format
 
-    return new Wallet({
+    // Generate real ed25519 signing keypair for node registration proof + future result sigs
+    const { publicKey: spk, privateKey: spr } = crypto.generateKeyPairSync('ed25519', {
+      publicKeyEncoding: { type: 'spki', format: 'pem' },
+      privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
+    });
+
+    const w = new Wallet({
       address,
       privateKey,
       publicKey,
     });
+    w.signingPublicKey = spk;
+    w.signingPrivateKey = spr;
+    return w;
   }
 
   static fromJSON(data) {
@@ -50,7 +64,52 @@ export class Wallet {
       privateKey: this.privateKey,
       publicKey: this.publicKey,
       createdAt: this.createdAt,
+      signingPublicKey: this.signingPublicKey,
+      signingPrivateKey: this.signingPrivateKey,
+      balance: this.balance,
+      nonce: this.nonce,
     };
+  }
+
+  /**
+   * Ensure this wallet has an ed25519 signing keypair (for register proof etc).
+   * If missing (upgrading old wallet file), generate + caller should save.
+   */
+  ensureSigningKeys() {
+    if (this.signingPublicKey && this.signingPrivateKey) return;
+    const { publicKey, privateKey } = crypto.generateKeyPairSync('ed25519', {
+      publicKeyEncoding: { type: 'spki', format: 'pem' },
+      privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
+    });
+    this.signingPublicKey = publicKey;
+    this.signingPrivateKey = privateKey;
+  }
+
+  /**
+   * Sign arbitrary data (stringified if object). Returns base64 signature.
+   */
+  sign(data) {
+    this.ensureSigningKeys();
+    const msg = Buffer.isBuffer(data) ? data : Buffer.from(
+      typeof data === 'string' ? data : JSON.stringify(data)
+    );
+    const sig = crypto.sign(null, msg, this.signingPrivateKey);
+    return sig.toString('base64');
+  }
+
+  /**
+   * Verify a signature produced by a Wallet.sign using the provided public PEM.
+   */
+  static verifySignature(publicKeyPem, data, signatureBase64) {
+    try {
+      const msg = Buffer.isBuffer(data) ? data : Buffer.from(
+        typeof data === 'string' ? data : JSON.stringify(data)
+      );
+      const sig = Buffer.from(signatureBase64, 'base64');
+      return crypto.verify(null, msg, publicKeyPem, sig);
+    } catch (e) {
+      return false;
+    }
   }
 }
 
@@ -75,7 +134,13 @@ export class WalletManager {
     const file = path.join(WALLETS_DIR, `${address}.json`);
     if (!fs.existsSync(file)) return null;
     const data = JSON.parse(fs.readFileSync(file, 'utf8'));
-    return Wallet.fromJSON(data);
+    const w = Wallet.fromJSON(data);
+    // Auto-upgrade old wallets to have signing keys (for register protection etc)
+    if (!w.signingPublicKey || !w.signingPrivateKey) {
+      w.ensureSigningKeys();
+      this.saveWallet(w);
+    }
+    return w;
   }
 
   listWallets() {
@@ -91,9 +156,21 @@ export class WalletManager {
   }
 
   // Credit balance (used when receiving rewards or transfers)
+  // Auto-creates a stub wallet file for the address if none exists (so remote workerIds or
+  // alternate identity addresses like solana addrs used as pohWallet still get balances recorded).
   credit(address, amount) {
-    const wallet = this.loadWallet(address);
-    if (!wallet) return false;
+    let wallet = this.loadWallet(address);
+    if (!wallet) {
+      // Create a minimal stub so this address can hold balance/rewards.
+      // (Real signing keys etc. not needed for pure balance accounting.)
+      wallet = new Wallet({
+        address: address,
+        privateKey: null,
+        publicKey: null,
+        createdAt: Date.now(),
+      });
+      // Note: this will be saved below after balance update.
+    }
     wallet.balance = (wallet.balance || 0) + amount;
     this.saveWallet(wallet);
     return true;
@@ -112,10 +189,52 @@ export class WalletManager {
   transfer(fromAddress, toAddress, amount) {
     if (!this.debit(fromAddress, amount)) return false;
     if (!this.credit(toAddress, amount)) {
-      // Rollback if credit fails (shouldn't happen for local wallets)
       this.credit(fromAddress, amount);
       return false;
     }
     return true;
+  }
+
+  // ── Nonce helpers ─────────────────────────────────────────────────────────
+  getNonce(address) {
+    const w = this.loadWallet(address);
+    return w ? (w.nonce || 0) : 0;
+  }
+
+  // Apply a signed transaction: validate nonce + balance, then mutate state.
+  // Returns true on success, or an error string on failure.
+  applyTransaction(tx) {
+    const sender = this.loadWallet(tx.from);
+    if (!sender) return 'sender not found';
+    if ((sender.nonce || 0) + 1 !== tx.nonce) {
+      return `nonce mismatch: expected ${sender.nonce + 1}, got ${tx.nonce}`;
+    }
+    const total = tx.amount + (tx.fee || 0);
+    if ((sender.balance || 0) < total) return 'insufficient balance';
+    if (!tx.verify()) return 'invalid signature';
+
+    sender.balance -= total;
+    sender.nonce   += 1;
+    this.saveWallet(sender);
+
+    // Credit recipient (auto-create if missing)
+    this.credit(tx.to, tx.amount);
+    // Fee goes to block proposer — caller handles this separately
+    return true;
+  }
+
+  // Reverse a previously applied transaction (used during reorg — Fix 6)
+  revertTransaction(tx, proposerAddress) {
+    // Undo debit on sender
+    const sender = this.loadWallet(tx.from);
+    if (sender) {
+      sender.balance = (sender.balance || 0) + tx.amount + (tx.fee || 0);
+      sender.nonce   = Math.max(0, (sender.nonce || 1) - 1);
+      this.saveWallet(sender);
+    }
+    // Undo credit on recipient
+    this.debit(tx.to, tx.amount);
+    // Undo fee credit on proposer
+    if (proposerAddress && tx.fee > 0) this.debit(proposerAddress, tx.fee);
   }
 }

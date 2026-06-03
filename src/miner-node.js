@@ -24,6 +24,7 @@ import { computeChainWork, compareChainWork, getTipChainWork } from './consensus
 import { computeVerdictWithExistingPoh } from './compute/poh-adapter.js';
 import { getBrain, getBrainDataDir } from './compute/adapters/real-poh.js';
 import { BrainSync } from './brain/brain-sync.js';
+import { PoHTransaction, TxMempool } from './core/transaction.js';
 import fs from 'fs';
 import path from 'path';
 import { ChainStore } from './storage/chain-store.js';
@@ -62,9 +63,10 @@ export class PohMinerNode {
     };
 
     this.chain = [];
-    this.peers = [];          // discovered miners from bootnodes
-    this.knownPeers = [];     // alias for compatibility
+    this.peers = [];
+    this.knownPeers = [];
     this.orphanPool = new Map(); // previousHash → PohBlock[]  (Fix 3)
+    this.txMempool = null;       // initialized after walletManager is ready (Fix 4)
 
     // Apply custom RPC endpoints from config into process.env so the loaded checker uses them
     this._applyRpcEndpoints();
@@ -81,6 +83,7 @@ export class PohMinerNode {
     );
     this.chainStore = new ChainStore();
     this.walletManager = new WalletManager();
+    this.txMempool = new TxMempool(this.walletManager);
     this.rewardClaimStore = new RewardClaimStore();
 
     // Simple quality tracking + reputation for slashing
@@ -553,6 +556,35 @@ export class PohMinerNode {
           walletApiPort: port,
           version: 'poh-miner-network',
         }));
+      }
+
+      // ── Transaction submission ────────────────────────────────────────────────
+      if (req.method === 'POST' && url.pathname === '/api/tx/submit') {
+        let body = '';
+        req.on('data', c => body += c);
+        req.on('end', () => {
+          try {
+            const txData = JSON.parse(body);
+            const tx = PoHTransaction.fromJSON(txData);
+            const result = this.txMempool.submit(tx);
+            if (result === true) {
+              // Gossip to peers so all miners can include it
+              this.gossip.publish('new-tx', tx.toJSON()).catch(() => {});
+              return res.end(JSON.stringify({ ok: true, txHash: tx.txHash, queueSize: this.txMempool.size() }));
+            }
+            res.statusCode = 400;
+            res.end(JSON.stringify({ error: result.error || result }));
+          } catch (e) {
+            res.statusCode = 400;
+            res.end(JSON.stringify({ error: e.message }));
+          }
+        });
+        return;
+      }
+
+      if (req.method === 'GET' && url.pathname === '/api/tx/pending') {
+        const txs = this.txMempool.getPending(200).map(t => ({ txHash: t.txHash, from: t.from, to: t.to, amount: t.amount, fee: t.fee, nonce: t.nonce }));
+        return res.end(JSON.stringify({ txs, count: txs.length }));
       }
 
       // ── P2P gossip receive endpoint ───────────────────────────────────────────
@@ -1033,6 +1065,14 @@ export class PohMinerNode {
       console.log('[PoH-Miner] No bootnodes configured — running in local/dev mode only');
     }
 
+    // Accept transactions gossiped by peers
+    this.gossip.subscribe('new-tx', (txData) => {
+      try {
+        const tx = PoHTransaction.fromJSON(txData);
+        this.txMempool.submit(tx); // silently ignores duplicates / invalid
+      } catch { /* malformed tx */ }
+    });
+
     // Subscribe to node status updates
     this.gossip.subscribe('node-status', (status, from) => {
       if (status.methodsHash && status.methodsHash !== this.methodsManager?.hash) {
@@ -1116,9 +1156,26 @@ export class PohMinerNode {
   }
 
   _appendBlock(block, from) {
+    // Apply formal transactions in the block to wallet state
+    const appliedTxHashes = [];
+    for (const txData of (block.transactions || [])) {
+      const tx = PoHTransaction.fromJSON(txData);
+      const result = this.walletManager.applyTransaction(tx);
+      if (result === true) {
+        appliedTxHashes.push(tx.txHash);
+        // Fee to block proposer
+        if (tx.fee > 0 && block.minerWallet) {
+          this.walletManager.credit(block.minerWallet, tx.fee);
+        }
+      } else {
+        console.warn(`[PoH-Miner] Tx ${tx.txHash.slice(0,12)} failed in block #${block.height}: ${result}`);
+      }
+    }
+    if (appliedTxHashes.length) this.txMempool.onBlockApplied(appliedTxHashes);
+
     this.chain.push(block);
     this.chainStore.saveChain(this.chain);
-    console.log(`[PoH-Miner] Accepted block #${block.height} chainWork=${block.chainWork} [sig:${block.minerSignature ? '✓' : 'none'}] from ${from?.slice(0,8)}`);
+    console.log(`[PoH-Miner] Accepted block #${block.height} chainWork=${block.chainWork} txs=${appliedTxHashes.length} [sig:${block.minerSignature ? '✓' : 'none'}] from ${from?.slice(0,8)}`);
     this.processIncomingBlockRewards(block);
   }
 
@@ -1484,12 +1541,16 @@ export class PohMinerNode {
       coinbase.proposerReward = Math.floor(coinbase.proposerReward * reputationMultiplier);
     }
 
+    // Include pending transactions (fee-ordered, up to 100 per block)
+    const pendingTxs = this.txMempool.getPending(100);
+
     const newBlock = new PohBlock({
       height: previous.height + 1,
       previousHash: await previous.getHash(),
       timestamp: Date.now(),
       minerWallet: this.config.wallet,
       scanResults: validResultsForBlock,
+      transactions: pendingTxs.map(t => t.toJSON()),
       coinbaseReward: coinbase,
       difficulty: this.currentDifficulty,
       chainWork: computeChainWork(previous.chainWork, this.currentDifficulty),
