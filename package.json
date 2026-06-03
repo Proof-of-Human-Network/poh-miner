@@ -31,6 +31,7 @@
     "start:local": "node scripts/start-local-network.js",
     "serve:landing": "node scripts/serve-landing.js",
     "start:node": "node src/miner-node.js",
+    "start:bootnode": "node src/bootnode.js --port 8080 --data-dir ~/.poh-bootnode",
     "test:job": "node scripts/submit-test-job.js",
     "build:bin": "pkg . --compress GZip",
     "build:deb": "bash scripts/build-deb.sh",

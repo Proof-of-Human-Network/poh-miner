@@ -67,26 +67,27 @@ export class CoinbaseReward {
 
 /**
  * Fixed block reward: exactly 1 POH per block.
+ * Internally represented as micro-POH (1 POH = 1_000_000_000 μPOH) so that
+ * integer splits don't floor to zero when dividing fractions of 1.
  *
  * Protection: Only high-quality work (validated via validateResultWork)
  * should be allowed to contribute to or benefit from block rewards.
  */
-export const BLOCK_REWARD_POH = 1; // Fixed 1 POH per block
+export const POH_DECIMALS = 1_000_000_000; // 1 POH = 1e9 micro-POH
+export const BLOCK_REWARD_POH = 1; // human-readable display value
+export const BLOCK_REWARD_UPOH = BLOCK_REWARD_POH * POH_DECIMALS; // 1_000_000_000 μPOH
 
 export function calculateBlockRewards(validWorkSubmissions = [], blockHeight = 0) {
-  // Always fixed reward
-  const totalNewSupply = BLOCK_REWARD_POH;
+  // Work in micro-POH so Math.floor never truncates the entire reward to 0
+  const totalNewSupply = BLOCK_REWARD_UPOH;
 
-  // For now: 60% to block proposer, 40% split among nodes that contributed *valid* work
-  const proposerShare = 0.6;
-  const workerShare = 0.4;
-
-  const proposerReward = Math.floor(totalNewSupply * proposerShare);
+  // 60% to block proposer, 40% split among workers that contributed valid scans
+  const proposerReward = Math.floor(totalNewSupply * 0.6); // 600_000_000 μPOH
 
   let workerRewards = [];
 
   if (validWorkSubmissions.length > 0) {
-    const perWorker = Math.floor((totalNewSupply * workerShare) / validWorkSubmissions.length);
+    const perWorker = Math.floor((totalNewSupply * 0.4) / validWorkSubmissions.length);
 
     workerRewards = validWorkSubmissions.map((work, i) => ({
       workerId: work.nodeId || work.minerWallet,

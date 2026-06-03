@@ -121,4 +121,18 @@ export class JobQueue {
     this.removeJob(jobId);
     this._saveToDisk();
   }
+
+  /**
+   * Persist job state to disk (MVP: no-op, jobs are transient mempool).
+   * In production this could write to JSON or DB like ChainStore.
+   * Called after markCompleted to allow future persistence without breaking callers.
+   */
+  _saveToDisk() {
+    // No-op for now. Add fs persistence here if jobs should survive restarts.
+    // Example skeleton:
+    // try {
+    //   const data = { jobs: [...], completed: [...] };
+    //   fs.writeFileSync(..., JSON.stringify(data));
+    // } catch {}
+  }
 }
