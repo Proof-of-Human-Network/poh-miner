@@ -1067,12 +1067,18 @@ export class PohMinerNode {
 
       const currentHeight = this.chain.length - 1;
       if (newBlock.height === currentHeight + 1) {
+        // Reject blocks with an invalid proposer signature
+        if (newBlock.minerSignature && !newBlock.verifySignature()) {
+          console.warn(`[PoH-Miner] Block #${newBlock.height} from ${from?.slice(0,8)} has INVALID signature — rejected`);
+          return;
+        }
+
         // Simple append if it's the next block
         const prevHash = await this.chain[currentHeight].getHash();
         if (newBlock.previousHash === prevHash) {
           this.chain.push(newBlock);
           this.chainStore.saveChain(this.chain);  // persist gossiped blocks so chain state survives restart
-          console.log(`[PoH-Miner] Accepted block #${newBlock.height} from ${from?.slice(0,8)}`);
+          console.log(`[PoH-Miner] Accepted block #${newBlock.height} from ${from?.slice(0,8)} [sig:${newBlock.minerSignature ? '✓' : 'none'}]`);
 
           // Credit any worker rewards this node earned in the received block
           this.processIncomingBlockRewards(newBlock);
@@ -1347,6 +1353,12 @@ export class PohMinerNode {
     result.isValidWork = true;
     this.qualityStats.validSubmissions++;
 
+    // Sign the result with this miner's identity key so block validators
+    // can verify who produced this work and reject forgeries.
+    if (this.identityWallet) {
+      try { result.sign(this.identityWallet); } catch { /* non-fatal */ }
+    }
+
     // Record successful submission
     this._recordSubmission(true, request.id, { ...workValidation, realPohUsed: result.realPohUsed });
 
@@ -1432,6 +1444,9 @@ export class PohMinerNode {
     }
 
     if (await newBlock.meetsDifficulty()) {
+      // Sign the block with our identity key after PoW is solved
+      if (this.identityWallet) newBlock.sign(this.identityWallet);
+
       this.chain.push(newBlock);
       this.chainStore.saveChain(this.chain);  // persist local blocks so they survive restart
       console.log(`[PoH-Miner] Produced block #${newBlock.height} (nonce ${newBlock.nonce}) — minted fixed ${BLOCK_REWARD_POH} POH | included ${validResultsForBlock.length} validated scan results`);

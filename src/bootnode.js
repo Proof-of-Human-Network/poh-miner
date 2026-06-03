@@ -132,6 +132,12 @@ const server = http.createServer(async (req, res) => {
           const blockData = JSON.parse(body);
           const block = PohBlock.fromJSON ? PohBlock.fromJSON(blockData) : new PohBlock(blockData);
 
+          // Reject blocks with invalid proposer signatures
+          if (block.minerSignature && !block.verifySignature()) {
+            res.statusCode = 400;
+            return res.end(JSON.stringify({ error: 'invalid block signature' }));
+          }
+
           const tip = chain[chain.length - 1];
           const tipHash = await tip.getHash();
 

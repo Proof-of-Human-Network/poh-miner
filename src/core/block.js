@@ -1,22 +1,25 @@
 /**
  * PoH Miner Network - Core Block Structure
- *
- * This defines what a block looks like in the decentralized PoW network
- * run by miners.
  */
+
+import crypto from 'crypto';
+import { Wallet } from '../wallet/wallet.js';
 
 export class PohBlock {
   constructor({
     height,
     previousHash,
     timestamp,
-    minerWallet,           // The winning miner's Solana address
-    scanResults = [],      // Array of { requestId, resultHash, winnerSignature, fee }
-    stateTransitions = [], // SignalsTransaction (new methods), weight updates, brain deltas, etc.
-
-    coinbaseReward = null, // CoinbaseReward instance (native token production)
+    minerWallet,
+    scanResults = [],
+    stateTransitions = [],
+    transactions = [],     // formal PoHTransaction objects (Fix 4)
+    coinbaseReward = null,
     nonce = 0,
     difficulty = 0,
+    chainWork = '0',       // cumulative difficulty as hex bigint string (Fix 3)
+    minerSignature = null, // ed25519 signature over block hash (Fix 2)
+    minerSigningPublicKey = null,
   }) {
     this.height = height;
     this.previousHash = previousHash;
@@ -24,16 +27,17 @@ export class PohBlock {
     this.minerWallet = minerWallet;
     this.scanResults = scanResults;
     this.stateTransitions = stateTransitions;
-
+    this.transactions = transactions;
     this.coinbaseReward = coinbaseReward;
     this.nonce = nonce;
     this.difficulty = difficulty;
+    this.chainWork = chainWork;
+    this.minerSignature = minerSignature;
+    this.minerSigningPublicKey = minerSigningPublicKey;
   }
 
-  /**
-   * Compute the block hash (for PoW and chain linking)
-   */
-  async getHash() {
+  // Synchronous SHA-256 (Node.js crypto) — used in the hot PoW loop
+  getHashSync() {
     const data = JSON.stringify({
       height: this.height,
       previousHash: this.previousHash,
@@ -41,30 +45,47 @@ export class PohBlock {
       minerWallet: this.minerWallet,
       scanResults: this.scanResults,
       stateTransitions: this.stateTransitions,
-
+      transactions: this.transactions,
       coinbaseReward: this.coinbaseReward ? {
         totalNewSupply: this.coinbaseReward.totalNewSupply,
         proposerReward: this.coinbaseReward.proposerReward,
       } : null,
       nonce: this.nonce,
     });
-
-    // Simple SHA256 for now (can be upgraded to more PoW-friendly later)
-    const encoder = new TextEncoder();
-    const dataBuffer = encoder.encode(data);
-    const hashBuffer = await crypto.subtle.digest('SHA-256', dataBuffer);
-    return Array.from(new Uint8Array(hashBuffer))
-      .map(b => b.toString(16).padStart(2, '0'))
-      .join('');
+    return crypto.createHash('sha256').update(data).digest('hex');
   }
 
-  /**
-   * Check if this block satisfies the current difficulty target
-   */
+  // Async alias kept for external callers that await it
+  async getHash() {
+    return this.getHashSync();
+  }
+
+  meetsDifficultySync() {
+    const hash = this.getHashSync();
+    return hash.startsWith('0'.repeat(this.difficulty));
+  }
+
   async meetsDifficulty() {
-    const hash = await this.getHash();
-    const target = '0'.repeat(this.difficulty);
-    return hash.startsWith(target);
+    return this.meetsDifficultySync();
+  }
+
+  // Sign the block with the proposer's identity wallet.
+  // Called after the block hash is stable (PoW solved, nonce fixed).
+  sign(identityWallet) {
+    const hash = this.getHashSync();
+    this.minerSignature = identityWallet.sign(hash);
+    this.minerSigningPublicKey = identityWallet.signingPublicKey;
+    return this;
+  }
+
+  // Verify the proposer's signature over the block hash.
+  verifySignature() {
+    if (!this.minerSignature || !this.minerSigningPublicKey) return false;
+    return Wallet.verifySignature(
+      this.minerSigningPublicKey,
+      this.getHashSync(),
+      this.minerSignature
+    );
   }
 
   toJSON() {
