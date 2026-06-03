@@ -90,6 +90,8 @@ export class PohMinerNode {
     this.chainStore = new ChainStore();
     this.walletManager = new WalletManager();
     this.txMempool = new TxMempool(this.walletManager);
+    // push token registry: address → { token, platform, registeredAt }
+    this.pushTokens = new Map();
     this.rewardClaimStore = new RewardClaimStore();
     const _homeDir = process.env.HOME || process.env.USERPROFILE || '.';
     this.balanceJournal = new BalanceJournal(
@@ -573,6 +575,89 @@ export class PohMinerNode {
           walletApiPort: port,
           version: 'poh-miner-network',
         }));
+      }
+
+      // ── Push notifications ────────────────────────────────────────────────────
+      if (req.method === 'POST' && url.pathname === '/api/push/register') {
+        let body = '';
+        req.on('data', c => body += c);
+        req.on('end', () => {
+          try {
+            const { address, token, platform } = JSON.parse(body);
+            if (!address || !token) {
+              res.statusCode = 400;
+              return res.end(JSON.stringify({ error: 'address and token required' }));
+            }
+            this.pushTokens.set(address, { token, platform: platform || 'unknown', registeredAt: Date.now() });
+            console.log(`[PoH-Miner] Push token registered for ${address.slice(0, 12)}… (${platform})`);
+            res.end(JSON.stringify({ ok: true }));
+          } catch (e) {
+            res.statusCode = 400;
+            res.end(JSON.stringify({ error: e.message }));
+          }
+        });
+        return;
+      }
+
+      // POST /api/push/send  { title, body, address? }
+      // address omitted → broadcast to all registered wallets
+      if (req.method === 'POST' && url.pathname === '/api/push/send') {
+        let body = '';
+        req.on('data', c => body += c);
+        req.on('end', async () => {
+          try {
+            const { title, body: msgBody, address, data } = JSON.parse(body);
+            if (!title || !msgBody) {
+              res.statusCode = 400;
+              return res.end(JSON.stringify({ error: 'title and body required' }));
+            }
+
+            // Pick target tokens
+            const targets = address
+              ? [this.pushTokens.get(address)?.token].filter(Boolean)
+              : [...this.pushTokens.values()].map(r => r.token);
+
+            if (!targets.length) {
+              return res.end(JSON.stringify({ ok: true, sent: 0, reason: 'no registered tokens' }));
+            }
+
+            // Expo push API — sends up to 100 per request
+            const messages = targets.map(t => ({
+              to: t, title, body: msgBody,
+              sound: 'default',
+              data: data || {},
+            }));
+
+            let sent = 0;
+            // Batch in chunks of 100 (Expo limit)
+            for (let i = 0; i < messages.length; i += 100) {
+              const chunk = messages.slice(i, i + 100);
+              try {
+                const r = await fetch('https://exp.host/--/api/v2/push/send', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+                  body: JSON.stringify(chunk),
+                  signal: AbortSignal.timeout(15000),
+                });
+                if (r.ok) sent += chunk.length;
+              } catch { /* skip failed batch */ }
+            }
+
+            console.log(`[PoH-Miner] Push sent: "${title}" → ${sent}/${targets.length} tokens`);
+            res.end(JSON.stringify({ ok: true, sent, total: targets.length }));
+          } catch (e) {
+            res.statusCode = 500;
+            res.end(JSON.stringify({ error: e.message }));
+          }
+        });
+        return;
+      }
+
+      if (req.method === 'GET' && url.pathname === '/api/push/tokens') {
+        const list = [...this.pushTokens.entries()].map(([addr, r]) => ({
+          address: addr, platform: r.platform, registeredAt: r.registeredAt,
+        }));
+        return res.end(JSON.stringify({ tokens: list, count: list.length }));
       }
 
       // ── Transaction submission ────────────────────────────────────────────────
