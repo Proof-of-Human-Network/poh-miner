@@ -22,3 +22,5 @@ const job = {
 console.log('Submitting test job with origin:', region);
 console.log(JSON.stringify(job, null, 2));
 console.log('\nIn a real network this would be gossiped to all miners.');
+console.log('\nFor actually running the checker, use:');
+console.log('  node scripts/send-test-checker-job.js [optional-address]');

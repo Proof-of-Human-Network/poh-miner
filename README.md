@@ -228,6 +228,59 @@ See [test/README.md](./test/README.md) for details, including how to run full en
 
 See `start.js` for the main entry point.
 
+### Submitting a test wallet scan / checker job (for developers)
+
+Once a miner is running (it exposes the Wallet API on port 3456 by default), you can submit a "verdict" job that will make it run the real POH checker on an address:
+
+```bash
+# Basic (replace the address)
+curl -X POST http://localhost:3456/test/job \
+  -H "Content-Type: application/json" \
+  -d '{
+    "type": "verdict",
+    "payload": { "address": "bc1qyouraddresshere" },
+    "fee": 25000000,
+    "originCountry": "US"
+  }'
+```
+
+Or use the helper script (it will use the HTTP endpoint if available, or fall back to running a local miner):
+
+```bash
+node scripts/send-test-checker-job.js bc1qyouraddresshere
+```
+
+If you get `{"error":"Not found"}`, restart your miner (the code change for the `/test/job` handler needs to be loaded).
+
+The job will trigger `computeAndSubmitJob` → the real `runFullCheck` (if the dev/ checker is present) and you will see the result in the miner's logs and `submissionHistory`.
+
+#### New: search -> status -> verdict/profile/evidence flow (for frontends)
+
+Every running miner now exposes a proper job API on its wallet port (default 3456). A frontend (e.g. `~/Desktop/poh/dev/frontend`) can:
+
+1. Discover live nodes: `GET https://bootnode.proofofhuman.ge/peers` (only nodes that proved they run valid poh-miner-network code via signed register are listed with `verified: true`).
+
+2. Pick a node and talk directly to it (using its `host` + `walletApiPort`):
+
+```bash
+# Submit a search/verdict (returns immediately with jobId)
+curl -X POST http://<node-host>:<port>/job \
+  -H "Content-Type: application/json" \
+  -d '{"payload": {"address": "bc1qyouraddresshere"}}'
+
+# Poll status
+curl http://<node-host>:<port>/job/<jobId>/status
+
+# Get full verdict + profile + evidence (signalsUsed etc)
+curl http://<node-host>:<port>/job/<jobId>/result
+```
+
+The `/job` endpoint (and legacy `/test/job`) now accept async and provide `/status` + `/result` URLs.
+
+`/peers` from bootnode now includes `verified`, `signingPublicKey`, `methodsHash` for each miner so clients can prefer real nodes.
+
+(Protection on `/register`: requires fresh timestamp + ed25519 signature over (wallet,host,timestamp,methodsHash) using the node's local wallet signing key. Random POSTs without a real running miner are rejected.)
+
 ---
 
 **Current Status**

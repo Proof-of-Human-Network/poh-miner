@@ -37,6 +37,7 @@ mkdir -p "$TMP_DIR/scripts"
 mkdir -p "$TMP_DIR/installers"
 mkdir -p "$TMP_DIR/landing"
 mkdir -p "$TMP_DIR/binaries"
+mkdir -p "$TMP_DIR/assets/icons"
 
 # Copy original files (still containing placeholder)
 cp scripts/easy-start.sh "$TMP_DIR/scripts/"
@@ -48,6 +49,13 @@ cp installers/install-windows.ps1 "$TMP_DIR/installers/" 2>/dev/null || true
 cp README*.md "$TMP_DIR/" 2>/dev/null || true
 cp QUICKSTART*.md "$TMP_DIR/" 2>/dev/null || true
 cp landing/index.html "$TMP_DIR/landing/"
+cp landing/favicon* "$TMP_DIR/landing/" 2>/dev/null || true
+cp landing/poh-miner.svg "$TMP_DIR/landing/" 2>/dev/null || true
+
+# Stage icons/assets so that landing page's logo (../assets/icons/...) and favicons resolve correctly under the published CID root
+cp assets/icons/poh-miner.svg "$TMP_DIR/assets/icons/" 2>/dev/null || true
+cp assets/icons/poh-miner-*.png "$TMP_DIR/assets/icons/" 2>/dev/null || true
+cp assets/icons/poh-miner.ico "$TMP_DIR/assets/icons/" 2>/dev/null || true
 # Copy static assets from landing (e.g. the Android wallet APK for direct download)
 mkdir -p "$TMP_DIR/landing/binaries"
 cp landing/binaries/*.apk "$TMP_DIR/landing/binaries/" 2>/dev/null || true

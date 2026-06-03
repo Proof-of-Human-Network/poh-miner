@@ -19,11 +19,21 @@ const MIME = {
   '.ps1': 'text/plain',
   '.json': 'application/json',
   '.apk': 'application/vnd.android.package-archive',
+  '.png': 'image/png',
+  '.svg': 'image/svg+xml',
+  '.ico': 'image/x-icon',
 };
 
 const server = http.createServer((req, res) => {
   let urlPath = req.url.split('?')[0];
-  if (urlPath === '/') urlPath = '/landing/index.html';
+
+  // Redirect root to the landing page so that relative asset URLs (favicons, logo)
+  // resolve correctly under /landing/ instead of the server root.
+  if (urlPath === '/' || urlPath === '') {
+    res.writeHead(302, { Location: '/landing/index.html' });
+    res.end();
+    return;
+  }
 
   const filePath = path.join(ROOT, urlPath);
 
