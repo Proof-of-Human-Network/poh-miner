@@ -93,6 +93,16 @@ export class RewardClaimStore {
   }
 
   /**
+   * Remove a claim (used during reorg so rewards can be re-earned on the new chain).
+   */
+  unclaim(claimKey) {
+    if (claimKey && this.claimed.has(claimKey)) {
+      this.claimed.delete(claimKey);
+      this._save();
+    }
+  }
+
+  /**
    * Generate a consistent claim key for a worker reward.
    */
   static makeClaimKey(blockHeight, workProofHash) {

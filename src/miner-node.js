@@ -26,6 +26,7 @@ import { computeVerdictWithExistingPoh } from './compute/poh-adapter.js';
 import { getBrain, getBrainDataDir } from './compute/adapters/real-poh.js';
 import { BrainSync } from './brain/brain-sync.js';
 import { PoHTransaction, TxMempool } from './core/transaction.js';
+import { BalanceJournal } from './storage/balance-journal.js';
 import fs from 'fs';
 import path from 'path';
 import { ChainStore } from './storage/chain-store.js';
@@ -86,6 +87,11 @@ export class PohMinerNode {
     this.walletManager = new WalletManager();
     this.txMempool = new TxMempool(this.walletManager);
     this.rewardClaimStore = new RewardClaimStore();
+    const _homeDir = process.env.HOME || process.env.USERPROFILE || '.';
+    this.balanceJournal = new BalanceJournal(
+      path.join(_homeDir, '.poh-miner', 'chain'),
+      this.walletManager
+    );
 
     // Simple quality tracking + reputation for slashing
     this.qualityStats = {
@@ -1164,9 +1170,12 @@ export class PohMinerNode {
       const result = this.walletManager.applyTransaction(tx);
       if (result === true) {
         appliedTxHashes.push(tx.txHash);
-        // Fee to block proposer
+        // Record journal entries for rollback capability
+        this.balanceJournal.record(block.height, tx.from, -(tx.amount + tx.fee), 1, tx.txHash);
+        this.balanceJournal.record(block.height, tx.to, tx.amount, 0, tx.txHash);
         if (tx.fee > 0 && block.minerWallet) {
           this.walletManager.credit(block.minerWallet, tx.fee);
+          this.balanceJournal.record(block.height, block.minerWallet, tx.fee, 0, tx.txHash);
         }
       } else {
         console.warn(`[PoH-Miner] Tx ${tx.txHash.slice(0,12)} failed in block #${block.height}: ${result}`);
@@ -1234,26 +1243,29 @@ export class PohMinerNode {
 
         if (!res.ok) continue;
 
-        const blocks = await res.json();
+        const blocksData = await res.json();
+        const incoming = blocksData.map(b => PohBlock.fromJSON(b));
+
+        // Check if incoming blocks represent a heavier chain (reorg needed)
+        const incomingTip = incoming[incoming.length - 1];
+        const ourWork = getTipChainWork(this.chain);
+        if (incomingTip && compareChainWork(incomingTip.chainWork, ourWork) > 0) {
+          await this.reorgTo(incoming);
+          return;
+        }
+
+        // No reorg needed — append sequential blocks normally
         let added = 0;
-
-        for (const blockData of blocks) {
-          const block = PohBlock.fromJSON ? PohBlock.fromJSON(blockData) : new PohBlock(blockData);
+        for (const block of incoming) {
           const prev = this.chain[this.chain.length - 1];
-          const prevHash = await prev.getHash();
-
-          if (block.height === this.chain.length && block.previousHash === prevHash) {
-            this.chain.push(block);
+          if (block.height === this.chain.length && block.previousHash === prev.getHashSync()) {
+            this._appendBlock(block, bootnode);
             added++;
-
-            // Credit worker rewards this node earned in synced blocks
-            this.processIncomingBlockRewards(block);
           }
         }
 
         if (added > 0) {
-          this.chainStore.saveChain(this.chain);
-          console.log(`[PoH-Miner] [Sync] Successfully synced ${added} blocks from ${bootnode}`);
+          console.log(`[PoH-Miner] [Sync] Synced ${added} blocks from ${bootnode}`);
           return;
         }
       } catch (err) {
@@ -1284,11 +1296,68 @@ export class PohMinerNode {
       }
 
       this.walletManager.credit(this.config.wallet, worker.amount);
+      this.balanceJournal.record(block.height, this.config.wallet, worker.amount, 0, claimKey);
 
       console.log(
         `[PoH-Miner] Credited ${(worker.amount / POH_DECIMALS).toFixed(4)} POH (worker) from block #${block.height} to ${this.config.wallet}`
       );
     });
+  }
+
+  /**
+   * Reorganize to a different chain segment.
+   *
+   * Steps:
+   *   1. Find common ancestor between current chain and newBlocks
+   *   2. Roll back balance journal to common ancestor height
+   *   3. Re-credit reward claims from rolled-back blocks (mark unclaimed)
+   *   4. Replace chain from common ancestor with newBlocks
+   *   5. Apply each new block
+   *
+   * Called when a sync reveals a heavier chain branch.
+   */
+  async reorgTo(newBlocks) {
+    if (!newBlocks?.length) return;
+
+    // Find common ancestor
+    const newHashes = new Set(newBlocks.map(b => b.previousHash));
+    let commonHeight = -1;
+    for (let i = this.chain.length - 1; i >= 0; i--) {
+      if (newHashes.has(this.chain[i].getHashSync())) {
+        commonHeight = i;
+        break;
+      }
+    }
+    if (commonHeight < 0) {
+      console.warn('[PoH-Miner] Reorg: no common ancestor found — ignoring');
+      return;
+    }
+
+    const rolledBack = this.chain.splice(commonHeight + 1);
+    console.log(`[PoH-Miner] Reorg: rolling back ${rolledBack.length} blocks to height ${commonHeight}`);
+
+    // Undo balance changes for rolled-back blocks
+    const undone = this.balanceJournal.rollbackTo(commonHeight);
+    console.log(`[PoH-Miner] Reorg: reversed ${undone} journal entries`);
+
+    // Unclaim reward claims so they can be re-earned on the new chain
+    for (const block of rolledBack) {
+      const coinbase = block.coinbaseReward;
+      if (!coinbase?.workerRewards) continue;
+      for (const w of coinbase.workerRewards) {
+        if (w.workerId === this.config.wallet) {
+          const key = RewardClaimStore.makeClaimKey(block.height, w.workProofHash);
+          this.rewardClaimStore.unclaim(key);
+        }
+      }
+    }
+
+    // Apply the new branch blocks
+    for (const block of newBlocks) {
+      this._appendBlock(block, 'reorg');
+    }
+    this.chainStore.saveChain(this.chain);
+    console.log(`[PoH-Miner] Reorg complete. New tip: #${this.chain[this.chain.length - 1].height}`);
   }
 
   startJobListener() {
