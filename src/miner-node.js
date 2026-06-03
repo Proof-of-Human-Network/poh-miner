@@ -82,7 +82,7 @@ export class PohMinerNode {
     // (enables any frontend to connect directly to a discovered node via its walletApiPort)
     this.jobResults = new Map(); // jobId -> {id, status:'queued'|'computing'|'done'|'error', job, result:ScanResult|null, error?:string, createdAt, updatedAt}
     this.myLatencyProfile = null; // populated on startup
-    this.currentDifficulty = 4;
+    this.currentDifficulty = 5; // matches MIN_DIFFICULTY in pow.js
     this.gossip = new P2PGossip(
       this.config.wallet || 'unknown-miner',
       () => this.peers || []   // live peer list — updated by discoverAndRegisterWithBootnodes

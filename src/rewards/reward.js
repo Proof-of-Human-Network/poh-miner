@@ -81,19 +81,22 @@ export function calculateBlockRewards(validWorkSubmissions = [], blockHeight = 0
   // Work in micro-POH so Math.floor never truncates the entire reward to 0
   const totalNewSupply = BLOCK_REWARD_UPOH;
 
-  // 60% to block proposer, 40% split among workers that contributed valid scans
-  const proposerReward = Math.floor(totalNewSupply * 0.6); // 600_000_000 μPOH
-
+  let proposerReward;
   let workerRewards = [];
 
   if (validWorkSubmissions.length > 0) {
+    // 60% to proposer, 40% split evenly among workers
+    proposerReward = Math.floor(totalNewSupply * 0.6);
     const perWorker = Math.floor((totalNewSupply * 0.4) / validWorkSubmissions.length);
-
     workerRewards = validWorkSubmissions.map((work, i) => ({
-      workerId: work.nodeId || work.minerWallet,
-      amount: perWorker,
+      workerId:      work.nodeId || work.minerWallet,
+      amount:        perWorker,
       workProofHash: work.proofHash || work.requestId || `work-${i}`,
     }));
+  } else {
+    // No compute work in this block — full reward goes to the proposer
+    // (they still did PoW and maintain the chain)
+    proposerReward = totalNewSupply;
   }
 
   return new CoinbaseReward({

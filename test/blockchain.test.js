@@ -383,10 +383,11 @@ describe('Fix 5 — Proof of Work', () => {
     expect(result).toBeNull();
   });
 
-  it('getNextDifficulty returns MIN_DIFFICULTY for short chain', async () => {
+  it('getNextDifficulty preserves current difficulty for short chain (no reset to MIN)', async () => {
     const { getNextDifficulty } = await import('../src/consensus/pow.js');
-    expect(getNextDifficulty([])).toBe(3);
-    expect(getNextDifficulty([{}, {}])).toBe(3);
+    expect(getNextDifficulty([])).toBe(5);                                  // MIN when chain empty
+    expect(getNextDifficulty([{ difficulty: 7 }])).toBe(7);                // keeps tip difficulty
+    expect(getNextDifficulty([{ difficulty: 3 }])).toBe(5);                // clamps up to MIN
   });
 
   it('getNextDifficulty increases when blocks are too fast', async () => {
@@ -395,9 +396,9 @@ describe('Fix 5 — Proof of Work', () => {
     // 11 blocks in 5 seconds = ~500ms avg (way below 30s target)
     const fastChain = Array.from({ length: 11 }, (_, i) => ({
       timestamp: now + i * 500,
-      difficulty: 4,
+      difficulty: 5,
     }));
-    expect(getNextDifficulty(fastChain)).toBe(5);
+    expect(getNextDifficulty(fastChain)).toBe(6);
   });
 
   it('getNextDifficulty decreases when blocks are too slow', async () => {
