@@ -167,6 +167,151 @@
       display: flex;
       justify-content: space-between;
     }
+
+    /* ── Tab nav ── */
+    .tab-nav {
+      display: flex;
+      background: #111;
+      border-bottom: 1px solid #222;
+      padding: 0 4px;
+      gap: 2px;
+      flex-shrink: 0;
+    }
+    .tab-btn {
+      padding: 7px 16px;
+      font-size: 12px;
+      color: #666;
+      background: none;
+      border: none;
+      border-bottom: 2px solid transparent;
+      cursor: pointer;
+      transition: color 0.15s, border-color 0.15s;
+      margin-bottom: -1px;
+    }
+    .tab-btn:hover { color: #aaa; }
+    .tab-btn.active { color: #22c55e; border-bottom-color: #22c55e; }
+
+    /* ── Chat panel ── */
+    #chat-panel {
+      flex: 1;
+      display: none;
+      flex-direction: column;
+      background: #0a0a0a;
+      min-width: 0;
+    }
+    #chat-panel.active { display: flex; }
+    #logs.active { display: flex; flex-direction: column; }
+    #logs { display: none; }
+
+    .chat-messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .chat-msg {
+      display: flex;
+      flex-direction: column;
+      max-width: 82%;
+      gap: 3px;
+    }
+    .chat-msg.user { align-self: flex-end; align-items: flex-end; }
+    .chat-msg.assistant { align-self: flex-start; align-items: flex-start; }
+    .chat-bubble {
+      padding: 9px 13px;
+      border-radius: 14px;
+      font-size: 13px;
+      line-height: 1.5;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .chat-msg.user   .chat-bubble { background: #1a3a2a; color: #d1fae5; border-bottom-right-radius: 3px; }
+    .chat-msg.assistant .chat-bubble { background: #1a1a1a; color: #ddd; border-bottom-left-radius: 3px; border: 1px solid #2a2a2a; }
+    .chat-meta { font-size: 10px; color: #444; padding: 0 4px; }
+    .chat-cursor { display: inline-block; width: 7px; height: 13px; background: #22c55e; animation: blink 1s step-end infinite; vertical-align: text-bottom; margin-left: 2px; }
+    @keyframes blink { 50% { opacity: 0; } }
+
+    .chat-toolbar {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px 12px;
+      border-top: 1px solid #1a1a1a;
+      border-bottom: 1px solid #1a1a1a;
+      background: #111;
+      flex-shrink: 0;
+    }
+    .chat-model-label { font-size: 11px; color: #555; }
+    #chat-model-select {
+      font-size: 11px;
+      background: #1a1a1a;
+      color: #888;
+      border: 1px solid #2a2a2a;
+      border-radius: 4px;
+      padding: 2px 6px;
+      cursor: pointer;
+    }
+    .chat-clear-btn {
+      margin-left: auto;
+      font-size: 11px;
+      color: #555;
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 2px 8px;
+    }
+    .chat-clear-btn:hover { color: #888; }
+
+    .chat-input-row {
+      display: flex;
+      gap: 8px;
+      padding: 10px 12px;
+      background: #111;
+      flex-shrink: 0;
+    }
+    #chat-input {
+      flex: 1;
+      background: #1a1a1a;
+      border: 1px solid #2a2a2a;
+      border-radius: 8px;
+      color: #ddd;
+      font-size: 13px;
+      padding: 8px 12px;
+      resize: none;
+      font-family: inherit;
+      line-height: 1.4;
+      max-height: 120px;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    #chat-input:focus { border-color: #333; }
+    #chat-send-btn {
+      background: #22c55e;
+      color: #000;
+      border: none;
+      border-radius: 8px;
+      padding: 8px 16px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s;
+      align-self: flex-end;
+    }
+    #chat-send-btn:hover { background: #16a34a; }
+    #chat-send-btn:disabled { background: #1a3a2a; color: #2d6a3f; cursor: default; }
+    .chat-empty {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      color: #333;
+      font-size: 13px;
+      gap: 6px;
+    }
+    .chat-empty-icon { font-size: 32px; opacity: 0.4; }
   </style>
 </head>
 <body>
@@ -589,14 +734,46 @@
 
   <!-- ==================== MAIN APP ==================== -->
   <div id="main-app" class="hidden">
+    <!-- Tab navigation -->
+    <div class="tab-nav">
+      <button class="tab-btn active" id="tab-logs-btn" onclick="switchTab('logs')">Logs</button>
+      <button class="tab-btn"        id="tab-chat-btn" onclick="switchTab('chat')">Chat</button>
+    </div>
+
     <div class="main">
-      <!-- Logs -->
-      <div class="logs" id="logs">
+      <!-- Logs panel -->
+      <div class="logs active" id="logs">
         <div class="log-header">
           <span>Live Logs</span>
           <span style="cursor:pointer" onclick="clearLogs()">Clear</span>
         </div>
         <div id="log-content"></div>
+      </div>
+
+      <!-- Chat panel -->
+      <div id="chat-panel">
+        <!-- Toolbar: model selector + clear -->
+        <div class="chat-toolbar">
+          <span class="chat-model-label">Model</span>
+          <select id="chat-model-select" title="Select model"></select>
+          <button class="chat-clear-btn" onclick="clearChat()" title="Clear conversation">Clear</button>
+        </div>
+
+        <!-- Message list -->
+        <div class="chat-messages" id="chat-messages">
+          <div class="chat-empty" id="chat-empty">
+            <div class="chat-empty-icon">◈</div>
+            <div>Chat with your local LLM</div>
+            <div style="font-size:11px;color:#2a2a2a">Powered by Ollama · running on this machine</div>
+          </div>
+        </div>
+
+        <!-- Input -->
+        <div class="chat-input-row">
+          <textarea id="chat-input" rows="1" placeholder="Message the AI…"
+                    onkeydown="chatKeydown(event)" oninput="autoResize(this)"></textarea>
+          <button id="chat-send-btn" onclick="sendChatMessage()">Send</button>
+        </div>
       </div>
 
       <!-- Resizer -->

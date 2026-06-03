@@ -86,6 +86,8 @@ if (window.pohMinerAPI) {
   });
 
   window.pohMinerAPI.onStatus((status) => {
+    // Keep port in sync so chat always hits the right endpoint
+    if (status?.walletApiPort) window._minerApiPort = status.walletApiPort;
     updateStatus(status);
 
     // If main process tells us we're not onboarded, force the wizard
@@ -1165,4 +1167,218 @@ if (resizer && sidebar) {
     sidebar.style.width = '280px';
     localStorage.setItem('sidebarWidth', 280);
   });
+}
+
+// ── Tab switching ──────────────────────────────────────────────────────────────
+
+function switchTab(name) {
+  const logsEl   = document.getElementById('logs');
+  const chatEl   = document.getElementById('chat-panel');
+  const logBtn   = document.getElementById('tab-logs-btn');
+  const chatBtn  = document.getElementById('tab-chat-btn');
+  const resizer  = document.getElementById('sidebar-resizer');
+
+  if (name === 'chat') {
+    logsEl?.classList.remove('active');
+    chatEl?.classList.add('active');
+    logBtn?.classList.remove('active');
+    chatBtn?.classList.add('active');
+    if (resizer) resizer.style.display = 'none'; // chat uses full width
+    chatEl?.querySelector('#chat-input')?.focus();
+    loadChatModels();
+  } else {
+    chatEl?.classList.remove('active');
+    logsEl?.classList.add('active');
+    chatBtn?.classList.remove('active');
+    logBtn?.classList.add('active');
+    if (resizer) resizer.style.display = '';
+  }
+}
+
+// ── Chat state ─────────────────────────────────────────────────────────────────
+
+const chatHistory = []; // { role: 'user'|'assistant', content: string }
+let chatStreaming = false;
+
+// ── Model loader ───────────────────────────────────────────────────────────────
+
+async function loadChatModels() {
+  const sel = document.getElementById('chat-model-select');
+  if (!sel || sel.dataset.loaded) return;
+  try {
+    const port = window._minerApiPort || 3456;
+    const res  = await fetch(`http://localhost:${port}/api/models`);
+    if (!res.ok) return;
+    const data = await res.json();
+    const models = (data.models || []).map(m => m.name || m.model).filter(Boolean);
+    sel.innerHTML = '';
+    if (!models.length) {
+      sel.innerHTML = '<option value="">No models found</option>';
+      return;
+    }
+    for (const m of models) {
+      const opt = document.createElement('option');
+      opt.value = opt.textContent = m;
+      sel.appendChild(opt);
+    }
+    // Default to qwen if available
+    const qwen = models.find(m => m.includes('qwen'));
+    if (qwen) sel.value = qwen;
+    sel.dataset.loaded = '1';
+  } catch { /* Ollama not running */ }
+}
+
+// ── Message rendering ──────────────────────────────────────────────────────────
+
+function renderMessage(role, content, streaming = false) {
+  const empty = document.getElementById('chat-empty');
+  if (empty) empty.style.display = 'none';
+
+  const msgs = document.getElementById('chat-messages');
+  const wrap = document.createElement('div');
+  wrap.className = `chat-msg ${role}`;
+  wrap.dataset.role = role;
+
+  const bubble = document.createElement('div');
+  bubble.className = 'chat-bubble';
+  bubble.textContent = content;
+  if (streaming) {
+    const cursor = document.createElement('span');
+    cursor.className = 'chat-cursor';
+    cursor.id = 'chat-cursor';
+    bubble.appendChild(cursor);
+  }
+
+  const meta = document.createElement('div');
+  meta.className = 'chat-meta';
+  meta.textContent = role === 'user' ? 'You' : 'AI';
+
+  wrap.appendChild(bubble);
+  wrap.appendChild(meta);
+  msgs.appendChild(wrap);
+  msgs.scrollTop = msgs.scrollHeight;
+  return bubble;
+}
+
+function appendToLastBubble(token) {
+  const msgs = document.getElementById('chat-messages');
+  const last = msgs.querySelector('.chat-msg.assistant:last-child .chat-bubble');
+  if (!last) return;
+  const cursor = last.querySelector('#chat-cursor');
+  if (cursor) {
+    cursor.insertAdjacentText('beforebegin', token);
+  } else {
+    last.textContent += token;
+  }
+  msgs.scrollTop = msgs.scrollHeight;
+}
+
+function finalizeLastBubble() {
+  const cursor = document.getElementById('chat-cursor');
+  cursor?.remove();
+}
+
+// ── Send + stream ──────────────────────────────────────────────────────────────
+
+async function sendChatMessage() {
+  if (chatStreaming) return;
+  const input = document.getElementById('chat-input');
+  const text  = input.value.trim();
+  if (!text) return;
+
+  input.value = '';
+  input.style.height = '';
+  input.disabled = true;
+  document.getElementById('chat-send-btn').disabled = true;
+  chatStreaming = true;
+
+  chatHistory.push({ role: 'user', content: text });
+  renderMessage('user', text);
+
+  const sel   = document.getElementById('chat-model-select');
+  const model = sel?.value || 'qwen2.5:1.5b';
+  const port  = window._minerApiPort || 3456;
+
+  renderMessage('assistant', '', true); // empty bubble with cursor
+
+  try {
+    const res = await fetch(`http://localhost:${port}/api/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model,
+        messages: chatHistory,
+        stream: true,
+        options: { temperature: 0.7 },
+      }),
+    });
+
+    if (!res.ok) {
+      const err = await res.text().catch(() => res.statusText);
+      appendToLastBubble(`[Error: ${err}]`);
+      finalizeLastBubble();
+      chatHistory.push({ role: 'assistant', content: `[Error: ${err}]` });
+      return;
+    }
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buf = '';
+    let fullResponse = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      const lines = buf.split('\n');
+      buf = lines.pop(); // keep incomplete line
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        try {
+          const evt = JSON.parse(line);
+          const token = evt.message?.content || '';
+          if (token) {
+            appendToLastBubble(token);
+            fullResponse += token;
+          }
+          if (evt.done) break;
+        } catch { /* partial JSON */ }
+      }
+    }
+
+    finalizeLastBubble();
+    chatHistory.push({ role: 'assistant', content: fullResponse });
+  } catch (err) {
+    appendToLastBubble(`[Connection error: ${err.message}]`);
+    finalizeLastBubble();
+    chatHistory.push({ role: 'assistant', content: `[Error]` });
+  } finally {
+    chatStreaming = false;
+    input.disabled = false;
+    document.getElementById('chat-send-btn').disabled = false;
+    input.focus();
+  }
+}
+
+function clearChat() {
+  chatHistory.length = 0;
+  const msgs = document.getElementById('chat-messages');
+  msgs.innerHTML = `
+    <div class="chat-empty" id="chat-empty">
+      <div class="chat-empty-icon">◈</div>
+      <div>Chat with your local LLM</div>
+      <div style="font-size:11px;color:#2a2a2a">Powered by Ollama · running on this machine</div>
+    </div>`;
+}
+
+function chatKeydown(e) {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    sendChatMessage();
+  }
+}
+
+function autoResize(el) {
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 120) + 'px';
 }

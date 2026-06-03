@@ -182,6 +182,7 @@ function sendStatusUpdate() {
       chainHeight: minerNode.chain ? minerNode.chain.length - 1 : 0,
       reputation: minerNode.reputation || 1.0,
       qualityStats: minerNode.qualityStats || {},
+      walletApiPort: minerNode.config?.walletApiPort || 3456,
     };
 
     mainWindow.webContents.send('status', status);
