@@ -615,13 +615,28 @@ export class PohMinerNode {
       }
 
       // ── Ollama chat/generate proxy (/api/chat, /api/generate, /api/models) ──
-      // Lets developers talk directly to the miner's local LLM.
+      // Restricted: localhost-only by default. Set config.llmApiKey to allow
+      // external access authenticated with "Authorization: Bearer <key>".
       const ollamaBase = this.config.ollamaUrl || 'http://localhost:11434';
       const ollamaProxyPaths = ['/api/chat', '/api/generate', '/api/embeddings'];
       const isOllamaProxy = ollamaProxyPaths.includes(url.pathname) ||
         url.pathname === '/api/models';
 
       if (isOllamaProxy) {
+        const remote = req.socket.remoteAddress || '';
+        const isLocalRequest = remote === '127.0.0.1' || remote === '::1' || remote === '::ffff:127.0.0.1';
+        const llmApiKey = this.config.llmApiKey;
+        if (!isLocalRequest) {
+          if (!llmApiKey) {
+            res.statusCode = 403;
+            return res.end(JSON.stringify({ error: 'LLM proxy is restricted to localhost. Set llmApiKey in config to allow external access.' }));
+          }
+          const provided = (req.headers['authorization'] || '').replace(/^Bearer\s+/i, '').trim();
+          if (provided !== llmApiKey) {
+            res.statusCode = 401;
+            return res.end(JSON.stringify({ error: 'Invalid API key' }));
+          }
+        }
         const targetPath = url.pathname === '/api/models'
           ? '/api/tags'
           : url.pathname;
