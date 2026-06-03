@@ -21,6 +21,7 @@ import { P2PGossip } from './network/p2p-gossip.js';
 import { validateResultWork } from './validation/result-validator.js';
 import { calculateBlockRewards, BLOCK_REWARD_POH, POH_DECIMALS } from './rewards/reward.js';
 import { computeChainWork, compareChainWork, getTipChainWork } from './consensus/chain-selection.js';
+import { mineBlock, getNextDifficulty } from './consensus/pow.js';
 import { computeVerdictWithExistingPoh } from './compute/poh-adapter.js';
 import { getBrain, getBrainDataDir } from './compute/adapters/real-poh.js';
 import { BrainSync } from './brain/brain-sync.js';
@@ -1173,10 +1174,16 @@ export class PohMinerNode {
     }
     if (appliedTxHashes.length) this.txMempool.onBlockApplied(appliedTxHashes);
 
+    // Abort current mining immediately — we need to mine on the new tip
+    this._abortMining();
+
     this.chain.push(block);
     this.chainStore.saveChain(this.chain);
     console.log(`[PoH-Miner] Accepted block #${block.height} chainWork=${block.chainWork} txs=${appliedTxHashes.length} [sig:${block.minerSignature ? '✓' : 'none'}] from ${from?.slice(0,8)}`);
     this.processIncomingBlockRewards(block);
+
+    // Recalculate difficulty after each new block
+    this.currentDifficulty = getNextDifficulty(this.chain);
   }
 
   _storeOrphan(block) {
@@ -1509,17 +1516,40 @@ export class PohMinerNode {
   }
 
   startBlockProduction() {
-    // Miners produce blocks containing accepted scan results + state changes
-    setInterval(async () => {
-      // In reality only selected miners produce blocks in their slot
-      if (Math.random() < 0.25) {
-        console.log('[PoH-Miner] Attempting to produce block...');
-        await this.proposeBlock();
-      }
-    }, 15000);
+    // Every miner mines continuously. Mining is aborted when a new valid
+    // block arrives from the network, then immediately restarted on the
+    // new tip — same as Bitcoin's mining loop.
+    this._miningController = null;
+    this._miningActive = false;
+    this._mineLoop();
   }
 
-  async proposeBlock() {
+  async _mineLoop() {
+    if (this._miningActive) return;
+    this._miningActive = true;
+    try {
+      while (true) {
+        this._miningController = new AbortController();
+        const result = await this.proposeBlock(this._miningController.signal);
+        if (!result) {
+          // Aborted by incoming block — tiny pause, then restart on new tip
+          await new Promise(r => setTimeout(r, 50));
+        }
+        // Block found or aborted — either way restart
+      }
+    } finally {
+      this._miningActive = false;
+    }
+  }
+
+  // Call this when a valid block arrives from the network to abort mining
+  _abortMining() {
+    if (this._miningController && !this._miningController.signal.aborted) {
+      this._miningController.abort();
+    }
+  }
+
+  async proposeBlock(abortSignal) {
     const previous = this.chain[this.chain.length - 1];
 
     // === Fixed 1 POH per block + Strict Work Quality Filter ===
@@ -1556,14 +1586,11 @@ export class PohMinerNode {
       chainWork: computeChainWork(previous.chainWork, this.currentDifficulty),
     });
 
-    // Do a small PoW (this can be made useful later)
-    let attempts = 0;
-    while (!(await newBlock.meetsDifficulty()) && attempts < 100000) {
-      newBlock.nonce++;
-      attempts++;
-    }
+    const attempts = await mineBlock(newBlock, this.currentDifficulty, abortSignal);
 
-    if (await newBlock.meetsDifficulty()) {
+    if (attempts === null) return null; // aborted by incoming block
+
+    if (newBlock.meetsDifficultySync()) {
       // Sign the block with our identity key after PoW is solved
       if (this.identityWallet) newBlock.sign(this.identityWallet);
 

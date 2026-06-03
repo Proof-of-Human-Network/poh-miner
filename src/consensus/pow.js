@@ -1,38 +1,61 @@
 /**
- * Lightweight Proof of Work for the PoH Miner Network
+ * Proof of Work for the PoH Miner Network.
  *
- * This is intentionally simple at the beginning.
- * The real "work" is the useful computation (verdicts, profiles, brain updates).
- * The PoW here is mostly anti-spam + Sybil resistance.
+ * Real competitive PoW: all miners mine simultaneously; the first to find
+ * a valid nonce wins the block. Mining aborts immediately when a new valid
+ * block arrives from the network (via AbortSignal), preventing wasted work.
+ *
+ * Uses synchronous Node.js crypto (SHA-256) so the hot loop is as fast
+ * as possible. Yields to the event loop every YIELD_EVERY hashes so
+ * incoming gossip blocks and scan jobs are never blocked.
+ *
+ * Difficulty target: hash must start with `difficulty` zero hex chars.
+ * Difficulty adjustment targets 30-second average block time.
  */
 
-export async function mineBlock(block, difficulty) {
+const YIELD_EVERY = 2000;         // yield to event loop this often
+const TARGET_BLOCK_TIME_MS = 30_000;
+const ADJUSTMENT_WINDOW = 10;    // blocks
+const MIN_DIFFICULTY = 3;
+const MAX_DIFFICULTY = 20;
+
+export async function mineBlock(block, difficulty, abortSignal) {
   block.difficulty = difficulty;
+  block.nonce = 0;
+
   let attempts = 0;
 
-  while (!(await block.meetsDifficulty())) {
+  while (true) {
+    if (abortSignal?.aborted) return null;   // new block arrived — give up
+
+    if (block.meetsDifficultySync()) break;
+
     block.nonce++;
     attempts++;
 
-    if (attempts % 10000 === 0) {
-      console.log(`Mining... attempts=${attempts}, nonce=${block.nonce}`);
+    // Yield to event loop periodically (keeps gossip + scan handlers alive)
+    if (attempts % YIELD_EVERY === 0) {
+      await new Promise(r => setImmediate(r));
+      if (abortSignal?.aborted) return null;
     }
 
-    // Prevent infinite loop in dev
-    if (attempts > 1_000_000) break;
+    if (attempts % 100_000 === 0) {
+      console.log(`[PoW] Mining block #${block.height} attempt ${attempts} nonce=${block.nonce}`);
+    }
   }
 
   return attempts;
 }
 
 export function getNextDifficulty(lastBlocks) {
-  // Very naive difficulty adjustment
-  if (lastBlocks.length < 10) return 4;
+  if (lastBlocks.length < ADJUSTMENT_WINDOW + 1) return MIN_DIFFICULTY;
 
-  const recent = lastBlocks.slice(-10);
-  const avgTime = (recent[recent.length-1].timestamp - recent[0].timestamp) / recent.length;
+  const window = lastBlocks.slice(-(ADJUSTMENT_WINDOW + 1));
+  const elapsed = window[window.length - 1].timestamp - window[0].timestamp;
+  const avgMs = elapsed / ADJUSTMENT_WINDOW;
+  const current = window[window.length - 1].difficulty || MIN_DIFFICULTY;
 
-  if (avgTime < 8000) return recent[0].difficulty + 1;
-  if (avgTime > 25000) return Math.max(3, recent[0].difficulty - 1);
-  return recent[0].difficulty;
+  if (avgMs < TARGET_BLOCK_TIME_MS * 0.5) return Math.min(MAX_DIFFICULTY, current + 1);
+  if (avgMs > TARGET_BLOCK_TIME_MS * 2.0) return Math.max(MIN_DIFFICULTY, current - 1);
+  return current;
 }
