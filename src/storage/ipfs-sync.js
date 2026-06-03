@@ -15,27 +15,48 @@
 
 import { IPFSStore } from './ipfs-store.js';
 import { getBrainDataDir } from '../compute/adapters/real-poh.js';
+import fs from 'fs';
+import path from 'path';
+import os from 'os';
 
-const CHAIN_SNAP_EVERY  = 100;   // blocks between chain snapshots
-const BRAIN_SNAP_MS     = 30 * 60 * 1000; // 30 minutes
+const CHAIN_SNAP_EVERY  = 100;
+const BRAIN_SNAP_MS     = 30 * 60 * 1000;
 const PUSH_TIMEOUT_MS   = 8_000;
+
+// Local cache file — stores the last known CIDs so the node survives
+// a bootnode outage across restarts.
+const CID_CACHE_FILE = path.join(os.homedir(), '.poh-miner', 'ipfs_cid_cache.json');
+
+function loadCIDCache() {
+  try {
+    if (fs.existsSync(CID_CACHE_FILE)) return JSON.parse(fs.readFileSync(CID_CACHE_FILE, 'utf8'));
+  } catch { /* ignore */ }
+  return { chain: null, brain: null, peers: null };
+}
+
+function saveCIDCache(cids) {
+  try {
+    fs.mkdirSync(path.dirname(CID_CACHE_FILE), { recursive: true });
+    fs.writeFileSync(CID_CACHE_FILE, JSON.stringify(cids, null, 2));
+  } catch { /* non-fatal */ }
+}
 
 export class IPFSSync {
   constructor({ chain, bootnodes = [], identityWallet = null, storeOpts = {} } = {}) {
-    this.chain          = chain;        // live reference — always current
+    this.chain          = chain;
     this.bootnodes      = bootnodes;
     this.identityWallet = identityWallet;
     this.store          = new IPFSStore(storeOpts);
-    this.lastChainSnap  = 0;            // block height of last chain snapshot
-    this.latestCIDs     = { chain: null, brain: null };
+    this.lastChainSnap  = 0;
+    this.latestCIDs     = loadCIDCache(); // seed from disk so fallback works immediately
     this._brainInterval = null;
   }
 
   // ── Startup bootstrap ─────────────────────────────────────────────────────
 
   /**
-   * Pull latest known CIDs from the bootnode. Returns { chain, brain } CIDs.
-   * If no bootnode responds, returns the local latestCIDs (may be null).
+   * Pull latest known CIDs from the bootnode.
+   * Also persists them locally so they survive across restarts.
    */
   async fetchLatestCIDs() {
     for (const bn of this.bootnodes) {
@@ -48,9 +69,15 @@ export class IPFSSync {
         const data = await res.json();
         if (data.chain?.cid) this.latestCIDs.chain = data.chain.cid;
         if (data.brain?.cid) this.latestCIDs.brain = data.brain.cid;
-        console.log(`[IPFSSync] Latest CIDs from ${bn}: chain=${data.chain?.cid?.slice(0,16) ?? 'none'} brain=${data.brain?.cid?.slice(0,16) ?? 'none'}`);
+        if (data.peers?.cid) this.latestCIDs.peers = data.peers.cid;
+        saveCIDCache(this.latestCIDs);
+        console.log(`[IPFSSync] Latest CIDs from ${bn}: chain=${data.chain?.cid?.slice(0,16) ?? 'none'} brain=${data.brain?.cid?.slice(0,16) ?? 'none'} peers=${data.peers?.cid?.slice(0,16) ?? 'none'}`);
         return this.latestCIDs;
       } catch { /* try next bootnode */ }
+    }
+    // Bootnode unreachable — return cached CIDs from disk
+    if (this.latestCIDs.peers) {
+      console.log('[IPFSSync] Bootnode unreachable — using cached CIDs for peer discovery');
     }
     return this.latestCIDs;
   }
@@ -136,6 +163,64 @@ export class IPFSSync {
       await this._pushCIDs({ brain: cid });
     } catch (e) {
       console.warn('[IPFSSync] Brain snapshot failed:', e.message);
+    }
+  }
+
+  // ── Peer record ───────────────────────────────────────────────────────────
+
+  /**
+   * Pin this miner's own peer record to IPFS and push the CID to the bootnode.
+   * Called once after successful bootnode registration.
+   *
+   * peerInfo: { wallet, host, walletApiPort, region, methodsHash }
+   */
+  async publishPeerRecord(peerInfo) {
+    try {
+      const record = {
+        ...peerInfo,
+        ts: Date.now(),
+        version: 1,
+      };
+      if (this.identityWallet?.sign) {
+        const toSign = JSON.stringify({ wallet: record.wallet, host: record.host, walletApiPort: record.walletApiPort, ts: record.ts });
+        record.signature        = this.identityWallet.sign(toSign);
+        record.signingPublicKey = this.identityWallet.signingPublicKey;
+      }
+      const cid = await this.store.add(record, 'peer-record.json');
+      if (!cid) return null;
+      this.latestCIDs.selfPeer = cid;
+      saveCIDCache(this.latestCIDs);
+      console.log(`[IPFSSync] Peer record pinned: ${cid.slice(0, 20)}…`);
+      await this._pushCIDs({ selfPeer: cid });
+      return cid;
+    } catch (e) {
+      console.warn('[IPFSSync] Peer record pin failed:', e.message);
+      return null;
+    }
+  }
+
+  /**
+   * Fetch the peer directory from IPFS using the cached (or bootnode-supplied) CID.
+   * Returns an array of { wallet, host, walletApiPort, region } peer objects,
+   * or [] if the directory is unreachable.
+   *
+   * Used as a fallback when all bootnodes are unreachable.
+   */
+  async fetchPeerDirectory(selfWallet) {
+    const cid = this.latestCIDs.peers;
+    if (!cid) {
+      console.warn('[IPFSSync] No peer directory CID cached — cannot use IPFS fallback');
+      return [];
+    }
+    try {
+      const data = await this.store.getJSON(cid);
+      if (!Array.isArray(data?.peers)) return [];
+      const peers = data.peers.filter(p => p.wallet !== selfWallet && p.host && p.walletApiPort);
+      console.log(`[IPFSSync] Peer directory from IPFS (${cid.slice(0,16)}…): ${peers.length} peers`);
+      return peers;
+    } catch (e) {
+      console.warn('[IPFSSync] Peer directory fetch failed:', e.message);
+      return [];
     }
   }
 

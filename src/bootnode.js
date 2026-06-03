@@ -16,6 +16,9 @@ import path from 'path';
 import { PohBlock } from './core/block.js';
 import { ChainStore } from './storage/chain-store.js';
 import { Wallet } from './wallet/wallet.js';
+import { IPFSStore } from './storage/ipfs-store.js';
+
+const ipfsStore = new IPFSStore();
 
 const argv = process.argv.slice(2);
 const PORT = parseInt(argv.find(a => a.startsWith('--port='))?.split('=')[1] || '8080');
@@ -80,6 +83,38 @@ function saveIPFSRegistry() {
 }
 
 loadIPFSRegistry();
+
+// Debounced peer-directory pinner — fires at most once every 60 s to avoid
+// hammering IPFS on rapid peer registrations.
+let _pinDebounce = null;
+function schedulePeerDirectoryPin() {
+  if (_pinDebounce) return;
+  _pinDebounce = setTimeout(async () => {
+    _pinDebounce = null;
+    try {
+      pruneStalePeers();
+      const peerList = Array.from(peers.values()).map(p => ({
+        wallet:        p.wallet,
+        host:          p.host,
+        walletApiPort: p.walletApiPort,
+        p2pPort:       p.p2pPort || null,
+        region:        p.region  || null,
+        verified:      !!p.signingPublicKey,
+        methodsHash:   p.methodsHash || null,
+        ts:            p.lastSeen,
+      }));
+      const directory = { peers: peerList, count: peerList.length, updatedAt: Date.now() };
+      const cid = await ipfsStore.add(directory, 'peer-directory.json');
+      if (!cid) return;
+      ipfsRegistry.peers = { cid, count: peerList.length, ts: Date.now() };
+      ipfsRegistry.history = [...(ipfsRegistry.history || []), { type: 'peers', cid, ts: Date.now() }].slice(-20);
+      saveIPFSRegistry();
+      console.log(`[Bootnode] Peer directory pinned to IPFS: ${cid.slice(0, 20)}… (${peerList.length} peers)`);
+    } catch (e) {
+      console.warn('[Bootnode] Peer directory IPFS pin failed:', e.message);
+    }
+  }, 60_000);
+}
 
 function pruneStalePeers() {
   const now = Date.now();
@@ -241,8 +276,9 @@ const server = http.createServer(async (req, res) => {
 
           peers.set(peer.wallet, peer);
           console.log(`[Bootnode] Registered VERIFIED peer: ${peer.wallet} @ ${peer.host}:${peer.walletApiPort} (methods=${peer.methodsHash?.slice(0,8)||'?'})`);
+          schedulePeerDirectoryPin(); // debounced — pins updated directory to IPFS
           res.statusCode = 200;
-          res.end(JSON.stringify({ registered: true, peersKnown: peers.size, verified: true }));
+          res.end(JSON.stringify({ registered: true, peersKnown: peers.size, verified: true, peersCid: ipfsRegistry.peers?.cid || null }));
         } catch (e) {
           res.statusCode = 400;
           res.end(JSON.stringify({ error: e.message }));
@@ -307,8 +343,9 @@ const server = http.createServer(async (req, res) => {
       res.end(JSON.stringify({
         chain:     ipfsRegistry.chain  || null,
         brain:     ipfsRegistry.brain  || null,
+        peers:     ipfsRegistry.peers  || null,
         history:   (ipfsRegistry.history || []).slice(-5),
-        updatedAt: ipfsRegistry.chain?.ts || ipfsRegistry.brain?.ts || null,
+        updatedAt: ipfsRegistry.chain?.ts || ipfsRegistry.brain?.ts || ipfsRegistry.peers?.ts || null,
       }));
       return;
     }
@@ -321,19 +358,13 @@ const server = http.createServer(async (req, res) => {
           const data = JSON.parse(body);
           const ts = data.ts || Date.now();
 
-          if (data.chain) {
-            const entry = { cid: data.chain, minerWallet: data.minerWallet, ts };
-            if (!ipfsRegistry.chain || ts > (ipfsRegistry.chain.ts || 0)) {
-              ipfsRegistry.chain = entry;
+          for (const [type, cid] of [['chain', data.chain], ['brain', data.brain], ['selfPeer', data.selfPeer]]) {
+            if (!cid) continue;
+            const entry = { cid, minerWallet: data.minerWallet, ts };
+            if (!ipfsRegistry[type] || ts > (ipfsRegistry[type].ts || 0)) {
+              ipfsRegistry[type] = entry;
             }
-            ipfsRegistry.history = [...(ipfsRegistry.history || []), { type: 'chain', ...entry }].slice(-20);
-          }
-          if (data.brain) {
-            const entry = { cid: data.brain, minerWallet: data.minerWallet, ts };
-            if (!ipfsRegistry.brain || ts > (ipfsRegistry.brain.ts || 0)) {
-              ipfsRegistry.brain = entry;
-            }
-            ipfsRegistry.history = [...(ipfsRegistry.history || []), { type: 'brain', ...entry }].slice(-20);
+            ipfsRegistry.history = [...(ipfsRegistry.history || []), { type, ...entry }].slice(-20);
           }
           saveIPFSRegistry();
           res.end(JSON.stringify({ ok: true }));

@@ -1084,8 +1084,43 @@ export class PohMinerNode {
       }
     }
 
-    // Store for later use (e.g. future direct gossip)
+    // Store for later use
     this.peers = this.knownPeers || [];
+
+    // Publish own peer record to IPFS after a successful registration so
+    // other miners can discover us even when the bootnode is offline later.
+    if (this.peers.length >= 0 && this.ipfsSync) {
+      this.ipfsSync.publishPeerRecord({
+        wallet:        walletAddr,
+        host:          this._getPublicHost(),
+        walletApiPort: this.config.walletApiPort || 3456,
+        region:        this.myLocation?.country || null,
+        methodsHash,
+      }).catch(() => {});
+    }
+  }
+
+  /**
+   * IPFS peer discovery fallback — used when all bootnodes are unreachable.
+   * Fetches the peer directory pinned to IPFS and merges it into this.peers.
+   */
+  async _discoverPeersFromIPFS() {
+    if (!this.ipfsSync) return;
+    const walletAddr = this.config.pohWallet || this.config.wallet;
+
+    // Ensure we have the latest CIDs (reads from disk cache if bootnode is down)
+    await this.ipfsSync.fetchLatestCIDs();
+
+    const ipfsPeers = await this.ipfsSync.fetchPeerDirectory(walletAddr);
+    if (!ipfsPeers.length) return;
+
+    // Merge with existing peers — prefer IPFS entries for addresses we haven't seen
+    const known = new Set(this.peers.map(p => p.wallet));
+    const fresh = ipfsPeers.filter(p => !known.has(p.wallet));
+    if (fresh.length) {
+      this.peers = [...this.peers, ...fresh];
+      console.log(`[PoH-Miner] Added ${fresh.length} peer(s) from IPFS directory (bootnode fallback)`);
+    }
   }
 
   _getPublicHost() {
@@ -1119,6 +1154,12 @@ export class PohMinerNode {
 
       await this.discoverAndRegisterWithBootnodes();
 
+      // If we got no peers from the bootnode, try the IPFS peer directory
+      if (!this.peers.length) {
+        console.log('[PoH-Miner] No peers from bootnode — trying IPFS peer directory fallback');
+        await this._discoverPeersFromIPFS();
+      }
+
       // Pull brain events accumulated on the bootnode since our last sync
       if (this.brainSync) {
         const brain = await getBrain().catch(() => null);
@@ -1136,8 +1177,14 @@ export class PohMinerNode {
       // Start periodic brain pinning
       this.ipfsSync.startPeriodicBrainSync();
 
-      // Re-register every 8 minutes so we stay in the bootnode peer list
-      setInterval(() => this.discoverAndRegisterWithBootnodes(), 8 * 60 * 1000);
+      // Re-register every 8 minutes; fall back to IPFS if bootnode is down
+      setInterval(async () => {
+        const before = this.peers.length;
+        await this.discoverAndRegisterWithBootnodes();
+        if (!this.peers.length && before === 0) {
+          await this._discoverPeersFromIPFS();
+        }
+      }, 8 * 60 * 1000);
 
       // Re-sync brain events every 5 minutes (picks up any events we missed)
       setInterval(async () => {
