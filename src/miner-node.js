@@ -1785,7 +1785,13 @@ export class PohMinerNode {
       proofHash: r.getResultHash ? r.getResultHash() : `result-${r.requestId}`,
     }));
 
-    const coinbase = calculateBlockRewards(validWorkSubmissions, previous.height + 1);
+    // When there's no compute work, share the 40% keepalive reward among
+    // active peers (exclude self — proposer already gets the 60% share).
+    const activePeersForReward = validWorkSubmissions.length === 0
+      ? (this.peers || []).filter(p => p.wallet && p.wallet !== (this.config.pohWallet || this.config.wallet))
+      : [];
+
+    const coinbase = calculateBlockRewards(validWorkSubmissions, previous.height + 1, activePeersForReward);
 
     // Apply local reputation to this node's proposer share (simple slashing effect)
     if (coinbase.proposerReward > 0) {

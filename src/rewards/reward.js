@@ -77,15 +77,22 @@ export const POH_DECIMALS = 1_000_000_000; // 1 POH = 1e9 micro-POH
 export const BLOCK_REWARD_POH = 1; // human-readable display value
 export const BLOCK_REWARD_UPOH = BLOCK_REWARD_POH * POH_DECIMALS; // 1_000_000_000 μPOH
 
-export function calculateBlockRewards(validWorkSubmissions = [], blockHeight = 0) {
-  // Work in micro-POH so Math.floor never truncates the entire reward to 0
+/**
+ * @param validWorkSubmissions  Array of { nodeId|minerWallet, proofHash|requestId }
+ * @param blockHeight           Current block height
+ * @param activePeers           Array of { wallet } — peers to share the keepalive
+ *                              reward with when there is no compute work.
+ *                              The block proposer should be excluded from this list
+ *                              (they already receive the proposer share).
+ */
+export function calculateBlockRewards(validWorkSubmissions = [], blockHeight = 0, activePeers = []) {
   const totalNewSupply = BLOCK_REWARD_UPOH;
 
   let proposerReward;
   let workerRewards = [];
 
   if (validWorkSubmissions.length > 0) {
-    // 60% to proposer, 40% split evenly among workers
+    // Compute block: 60% to proposer, 40% split evenly among workers
     proposerReward = Math.floor(totalNewSupply * 0.6);
     const perWorker = Math.floor((totalNewSupply * 0.4) / validWorkSubmissions.length);
     workerRewards = validWorkSubmissions.map((work, i) => ({
@@ -93,9 +100,18 @@ export function calculateBlockRewards(validWorkSubmissions = [], blockHeight = 0
       amount:        perWorker,
       workProofHash: work.proofHash || work.requestId || `work-${i}`,
     }));
+  } else if (activePeers.length > 0) {
+    // Empty block with known active peers:
+    // 60% to proposer for doing PoW, 40% split as keepalive among active peers.
+    proposerReward = Math.floor(totalNewSupply * 0.6);
+    const perPeer = Math.floor((totalNewSupply * 0.4) / activePeers.length);
+    workerRewards = activePeers.map((peer, i) => ({
+      workerId:      peer.wallet,
+      amount:        perPeer,
+      workProofHash: `keepalive:${blockHeight}:${peer.wallet}`,
+    }));
   } else {
-    // No compute work in this block — full reward goes to the proposer
-    // (they still did PoW and maintain the chain)
+    // Empty block, no known peers — full reward to proposer
     proposerReward = totalNewSupply;
   }
 
