@@ -20,6 +20,7 @@ import { getMethodsManager } from './signals/methods-manager.js';
 import { P2PGossip } from './network/p2p-gossip.js';
 import { validateResultWork } from './validation/result-validator.js';
 import { calculateBlockRewards, BLOCK_REWARD_POH, POH_DECIMALS } from './rewards/reward.js';
+import { computeChainWork, compareChainWork, getTipChainWork } from './consensus/chain-selection.js';
 import { computeVerdictWithExistingPoh } from './compute/poh-adapter.js';
 import { getBrain, getBrainDataDir } from './compute/adapters/real-poh.js';
 import { BrainSync } from './brain/brain-sync.js';
@@ -63,6 +64,7 @@ export class PohMinerNode {
     this.chain = [];
     this.peers = [];          // discovered miners from bootnodes
     this.knownPeers = [];     // alias for compatibility
+    this.orphanPool = new Map(); // previousHash → PohBlock[]  (Fix 3)
 
     // Apply custom RPC endpoints from config into process.env so the loaded checker uses them
     this._applyRpcEndpoints();
@@ -1063,33 +1065,89 @@ export class PohMinerNode {
    */
   async handleIncomingBlock(blockData, from) {
     try {
-      const newBlock = PohBlock.fromJSON ? PohBlock.fromJSON(blockData) : new PohBlock(blockData);
-
+      const newBlock = PohBlock.fromJSON(blockData);
       const currentHeight = this.chain.length - 1;
-      if (newBlock.height === currentHeight + 1) {
-        // Reject blocks with an invalid proposer signature
-        if (newBlock.minerSignature && !newBlock.verifySignature()) {
-          console.warn(`[PoH-Miner] Block #${newBlock.height} from ${from?.slice(0,8)} has INVALID signature — rejected`);
-          return;
+      const tipHash = this.chain[currentHeight].getHashSync();
+
+      // Always reject invalid signatures
+      if (newBlock.minerSignature && !newBlock.verifySignature()) {
+        console.warn(`[PoH-Miner] Block #${newBlock.height} invalid signature — rejected`);
+        return;
+      }
+
+      // Ensure incoming block has chainWork set
+      if (!newBlock.chainWork || newBlock.chainWork === '0') {
+        const parent = this.chain.find(b => b.getHashSync() === newBlock.previousHash);
+        newBlock.chainWork = computeChainWork(parent?.chainWork, newBlock.difficulty);
+      }
+
+      if (newBlock.height === currentHeight + 1 && newBlock.previousHash === tipHash) {
+        // ── Happy path: extends our current tip ─────────────────────────────
+        this._appendBlock(newBlock, from);
+        this._drainOrphans(newBlock.getHashSync());
+
+      } else if (newBlock.height === currentHeight + 1 && newBlock.previousHash !== tipHash) {
+        // ── Fork at same height: competing block ─────────────────────────────
+        // Keep the block with more cumulative work (longest/heaviest chain rule)
+        const ourWork  = getTipChainWork(this.chain);
+        if (compareChainWork(newBlock.chainWork, ourWork) > 0) {
+          console.log(`[PoH-Miner] Fork: incoming block #${newBlock.height} has more chainWork — switching`);
+          // Roll back our tip and replace with the heavier block
+          this.chain.pop();
+          this._appendBlock(newBlock, from);
+        } else {
+          // Put in orphan pool; may become canonical if a longer chain follows
+          this._storeOrphan(newBlock);
         }
 
-        // Simple append if it's the next block
-        const prevHash = await this.chain[currentHeight].getHash();
-        if (newBlock.previousHash === prevHash) {
-          this.chain.push(newBlock);
-          this.chainStore.saveChain(this.chain);  // persist gossiped blocks so chain state survives restart
-          console.log(`[PoH-Miner] Accepted block #${newBlock.height} from ${from?.slice(0,8)} [sig:${newBlock.minerSignature ? '✓' : 'none'}]`);
+      } else if (newBlock.height <= currentHeight) {
+        // ── Old block: only consider if it anchors a heavier chain ───────────
+        this._storeOrphan(newBlock);
 
-          // Credit any worker rewards this node earned in the received block
-          this.processIncomingBlockRewards(newBlock);
-        }
-      } else if (newBlock.height > currentHeight + 1) {
-        // We're behind - request sync from peers / bootnodes
-        console.log(`[PoH-Miner] Detected we're behind (peer at ${newBlock.height}, we are at ${currentHeight}). Requesting sync...`);
+      } else {
+        // ── We're behind (gap) — add to orphan pool and sync ─────────────────
+        this._storeOrphan(newBlock);
+        console.log(`[PoH-Miner] Behind (peer at ${newBlock.height}, we at ${currentHeight}) — syncing`);
         this.requestBlockSync(newBlock.height);
       }
     } catch (err) {
       console.warn(`[PoH-Miner] Failed to process incoming block from ${from}:`, err.message);
+    }
+  }
+
+  _appendBlock(block, from) {
+    this.chain.push(block);
+    this.chainStore.saveChain(this.chain);
+    console.log(`[PoH-Miner] Accepted block #${block.height} chainWork=${block.chainWork} [sig:${block.minerSignature ? '✓' : 'none'}] from ${from?.slice(0,8)}`);
+    this.processIncomingBlockRewards(block);
+  }
+
+  _storeOrphan(block) {
+    const key = block.previousHash;
+    if (!this.orphanPool.has(key)) this.orphanPool.set(key, []);
+    const siblings = this.orphanPool.get(key);
+    if (!siblings.find(b => b.getHashSync() === block.getHashSync())) {
+      siblings.push(block);
+    }
+    // Prune orphan pool to avoid unbounded growth
+    if (this.orphanPool.size > 200) {
+      const oldest = this.orphanPool.keys().next().value;
+      this.orphanPool.delete(oldest);
+    }
+  }
+
+  // After accepting a block, check if any orphan was waiting for it as parent
+  _drainOrphans(newTipHash) {
+    const waiting = this.orphanPool.get(newTipHash);
+    if (!waiting?.length) return;
+    this.orphanPool.delete(newTipHash);
+
+    // Sort by chainWork desc, pick heaviest
+    waiting.sort((a, b) => compareChainWork(b.chainWork, a.chainWork));
+    const best = waiting[0];
+    if (compareChainWork(best.chainWork, getTipChainWork(this.chain)) > 0) {
+      this._appendBlock(best, 'orphan-pool');
+      this._drainOrphans(best.getHashSync());
     }
   }
 
@@ -1431,9 +1489,10 @@ export class PohMinerNode {
       previousHash: await previous.getHash(),
       timestamp: Date.now(),
       minerWallet: this.config.wallet,
-      scanResults: validResultsForBlock, // Only high-quality, validated results
+      scanResults: validResultsForBlock,
       coinbaseReward: coinbase,
       difficulty: this.currentDifficulty,
+      chainWork: computeChainWork(previous.chainWork, this.currentDifficulty),
     });
 
     // Do a small PoW (this can be made useful later)
