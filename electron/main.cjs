@@ -3,6 +3,13 @@ const path = require('path');
 const { pathToFileURL } = require('url');
 const fs = require('fs');
 
+// Ubuntu 24.04+ tightens kernel user-namespace restrictions which breaks
+// Electron's Zygote sandbox (CLONE_NEWUSER fails with EINVAL).
+// Disabling the sandbox is safe for a local desktop app — there is no
+// untrusted web content being rendered.
+app.commandLine.appendSwitch('no-sandbox');
+app.commandLine.appendSwitch('disable-setuid-sandbox');
+
 let mainWindow;
 let minerNode = null;
 let isStartingMiner = false;
