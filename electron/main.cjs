@@ -128,16 +128,30 @@ async function startMiner() {
     const originalLog = console.log;
     const originalError = console.error;
 
+    // Patterns that are noisy and add no value for the user
+    const SUPPRESS = [
+      /common_init_result:.*logit bias/,   // llama.cpp token-suppression internals
+      /^\[PoW\] Mining block #\d+ attempt/, // PoW progress (only final result matters)
+    ];
+    const shouldSuppress = (msg) => SUPPRESS.some(re => re.test(msg));
+
     console.log = (...args) => {
       const msg = args.join(' ');
-      sendLog(msg);
+      if (!shouldSuppress(msg)) sendLog(msg);
       originalLog.apply(console, args);
     };
 
     console.error = (...args) => {
       const msg = '[ERROR] ' + args.join(' ');
-      sendLog(msg);
+      if (!shouldSuppress(msg)) sendLog(msg);
       originalError.apply(console, args);
+    };
+
+    const originalWarn = console.warn;
+    console.warn = (...args) => {
+      const msg = '[WARN] ' + args.join(' ');
+      if (!shouldSuppress(msg)) sendLog(msg);
+      originalWarn.apply(console, args);
     };
 
     await minerNode.start();

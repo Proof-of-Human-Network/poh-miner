@@ -1,4 +1,5 @@
 const { contextBridge, ipcRenderer } = require('electron');
+const QRCode = require('qrcode');
 
 contextBridge.exposeInMainWorld('pohMinerAPI', {
   onLog: (callback) => {
@@ -27,6 +28,10 @@ contextBridge.exposeInMainWorld('pohMinerAPI', {
   miner: {
     start: () => ipcRenderer.invoke('miner:start'),
   },
+
+  // QR code generation (uses Node qrcode lib — not available in sandboxed renderer)
+  generateQR: (text, size = 220) =>
+    QRCode.toDataURL(text, { width: size, margin: 2, color: { dark: '#000', light: '#fff' } }),
 
   // Custom events from main process
   onEnterOnboardingMode: (callback) => {

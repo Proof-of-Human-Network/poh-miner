@@ -17,8 +17,9 @@ function addLog(message) {
   div.textContent = message;
   logContent.appendChild(div);
 
-  // Auto-scroll
-  logContent.scrollTop = logContent.scrollHeight;
+  // Auto-scroll the panel (not the inner div — the panel has overflow:auto)
+  const logsPanel = document.getElementById('logs');
+  if (logsPanel) logsPanel.scrollTop = logsPanel.scrollHeight;
 
   // Keep only last 300 lines
   while (logContent.children.length > 300) {
@@ -33,49 +34,70 @@ function clearLogs() {
 function updateStatus(status) {
   if (!status) return;
 
-  // PoH Wallet (primary)
-  const pohAddrEl = document.getElementById('poh-wallet-address');
-  const pohBalEl = document.getElementById('poh-wallet-balance');
-
-  if (status.pohWallet || status.wallet) {
-    const addr = status.pohWallet || status.wallet;
-    if (pohAddrEl) pohAddrEl.textContent = addr;
-  }
-
   const POH_DECIMALS = 1_000_000_000;
+  const addr   = status.pohWallet || status.wallet || '';
   const rawBal = typeof status.pohBalance === 'number' ? status.pohBalance
-               : typeof status.balance === 'number'    ? status.balance
-               : null;
-  if (rawBal !== null && pohBalEl) {
-    const poh = rawBal / POH_DECIMALS;
-    pohBalEl.textContent = poh.toFixed(poh < 1 ? 4 : 2) + ' POH';
-  }
+               : typeof status.balance    === 'number' ? status.balance : null;
+  const poh    = rawBal !== null ? rawBal / POH_DECIMALS : null;
+  const pohStr = poh !== null ? poh.toFixed(poh < 1 ? 4 : 2) + ' POH' : null;
 
-  // Solana identity
-  const solEl = document.getElementById('solana-address');
-  if (solEl && status.solanaAddress) {
-    solEl.textContent = status.solanaAddress;
+  // Left sidebar
+  const set = (id, val) => { const el = document.getElementById(id); if (el && val != null) el.textContent = val; };
+  if (addr) {
+    const short = addr.length > 16 ? addr.slice(0, 8) + '…' + addr.slice(-6) : addr;
+    set('poh-wallet-address', short);
+    window._localWallet = addr;
   }
-
-  // Legacy elements (keep for compatibility)
-  const walletAddressEl = document.getElementById('wallet-address');
-  const walletBalanceEl = document.getElementById('wallet-balance');
-  if (walletAddressEl && status.wallet) walletAddressEl.textContent = status.wallet;
-  if (walletBalanceEl && rawBal !== null) {
-    walletBalanceEl.textContent = (rawBal / POH_DECIMALS).toFixed(4) + ' POH';
+  if (pohStr) set('poh-wallet-balance', pohStr);
+  // Home panel
+  if (poh !== null) {
+    const numEl = document.getElementById('home-balance-num');
+    if (numEl) numEl.textContent = poh.toFixed(poh < 1 ? 4 : 2);
   }
-
-  if (typeof status.chainHeight === 'number') {
-    chainHeightEl.textContent = status.chainHeight;
+  if (addr) {
+    const addrEl = document.getElementById('home-balance-addr');
+    if (addrEl) addrEl.textContent = addr.length > 16 ? addr.slice(0, 8) + '…' + addr.slice(-6) : addr;
   }
-
-  if (typeof status.reputation === 'number') {
-    reputationEl.textContent = status.reputation.toFixed(2);
-  }
-
+  if (typeof status.chainHeight === 'number') { set('chain-height', status.chainHeight.toLocaleString()); if (chainHeightEl) chainHeightEl.textContent = status.chainHeight; }
+  if (typeof status.reputation  === 'number') { set('reputation', status.reputation.toFixed(2)); if (reputationEl) reputationEl.textContent = status.reputation.toFixed(2); }
   if (status.qualityStats) {
-    validSubEl.textContent = status.qualityStats.validSubmissions || 0;
-    invalidSubEl.textContent = status.qualityStats.invalidSubmissions || 0;
+    set('valid-submissions',   status.qualityStats.validSubmissions   || 0);
+    set('invalid-submissions', status.qualityStats.invalidSubmissions || 0);
+    if (validSubEl)   validSubEl.textContent   = status.qualityStats.validSubmissions   || 0;
+    if (invalidSubEl) invalidSubEl.textContent = status.qualityStats.invalidSubmissions || 0;
+  }
+  if (status.solanaAddress) {
+    const short = status.solanaAddress.length > 14 ? status.solanaAddress.slice(0, 6) + '…' + status.solanaAddress.slice(-4) : status.solanaAddress;
+    set('solana-address', short);
+  }
+  if (status.model || status.inferenceMode) {
+    const mode  = (status.inferenceMode || 'AUTO').toUpperCase();
+    const model = status.model || 'qwen2.5:1.5b';
+    set('sidebar-inference', `${mode} · ${model}`);
+    set('brain-model', model);
+  }
+  if (typeof status.peers === 'number' || status.peerCount != null) {
+    const count = status.peers ?? status.peerCount ?? status.activeJobs;
+    if (count != null) set('sidebar-peers', count + ' online');
+  }
+  if (status.region) set('sidebar-region', status.region);
+
+  // Mining active indicator
+  const isActive = (status.activeJobs ?? 0) > 0 || (status.qualityStats?.validSubmissions ?? 0) > 0;
+  const dot = document.getElementById('mining-dot');
+  const lbl = document.getElementById('mining-label');
+  if (dot) dot.className = 'mining-dot' + (isActive ? ' active' : '');
+  if (lbl) { lbl.textContent = isActive ? 'MINING ACTIVE' : 'WAITING'; lbl.className = 'sb-mining-label' + (isActive ? ' active' : ''); }
+
+  // Keep port in sync
+  if (status?.walletApiPort) window._minerApiPort = status.walletApiPort;
+
+  // Onboarding gate
+  if (status && status.waitingForOnboarding) {
+    const od = document.getElementById('onboarding');
+    const ma = document.getElementById('main-app');
+    if (ma) ma.classList.add('hidden');
+    if (od) { od.classList.remove('hidden'); showOnboardingStep('welcome'); }
   }
 }
 
@@ -142,7 +164,10 @@ if (window.pohMinerAPI) {
     }
   });
 
-  window.pohMinerAPI.getStatus().then(updateStatus);
+  window.pohMinerAPI.getStatus().then(status => {
+    updateStatus(status);
+    setTimeout(loadBrainState, 1500);
+  });
 } else {
   // Fallback for development
   addLog('[UI] Running outside Electron. IPC not available.');
@@ -1112,93 +1137,300 @@ async function initEtherscanUI() {
 
 initEtherscanUI();
 
-// =====================================================
-// Sidebar Resizer (Drag to resize)
-// =====================================================
-
-const resizer = document.getElementById('sidebar-resizer');
-const sidebar = document.querySelector('.sidebar');
-
-let isResizing = false;
-
-if (resizer && sidebar) {
-  // Restore previous width if saved
-  const savedWidth = localStorage.getItem('sidebarWidth');
-  if (savedWidth) {
-    sidebar.style.width = savedWidth + 'px';
-  }
-
-  resizer.addEventListener('mousedown', (e) => {
-    isResizing = true;
-    document.body.style.userSelect = 'none';
-    document.body.style.cursor = 'col-resize';
-  });
-
-  document.addEventListener('mousemove', (e) => {
-    if (!isResizing) return;
-
-    // Calculate new sidebar width based on mouse position from right edge
-    const newWidth = window.innerWidth - e.clientX;
-
-    // Clamp between min and max
-    const minW = 200;
-    const maxW = 520;
-    const clamped = Math.max(minW, Math.min(maxW, newWidth));
-
-    sidebar.style.width = clamped + 'px';
-  });
-
-  document.addEventListener('mouseup', () => {
-    if (isResizing) {
-      isResizing = false;
-      document.body.style.userSelect = '';
-      document.body.style.cursor = '';
-
-      // Persist the width
-      const currentWidth = parseInt(sidebar.style.width, 10);
-      if (currentWidth) {
-        localStorage.setItem('sidebarWidth', currentWidth);
-      }
-    }
-  });
-
-  // Double-click to reset to default width
-  resizer.addEventListener('dblclick', () => {
-    sidebar.style.width = '280px';
-    localStorage.setItem('sidebarWidth', 280);
-  });
-}
+// Sidebar resizer removed — layout now uses fixed 3-column flex
 
 // ── Tab switching ──────────────────────────────────────────────────────────────
 
-function switchTab(name) {
-  const logsEl   = document.getElementById('logs');
-  const chatEl   = document.getElementById('chat-panel');
-  const logBtn   = document.getElementById('tab-logs-btn');
-  const chatBtn  = document.getElementById('tab-chat-btn');
-  const resizer  = document.getElementById('sidebar-resizer');
+const TAB_PANELS = { home: 'home-panel', logs: 'logs', chat: 'chat-panel', search: 'search-panel', send: 'send-panel' };
+const TAB_BTNS   = { home: 'tab-home-btn', logs: 'tab-logs-btn', chat: 'tab-chat-btn', search: 'tab-search-btn', send: 'tab-send-btn' };
 
-  if (name === 'chat') {
-    logsEl?.classList.remove('active');
-    chatEl?.classList.add('active');
-    logBtn?.classList.remove('active');
-    chatBtn?.classList.add('active');
-    if (resizer) resizer.style.display = 'none'; // chat uses full width
-    chatEl?.querySelector('#chat-input')?.focus();
-    loadChatModels();
-  } else {
-    chatEl?.classList.remove('active');
-    logsEl?.classList.add('active');
-    chatBtn?.classList.remove('active');
-    logBtn?.classList.add('active');
-    if (resizer) resizer.style.display = '';
-  }
+function switchTab(name) {
+  Object.entries(TAB_PANELS).forEach(([key, panelId]) => {
+    const panel = document.getElementById(panelId);
+    const btn   = document.getElementById(TAB_BTNS[key]);
+    if (panel) panel.classList.toggle('active', key === name);
+    if (btn)   btn.classList.toggle('active', key === name);
+  });
+  if (name === 'home')   { syncHomeBalance(); }
+  if (name === 'chat')   { loadChatModels(); loadChatBrainContext(true); document.getElementById('chat-input')?.focus(); }
+  if (name === 'send')   { syncSendWallet(); showSendView(); }
 }
 
 // ── Chat state ─────────────────────────────────────────────────────────────────
 
 const chatHistory = []; // { role: 'user'|'assistant', content: string }
 let chatStreaming = false;
+let chatAbortController = null;
+let _brainSystemPrompt = null; // full brain state injected as system msg on every chat send
+
+function _setBrainIndicator(state) {
+  const el = document.getElementById('chat-brain-pill');
+  if (!el) return;
+  if (state === 'loaded') {
+    el.textContent = '🧠 brain loaded';
+    el.style.display = 'inline-flex';
+    el.style.color = '#22c55e';
+    el.style.borderColor = 'rgba(34,197,94,0.3)';
+  } else if (state === 'loading') {
+    el.textContent = '🧠 loading…';
+    el.style.display = 'inline-flex';
+    el.style.color = '#6b7280';
+    el.style.borderColor = '#2a2a2a';
+  } else {
+    el.textContent = '🧠 no context';
+    el.style.display = 'inline-flex';
+    el.style.color = '#ef4444';
+    el.style.borderColor = 'rgba(239,68,68,0.3)';
+  }
+}
+
+async function loadChatBrainContext(force = false) {
+  if (_brainSystemPrompt && !force) return;
+  _setBrainIndicator('loading');
+  const port = window._minerApiPort || 3456;
+  try {
+    // Manual timeout via Promise.race for broad compatibility
+    const timeout = new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 8000));
+    const fetchP  = fetch(`http://localhost:${port}/api/brain/state?full=1`);
+    const r = await Promise.race([fetchP, timeout]);
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const d = await r.json();
+    const stateText = d.stateSummary || '';
+    if (!stateText.trim()) throw new Error('brain_state.md is empty');
+
+    _brainSystemPrompt =
+      `You are the AI assistant for the PoH Miner desktop app and the Proof of Human (POH) protocol. ` +
+      `Answer all questions about POH, the miner network, the wallet, staking, Conviction Curves, ` +
+      `signals, the AI brain, token economics, and anything else in your knowledge base below. ` +
+      `Never say you cannot discuss POH topics.\n\n` +
+      `=== KNOWLEDGE BASE (brain_state.md) ===\n\n${stateText}`;
+
+    console.log(`[chat] ✓ Brain context loaded — ${_brainSystemPrompt.length} chars from ${port}`);
+    _setBrainIndicator('loaded');
+  } catch (e) {
+    _brainSystemPrompt = null;
+    console.warn('[chat] Brain context failed:', e.message);
+    _setBrainIndicator('error');
+  }
+}
+
+// ── Social context injection ──────────────────────────────────────────────────
+// Populated after a scan; prepended as system message to every chat send.
+let _chatSocialContext = null; // { address, system, label, farcasterData, paragraphData }
+let _lastScannedAddress = null;
+
+async function _fetchSocialContextForAddress(address) {
+  if (!address || !/^0x[0-9a-fA-F]{40}$/i.test(address)) return;
+  _lastScannedAddress = address;
+
+  const WARPCAST  = 'https://api.warpcast.com/v2';
+  const PARAGRAPH = 'https://paragraph.xyz/api';
+  const systemParts = [];
+  let label = address.slice(0, 8) + '…';
+  let farcasterData = null;
+  let paragraphData = null;
+
+  // ── Farcaster ───────────────────────────────────────────────────────────────
+  try {
+    const userRes = await fetch(`${WARPCAST}/user-by-verification?address=${address.toLowerCase()}`)
+      .then(r => r.ok ? r.json() : null).catch(() => null);
+    const user = userRes?.result?.user;
+
+    if (user?.fid) {
+      label = `@${user.username}`;
+      const castsRes = await fetch(`${WARPCAST}/casts?fid=${user.fid}&limit=15`)
+        .then(r => r.ok ? r.json() : null).catch(() => null);
+      const rawCasts = castsRes?.result?.casts || [];
+
+      farcasterData = {
+        fid:           user.fid,
+        username:      user.username      || '',
+        displayName:   user.displayName   || user.username || '',
+        bio:           user.profile?.bio?.text || '',
+        followerCount: user.followerCount || 0,
+        followingCount:user.followingCount|| 0,
+        casts: rawCasts.slice(0, 12).map(c => ({
+          text:    c.text || '',
+          likes:   c.reactions?.count || 0,
+          replies: c.replies?.count   || 0,
+          recasts: c.recasts?.count   || 0,
+        })).filter(c => c.text.length > 2),
+      };
+
+      const sysLines = [`FARCASTER — @${user.username} (${user.followerCount?.toLocaleString()} followers)`];
+      if (farcasterData.bio) sysLines.push(`Bio: "${farcasterData.bio}"`);
+      if (farcasterData.casts.length) {
+        sysLines.push('Recent posts:');
+        farcasterData.casts.forEach(c => {
+          const m = [c.likes && `♥${c.likes}`, c.replies && `${c.replies} replies`].filter(Boolean).join(' · ');
+          sysLines.push(`  • "${c.text}"${m ? ` [${m}]` : ''}`);
+        });
+      }
+      systemParts.push(sysLines.join('\n'));
+    }
+  } catch {}
+
+  // ── Paragraph ───────────────────────────────────────────────────────────────
+  try {
+    const blogsRes = await fetch(`${PARAGRAPH}/blogs?address=${address.toLowerCase()}`)
+      .then(r => r.ok ? r.json() : null).catch(() => null);
+    const blogs = Array.isArray(blogsRes) ? blogsRes : (blogsRes?.blogs || []);
+    const blog  = blogs[0];
+
+    if (blog?.id) {
+      const postsRes = await fetch(`${PARAGRAPH}/blogs/${blog.id}/posts?limit=8`)
+        .then(r => r.ok ? r.json() : null).catch(() => null);
+      const rawPosts = Array.isArray(postsRes) ? postsRes : (postsRes?.posts || []);
+
+      paragraphData = {
+        blogId:          blog.id,
+        title:           blog.title || blog.name || '',
+        description:     blog.description || blog.subtitle || '',
+        subscriberCount: blog.subscriberCount || 0,
+        postCount:       rawPosts.length,
+        posts: rawPosts.slice(0, 8).map(p => ({ title: p.title||'', subtitle: p.subtitle||'' })),
+      };
+
+      const sysLines = [`PARAGRAPH — "${paragraphData.title}" (${paragraphData.subscriberCount} subscribers)`];
+      if (paragraphData.description) sysLines.push(`Description: "${paragraphData.description}"`);
+      if (paragraphData.posts.length) {
+        sysLines.push('Articles:');
+        paragraphData.posts.forEach(p => sysLines.push(`  • "${p.title}"${p.subtitle ? ` — ${p.subtitle}` : ''}`));
+      }
+      systemParts.push(sysLines.join('\n'));
+    }
+  } catch {}
+
+  if (!farcasterData && !paragraphData) return;
+
+  _chatSocialContext = {
+    address, label,
+    farcasterData,
+    paragraphData,
+    system: `You have access to real-time social activity for wallet address ${address}.\nUse this context to answer questions about this person's views, interests, and recent activity.\n\n${systemParts.join('\n\n')}`,
+  };
+  _updateChatContextIndicator();
+
+  // ── Inject raw social data into result immediately ──────────────────────────
+  _injectSocialIntoResult(null, farcasterData, paragraphData);
+
+  // ── Ask local LLM to summarise vibe, then update ───────────────────────────
+  _generateVibeAndUpdate(farcasterData, paragraphData);
+}
+
+// Inject (or replace) the social characteristic section inside the rendered result.
+function _injectSocialIntoResult(vibeData, farcasterData, paragraphData) {
+  const root = document.querySelector('#search-result .wp-root');
+  if (!root) return;
+  root.querySelector('.wp-social-inject')?.remove();
+  const html = _socialChar(vibeData, farcasterData, paragraphData);
+  if (!html) return;
+  const wrap = document.createElement('div');
+  wrap.className = 'wp-social-inject';
+  wrap.innerHTML = html;
+  const fb = root.querySelector('.feedback-row');
+  fb ? root.insertBefore(wrap, fb) : root.appendChild(wrap);
+}
+
+// Call local Ollama for a fast vibe JSON, then update the injected section.
+async function _generateVibeAndUpdate(farcasterData, paragraphData) {
+  try {
+    const port = window._minerApiPort || 3456;
+    const contextLines = [];
+    if (farcasterData) {
+      contextLines.push(`Farcaster @${farcasterData.username} (${farcasterData.followerCount} followers, bio: "${farcasterData.bio}")`);
+      farcasterData.casts.slice(0, 6).forEach(c => contextLines.push(`- "${c.text}"`));
+    }
+    if (paragraphData) {
+      contextLines.push(`Paragraph "${paragraphData.title}" (${paragraphData.subscriberCount} subscribers)`);
+      paragraphData.posts.slice(0, 4).forEach(p => contextLines.push(`- "${p.title}"`));
+    }
+
+    const prompt = `Analyze this social media content and return ONLY valid JSON with no other text:
+{"vibe":"<2-3 sentence personality and interests summary>","topics":["topic1","topic2","topic3"],"humanSignals":["signal1","signal2"]}
+
+Content:
+${contextLines.join('\n')}`;
+
+    const res = await fetch(`http://localhost:${port}/api/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model:   document.getElementById('chat-model-select')?.value || 'qwen2.5:1.5b',
+        messages:[{ role: 'user', content: prompt }],
+        stream:  false,
+        options: { temperature: 0.4 },
+      }),
+    });
+    if (!res.ok) return;
+    const d = await res.json();
+    const text = d.message?.content || '';
+    const m = text.match(/\{[\s\S]*\}/);
+    if (!m) return;
+    const vibeData = JSON.parse(m[0]);
+    // Update displayed section with vibe
+    _injectSocialIntoResult(vibeData, farcasterData, paragraphData);
+    // Also store vibe in context for chat
+    if (_chatSocialContext) _chatSocialContext.vibeData = vibeData;
+  } catch {}
+}
+
+// Fetch enriched profile (including tx graph) from dev backend and inject graph section.
+async function _enrichResultWithGraph(address) {
+  try {
+    // Try dev backend on its default port (3000 → 3001 → 3456 as fallback)
+    const ports = [3000, 3001, 3002];
+    let profile = null;
+    for (const p of ports) {
+      try {
+        const r = await fetch(`http://localhost:${p}/checker/profile/${encodeURIComponent(address)}`, { signal: AbortSignal.timeout(5000) });
+        if (r.ok) { profile = await r.json(); break; }
+      } catch {}
+    }
+    if (!profile?.graph?.nodes?.length || profile.graph.nodes.length < 2) return;
+
+    const root = document.querySelector('#search-result .wp-root');
+    if (!root) return;
+    root.querySelector('.wp-graph-inject')?.remove();
+    const html = _txGraph(profile);
+    if (!html) return;
+    const wrap = document.createElement('div');
+    wrap.className = 'wp-graph-inject';
+    wrap.innerHTML = html;
+    // Insert before feedback row (at bottom of profile, before evidence/feedback)
+    const fb = root.querySelector('.feedback-row');
+    const socialInject = root.querySelector('.wp-social-inject');
+    const anchor = socialInject || fb;
+    anchor ? root.insertBefore(wrap, anchor) : root.appendChild(wrap);
+  } catch {}
+}
+
+function _updateChatContextIndicator() {
+  const pill    = document.getElementById('chat-context-pill');
+  const clearBtn = document.getElementById('chat-ctx-clear-btn');
+  const active  = !!_chatSocialContext;
+  if (pill) {
+    pill.textContent    = active ? `📡 ${_chatSocialContext.label}` : '';
+    pill.style.display  = active ? 'inline-flex' : 'none';
+  }
+  if (clearBtn) clearBtn.style.display = active ? 'inline-block' : 'none';
+}
+
+function clearChatContext() {
+  _chatSocialContext = null;
+  _updateChatContextIndicator();
+}
+
+function setChatStreaming(active) {
+  chatStreaming = active;
+  document.getElementById('chat-send-btn').disabled = active;
+  const stopBtn = document.getElementById('chat-stop-btn');
+  if (stopBtn) stopBtn.style.display = active ? 'block' : 'none';
+}
+
+function stopChatStream() {
+  if (chatAbortController) chatAbortController.abort();
+}
 
 // ── Model loader ───────────────────────────────────────────────────────────────
 
@@ -1228,6 +1460,49 @@ async function loadChatModels() {
   } catch { /* Ollama not running */ }
 }
 
+// ── Markdown + Math rendering ─────────────────────────────────────────────────
+
+function _mdParse(text) {
+  if (typeof marked === 'undefined') {
+    // Fallback: escape HTML and convert newlines
+    return text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
+  }
+
+  // Protect math expressions from the markdown parser by replacing them
+  // with unique placeholders, then restoring after marked runs.
+  const math = [];
+  const protect = (src) =>
+    src
+      // Display math: \[ ... \] and $$ ... $$
+      .replace(/\\\[([\s\S]*?)\\\]/g,  m => { math.push(m); return `\x02MATH${math.length-1}\x03`; })
+      .replace(/\$\$([\s\S]*?)\$\$/g,  m => { math.push(m); return `\x02MATH${math.length-1}\x03`; })
+      // Inline math: \( ... \) and $ ... $
+      .replace(/\\\(([\s\S]*?)\\\)/g,  m => { math.push(m); return `\x02IMATH${math.length-1}\x03`; })
+      .replace(/(?<!\$)\$(?!\$)((?:[^$\n]|\\.)+?)\$/g, m => { math.push(m); return `\x02IMATH${math.length-1}\x03`; });
+
+  const restore = (html) =>
+    html
+      .replace(/\x02MATH(\d+)\x03/g,  (_, i) => `<span class="math-display">${math[i]}</span>`)
+      .replace(/\x02IMATH(\d+)\x03/g, (_, i) => `<span class="math-inline">${math[i]}</span>`);
+
+  marked.setOptions({ breaks: true, gfm: true });
+  return restore(marked.parse(protect(text)));
+}
+
+function _renderMath(el) {
+  if (typeof renderMathInElement === 'undefined') return;
+  renderMathInElement(el, {
+    delimiters: [
+      { left: '$$',   right: '$$',   display: true  },
+      { left: '\\[',  right: '\\]',  display: true  },
+      { left: '$',    right: '$',    display: false },
+      { left: '\\(',  right: '\\)',  display: false },
+    ],
+    throwOnError: false,
+    output: 'html',
+  });
+}
+
 // ── Message rendering ──────────────────────────────────────────────────────────
 
 function renderMessage(role, content, streaming = false) {
@@ -1241,7 +1516,17 @@ function renderMessage(role, content, streaming = false) {
 
   const bubble = document.createElement('div');
   bubble.className = 'chat-bubble';
-  bubble.textContent = content;
+  bubble._rawText = content || '';
+
+  if (role === 'assistant') {
+    bubble.innerHTML = _mdParse(bubble._rawText);
+    if (!streaming && content) _renderMath(bubble);
+  } else {
+    // User messages: plain text (preserve newlines, no markdown)
+    bubble.style.whiteSpace = 'pre-wrap';
+    bubble.textContent = content;
+  }
+
   if (streaming) {
     const cursor = document.createElement('span');
     cursor.className = 'chat-cursor';
@@ -1264,18 +1549,36 @@ function appendToLastBubble(token) {
   const msgs = document.getElementById('chat-messages');
   const last = msgs.querySelector('.chat-msg.assistant:last-child .chat-bubble');
   if (!last) return;
-  const cursor = last.querySelector('#chat-cursor');
-  if (cursor) {
-    cursor.insertAdjacentText('beforebegin', token);
+
+  last._rawText = (last._rawText || '') + token;
+  last.innerHTML = _mdParse(last._rawText);
+
+  // Re-attach blinking cursor
+  const cur = document.createElement('span');
+  cur.className = 'chat-cursor';
+  cur.id = 'chat-cursor';
+  const lastEl = last.lastElementChild;
+  if (lastEl && ['P','LI','H1','H2','H3','H4','TD','BLOCKQUOTE'].includes(lastEl.tagName)) {
+    lastEl.appendChild(cur);
   } else {
-    last.textContent += token;
+    last.appendChild(cur);
   }
+
   msgs.scrollTop = msgs.scrollHeight;
 }
 
 function finalizeLastBubble() {
-  const cursor = document.getElementById('chat-cursor');
-  cursor?.remove();
+  const msgs = document.getElementById('chat-messages');
+  const last = msgs.querySelector('.chat-msg.assistant:last-child .chat-bubble');
+  if (!last) return;
+
+  document.getElementById('chat-cursor')?.remove();
+
+  // Final render: full markdown + math
+  if (last._rawText) {
+    last.innerHTML = _mdParse(last._rawText);
+    _renderMath(last);
+  }
 }
 
 // ── Send + stream ──────────────────────────────────────────────────────────────
@@ -1289,8 +1592,7 @@ async function sendChatMessage() {
   input.value = '';
   input.style.height = '';
   input.disabled = true;
-  document.getElementById('chat-send-btn').disabled = true;
-  chatStreaming = true;
+  setChatStreaming(true);
 
   chatHistory.push({ role: 'user', content: text });
   renderMessage('user', text);
@@ -1301,13 +1603,25 @@ async function sendChatMessage() {
 
   renderMessage('assistant', '', true); // empty bubble with cursor
 
+  chatAbortController = new AbortController();
+
   try {
+    // Merge brain + social context into a SINGLE system message
+    // (some models handle multiple system messages poorly)
+    const systemParts = [];
+    if (_brainSystemPrompt)         systemParts.push(_brainSystemPrompt);
+    if (_chatSocialContext?.system) systemParts.push('\n\n=== CURRENT ADDRESS SOCIAL CONTEXT ===\n\n' + _chatSocialContext.system);
+    const messagesWithContext = systemParts.length
+      ? [{ role: 'system', content: systemParts.join('\n\n') }, ...chatHistory]
+      : chatHistory;
+
     const res = await fetch(`http://localhost:${port}/api/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      signal: chatAbortController.signal,
       body: JSON.stringify({
         model,
-        messages: chatHistory,
+        messages: messagesWithContext,
         stream: true,
         options: { temperature: 0.7 },
       }),
@@ -1349,13 +1663,22 @@ async function sendChatMessage() {
     finalizeLastBubble();
     chatHistory.push({ role: 'assistant', content: fullResponse });
   } catch (err) {
-    appendToLastBubble(`[Connection error: ${err.message}]`);
-    finalizeLastBubble();
-    chatHistory.push({ role: 'assistant', content: `[Error]` });
+    if (err.name === 'AbortError') {
+      // User interrupted — finalize whatever was streamed so far
+      const msgs = document.getElementById('chat-messages');
+      const last = msgs?.querySelector('.chat-msg.assistant:last-child .chat-bubble');
+      const partial = last?._rawText || '';
+      finalizeLastBubble();
+      if (partial) chatHistory.push({ role: 'assistant', content: partial });
+    } else {
+      appendToLastBubble(`[Connection error: ${err.message}]`);
+      finalizeLastBubble();
+      chatHistory.push({ role: 'assistant', content: `[Error]` });
+    }
   } finally {
-    chatStreaming = false;
+    chatAbortController = null;
+    setChatStreaming(false);
     input.disabled = false;
-    document.getElementById('chat-send-btn').disabled = false;
     input.focus();
   }
 }
@@ -1382,3 +1705,754 @@ function autoResize(el) {
   el.style.height = 'auto';
   el.style.height = Math.min(el.scrollHeight, 120) + 'px';
 }
+
+// ── Brain state (right panel) ──────────────────────────────────────────────────
+
+let _brainLastLoaded = 0;
+
+async function loadBrainState() {
+  const port = window._minerApiPort || 3456;
+  const now  = Date.now();
+  if (now - _brainLastLoaded < 8000) return; // throttle
+  _brainLastLoaded = now;
+
+  try {
+    const [stateRes, weightsRes, methodsRes] = await Promise.allSettled([
+      fetch(`http://localhost:${port}/api/brain/state`, { timeout: 5000 }),
+      fetch(`http://localhost:${port}/api/brain/weights`, { timeout: 5000 }),
+      fetch(`http://localhost:${port}/methods`, { timeout: 5000 }),
+    ]);
+
+    if (stateRes.status === 'fulfilled' && stateRes.value.ok) {
+      const s = await stateRes.value.json();
+      const set = (id, v) => { const el = document.getElementById(id); if (el && v != null) el.textContent = v; };
+      // Active signals = live method count from /methods, not weights.json count
+      set('brain-corrections', s.feedbackCount ?? '—');
+      set('brain-model',       s.model || 'qwen2.5:1.5b');
+      if (s.stateSummary) {
+        const summary = s.stateSummary.replace(/^#.*\n/m, '').trim().slice(0, 200);
+        set('brain-state-summary', summary || '(no state yet)');
+      }
+      // Consolidation countdown (brain consolidates every 60 min)
+      const minsLeft = Math.max(0, 60 - Math.floor((Date.now() % (60 * 60 * 1000)) / 60000));
+      set('brain-consolidation', minsLeft + ' min');
+
+      // Ollama status
+      const dot = document.getElementById('brain-ollama-dot');
+      const lbl = document.getElementById('brain-ollama-status');
+      if (dot) dot.className = 'bdot on';
+      if (lbl) lbl.textContent = 'Ollama running';
+      const sdot = document.getElementById('brain-sync-dot');
+      if (sdot) sdot.className = 'bdot on';
+    }
+
+    if (weightsRes.status === 'fulfilled' && weightsRes.value.ok) {
+      const weights = await weightsRes.value.json();
+      const top5 = Object.entries(weights)
+        .sort(([, a], [, b]) => b - a)
+        .slice(0, 5);
+      const container = document.getElementById('brain-top-signals');
+      if (container) {
+        container.innerHTML = top5.map(([id, w]) => `
+          <div class="brain-signal-row">
+            <span>${id.slice(0, 22)}</span>
+            <span class="brain-weight">${w.toFixed(2)}</span>
+          </div>`).join('') || '<div class="brain-signal-row" style="color:#374151;">No weights yet</div>';
+      }
+    }
+
+    if (methodsRes.status === 'fulfilled' && methodsRes.value.ok) {
+      const methods = await methodsRes.value.json();
+      if (Array.isArray(methods)) {
+        const el = document.getElementById('brain-signals');
+        if (el) el.textContent = methods.length;
+        // If weights are empty, show top methods by built-in score/weight
+        const container = document.getElementById('brain-top-signals');
+        if (container && container.textContent.includes('No weights yet') && methods.length > 0) {
+          const top5 = methods
+            .filter(m => m.score || m.weight)
+            .sort((a, b) => (b.score || b.weight || 0) - (a.score || a.weight || 0))
+            .slice(0, 5);
+          if (top5.length) {
+            container.innerHTML = top5.map(m => `
+              <div class="brain-signal-row">
+                <span>${(m.description || m.id || '').slice(0, 24)}</span>
+                <span class="brain-weight">${(m.score || m.weight || 1).toFixed(2)}</span>
+              </div>`).join('');
+          }
+        }
+      }
+    }
+  } catch { /* Ollama / miner offline */ }
+}
+
+// Poll brain state every 15s
+setInterval(loadBrainState, 15000);
+
+// Also poll live node status (peer count, region, etc.)
+async function pollNodeStatus() {
+  const port = window._minerApiPort || 3456;
+  try {
+    const res  = await fetch(`http://localhost:${port}/status`, { timeout: 4000 });
+    if (!res.ok) return;
+    const data = await res.json();
+    if (data.peers != null) {
+      const el = document.getElementById('sidebar-peers');
+      if (el) el.textContent = data.peers + ' online';
+    }
+  } catch {}
+}
+setInterval(pollNodeStatus, 10000);
+
+// ── Search (identity scanner) ──────────────────────────────────────────────────
+
+let _searchPollTimer = null;
+
+// Raw address patterns — if none match and it looks like a domain, warn early
+const RAW_ADDR_RE = /^(0x[0-9a-fA-F]{40}|[1-9A-HJ-NP-Za-km-z]{32,44}|(bc1|[13])[a-zA-HJ-NP-Z0-9]{25,87}|T[1-9A-HJ-NP-Za-km-z]{33}|(EQ|UQ|kQ|0Q)[a-zA-Z0-9_-]{46}|G[A-Z2-7]{55})$/;
+const DOMAIN_INPUT_RE = /^[a-zA-Z0-9_-]+\.[a-zA-Z0-9]+$/;
+
+async function runSearch() {
+  const input = document.getElementById('search-input');
+  const address = (input?.value || '').trim();
+  if (!address) { input?.focus(); return; }
+
+  // If it looks like a domain name, show an informational note
+  if (DOMAIN_INPUT_RE.test(address) && !RAW_ADDR_RE.test(address)) {
+    const resultEl = document.getElementById('search-result');
+    if (resultEl) {
+      resultEl.style.display = 'block';
+      resultEl.innerHTML = `<div class="result-card" style="border-color:#374151;">
+        <div style="font-family:monospace;font-size:11px;color:#9ca3af;margin-bottom:8px;">
+          🔍 Resolving <strong>${address}</strong>…
+        </div>
+        <div style="font-family:monospace;font-size:10px;color:#4b5563;">
+          Trying SPACEID · ZNS · Bonfida. If the domain doesn't exist the scan will fail.<br>
+          Tip: paste the raw wallet address for faster results.
+        </div>
+      </div>`;
+    }
+  }
+
+  const btn      = document.getElementById('search-btn');
+  const loading  = document.getElementById('search-loading');
+  const resultEl = document.getElementById('search-result');
+  const statusTx = document.getElementById('search-status-text');
+
+  if (_searchPollTimer) { clearInterval(_searchPollTimer); _searchPollTimer = null; }
+
+  btn.disabled = true;
+  loading.style.display = 'flex';
+  resultEl.style.display = 'none';
+  resultEl.innerHTML = '';
+
+  const port = window._minerApiPort || 3456;
+
+  try {
+    statusTx.textContent = 'Submitting job…';
+    const jobRes = await fetch(`http://localhost:${port}/job`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: 'verdict', payload: { address } }),
+    });
+
+    if (!jobRes.ok) {
+      const err = await jobRes.json().catch(() => ({}));
+      throw new Error(err.error || `HTTP ${jobRes.status}`);
+    }
+
+    const { jobId } = await jobRes.json();
+    if (!jobId) throw new Error('No jobId returned');
+
+    statusTx.textContent = 'Scanning…';
+    let attempts = 0;
+
+    _searchPollTimer = setInterval(async () => {
+      attempts++;
+      try {
+        const r = await fetch(`http://localhost:${port}/job/${jobId}/result`, { timeout: 6000 });
+        if (r.status === 202) { statusTx.textContent = `Scanning… (${attempts * 2}s)`; return; }
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        const data = await r.json();
+        if (!data.verdict) return;
+
+        clearInterval(_searchPollTimer); _searchPollTimer = null;
+        loading.style.display = 'none';
+        btn.disabled = false;
+        // Fetch social context + tx graph enrichment in background
+        _fetchSocialContextForAddress(address);
+        // Only try graph enrichment if profile graph is empty/missing
+        if (!data.profile?.graph?.nodes?.length || data.profile.graph.nodes.length < 2) {
+          _enrichResultWithGraph(address);
+        }
+        try {
+          renderSearchResult(resultEl, data, address);
+        } catch (renderErr) {
+          console.error('[Search] renderSearchResult threw:', renderErr);
+          resultEl.style.display = 'block';
+          resultEl.innerHTML = `<div class="result-card"><span style="color:#f87171;font-family:monospace;font-size:11px;">Render error: ${renderErr.message}</span></div>`;
+        }
+      } catch (pollErr) {
+        if (attempts > 60) {
+          clearInterval(_searchPollTimer); _searchPollTimer = null;
+          loading.style.display = 'none';
+          btn.disabled = false;
+          resultEl.style.display = 'block';
+          resultEl.innerHTML = `<div class="result-card"><span style="color:#f87171;font-family:monospace;font-size:11px;">Timed out — ${pollErr.message}</span></div>`;
+        }
+      }
+    }, 2000);
+
+  } catch (err) {
+    loading.style.display = 'none';
+    btn.disabled = false;
+    resultEl.style.display = 'block';
+    resultEl.innerHTML = `<div class="result-card"><span style="color:#f87171;font-family:monospace;font-size:11px;">Error: ${err.message}</span></div>`;
+  }
+}
+
+// ── Profile rendering helpers ─────────────────────────────────────────────────
+
+function escHtml(str) {
+  return String(str ?? '')
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+function fmtAddr(addr) {
+  if (!addr || addr.length < 12) return addr || '—';
+  return addr.slice(0, 8) + '…' + addr.slice(-6);
+}
+
+function fmtDate(ts) {
+  if (!ts) return '—';
+  try { return new Date(ts).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' }); }
+  catch { return '—'; }
+}
+
+function profileInitials(name) {
+  if (!name) return '?';
+  return name.trim().split(/\s+/).map(w => w[0] || '').join('').toUpperCase().slice(0, 2) || '?';
+}
+
+function platformFavicon(platform, url) {
+  const map = { farcaster:'https://warpcast.com/favicon.ico', lens:'https://hey.xyz/favicon.ico',
+    ens:'https://app.ens.domains/favicon.ico', twitter:'https://x.com/favicon.ico',
+    x:'https://x.com/favicon.ico', github:'https://github.com/favicon.ico',
+    discord:'https://discord.com/favicon.ico', telegram:'https://telegram.org/favicon.ico' };
+  if (map[platform?.toLowerCase()]) return map[platform.toLowerCase()];
+  if (url) { try { return new URL(url).origin + '/favicon.ico'; } catch {} }
+  return null;
+}
+
+function platformEmoji(platform) {
+  const map = { farcaster:'🟣', lens:'🌿', ens:'🔷', twitter:'✖', x:'✖', github:'🐙',
+    discord:'💬', telegram:'✈', website:'🌐', linkedin:'💼', snapshot:'🗳️' };
+  return map[platform?.toLowerCase()] || '🔗';
+}
+
+// ── Section builders ──────────────────────────────────────────────────────────
+
+function _profileHeader(p, address) {
+  const name = p.displayName || fmtAddr(p.address || address);
+  const initials = profileInitials(p.displayName || '');
+  const avatar = p.avatar
+    ? `<img src="${escHtml(p.avatar)}" class="wp-avatar" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`
+    : '';
+  return `
+    <div class="wp-header">
+      <div class="wp-avatar-wrap">
+        ${avatar}
+        <div class="wp-avatar-fallback" ${p.avatar ? 'style="display:none"' : ''}>${escHtml(initials)}</div>
+      </div>
+      <div class="wp-header-info">
+        <div class="wp-name">${escHtml(name)}</div>
+        ${p.displayName ? `<div class="wp-addr-sub">${escHtml(fmtAddr(p.address || address))}</div>` : ''}
+        ${p.bio ? `<div class="wp-bio">${escHtml(p.bio)}</div>` : ''}
+      </div>
+    </div>`;
+}
+
+function _profileBadges(p, verdict, conf, ofac, eu, uk) {
+  const b = [];
+  const badge = (cls, txt) => `<span class="wp-badge wp-badge-${cls}">${txt}</span>`;
+
+  if (ofac?.sanctioned)       b.push(badge('danger', `⛔ OFAC — ${escHtml(ofac.name || '')}`));
+  else if (ofac)              b.push(badge('ok', '✓ OFAC Clear'));
+  if (eu?.sanctioned)         b.push(badge('danger', `⛔ EU — ${escHtml(eu.name || '')}`));
+  else if (eu)                b.push(badge('ok', '✓ EU Clean'));
+  if (uk?.sanctioned)         b.push(badge('danger', `⛔ UK — ${escHtml(uk.name || '')}`));
+  else if (uk)                b.push(badge('ok', '✓ UK Clean'));
+
+  const ensLink = p.links?.find(l => l.platform?.toLowerCase() === 'ens');
+  const ensDom  = p.domains?.find(d => d.platform === 'ENS' || d.name?.endsWith('.eth'));
+  const ensName = ensLink?.identity || ensDom?.name;
+  if (ensName) b.push(badge('ok', `ENS: ${escHtml(ensName.slice(0, 14))}${ensName.length > 14 ? '…' : ''}`));
+
+  const fc = p.links?.find(l => l.platform?.toLowerCase() === 'farcaster');
+  if (fc) b.push(badge('ok', `🟣 ${escHtml(fc.identity || fc.displayName || '')}`));
+
+  const ip = p.identityProtocols || {};
+  if (ip.worldId)   b.push(badge('ok',   '🌍 World ID'));
+  if (ip.poh)       b.push(badge('ok',   '⚖️ PoH'));
+  if (ip.brightid)  b.push(badge('ok',   '🔆 BrightID'));
+  if (ip.bab)       b.push(badge('ok',   '🏦 BAB KYC'));
+  if (p.gitcoin)    b.push(badge(p.gitcoin.passing ? 'ok' : 'warn',
+    `${p.gitcoin.passing ? '✓' : '⚠'} Gitcoin ${(p.gitcoin.score || 0).toFixed(1)}`));
+
+  const vCls = verdict === 'HUMAN' ? 'human' : verdict === 'UNCERTAIN' ? 'warn' : 'danger';
+  const vLbl = verdict === 'HUMAN' ? '✓ Verified Human' : verdict === 'UNCERTAIN' ? '? Uncertain' : '✗ Suspected Bot';
+  b.push(`<span class="wp-badge wp-badge-${vCls}">${vLbl} <span class="wp-badge-conf">${conf}</span></span>`);
+
+  return b.length ? `<div class="wp-badges">${b.join('')}</div>` : '';
+}
+
+function _identityProtocols(p) {
+  const ip = p.identityProtocols || {};
+  const cards = [];
+  const card = (icon, name, status, ok, score) => `
+    <div class="wp-id-card ${ok ? 'wp-id-ok' : score != null ? 'wp-id-warn' : 'wp-id-none'}">
+      <div class="wp-id-icon">${icon}</div>
+      <div class="wp-id-body">
+        <div class="wp-id-name">${name}</div>
+        <div class="wp-id-status">${status}</div>
+        ${score != null ? `<div class="wp-score-bar"><div class="wp-score-fill" style="width:${Math.min(100,score)}%;background:${score>=50?'#22c55e':'#eab308'}"></div></div>` : ''}
+      </div>
+      ${ok ? '<span class="wp-id-check">✓</span>' : ''}
+    </div>`;
+
+  if (ip.worldId  != null) cards.push(card('🌍', 'World ID',          ip.worldId  ? 'Verified human' : 'Not verified',   ip.worldId,  null));
+  if (ip.poh      != null) cards.push(card('⚖️', 'Proof of Humanity', ip.poh      ? 'Registered'     : 'Not registered', ip.poh,      null));
+  if (ip.humanity != null) cards.push(card('🖐️', 'Humanity Protocol', ip.humanity ? 'Palm verified'  : 'Not verified',   ip.humanity, null));
+  if (ip.brightid != null) cards.push(card('🔆', 'BrightID',          ip.brightid ? 'Verified unique' : 'Not verified',  ip.brightid, null));
+  if (ip.bab      != null) cards.push(card('🏦', 'BAB Token',         ip.bab      ? 'Binance KYC'    : 'No BAB token',   ip.bab,      null));
+  if (ip.humanTech!= null) cards.push(card('🤖', 'Human Protocol',    `Score: ${ip.humanTech?.score?.toFixed(0) ?? '—'}`, (ip.humanTech?.score||0)>=50, ip.humanTech?.score));
+  if (ip.nomis    != null) cards.push(card('📊', 'Nomis',             `Score: ${ip.nomis?.score?.toFixed(0) ?? '—'}`,     (ip.nomis?.score||0)>=50,     ip.nomis?.score));
+
+  if (!cards.length) return '';
+  return `<div class="wp-section"><div class="wp-section-title">Identity Protocols</div><div class="wp-id-grid">${cards.join('')}</div></div>`;
+}
+
+function _domains(p) {
+  if (!p.domains?.length) return '';
+  const chips = p.domains.map(d => `
+    <a class="wp-domain-chip" href="${escHtml(d.url || '#')}" target="_blank" rel="noopener">
+      <span class="wp-domain-platform">${escHtml(d.platform)}</span>
+      <span class="wp-domain-name">${escHtml(d.name)}</span>
+    </a>`).join('');
+  return `<div class="wp-section"><div class="wp-section-title">Web3 Domains</div><div class="wp-domains">${chips}</div></div>`;
+}
+
+function _socialLinks(p) {
+  if (!p.links?.length) return '';
+  const chips = p.links.map(l => {
+    const fav = platformFavicon(l.platform, l.url);
+    const icon = fav
+      ? `<img src="${escHtml(fav)}" class="wp-social-logo" alt="${escHtml(l.platform)}" onerror="this.style.display='none'">`
+      : `<span class="wp-social-emoji">${platformEmoji(l.platform)}</span>`;
+    const av = l.avatar ? `<img src="${escHtml(l.avatar)}" class="wp-social-av" onerror="this.style.display='none'">` : '';
+    return `<a class="wp-social-chip" href="${escHtml(l.url || '#')}" target="_blank" rel="noopener" title="${escHtml(l.description || l.displayName || '')}">
+      ${icon}${av}<span class="wp-social-id">${escHtml(l.identity || l.displayName || '')}</span>
+    </a>`;
+  }).join('');
+  return `<div class="wp-section"><div class="wp-section-title">Profiles</div><div class="wp-socials">${chips}</div></div>`;
+}
+
+function _activity(p) {
+  if (!p.txStats) return '';
+  const s = p.txStats;
+  const box = (label, val, link) => `
+    <div class="wp-stat-box">
+      <div class="wp-stat-label">${label}</div>
+      <div class="wp-stat-val">${escHtml(String(val ?? '—'))}</div>
+      ${link ? `<a href="${escHtml(link)}" target="_blank" rel="noopener" class="wp-stat-link">↗</a>` : ''}
+    </div>`;
+  return `<div class="wp-section"><div class="wp-section-title">Activity</div>
+    <div class="wp-stats-row">
+      ${box('Total Txs', s.total?.toLocaleString())}
+      ${box('First Tx', fmtDate(s.firstTx?.ts), s.firstTx?.hash ? `https://etherscan.io/tx/${s.firstTx.hash}` : null)}
+      ${box('Last Tx',  fmtDate(s.lastTx?.ts),  s.lastTx?.hash  ? `https://etherscan.io/tx/${s.lastTx.hash}`  : null)}
+    </div>
+  </div>`;
+}
+
+function _associatedWallets(p) {
+  if (!p.associatedWallets?.length) return '';
+  const rows = p.associatedWallets.map(w => `
+    <div class="wp-assoc-row">
+      <span>🔐</span>
+      <a href="https://app.safe.global/home?safe=eth:${escHtml(w)}" target="_blank" rel="noopener" class="wp-assoc-addr">${escHtml(fmtAddr(w))}</a>
+      <a href="https://etherscan.io/address/${escHtml(w)}" target="_blank" rel="noopener" class="wp-stat-link">↗</a>
+    </div>`).join('');
+  return `<div class="wp-section"><div class="wp-section-title">Associated Wallets <span class="wp-section-hint">Safe multisig signer</span></div>${rows}</div>`;
+}
+
+function _crossChain(p) {
+  const cards = [];
+  if (p.bitcoin) cards.push(`<div class="wp-cc-card"><div class="wp-cc-head">₿ Bitcoin</div>
+    <div class="wp-cc-row">Txs: <b>${p.bitcoin.txCount?.toLocaleString() ?? '—'}</b></div>
+    <div class="wp-cc-row">Balance: <b>${((p.bitcoin.balance||0)/1e8).toFixed(8)} BTC</b></div>
+    ${p.bitcoin.explorer ? `<a href="${escHtml(p.bitcoin.explorer)}" target="_blank" class="wp-cc-link">mempool.space ↗</a>` : ''}</div>`);
+  if (p.tron) cards.push(`<div class="wp-cc-card"><div class="wp-cc-head">⚡ TRON</div>
+    <div class="wp-cc-row">TRX: <b>${p.tron.trxBalance?.toFixed(2) ?? '—'}</b></div>
+    <div class="wp-cc-row">USDT: <b>${p.tron.usdtBalance?.toFixed(2) ?? '—'}</b></div>
+    ${p.tron.explorer ? `<a href="${escHtml(p.tron.explorer)}" target="_blank" class="wp-cc-link">tronscan ↗</a>` : ''}</div>`);
+  if (p.ton) cards.push(`<div class="wp-cc-card"><div class="wp-cc-head">◆ TON</div>
+    <div class="wp-cc-row">Balance: <b>${p.ton.balance?.toFixed(2) ?? '—'} TON</b></div>
+    ${p.ton.hasDomain ? '<div class="wp-cc-row">.ton domain ✓</div>' : ''}
+    ${p.ton.explorer ? `<a href="${escHtml(p.ton.explorer)}" target="_blank" class="wp-cc-link">tonscan ↗</a>` : ''}</div>`);
+  if (p.xlm) cards.push(`<div class="wp-cc-card"><div class="wp-cc-head">✦ Stellar</div>
+    <div class="wp-cc-row">XLM: <b>${p.xlm.xlmBalance?.toFixed(2) ?? '—'}</b></div>
+    ${p.xlm.homeDomain ? `<div class="wp-cc-row">Domain: ${escHtml(p.xlm.homeDomain)}</div>` : ''}
+    ${p.xlm.explorer ? `<a href="${escHtml(p.xlm.explorer)}" target="_blank" class="wp-cc-link">stellarchain ↗</a>` : ''}</div>`);
+  if (!cards.length) return '';
+  return `<div class="wp-section"><div class="wp-section-title">Cross-chain Activity</div><div class="wp-cc-grid">${cards.join('')}</div></div>`;
+}
+
+function _txGraph(p) {
+  if (!p.graph?.nodes?.length || p.graph.nodes.length < 2) return '';
+  const nodes = p.graph.nodes.slice(0, 10).map(n => {
+    const id = n.id || n.address || String(n);
+    return `<span class="wp-graph-node" onclick="document.getElementById('search-input').value='${escHtml(id)}'">${escHtml(fmtAddr(id))}</span>`;
+  }).join('');
+  const more = p.graph.nodes.length > 10 ? `<span class="wp-graph-more">+${p.graph.nodes.length - 10} more</span>` : '';
+  return `<div class="wp-section"><div class="wp-section-title">Transaction Graph <span class="wp-section-hint">${p.graph.nodes.length} nodes · ${p.graph.edges?.length || 0} edges · click to scan</span></div>
+    <div class="wp-graph-nodes">${nodes}${more}</div></div>`;
+}
+
+function _evidenceAccordion(signals) {
+  if (!signals.length) return '';
+  const real    = signals.filter(s => s.methodId !== 'ofac_check');
+  const passed  = real.filter(s => s.result !== false);
+  const failed  = real.filter(s => s.result === false);
+  const flagged = signals.filter(s => s.methodId?.startsWith('usdt_blacklist') && s.result);
+
+  const dots = real.slice(0, 28).map(s => {
+    const isBlacklist = s.methodId?.startsWith('usdt_blacklist') && s.result;
+    const cls = isBlacklist ? 'ev-blacklist' : s.result !== false ? 'ev-pass' : 'ev-fail';
+    return `<span class="ev-dot ${cls}" title="${escHtml(s.description || '')}"></span>`;
+  }).join('');
+
+  const flagHtml = flagged.length
+    ? `<div class="ev-flags">${flagged.map(s => `<div class="ev-flag-row"><span class="ev-dot ev-blacklist"></span><span style="color:#fca5a5;font-size:11px;">${escHtml(s.description||'')}</span></div>`).join('')}</div>`
+    : '';
+
+  const passRows = passed.length
+    ? passed.map(s => `<div class="ev-row ev-row-pass"><span class="ev-dot ev-pass"></span><span class="ev-desc">${escHtml(s.description||s.methodId||'Signal')}</span></div>`).join('')
+    : `<div class="ev-empty">No signals passed</div>`;
+  const failRows = failed.length
+    ? failed.map(s => `<div class="ev-row ev-row-fail"><span class="ev-dot ev-fail"></span><span class="ev-desc">${escHtml(s.description||s.methodId||'Signal')}</span></div>`).join('')
+    : `<div class="ev-empty">No signals failed</div>`;
+
+  return `
+    <div class="wp-section">
+      <div class="wp-section-title">Evidence</div>
+      <div class="evidence-summary">
+        ${dots}
+        <span class="ev-count">${passed.length}/${real.length} passed</span>
+      </div>
+      ${flagHtml}
+      <button class="ev-accordion-btn" onclick="toggleAccordion('ev-pass')">
+        <span>✓ Passed (${passed.length})</span>
+        <span class="ev-chevron open" id="chev-ev-pass">›</span>
+      </button>
+      <div id="ev-pass" class="ev-list">${passRows}</div>
+      <button class="ev-accordion-btn" onclick="toggleAccordion('ev-fail')">
+        <span>✗ Failed (${failed.length})</span>
+        <span class="ev-chevron" id="chev-ev-fail">›</span>
+      </button>
+      <div id="ev-fail" class="ev-list" style="display:none;">${failRows}</div>
+    </div>`;
+}
+
+function _socialChar(vibeData, farcasterData, paragraphData) {
+  if (!vibeData && !farcasterData && !paragraphData) return '';
+  const vd = vibeData || {};
+  const topics = (vd.topics || []).map(t => `<span class="char-topic">${escHtml(t)}</span>`).join('');
+  const sigs   = (vd.humanSignals || []).map(s => `<li>${escHtml(s)}</li>`).join('');
+  const casts  = (farcasterData?.casts || []).slice(0, 4).map(c => `
+    <div class="char-cast">
+      <span class="char-cast-text">${escHtml(c.text)}</span>
+      ${c.likes||c.replies ? `<span class="char-cast-meta">${c.likes?`♥${c.likes}`:''}${c.replies?` ·${c.replies}r`:''}</span>` : ''}
+    </div>`).join('');
+  const arts = (paragraphData?.posts || []).slice(0, 4).map(p => `
+    <div class="char-article"><span class="char-article-title">${escHtml(p.title)}</span>${p.subtitle?`<span class="char-article-sub"> — ${escHtml(p.subtitle)}</span>`:''}</div>`).join('');
+
+  return `
+    <div class="wp-section">
+      <div class="wp-section-title">Social Characteristic</div>
+      ${vd.vibe ? `<p class="char-text">${escHtml(vd.vibe)}</p>` : ''}
+      ${topics  ? `<div class="char-topics">${topics}</div>` : ''}
+      ${sigs    ? `<ul class="char-signals">${sigs}</ul>` : ''}
+      ${farcasterData ? `
+        <div class="char-source">
+          <div class="char-source-label">🟣 Farcaster — @${escHtml(farcasterData.username||'')}
+            <span class="char-follow-meta">${(farcasterData.followerCount||0).toLocaleString()} followers</span></div>
+          ${farcasterData.bio ? `<div class="char-bio">"${escHtml(farcasterData.bio)}"</div>` : ''}
+          ${casts}
+        </div>` : ''}
+      ${paragraphData ? `
+        <div class="char-source">
+          <div class="char-source-label">✍️ Paragraph — ${escHtml(paragraphData.title||'')}
+            <span class="char-follow-meta">${(paragraphData.subscriberCount||0).toLocaleString()} subscribers</span></div>
+          ${paragraphData.description ? `<div class="char-bio">"${escHtml(paragraphData.description)}"</div>` : ''}
+          ${arts}
+        </div>` : ''}
+    </div>`;
+}
+
+// ── Main render ───────────────────────────────────────────────────────────────
+
+function renderSearchResult(container, data, address) {
+  const v       = (data.verdict || 'UNCERTAIN').toUpperCase();
+  const cls     = v === 'HUMAN' ? 'human' : v === 'AI' ? 'ai' : 'uncertain';
+  const cardCls = v === 'HUMAN' ? 'human-result' : v === 'AI' ? 'ai-result' : '';
+  const conf    = data.confidence != null ? Math.round(data.confidence * 100) + '%' : '—';
+  const signals = data.evidence?.signalsUsed || data.signalsUsed || [];
+  const profile = data.profile || {};
+  const model   = data.evidence?.modelUsed || data.modelUsed || '';
+
+  // Unresolvable domain / no-signal fallback
+  const tooFew = signals.length <= 1 && (data.evidence?.methodsCount > 10 || 0);
+  if (tooFew || (signals.length === 1 && !signals[0]?.methodId)) {
+    container.style.display = 'block';
+    container.innerHTML = `<div class="result-card" style="border-color:#374151;">
+      <div style="font-family:monospace;font-size:12px;color:#f59e0b;margin-bottom:8px;">⚠ Could not evaluate address</div>
+      <div style="font-family:monospace;font-size:11px;color:#6b7280;line-height:1.6;">
+        ${address.includes('.') ? `Domain <b>${escHtml(address)}</b> could not be resolved.<br>Try the raw wallet address.` : 'Address format not recognised.'}
+      </div></div>`;
+    return;
+  }
+
+  const ofac = data.ofac || signals.find(s => s.methodId === 'ofac_check')?.ofac || null;
+  const eu   = data.eu  || null;
+  const uk   = data.uk  || null;
+  const label = v === 'HUMAN' ? 'VERIFIED HUMAN' : v === 'AI' ? 'SUSPECTED BOT' : 'UNCERTAIN';
+
+  container.style.display = 'block';
+  container.innerHTML = `
+    <div class="wp-root">
+
+      ${_profileHeader(profile, address)}
+
+      ${_profileBadges(profile, v, conf, ofac, eu, uk)}
+
+      <!-- AI reasoning + model -->
+      <div class="wp-reasoning-block ${cardCls}">
+        <p class="brain-reasoning">${escHtml(data.reasoning || '—')}</p>
+        ${model ? `<div class="wp-model-line">Powered by ${escHtml(model)}</div>` : ''}
+        ${data.resolvedAddress ? `<div class="wp-model-line">↳ resolved from ${escHtml(fmtAddr(data.resolvedAddress))}</div>` : ''}
+      </div>
+
+      ${_identityProtocols(profile)}
+      ${_domains(profile)}
+      ${_socialLinks(profile)}
+      ${_activity(profile)}
+      ${_associatedWallets(profile)}
+      ${_crossChain(profile)}
+      ${_txGraph(profile)}
+      ${_evidenceAccordion(signals)}
+      ${_socialChar(data.vibeData, data.farcasterData, data.paragraphData)}
+
+      <div class="feedback-row">
+        <button class="feedback-btn" onclick="submitFeedback('correct')">👍 Correct</button>
+        <button class="feedback-btn" onclick="submitFeedback('dispute')">👎 Dispute</button>
+      </div>
+    </div>`;
+}
+
+function toggleAccordion(id) {
+  const list    = document.getElementById(id);
+  const chevron = document.getElementById('chev-' + id);
+  if (!list) return;
+  const open = list.style.display !== 'none';
+  list.style.display = open ? 'none' : 'block';
+  if (chevron) chevron.classList.toggle('open', !open);
+}
+
+function submitFeedback(type) {
+  const btn = event.currentTarget;
+  btn.textContent = type === 'correct' ? '✓ Logged' : '✓ Dispute sent';
+  btn.style.color = '#22c55e';
+  btn.style.borderColor = 'rgba(34,197,94,0.4)';
+}
+
+// ── Send / Receive ─────────────────────────────────────────────────────────────
+
+let _sendWalletAddr = '';
+let _sendWalletPoh  = 0;
+
+function syncSendWallet() {
+  const addr = window._localWallet || '';
+  _sendWalletAddr = addr;
+  const fromEl = document.getElementById('send-from-addr');
+  if (fromEl) fromEl.textContent = addr || 'Not available';
+
+  // Fetch current balance
+  const port = window._minerApiPort || 3456;
+  if (!addr) return;
+  fetch(`http://localhost:${port}/api/wallet/balance?address=${encodeURIComponent(addr)}`)
+    .then(r => r.json())
+    .then(data => {
+      const POH_DECIMALS = 1_000_000_000;
+      _sendWalletPoh = (data.balance || 0) / POH_DECIMALS;
+      const str = _sendWalletPoh.toFixed(4) + ' POH';
+      const el = document.getElementById('send-balance');
+      if (el) el.textContent = str;
+      const rel = document.getElementById('receive-balance');
+      if (rel) rel.textContent = str;
+    })
+    .catch(() => {});
+}
+
+function setSendAmount(n) {
+  const el = document.getElementById('send-amount');
+  if (el) { el.value = n; updateSendSummary(); }
+}
+
+function setSendMax() {
+  const el = document.getElementById('send-amount');
+  if (el) { el.value = Math.max(0, _sendWalletPoh - 0.001).toFixed(4); updateSendSummary(); }
+}
+
+function updateSendSummary() {
+  const amount = parseFloat(document.getElementById('send-amount')?.value || '0') || 0;
+  const to = (document.getElementById('send-to')?.value || '').trim();
+  const dispEl = document.getElementById('amount-display');
+  if (dispEl) dispEl.textContent = amount > 0 ? amount.toFixed(2) : '0.00';
+  const sumAmt = document.getElementById('summary-amount');
+  const sumTo  = document.getElementById('summary-to');
+  if (sumAmt) sumAmt.textContent = amount > 0 ? amount.toFixed(4) + ' POH' : '—';
+  if (sumTo)  sumTo.textContent  = to.length > 16 ? to.slice(0, 8) + '…' + to.slice(-6) : (to || '—');
+}
+
+function syncHomeBalance() {
+  const bal = document.getElementById('poh-wallet-balance')?.textContent || '';
+  const addr = window._localWallet || '';
+  const numEl = document.getElementById('home-balance-num');
+  const addrEl = document.getElementById('home-balance-addr');
+  if (numEl && bal) numEl.textContent = bal.replace(' POH', '');
+  if (addrEl && addr) addrEl.textContent = addr.length > 16 ? addr.slice(0, 8) + '…' + addr.slice(-6) : addr;
+}
+
+async function executeSend() {
+  const to     = (document.getElementById('send-to')?.value || '').trim();
+  const amount = parseFloat(document.getElementById('send-amount')?.value || '0');
+  const btn    = document.getElementById('send-btn');
+  const res    = document.getElementById('send-result');
+
+  if (!to)           { showSendResult(res, false, 'Enter a recipient address'); return; }
+  if (!(amount > 0)) { showSendResult(res, false, 'Enter a valid amount'); return; }
+  if (amount > _sendWalletPoh) { showSendResult(res, false, `Insufficient balance (${_sendWalletPoh.toFixed(4)} POH)`); return; }
+
+  btn.disabled = true;
+  btn.textContent = 'Sending…';
+  res.style.display = 'none';
+
+  const port = window._minerApiPort || 3456;
+  try {
+    const r = await fetch(`http://localhost:${port}/api/wallet/send`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ from: _sendWalletAddr, to, amount }),
+    });
+    const data = await r.json();
+    if (r.ok && data.success) {
+      showSendResult(res, true, `Sent ${amount} POH → ${to.slice(0, 12)}…`);
+      document.getElementById('send-to').value = '';
+      document.getElementById('send-amount').value = '';
+      setTimeout(syncSendWallet, 1000); // refresh balance
+    } else {
+      showSendResult(res, false, data.error || 'Transaction failed');
+    }
+  } catch (err) {
+    showSendResult(res, false, err.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Confirm & Send';
+  }
+}
+
+function showSendResult(el, ok, msg) {
+  if (!el) return;
+  el.className = 'send-result ' + (ok ? 'ok' : 'err');
+  el.textContent = (ok ? '✓ ' : '✗ ') + msg;
+  el.style.display = 'block';
+}
+
+// ── Send / Receive toggle ──────────────────────────────────────────────────────
+
+function showSendView() {
+  document.getElementById('send-view')?.classList.remove('hidden');
+  document.getElementById('receive-view')?.classList.remove('active');
+  document.getElementById('sr-send-btn')?.classList.add('active');
+  document.getElementById('sr-recv-btn')?.classList.remove('active');
+}
+
+function showReceiveView() {
+  document.getElementById('send-view')?.classList.add('hidden');
+  document.getElementById('receive-view')?.classList.add('active');
+  document.getElementById('sr-recv-btn')?.classList.add('active');
+  document.getElementById('sr-send-btn')?.classList.remove('active');
+  populateReceiveView();
+}
+
+function populateReceiveView() {
+  const addr = window._localWallet || '';
+  const addrEl = document.getElementById('receive-addr-text');
+  if (addrEl) addrEl.textContent = addr || 'Wallet address not available';
+
+  // Sync balance
+  const balEl = document.getElementById('receive-balance');
+  if (balEl) balEl.textContent = document.getElementById('send-balance')?.textContent || '0 POH';
+
+  // Draw QR code
+  if (addr) drawQR('receive-qr', addr);
+}
+
+function copyReceiveAddr() {
+  const addr = window._localWallet || '';
+  if (!addr) return;
+  navigator.clipboard.writeText(addr).catch(() => {
+    // Electron fallback
+    const el = document.createElement('textarea');
+    el.value = addr;
+    document.body.appendChild(el);
+    el.select();
+    document.execCommand('copy');
+    document.body.removeChild(el);
+  });
+  const btn = document.getElementById('receive-copy-btn');
+  if (!btn) return;
+  btn.textContent = '✓ COPIED';
+  btn.classList.add('copied');
+  setTimeout(() => { btn.textContent = 'COPY ADDRESS'; btn.classList.remove('copied'); }, 2000);
+}
+
+// ── QR code rendering ─────────────────────────────────────────────────────────
+// Uses the Node.js `qrcode` library via contextBridge (preload.js).
+// Falls back to showing the address text if generation fails.
+
+async function drawQR(canvasId, text) {
+  const canvas = document.getElementById(canvasId);
+  if (!canvas || !text) return;
+  try {
+    const dataUrl = await window.pohMinerAPI.generateQR(text, canvas.width || 220);
+    const img = new Image();
+    img.onload = () => {
+      const ctx = canvas.getContext('2d');
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    };
+    img.src = dataUrl;
+  } catch (e) {
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = '#fff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = '#000';
+    ctx.font = '11px monospace';
+    ctx.fillText('QR error', 10, 110);
+  }
+}
+
