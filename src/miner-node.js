@@ -39,8 +39,9 @@ import { resolveRpcConfig } from './rpc/resolver.js';
 // Well-known production bootnodes. Used when no bootnodes are configured
 // (e.g. fresh GUI onboarding). Individual users can override via config.bootnodes.
 const DEFAULT_BOOTNODES = [
-  // 'https://bootnode.proofofhuman.ge',
-  'http://localhost:8080'
+  'https://miner.proofofhuman.ge:3456',
+  'https://proofofhuman.ge:3456',
+  'https://exchange.assetux.com:3456',
 ];
 
 export class PohMinerNode {
@@ -437,6 +438,7 @@ export class PohMinerNode {
               payload: rawJob.payload || { address: rawJob.address },
               fee: rawJob.fee || 10_000_000,
               originCountry: rawJob.originCountry || rawJob.originRegion,
+              source: 'api', // marks as local UI job — skip network slashing
               ...rawJob,
             };
 
@@ -764,9 +766,12 @@ export class PohMinerNode {
           const feedbackCount = brainDir && fs.existsSync(path.join(brainDir, 'feedback.json'))
             ? JSON.parse(fs.readFileSync(path.join(brainDir, 'feedback.json'), 'utf8')).length
             : 0;
-          const stateSummary = brainDir && fs.existsSync(path.join(brainDir, 'brain_state.md'))
-            ? fs.readFileSync(path.join(brainDir, 'brain_state.md'), 'utf8').slice(0, 2000)
+          const fullState = brainDir && fs.existsSync(path.join(brainDir, 'brain_state.md'))
+            ? fs.readFileSync(path.join(brainDir, 'brain_state.md'), 'utf8')
             : '';
+          // ?full=1 returns complete state; default returns first 2000 chars for sidebar display
+          const wantFull = url.searchParams?.get('full') === '1';
+          const stateSummary = wantFull ? fullState : fullState.slice(0, 2000);
           return res.end(JSON.stringify({
             dataDir: brainDir,
             weightsCount: Object.keys(weights).length,
@@ -1761,14 +1766,14 @@ export class PohMinerNode {
       // Record for history and strike detection
       this._recordSubmission(false, request.id, { ...workValidation, realPohUsed: result.realPohUsed });
 
-      // Do not slash for simulation fallbacks (dev/testing) or non-realPoh
-      const isSim = result.methodsHash && String(result.methodsHash).startsWith('sim-');
-      const isReal = result.realPohUsed === true;
-      if (!isSim) {
-        // Apply slashing / reputation penalty for malicious or lazy submissions
+      // Do not slash for simulation fallbacks, local API jobs, or dev/testing
+      const isSim    = result.methodsHash && String(result.methodsHash).startsWith('sim-');
+      const isApiJob = request.source === 'api'; // submitted via local /job endpoint
+      if (!isSim && !isApiJob) {
+        // Only slash for network-originated work (gossip jobs) — not local UI searches
         this.applySlashing(0.15);
       } else {
-        console.log('[PoH-Miner] Simulation result (dev fallback) — skipping self-slash');
+        console.log(`[PoH-Miner] Skipping self-slash — ${isApiJob ? 'local API job' : 'simulation fallback'}`);
       }
       return; // Do not propagate bad work
     }

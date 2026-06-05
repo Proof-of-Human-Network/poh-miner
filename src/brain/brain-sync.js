@@ -87,10 +87,40 @@ export class BrainSync {
         }
       } else if (event.type === 'weight_update') {
         const { method, voteType, vote, stakeWeight, feedback: fb } = event.data;
-        if (!method || !voteType || !vote) return false;
+        if (!method || !voteType || vote == null) return false;
         if (brain?.onVote) {
           await brain.onVote(method, voteType, vote, stakeWeight || 1, fb || null);
         }
+
+      } else if (event.type === 'new_method') {
+        // A new signal was listed on proofofhuman.ge — evaluate it on this node too
+        const { id, type, description, address, expression } = event.data;
+        if (!id || !description) return false;
+        if (brain?.onNewMethod) {
+          await brain.onNewMethod({ id, type: type || 'rest', description, address, expression });
+        }
+
+      } else if (event.type === 'curve_price_change') {
+        // Conviction Curve price moved significantly — translate to a vote-style weight update
+        const { methodId, description, direction, magnitude, graduated } = event.data;
+        if (!methodId) return false;
+
+        if (graduated && brain?.onVote) {
+          await brain.onVote(
+            { id: methodId, description: description || methodId },
+            'graduation', true, 0.5,
+            'Conviction Curve graduated — received from network'
+          );
+        } else if (brain?.onVote) {
+          const voteUp = direction === 'up';
+          const cap    = Math.min(parseFloat(magnitude) || 0, 0.5);
+          await brain.onVote(
+            { id: methodId, description: description || methodId },
+            'market', voteUp, cap * 0.4,
+            `Network relay: curve price ${direction} ${((cap) * 100).toFixed(1)}%`
+          );
+        }
+
       } else {
         return false;
       }
@@ -188,6 +218,25 @@ export class BrainSync {
 
   async publishWeightUpdate({ method, voteType, vote, stakeWeight, feedback }, peers, bootnodes) {
     const event = this.createEvent('weight_update', { method, voteType, vote, stakeWeight, feedback });
+    this.seenHashes.add(event.eventHash);
+    await this.broadcast(event, peers, bootnodes);
+    return event;
+  }
+
+  async publishNewMethod(method, peers, bootnodes) {
+    const event = this.createEvent('new_method', {
+      id: method.id, type: method.type,
+      description: (method.description || '').slice(0, 120),
+      address: method.address,
+      expression: (method.expression || '').slice(0, 80),
+    });
+    this.seenHashes.add(event.eventHash);
+    await this.broadcast(event, peers, bootnodes);
+    return event;
+  }
+
+  async publishCurvePriceChange({ methodId, description, direction, magnitude, graduated }, peers, bootnodes) {
+    const event = this.createEvent('curve_price_change', { methodId, description, direction, magnitude, graduated });
     this.seenHashes.add(event.eventHash);
     await this.broadcast(event, peers, bootnodes);
     return event;

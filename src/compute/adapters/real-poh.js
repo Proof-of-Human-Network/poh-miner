@@ -16,6 +16,56 @@ import { fileURLToPath } from 'url';
 import { getMethodsManager } from '../../signals/methods-manager.js';
 import { resolveRpcConfig } from '../../rpc/resolver.js';
 
+// ── Domain name → wallet address resolution ───────────────────────────────────
+// Runs before runFullCheck so the checker always receives a raw address.
+// Supports: SPACEID (.bnb/.eth and others), ZNS multi-chain, Bonfida (.sol)
+
+const ZNS_TLD_CHAIN = {
+  ink:57073, bnb:56, base:8453, blast:81457, polygon:137,
+  zora:7777777, scroll:534352, taiko:167000, bera:80094,
+  sonic:146, kaia:8217, abstract:2741, defi:130, unichain:1301,
+  soneium:1868, plume:98865, hemi:43111, xrpl:1440002,
+};
+
+const ADDRESS_RE = /^(0x[0-9a-fA-F]{40}|[1-9A-HJ-NP-Za-km-z]{32,44}|(bc1|[13])[a-zA-HJ-NP-Z0-9]{25,87}|T[1-9A-HJ-NP-Za-km-z]{33}|(EQ|UQ|kQ|0Q)[a-zA-Z0-9_-]{46}|G[A-Z2-7]{55})$/;
+const DOMAIN_RE  = /^[a-zA-Z0-9_-]+\.[a-zA-Z0-9]+$/;
+
+async function resolveDomainName(name) {
+  let axios;
+  try { axios = (await import('axios')).default; } catch { return null; }
+
+  // 1. SPACEID / BNB Name Service / ENS via Space.ID API (handles .bnb, .eth, .arb, etc.)
+  try {
+    const r = await axios.get('https://nameapi.space.id/getAddress',
+      { params: { domain: name }, timeout: 5000 });
+    if (r.data?.code === 0 && r.data?.address) return r.data.address;
+  } catch {}
+
+  // 2. ZNS (zns.bio) for chain-specific TLDs
+  const tld = name.split('.').pop()?.toLowerCase();
+  const label = name.split('.').slice(0, -1).join('.');
+  const chain = ZNS_TLD_CHAIN[tld];
+  if (chain) {
+    try {
+      const r = await axios.get('https://zns.bio/api/resolveDomain',
+        { params: { chain, domain: label }, timeout: 5000 });
+      if (r.data?.code === 200 && r.data?.address) return r.data.address;
+    } catch {}
+  }
+
+  // 3. Bonfida SNS for .sol
+  if (tld === 'sol') {
+    try {
+      const r = await axios.get(
+        `https://sns-sdk-proxy.bonfida.workers.dev/resolve/${label}`,
+        { timeout: 5000 });
+      if (r.data?.result) return r.data.result;
+    } catch {}
+  }
+
+  return null;
+}
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const POH_DEV_PATH = process.env.POH_DEV_PATH || path.resolve(__dirname, '../../../../../dev/src');
 
@@ -55,7 +105,7 @@ async function loadRealPohModules() {
     fs.mkdirSync(brainDir, { recursive: true });
 
     // Bootstrap miner's brain with dev weights if not yet present
-    const devDataDir = path.resolve(POH_DEV_PATH, '../../data');
+    const devDataDir = path.resolve(POH_DEV_PATH, '../data');
     for (const f of ['weights.json', 'pools.json', 'brain_state.md']) {
       const src = path.join(devDataDir, f);
       const dst = path.join(brainDir, f);
@@ -97,7 +147,9 @@ async function loadRealPohModules() {
 
     loaded = true;
   } catch (err) {
-    console.warn('[RealPOH] Could not load real POH modules. Falling back to simulation.', err.message);
+    console.error('[RealPOH] Could not load real POH modules. Falling back to simulation.');
+    console.error('[RealPOH] Load error:', err.message);
+    console.error('[RealPOH] POH_DEV_PATH:', POH_DEV_PATH);
     loaded = true;
   }
 }
@@ -162,7 +214,7 @@ export async function computeWithRealPoh(job, config) {
   // The checker reads from its own dev/data/methods.json ; we overwrite it with the synced set.
   if (methodsManager && activeMethods.length > 0) {
     try {
-      const devDataDir = path.resolve(POH_DEV_PATH, '../../data');
+      const devDataDir = path.resolve(POH_DEV_PATH, '../data');
       if (!fs.existsSync(devDataDir)) {
         fs.mkdirSync(devDataDir, { recursive: true });
       }
@@ -177,8 +229,21 @@ export async function computeWithRealPoh(job, config) {
     }
   }
 
+  // Resolve domain names (e.g. assetux.bnb, vitalik.eth, name.sol) to raw addresses
+  // before running the checker — checker only knows ZNS, not SPACEID/ENS/Bonfida.
+  let scanAddress = address;
+  if (DOMAIN_RE.test(address) && !ADDRESS_RE.test(address)) {
+    const resolved = await resolveDomainName(address).catch(() => null);
+    if (resolved) {
+      console.log(`[RealPOH] Domain resolved: ${address} → ${resolved}`);
+      scanAddress = resolved;
+    } else {
+      console.warn(`[RealPOH] Could not resolve domain "${address}" — scanning as-is`);
+    }
+  }
+
   try {
-    const fullResult = await checker.runFullCheck(address, {
+    const fullResult = await checker.runFullCheck(scanAddress, {
       chainFilter: job.payload?.chainFilter,
     });
 
@@ -201,12 +266,18 @@ export async function computeWithRealPoh(job, config) {
       computationTimeMs: Date.now() - start,
       realPohUsed: true,
       profile,
-      methodsHash,                    // ← Critical for network consensus
+      vibeData:      fullResult.vibeData      || null,
+      farcasterData: fullResult.farcasterData || null,
+      paragraphData: fullResult.paragraphData || null,
+      resolvedAddress: scanAddress !== address ? scanAddress : undefined,
+      methodsHash,
       methodsCount: activeMethods.length || resultsArray.length,
     };
   } catch (err) {
-    console.error('[RealPOH] Real computation failed, using fallback:', err.message);
-    return simulateVerdict(job, config, methodsManager);
+    console.error('[RealPOH] Real computation failed:', err.message);
+    const sim = simulateVerdict(job, config, methodsManager);
+    sim.reasoning = `[Fallback] Real POH error: ${err.message}`;
+    return sim;
   }
 }
 
