@@ -39,9 +39,9 @@ import { resolveRpcConfig } from './rpc/resolver.js';
 // Well-known production bootnodes. Used when no bootnodes are configured
 // (e.g. fresh GUI onboarding). Individual users can override via config.bootnodes.
 const DEFAULT_BOOTNODES = [
-  'https://miner.proofofhuman.ge:3456',
-  'https://proofofhuman.ge:3456',
-  'https://exchange.assetux.com:3456',
+  "https://poh.assetux.com",
+  "https://bootnode.proofofhuman.ge",
+  "https://proofofhuman.ge"
 ];
 
 export class PohMinerNode {
@@ -348,6 +348,11 @@ export class PohMinerNode {
       res.setHeader('Content-Type', 'application/json');
 
       const url = new URL(req.url, `http://${req.headers.host}`);
+
+      // Health probe used by SDK node-discovery (HEAD or GET /healthz)
+      if (url.pathname === '/healthz') {
+        return res.end(JSON.stringify({ status: 'ok', node: 'poh-miner' }));
+      }
 
       if (url.pathname === '/api/wallet/balance') {
         const address = url.searchParams.get('address');
@@ -1962,13 +1967,15 @@ export class PohMinerNode {
   getStatus() {
     const sig = this.methodsManager?.getStatus() || {};
     return {
-      wallet: this.config.wallet,
+      wallet: this.config.pohWallet || this.config.wallet,
+      pohWallet: this.config.pohWallet || this.config.wallet,
       methodsHash: sig.hash,
       methodsCount: sig.count,
       signalsSource: sig.source,
       signalsAgeMin: sig.ageMinutes,
       region: this.myLocation?.country,
       chainHeight: this.chain.length - 1,
+      peers: (this.peers || []).length,
       computeEnabled: this.config.computeEnabled,
       quality: this.qualityStats,
       reputation: this.reputation,

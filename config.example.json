@@ -12,7 +12,9 @@
   "region": "auto",
 
   "bootnodes": [
-    "http://your-bootnode-ip:8080"
+    "https://poh.assetux.com",
+    "https://bootnode.proofofhuman.ge",
+    "https://miner.proofofhuman.ge"
   ],
 
   "rpc": {

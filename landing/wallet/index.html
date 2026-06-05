@@ -16,6 +16,8 @@
     .glass { background: rgba(10,10,10,0.85); border: 1px solid #1f1f1f; backdrop-filter: blur(20px); }
     .neon { color: #22c55e; }
     html { font-size: 150%; }
+    @media (max-width: 639px)  { html { font-size: 100%; } }
+    @media (max-width: 767px)  { html { font-size: 110%; } }
     .text-xs, .text-\[10px\], .text-\[15px\] { font-size: 0.92rem !important; }
 
     /* Scroll fade-in */
@@ -25,6 +27,7 @@
     /* Phone glow — clip so SVG side-buttons (x=-4) don't bleed */
     .phone-glow { filter: drop-shadow(0 0 60px rgba(34,197,94,0.15)); overflow: hidden; }
     .phone-glow svg { display: block; max-width: 100%; height: auto; }
+    @media (max-width: 639px) { .phone-glow svg { width: min(260px, 72vw) !important; } }
   </style>
 </head>
 <body class="bg-black text-white overflow-x-hidden">
@@ -55,25 +58,25 @@
     <div class="absolute inset-0 bg-gradient-to-b from-[#22c55e]/4 via-transparent to-transparent pointer-events-none"></div>
     <div class="absolute top-1/3 right-0 translate-x-1/3 w-[500px] h-[500px] bg-[#22c55e]/3 blur-[120px] rounded-full pointer-events-none"></div>
 
-    <div class="max-w-7xl mx-auto px-8 w-full">
-      <div class="flex flex-col lg:flex-row items-center gap-16">
+    <div class="max-w-7xl mx-auto px-4 sm:px-8 w-full">
+      <div class="flex flex-col lg:flex-row items-center gap-8 lg:gap-16">
 
         <!-- Text -->
-        <div class="lg:w-1/2">
+        <div class="lg:w-1/2 text-center lg:text-left">
           <div class="uppercase tracking-[3px] text-xs text-[#22c55e] mb-6">COMPANION APP</div>
-          <h1 class="font-display text-[100px] md:text-[140px] leading-[0.88]">
+          <h1 class="font-display text-[56px] sm:text-[80px] md:text-[140px] leading-[0.88]">
             POH<br>Wallet.
           </h1>
-          <p class="mt-8 text-[26px] text-white/60 max-w-lg">
+          <p class="mt-6 text-[16px] sm:text-[20px] md:text-[26px] text-white/60 max-w-lg mx-auto lg:mx-0">
             Your mining rewards. Your POH balance. AI identity scans — right in your pocket.
           </p>
-          <div class="mt-10 flex flex-col sm:flex-row gap-4">
+          <div class="mt-8 flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
             <a href="#download"
-               class="inline-flex items-center justify-center px-10 py-4 bg-[#22c55e] text-black text-[26px] rounded-[4px] hover:bg-white transition">
+               class="inline-flex items-center justify-center px-8 py-3 bg-[#22c55e] text-black text-[18px] sm:text-[22px] md:text-[26px] rounded-[4px] hover:bg-white transition">
               Get the App
             </a>
             <a href="#balance"
-               class="inline-flex items-center justify-center px-10 py-4 border border-white/25 text-[26px] rounded-[4px] hover:bg-white/5 transition">
+               class="inline-flex items-center justify-center px-8 py-3 border border-white/25 text-[18px] sm:text-[22px] md:text-[26px] rounded-[4px] hover:bg-white/5 transition">
               See features
             </a>
           </div>
@@ -169,25 +172,25 @@
 
   <!-- ═══ STATS BAR ═══ -->
   <div class="border-y border-white/10 py-6 bg-[#050505]">
-    <div class="max-w-5xl mx-auto px-8 grid grid-cols-3 gap-8 text-center">
+    <div class="max-w-5xl mx-auto px-4 sm:px-8 grid grid-cols-3 gap-4 sm:gap-8 text-center">
       <div>
-        <div class="text-[44px] font-display tracking-tighter neon">v0.2.0</div>
+        <div class="text-[28px] sm:text-[36px] md:text-[44px] font-display tracking-tighter neon">v0.2.0</div>
         <div class="text-xs text-white/50 tracking-widest mt-1">CURRENT VERSION</div>
       </div>
       <div>
-        <div class="text-[44px] font-display tracking-tighter">Android</div>
+        <div class="text-[28px] sm:text-[36px] md:text-[44px] font-display tracking-tighter">Android</div>
         <div class="text-xs text-white/50 tracking-widest mt-1">AVAILABLE NOW</div>
       </div>
       <div>
-        <div class="text-[44px] font-display tracking-tighter text-white/40">iOS</div>
+        <div class="text-[28px] sm:text-[36px] md:text-[44px] font-display tracking-tighter text-white/40">iOS</div>
         <div class="text-xs text-white/50 tracking-widest mt-1">COMING SOON</div>
       </div>
     </div>
   </div>
 
   <!-- ═══ FEATURE 1: BALANCE ═══ -->
-  <div id="balance" class="max-w-7xl mx-auto px-8 py-32">
-    <div class="flex flex-col lg:flex-row items-center gap-20">
+  <div id="balance" class="max-w-7xl mx-auto px-4 sm:px-8 py-14 md:py-32">
+    <div class="flex flex-col lg:flex-row items-center gap-10 lg:gap-20">
 
       <!-- iPhone: Balance screen -->
       <div class="lg:w-1/2 flex justify-center reveal">
@@ -246,8 +249,8 @@
       <!-- Text -->
       <div class="lg:w-1/2 reveal">
         <div class="uppercase tracking-[3px] text-xs text-[#22c55e] mb-4">LIVE BALANCE</div>
-        <h2 class="font-display text-[80px] leading-[0.9] mb-6">Your rewards.<br>Always current.</h2>
-        <p class="text-[24px] text-white/60 mb-8">
+        <h2 class="font-display text-[44px] sm:text-[60px] md:text-[80px] leading-[0.9] mb-6">Your rewards.<br>Always current.</h2>
+        <p class="text-[16px] sm:text-[20px] md:text-[24px] text-white/60 mb-8">
           Balance updates directly from your connected miner node. See your earnings grow block by block — no refresh, no delays.
         </p>
         <div class="space-y-5">
@@ -280,8 +283,8 @@
 
   <!-- ═══ FEATURE 2: SCANNER ═══ -->
   <div id="scanner" class="border-t border-white/10 bg-[#030303]">
-    <div class="max-w-7xl mx-auto px-8 py-32">
-      <div class="flex flex-col lg:flex-row-reverse items-center gap-20">
+    <div class="max-w-7xl mx-auto px-4 sm:px-8 py-14 md:py-32">
+      <div class="flex flex-col lg:flex-row-reverse items-center gap-10 lg:gap-20">
 
         <!-- iPhone: Scanner screen -->
         <div class="lg:w-1/2 flex justify-center reveal">
@@ -350,8 +353,8 @@
         <!-- Text -->
         <div class="lg:w-1/2 reveal">
           <div class="uppercase tracking-[3px] text-xs text-[#22c55e] mb-4">AI SCANNER</div>
-          <h2 class="font-display text-[80px] leading-[0.9] mb-6">Scan any address.<br>In seconds.</h2>
-          <p class="text-[24px] text-white/60 mb-8">
+          <h2 class="font-display text-[44px] sm:text-[60px] md:text-[80px] leading-[0.9] mb-6">Scan any address.<br>In seconds.</h2>
+          <p class="text-[16px] sm:text-[20px] md:text-[24px] text-white/60 mb-8">
             Paste any wallet address — EVM, Solana, Bitcoin, TON — and get an AI verdict backed by 100+ on-chain signals. Runs on the miner network, not a central server.
           </p>
           <div class="space-y-5">
@@ -384,8 +387,8 @@
   </div>
 
   <!-- ═══ FEATURE 3: SEND ═══ -->
-  <div id="send" class="max-w-7xl mx-auto px-8 py-32">
-    <div class="flex flex-col lg:flex-row items-center gap-20">
+  <div id="send" class="max-w-7xl mx-auto px-4 sm:px-8 py-14 md:py-32">
+    <div class="flex flex-col lg:flex-row items-center gap-10 lg:gap-20">
 
       <!-- iPhone: Send screen -->
       <div class="lg:w-1/2 flex justify-center reveal">
@@ -457,8 +460,8 @@
       <!-- Text -->
       <div class="lg:w-1/2 reveal">
         <div class="uppercase tracking-[3px] text-xs text-[#22c55e] mb-4">SEND &amp; RECEIVE</div>
-        <h2 class="font-display text-[80px] leading-[0.9] mb-6">Send POH.<br>In seconds.</h2>
-        <p class="text-[24px] text-white/60 mb-8">
+        <h2 class="font-display text-[44px] sm:text-[60px] md:text-[80px] leading-[0.9] mb-6">Send POH.<br>In seconds.</h2>
+        <p class="text-[16px] sm:text-[20px] md:text-[24px] text-white/60 mb-8">
           Full peer-to-peer POH transfers between any addresses on the network. No exchange, no bridge, no intermediary.
         </p>
         <div class="space-y-5">
@@ -491,27 +494,27 @@
 
   <!-- ═══ NODE CONNECTIVITY ═══ -->
   <div class="border-t border-white/10 bg-[#030303] py-24">
-    <div class="max-w-5xl mx-auto px-8 text-center reveal">
+    <div class="max-w-5xl mx-auto px-4 sm:px-8 text-center reveal">
       <div class="uppercase tracking-[3px] text-xs text-[#22c55e] mb-4">DECENTRALIZED</div>
-      <h2 class="font-display text-[72px] leading-none mb-6">Connects to the network.<br>Not a company.</h2>
-      <p class="text-[24px] text-white/55 max-w-2xl mx-auto mb-14">
+      <h2 class="font-display text-[40px] sm:text-[56px] md:text-[72px] leading-none mb-6">Connects to the network.<br>Not a company.</h2>
+      <p class="text-[16px] sm:text-[20px] md:text-[24px] text-white/55 max-w-2xl mx-auto mb-14">
         The wallet pings all known miner nodes, picks the fastest responding one, and falls back automatically if it goes offline.
       </p>
 
       <div class="grid md:grid-cols-3 gap-6 text-left max-w-4xl mx-auto">
         <div class="glass p-7 rounded-[4px]">
           <div class="text-[#22c55e] text-sm tracking-widest mb-3">01</div>
-          <h3 class="text-[34px] mb-3">Auto-discovery</h3>
+          <h3 class="text-[24px] md:text-[34px] mb-3">Auto-discovery</h3>
           <p class="text-white/55 text-[18px]">Three default nodes built in. Add your own miner's address and connect directly to your machine.</p>
         </div>
         <div class="glass p-7 rounded-[4px]">
           <div class="text-[#22c55e] text-sm tracking-widest mb-3">02</div>
-          <h3 class="text-[34px] mb-3">Latency-aware</h3>
+          <h3 class="text-[24px] md:text-[34px] mb-3">Latency-aware</h3>
           <p class="text-white/55 text-[18px]">Pings all nodes in parallel and selects the fastest. Automatic failover when a node drops.</p>
         </div>
         <div class="glass p-7 rounded-[4px]">
           <div class="text-[#22c55e] text-sm tracking-widest mb-3">03</div>
-          <h3 class="text-[34px] mb-3">Your node first</h3>
+          <h3 class="text-[24px] md:text-[34px] mb-3">Your node first</h3>
           <p class="text-white/55 text-[18px]">Running a miner? Point the wallet at your own node for full custody of your balance and scans.</p>
         </div>
       </div>
@@ -519,18 +522,18 @@
   </div>
 
   <!-- ═══ DOWNLOAD ═══ -->
-  <div id="download" class="max-w-5xl mx-auto px-8 py-32">
+  <div id="download" class="max-w-5xl mx-auto px-4 sm:px-8 py-14 md:py-32">
     <div class="text-center reveal">
       <div class="uppercase tracking-[3px] text-xs text-[#22c55e] mb-4">GET THE APP</div>
-      <h2 class="font-display text-[96px] leading-[0.88] mb-6">Download.<br>Run. Earn.</h2>
-      <p class="text-[24px] text-white/55 max-w-xl mx-auto mb-12">
+      <h2 class="font-display text-[48px] sm:text-[72px] md:text-[96px] leading-[0.88] mb-6">Download.<br>Run. Earn.</h2>
+      <p class="text-[16px] sm:text-[20px] md:text-[24px] text-white/55 max-w-xl mx-auto mb-12">
         Sideload the APK directly. No Play Store. No tracking. Your keys, your rewards.
       </p>
 
       <div class="flex flex-col items-center gap-6">
         <!-- APK download -->
         <a href="../binaries/poh-miner-wallet.apk"
-           class="inline-flex items-center gap-4 px-12 py-5 bg-[#22c55e] text-black text-[28px] font-display rounded-[4px] hover:bg-white transition">
+           class="inline-flex items-center gap-3 px-8 py-4 bg-[#22c55e] text-black text-[18px] sm:text-[22px] md:text-[28px] font-display rounded-[4px] hover:bg-white transition">
           <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor"><path d="M17.523 15.341l-1.374-1.375A6.012 6.012 0 0016 12c0-1.15.323-2.225.875-3.145L15.5 7.5C14.424 8.819 13.8 10.432 13.8 12c0 1.567.623 3.181 1.699 4.5l1.374-1.375.65.216zM4.477 8.659L3.103 7.284A7.985 7.985 0 002 12c0 1.683.519 3.244 1.406 4.53l1.368-1.368A5.96 5.96 0 013.8 12c0-1.236.37-2.386.998-3.341h-.321zm10.016-5.016L13.12 4.916A7.973 7.973 0 0012 4.8c-1.16 0-2.257.25-3.249.695L10.126 6.87A5.98 5.98 0 0112 6.6c.713 0 1.396.127 2.03.36l.463-.317zM12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm0 18c-4.411 0-8-3.589-8-8s3.589-8 8-8 8 3.589 8 8-3.589 8-8 8z"/></svg>
           Download Android APK
         </a>
@@ -547,7 +550,7 @@
 
   <!-- Footer -->
   <footer class="border-t border-white/10 py-8 text-xs text-white/50">
-    <div class="max-w-7xl mx-auto px-8 flex justify-between items-center">
+    <div class="max-w-7xl mx-auto px-4 sm:px-8 flex flex-col sm:flex-row gap-3 sm:justify-between sm:items-center">
       <div class="flex items-center gap-4">
         <img src="../poh-miner.svg" alt="PoH" width="24" height="24" style="opacity:0.5"/>
         <span>PoH Miner Wallet — companion app for the decentralized identity network</span>

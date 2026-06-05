@@ -50,14 +50,39 @@
     }
 
     /* === GLOBAL +50% FONT SIZE SCALING (applied across entire landing) === */
-    html {
-      font-size: 150%; /* +50% base size for all rem-based text */
-    }
+    html { font-size: 150%; }
+    @media (max-width: 639px)  { html { font-size: 100%; } }
+    @media (max-width: 767px)  { html { font-size: 110%; } }
 
     /* Prevent tiny legal / meta text from exploding */
-    .text-xs, .text-\[10px\], .text-\[15px\] {
-      font-size: 0.92rem !important;
+    .text-xs, .text-\[10px\], .text-\[15px\] { font-size: 0.92rem !important; }
+
+    /* ── Mobile nav ─────────────────────────────────── */
+    .nav-links { display: none; }
+    @media (min-width: 768px) { .nav-links { display: flex; } }
+
+    /* Mobile hamburger */
+    .hamburger { display: flex; flex-direction: column; gap: 5px; cursor: pointer; padding: 4px; }
+    .hamburger span { display: block; width: 22px; height: 2px; background: #fff; border-radius: 2px; transition: 0.25s; }
+    .hamburger.open span:nth-child(1) { transform: translateY(7px) rotate(45deg); }
+    .hamburger.open span:nth-child(2) { opacity: 0; }
+    .hamburger.open span:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
+    @media (min-width: 768px) { .hamburger { display: none; } }
+
+    /* Mobile menu drawer */
+    .mobile-drawer {
+      display: none; position: fixed; top: 80px; left: 0; right: 0; z-index: 49;
+      background: #0a0a0a; border-bottom: 1px solid #1f1f1f;
+      flex-direction: column; padding: 16px 24px 24px;
+      gap: 0;
     }
+    .mobile-drawer.open { display: flex; }
+    .mobile-drawer a {
+      padding: 14px 0; font-size: 22px; color: #fff;
+      border-bottom: 1px solid #1a1a1a; text-decoration: none;
+    }
+    .mobile-drawer a:last-child { border-bottom: none; }
+    @media (min-width: 768px) { .mobile-drawer { display: none !important; } }
   </style>
 </head>
 <body class="bg-black text-white overflow-x-hidden">
@@ -70,15 +95,27 @@
           <span class="font-display text-[60px]">Miner</span>
         </div>
       </div>
-      <div class="flex items-center gap-x-9 text-[22px]">
+      <div class="nav-links flex items-center gap-x-9 text-[22px]">
         <a href="#how" class="hover:text-[#22c55e] transition">How it works</a>
         <a href="#network" class="hover:text-[#22c55e] transition">The Network</a>
         <a href="#start" class="hover:text-[#22c55e] transition">Start Earning</a>
         <a href="wallet/" class="hover:text-[#22c55e] transition">Wallet</a>
         <a href="https://proofofhuman.ge" target="_blank" class="px-5 py-2.5 rounded-[4px] border border-white/20 hover:bg-white/5 transition text-[22px]">proofofhuman.ge</a>
       </div>
+      <button class="hamburger" id="hamburger" aria-label="Open menu">
+        <span></span><span></span><span></span>
+      </button>
     </div>
   </nav>
+
+  <!-- Mobile nav drawer -->
+  <div class="mobile-drawer" id="mobile-drawer">
+    <a href="#how">How it works</a>
+    <a href="#network">The Network</a>
+    <a href="#start">Start Earning</a>
+    <a href="wallet/">Wallet</a>
+    <a href="https://proofofhuman.ge" target="_blank">proofofhuman.ge</a>
+  </div>
 
   <!-- Hero -->
   <div class="relative min-h-[100dvh] flex items-center justify-center pt-20">
@@ -87,18 +124,18 @@
     
     <div class="relative z-10 max-w-5xl px-6 text-center">
 
-      <h1 class="font-display text-[78px] md:text-[138px] leading-[0.92]">
+      <h1 class="font-display text-[44px] sm:text-[68px] md:text-[138px] leading-[0.92]">
         Serve your compute.<br>
         <span class="neon">Power the identity brain.</span>
       </h1>
 
       <div class="mt-10 flex flex-col sm:flex-row gap-4 justify-center">
-        <a href="#start" 
-           class="inline-flex items-center justify-center px-10 py-4 bg-white text-black text-[30px] rounded-[4px] hover:bg-[#22c55e] transition">
+        <a href="#start"
+           class="inline-flex items-center justify-center px-8 py-3 bg-white text-black text-[18px] sm:text-[24px] md:text-[30px] rounded-[4px] hover:bg-[#22c55e] transition">
           Start running a node
         </a>
-        <a href="#network" 
-           class="inline-flex items-center justify-center px-10 py-4 border border-white/30 hover:bg-white/5 text-[30px] rounded-[4px] transition">
+        <a href="#network"
+           class="inline-flex items-center justify-center px-8 py-3 border border-white/30 hover:bg-white/5 text-[18px] sm:text-[24px] md:text-[30px] rounded-[4px] transition">
           See the live mesh
         </a>
       </div>
@@ -113,31 +150,31 @@
   <div class="border-y border-white/10 py-6">
     <div class="max-w-6xl mx-auto px-8 grid grid-cols-2 md:grid-cols-4 gap-8 text-center">
       <div>
-        <div class="text-[60px] font-display tracking-tighter" id="node-count">—</div>
+        <div class="text-[36px] md:text-[60px] font-display tracking-tighter" id="node-count">—</div>
         <div class="text-xs text-white/50 tracking-widest mt-1">ACTIVE COMPUTE NODES</div>
       </div>
       <div>
-        <div class="text-[60px] font-display tracking-tighter" id="methods-count">—</div>
+        <div class="text-[36px] md:text-[60px] font-display tracking-tighter" id="methods-count">—</div>
         <div class="text-xs text-white/50 tracking-widest mt-1">VERIFIED SIGNALS</div>
       </div>
       <div>
-        <div class="text-[60px] font-display tracking-tighter" id="jobs-count">—</div>
+        <div class="text-[36px] md:text-[60px] font-display tracking-tighter" id="jobs-count">—</div>
         <div class="text-xs text-white/50 tracking-widest mt-1">VERDICTS DELIVERED</div>
       </div>
       <div>
-        <div class="text-[60px] font-display tracking-tighter text-[#22c55e]" id="poh-paid">—</div>
+        <div class="text-[36px] md:text-[60px] font-display tracking-tighter text-[#22c55e]" id="poh-paid">—</div>
         <div class="text-xs text-white/50 tracking-widest mt-1">POH DISTRIBUTED TO NODES</div>
       </div>
     </div>
   </div>
 
   <!-- The Network -->
-  <div id="network" class="max-w-7xl mx-auto px-8 p-40">
+  <div id="network" class="max-w-7xl mx-auto px-4 sm:px-8 py-16 md:py-40">
     <div class="flex flex-col md:flex-row gap-12 items-center">
-      <div style="padding-bottom:10rem" class="md:w-5/12">
+      <div class="md:w-5/12 md:pb-40">
         <div class="uppercase tracking-[3px] text-xs text-[#22c55e] mb-3">THE INFRASTRUCTURE</div>
-        <h2 class="font-display text-[90px] leading-none ">A living mesh of<br>compute providers.</h2>
-        <p class="mt-6 text-[30px] text-white/70">Miners and compute operators around the world form a decentralized inference layer for the most advanced open digital identity system.</p>
+        <h2 class="font-display text-[52px] sm:text-[72px] md:text-[90px] leading-none">A living mesh of<br>compute providers.</h2>
+        <p class="mt-6 text-[18px] sm:text-[22px] md:text-[30px] text-white/70">Miners and compute operators around the world form a decentralized inference layer for the most advanced open digital identity system.</p>
       </div>
 
       <!-- Real Mesh Visualization -->
@@ -151,16 +188,36 @@
 
   <!-- ═══ APP SHOWCASE ═══ -->
   <div class="border-t border-white/10 overflow-hidden" style="background:#030303;">
-    <div class="max-w-7xl mx-auto px-8 py-32">
+    <div class="max-w-7xl mx-auto px-4 sm:px-8 py-16 md:py-32">
 
       <div class="text-center mb-4">
         <div class="uppercase tracking-[3px] text-xs text-[#22c55e] mb-4">THE DESKTOP APP</div>
-        <h2 class="font-display text-[100px] md:text-[130px] leading-[0.88]">PoH Miner.</h2>
-        <p class="mt-6 text-[26px] text-white/55 max-w-2xl mx-auto">One native app. Full node, live AI brain, and LLM chat — all running on your machine.</p>
+        <h2 class="font-display text-[56px] sm:text-[80px] md:text-[130px] leading-[0.88]">PoH Miner.</h2>
+        <p class="mt-6 text-[16px] sm:text-[20px] md:text-[26px] text-white/55 max-w-2xl mx-auto">One native app. Full node, live AI brain, and LLM chat — all running on your machine.</p>
       </div>
 
-      <!-- macOS window mockup -->
-      <div class="mt-16 relative max-w-6xl mx-auto">
+      <!-- Mobile app summary card (hidden on sm+) -->
+      <div class="mt-8 sm:hidden rounded-2xl border border-white/10 bg-[#111] p-6 text-left space-y-4">
+        <div class="flex items-center gap-3">
+          <span class="w-3 h-3 rounded-full bg-[#ff5f57]"></span>
+          <span class="w-3 h-3 rounded-full bg-[#febc2e]"></span>
+          <span class="w-3 h-3 rounded-full bg-[#28c840]"></span>
+          <span class="text-white/30 text-xs ml-2" style="font-family:system-ui">PoH Miner — Mining Active</span>
+        </div>
+        <div class="font-mono text-xs space-y-2 text-white/70">
+          <div><span class="text-white/30">14:22:01</span> <span class="text-[#22c55e]">[PoH-Miner] Connected · 14 peers</span></div>
+          <div><span class="text-white/30">14:22:05</span> <span class="text-[#22c55e]">[Brain] ✓ Loaded · qwen2.5:1.5b</span></div>
+          <div><span class="text-white/30">14:22:31</span> <span class="text-[#22c55e]">[Brain] HUMAN (conf: 0.91)</span></div>
+          <div><span class="text-white/30">14:22:32</span> <span class="text-[#22c55e]">[Reward] ✓ +0.6 POH earned</span></div>
+        </div>
+        <div class="flex items-center gap-2 pt-2 border-t border-white/10">
+          <span class="w-2 h-2 rounded-full bg-[#22c55e] animate-pulse"></span>
+          <span class="text-[#22c55e] text-xs font-mono">MINING ACTIVE · Balance: 12.48 POH</span>
+        </div>
+      </div>
+
+      <!-- macOS window mockup — hidden on small screens, unreadable at narrow widths -->
+      <div class="mt-8 md:mt-16 relative max-w-6xl mx-auto hidden sm:block">
         <div class="absolute -inset-10 bg-[#22c55e]/4 blur-3xl rounded-full pointer-events-none"></div>
         <div class="relative rounded-2xl overflow-hidden border border-white/8 shadow-[0_40px_120px_rgba(0,0,0,0.9)]">
           <!-- Title bar -->
@@ -419,10 +476,10 @@
   <!-- ═══ END APP SHOWCASE ═══ -->
 
     <!-- CTA: Ready to contribute real compute? -->
-  <div id="start" class="max-w-5xl mx-auto px-6 p-40 border-t border-white/10">
+  <div id="start" class="max-w-5xl mx-auto px-4 sm:px-6 py-14 md:py-40 border-t border-white/10">
     <div class="text-center mb-10">
-      <h2 class="font-display text-[78px] leading-none ">Ready to contribute real compute?</h2>
-      <p class="mt-4 text-[30px] text-white/70 max-w-2xl mx-auto">Download the pre-built binary for your system. Double-click to install — no terminal, no coding required for non-technical users.</p>
+      <h2 class="font-display text-[44px] sm:text-[60px] md:text-[78px] leading-none">Ready to contribute real compute?</h2>
+      <p class="mt-4 text-[16px] sm:text-[22px] md:text-[30px] text-white/70 max-w-2xl mx-auto">Download the pre-built binary for your system. Double-click to install — no terminal, no coding required for non-technical users.</p>
     </div>
 
     <div class="max-w-6xl mx-auto">
@@ -587,11 +644,10 @@
             </div>
           </div>
           <div class="text-sm text-white/70 mb-4 flex-1">Standard .exe installer with shortcuts, Start Menu entry, and clean uninstaller. Built with NSIS.</div>
-          <a href="https://ipfs.io/ipfs/QmReplaceWithActualCID/binaries/poh-miner-windows-x64.exe" download="poh-miner-windows-x64.exe"
+          <a href="binaries/PoH Miner 0.1.0.exe" download="poh-miner-windows-x64.exe"
              class="block w-full text-center bg-[#22c55e] hover:bg-white hover:text-black transition text-black py-3 rounded-[4px] text-sm font-medium">
             Download Windows Installer
           </a>
-          <div class="text-[10px] text-center text-white/40 mt-1">~40 MB • double-click to install</div>
         </div>
       </div>
 
@@ -618,7 +674,7 @@
   </div>
 
     <!-- Real GeoIP Demo -->
-    <div class="mt-16 max-w-2xl mx-auto glass p-8 rounded-[4px]">
+    <div class="mt-8 md:mt-16 max-w-2xl mx-4 sm:mx-auto glass p-5 md:p-8 rounded-[4px]">
       <div class="text-[#22c55e] text-sm tracking-widest mb-2">REAL GEO-IP DETECTION</div>
       <h3 class="font-display text-[45px] mb-4">See your real advantage</h3>
       
@@ -635,23 +691,23 @@
 
   <!-- How it works -->
   <div id="how" class="border-t border-white/10 bg-[#050505]">
-    <div class="max-w-6xl mx-auto px-8 p-40">
-      <h2 class="font-display text-[78px] leading-none  text-center mb-16">How the network actually works</h2>
-      
+    <div class="max-w-6xl mx-auto px-4 sm:px-8 py-14 md:py-40">
+      <h2 class="font-display text-[44px] sm:text-[60px] md:text-[78px] leading-none text-center mb-10 md:mb-16">How the network actually works</h2>
+
       <div class="grid md:grid-cols-3 gap-6">
-        <div class="glass p-8 rounded-[4px]">
+        <div class="glass p-6 md:p-8 rounded-[4px]">
           <div class="text-[#22c55e] mb-4 text-sm tracking-widest">01</div>
-          <h3 class="text-[45px] tracking-tight mb-4">You run a node</h3>
+          <h3 class="text-[32px] md:text-[45px] tracking-tight mb-4">You run a node</h3>
           <p class="text-white/70">Install once on any machine. Your node joins the global mesh and advertises its location and capabilities.</p>
         </div>
-        <div class="glass p-8 rounded-[4px]">
+        <div class="glass p-6 md:p-8 rounded-[4px]">
           <div class="text-[#22c55e] mb-4 text-sm tracking-widest">02</div>
-          <h3 class="text-[45px] tracking-tight mb-4">Real jobs arrive</h3>
+          <h3 class="text-[32px] md:text-[45px] tracking-tight mb-4">Real jobs arrive</h3>
           <p class="text-white/70">When someone requests a digital identity scan on proofofhuman.ge, the job enters the shared mempool with geographic metadata.</p>
         </div>
-        <div class="glass p-8 rounded-[4px]">
+        <div class="glass p-6 md:p-8 rounded-[4px]">
           <div class="text-[#22c55e] mb-4 text-sm tracking-widest">03</div>
-          <h3 class="text-[45px] tracking-tight mb-4">You win or lose the race</h3>
+          <h3 class="text-[32px] md:text-[45px] tracking-tight mb-4">You win or lose the race</h3>
           <p class="text-white/70">Low-latency nodes near the requester have a natural advantage. First valid result using the real POH brain wins the reward in POH.</p>
         </div>
       </div>
@@ -659,9 +715,9 @@
   </div>
 
   <!-- Non-Tech About Section -->
-  <div class="max-w-5xl mx-auto px-6 p-40">
+  <div class="max-w-5xl mx-auto px-4 sm:px-6 py-14 md:py-40">
     <div class="max-w-3xl mx-auto text-center">
-      <h2 class="font-display text-[64px] leading-none  mb-6">What is PoH Miner, really?</h2>
+      <h2 class="font-display text-[40px] sm:text-[52px] md:text-[64px] leading-none mb-6">What is PoH Miner, really?</h2>
       <div class="text-lg text-white/80 space-y-4">
         <p>
           The internet is being flooded with AI. Proving that a real human is behind an action is becoming one of the most important problems of our time.
@@ -681,10 +737,10 @@
   </div>
 
   <!-- Blockchain & Mining Pitch -->
-  <div class="max-w-5xl mx-auto px-6 p-40 border-t border-white/10">
+  <div class="max-w-5xl mx-auto px-4 sm:px-6 py-14 md:py-40 border-t border-white/10">
     <div class="text-center mb-10">
-      <h2 class="font-display text-[72px] leading-none">A real blockchain.<br>Real work. Real rewards.</h2>
-      <p class="mt-4 text-[30px] text-white/70 max-w-2xl mx-auto">
+      <h2 class="font-display text-[40px] sm:text-[56px] md:text-[72px] leading-none">A real blockchain.<br>Real work. Real rewards.</h2>
+      <p class="mt-4 text-[16px] sm:text-[22px] md:text-[30px] text-white/70 max-w-2xl mx-auto">
         Every block contains verified scan results produced by actual inference. 
         Miners earn fixed POH rewards per block + fees from the jobs they win.
       </p>
@@ -692,17 +748,17 @@
 
     <div class="grid md:grid-cols-3 gap-6 max-w-4xl mx-auto text-center">
       <div class="glass p-6 rounded-[4px]">
-        <div class="text-[45px] text-[#22c55e] mb-2">1 POH</div>
+        <div class="text-[30px] sm:text-[40px] md:text-[45px] text-[#22c55e] mb-2">1 POH</div>
         <div class="font-semibold">per block</div>
         <div class="text-sm text-white/60 mt-1">Fixed subsidy for producing valid blocks with real POH work</div>
       </div>
       <div class="glass p-6 rounded-[4px]">
-        <div class="text-[45px] text-[#22c55e] mb-2">FCFS</div>
+        <div class="text-[28px] sm:text-[38px] md:text-[45px] text-[#22c55e] mb-2">FCFS</div>
         <div class="font-semibold">First-come-first-serve</div>
         <div class="text-sm text-white/60 mt-1">Lowest latency + fastest correct inference wins the fee</div>
       </div>
       <div class="glass p-6 rounded-[4px]">
-        <div class="text-[45px] text-[#22c55e] mb-2">Proof + Slashing</div>
+        <div class="text-[22px] sm:text-[32px] md:text-[38px] text-[#22c55e] mb-2">Proof + Slashing</div>
         <div class="font-semibold">Quality protected</div>
         <div class="text-sm text-white/60 mt-1">Miners must evaluate most live signals or get rejected & slashed</div>
       </div>
@@ -713,8 +769,8 @@
   <div id="wallet" class="max-w-6xl mx-auto px-6 py-16 border-t border-white/10">
     <div class="text-center mb-10">
       <div class="inline-block px-4 py-1 rounded-full border border-[#22c55e]/40 text-[#22c55e] text-sm tracking-[2px] mb-4">COMPANION APP</div>
-      <h2 class="font-display text-[64px] leading-none tracking-[-2px]">POH Miner Wallet</h2>
-      <p class="mt-4 text-[28px] text-white/70 max-w-2xl mx-auto">
+      <h2 class="font-display text-[40px] sm:text-[52px] md:text-[64px] leading-none tracking-[-2px]">POH Miner Wallet</h2>
+      <p class="mt-4 text-[16px] sm:text-[22px] md:text-[28px] text-white/70 max-w-2xl mx-auto">
         Send, receive, and track your mining rewards in real time — directly from your phone.
       </p>
     </div>
@@ -825,7 +881,7 @@
   </div>
 
   <footer class="border-t border-white/10 py-8 text-xs text-white/50">
-    <div class="max-w-7xl mx-auto px-8 flex justify-between">
+    <div class="max-w-7xl mx-auto px-4 sm:px-8 flex flex-col sm:flex-row gap-2 sm:justify-between">
       <div>PoH Miner Network — Infrastructure for decentralized identity</div>
       <div><a href="https://proofofhuman.ge" class="hover:text-white">proofofhuman.ge</a></div>
     </div>
@@ -964,10 +1020,8 @@
         if (chainRes.status === 'fulfilled' && chainRes.value.ok) {
           const tip = await chainRes.value.json();
           const height = tip.height ?? tip.block?.height ?? 0;
-          if (height > 0) {
-            document.getElementById('jobs-count').textContent = fmtNum(height);
-            document.getElementById('poh-paid').textContent   = fmtNum(height); // 1 POH per block
-          }
+          document.getElementById('jobs-count').textContent = fmtNum(height);
+          document.getElementById('poh-paid').textContent   = fmtNum(height);
         }
       } catch { /* leave as — */ }
     }
@@ -1040,6 +1094,22 @@
       initLiveMesh();
       loadRealStats();
     };
+
+    // Mobile hamburger nav
+    const hamburger = document.getElementById('hamburger');
+    const drawer = document.getElementById('mobile-drawer');
+    if (hamburger && drawer) {
+      hamburger.addEventListener('click', () => {
+        hamburger.classList.toggle('open');
+        drawer.classList.toggle('open');
+      });
+      drawer.querySelectorAll('a').forEach(a => {
+        a.addEventListener('click', () => {
+          hamburger.classList.remove('open');
+          drawer.classList.remove('open');
+        });
+      });
+    }
   </script>
 </body>
 </html>

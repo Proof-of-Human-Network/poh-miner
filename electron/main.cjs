@@ -59,9 +59,25 @@ function createWindow() {
   mainWindow.webContents.once('did-finish-load', async () => {
     try {
       const config = loadConfig();
-      const isOnboarded = !!(config.onboarded && (config.pohWallet || config.wallet));
 
-      sendLog(`[Startup] onboarded=${!!config.onboarded}, hasWallet=${!!(config.pohWallet || config.wallet)} → isOnboarded=${isOnboarded}`);
+      // Check wallet files on disk — existing wallets mean the user has already set up the miner.
+      // Require onboarding ONLY for brand-new installs with no wallets at all.
+      const { WalletManager } = await import(pathToFileURL(path.join(__dirname, '../src/wallet/wallet.js')).href);
+      const _wm = new WalletManager();
+      const existingWallets = _wm.listWallets();
+      const hasPohWallet = !!(config.pohWallet || config.wallet || existingWallets.length > 0);
+
+      // Auto-persist the wallet into config so startMiner() can read it
+      if (!config.pohWallet && !config.wallet && existingWallets.length > 0) {
+        const poh = existingWallets.find(w => w.startsWith('poh')) || existingWallets[0];
+        saveConfig({ pohWallet: poh, wallet: poh });
+        config.pohWallet = poh;
+        config.wallet    = poh;
+      }
+
+      const isOnboarded = !!(config.onboarded && hasPohWallet) || hasPohWallet;
+
+      sendLog(`[Startup] onboarded=${!!config.onboarded}, hasPohWallet=${hasPohWallet} → isOnboarded=${isOnboarded}`);
 
       if (isOnboarded) {
         // Silently ensure Ollama is running before starting the miner
@@ -204,6 +220,10 @@ function sendStatusUpdate() {
       reputation: minerNode.reputation || 1.0,
       qualityStats: minerNode.qualityStats || {},
       walletApiPort: minerNode.config?.walletApiPort || 3456,
+      peers: (minerNode.peers || []).length,
+      model: minerNode.config?.model || null,
+      inferenceMode: minerNode.config?.inferenceMode || 'AUTO',
+      region: minerNode.myLocation?.country || minerNode.config?.region || null,
     };
 
     mainWindow.webContents.send('status', status);

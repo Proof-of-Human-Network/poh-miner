@@ -47,6 +47,10 @@ function updateStatus(status) {
     const short = addr.length > 16 ? addr.slice(0, 8) + '…' + addr.slice(-6) : addr;
     set('poh-wallet-address', short);
     window._localWallet = addr;
+  } else {
+    // Clear "Loading..." once we've received at least one status update
+    const el = document.getElementById('poh-wallet-address');
+    if (el && el.textContent === 'Loading...') el.textContent = '—';
   }
   if (pohStr) set('poh-wallet-balance', pohStr);
   // Home panel
@@ -1729,8 +1733,8 @@ async function loadBrainState() {
       // Active signals = live method count from /methods, not weights.json count
       set('brain-corrections', s.feedbackCount ?? '—');
       set('brain-model',       s.model || 'qwen2.5:1.5b');
-      if (s.stateSummary) {
-        const summary = s.stateSummary.replace(/^#.*\n/m, '').trim().slice(0, 200);
+      {
+        const summary = (s.stateSummary || '').replace(/^#.*\n/m, '').trim().slice(0, 200);
         set('brain-state-summary', summary || '(no state yet)');
       }
       // Consolidation countdown (brain consolidates every 60 min)
