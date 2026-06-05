@@ -38,11 +38,20 @@ const server = http.createServer((req, res) => {
   const filePath = path.join(ROOT, urlPath);
 
   fs.stat(filePath, (err, stats) => {
-    if (err || !stats.isFile()) {
-      res.writeHead(404);
-      res.end('Not found');
+    if (err) { res.writeHead(404); res.end('Not found'); return; }
+
+    // Directory → serve index.html inside it
+    if (stats.isDirectory()) {
+      const indexPath = path.join(filePath, 'index.html');
+      fs.stat(indexPath, (err2, stats2) => {
+        if (err2 || !stats2.isFile()) { res.writeHead(404); res.end('Not found'); return; }
+        res.writeHead(200, { 'Content-Type': 'text/html' });
+        fs.createReadStream(indexPath).pipe(res);
+      });
       return;
     }
+
+    if (!stats.isFile()) { res.writeHead(404); res.end('Not found'); return; }
 
     const ext = path.extname(filePath).toLowerCase();
     const contentType = MIME[ext] || 'application/octet-stream';

@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PoH Wallet • Your Mining Rewards on Mobile</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Iceland&display=swap" rel="stylesheet">
+  <link rel="icon" type="image/svg+xml" href="../poh-miner.svg">
+  <link rel="icon" type="image/png" sizes="32x32" href="../favicon-32.png">
+  <link rel="shortcut icon" href="../favicon.ico">
+  <style>
+    html, body { overflow-x: hidden; max-width: 100vw; }
+    body { font-family: 'Iceland', sans-serif; background: #000; color: #fff; line-height: 1.45; }
+    h1,h2,h3,.font-display { font-family: 'Iceland', sans-serif; font-weight: 400; }
+    .glass { background: rgba(10,10,10,0.85); border: 1px solid #1f1f1f; backdrop-filter: blur(20px); }
+    .neon { color: #22c55e; }
+    html { font-size: 150%; }
+    .text-xs, .text-\[10px\], .text-\[15px\] { font-size: 0.92rem !important; }
+
+    /* Scroll fade-in */
+    .reveal { opacity: 0; transform: translateY(40px); transition: opacity 0.8s ease, transform 0.8s ease; }
+    .reveal.visible { opacity: 1; transform: none; }
+
+    /* Phone glow — clip so SVG side-buttons (x=-4) don't bleed */
+    .phone-glow { filter: drop-shadow(0 0 60px rgba(34,197,94,0.15)); overflow: hidden; }
+    .phone-glow svg { display: block; max-width: 100%; height: auto; }
+  </style>
+</head>
+<body class="bg-black text-white overflow-x-hidden">
+
+  <!-- Nav -->
+  <nav class="border-b border-white/10 bg-black/80 backdrop-blur-xl fixed w-full z-50">
+    <div class="max-w-7xl mx-auto px-8 h-20 flex items-center justify-between">
+      <div class="flex items-center gap-x-6">
+        <a href="../" class="flex items-center gap-x-3 hover:opacity-70 transition">
+          <img src="../poh-miner.svg" alt="PoH" width="40" height="40"/>
+          <span class="font-display text-[32px] text-white/50">Miner</span>
+        </a>
+        <span class="text-white/20 text-xl">/</span>
+        <span class="font-display text-[32px]">Wallet</span>
+      </div>
+      <div class="flex items-center gap-x-5 text-[18px]">
+        <a href="#balance" class="hover:text-[#22c55e] transition hidden md:block">Balance</a>
+        <a href="#scanner" class="hover:text-[#22c55e] transition hidden md:block">Scanner</a>
+        <a href="#send" class="hover:text-[#22c55e] transition hidden md:block">Send</a>
+        <a href="#download" class="px-4 py-2 rounded-[4px] bg-[#22c55e] text-black hover:bg-white transition text-[18px]">Download</a>
+      </div>
+    </div>
+  </nav>
+
+  <!-- ═══ HERO ═══ -->
+  <div class="relative min-h-[100dvh] flex items-center pt-20 overflow-hidden">
+    <!-- Background gradient -->
+    <div class="absolute inset-0 bg-gradient-to-b from-[#22c55e]/4 via-transparent to-transparent pointer-events-none"></div>
+    <div class="absolute top-1/3 right-0 translate-x-1/3 w-[500px] h-[500px] bg-[#22c55e]/3 blur-[120px] rounded-full pointer-events-none"></div>
+
+    <div class="max-w-7xl mx-auto px-8 w-full">
+      <div class="flex flex-col lg:flex-row items-center gap-16">
+
+        <!-- Text -->
+        <div class="lg:w-1/2">
+          <div class="uppercase tracking-[3px] text-xs text-[#22c55e] mb-6">COMPANION APP</div>
+          <h1 class="font-display text-[100px] md:text-[140px] leading-[0.88]">
+            POH<br>Wallet.
+          </h1>
+          <p class="mt-8 text-[26px] text-white/60 max-w-lg">
+            Your mining rewards. Your POH balance. AI identity scans — right in your pocket.
+          </p>
+          <div class="mt-10 flex flex-col sm:flex-row gap-4">
+            <a href="#download"
+               class="inline-flex items-center justify-center px-10 py-4 bg-[#22c55e] text-black text-[26px] rounded-[4px] hover:bg-white transition">
+              Get the App
+            </a>
+            <a href="#balance"
+               class="inline-flex items-center justify-center px-10 py-4 border border-white/25 text-[26px] rounded-[4px] hover:bg-white/5 transition">
+              See features
+            </a>
+          </div>
+          <div class="mt-6 text-sm text-white/40">Android • iOS coming soon</div>
+        </div>
+
+        <!-- Hero iPhone -->
+        <div class="lg:w-1/2 flex justify-center">
+          <div class="phone-glow">
+            <svg viewBox="0 0 340 700" width="300" xmlns="http://www.w3.org/2000/svg">
+              <!-- Phone body -->
+              <rect x="4" y="4" width="332" height="692" rx="46" fill="#1a1a1a"/>
+              <rect x="4" y="4" width="332" height="692" rx="46" fill="none" stroke="#2a2a2a" stroke-width="2"/>
+              <!-- Side button -->
+              <rect x="336" y="140" width="8" height="60" rx="4" fill="#222"/>
+              <!-- Volume buttons -->
+              <rect x="2" y="130" width="6" height="40" rx="3" fill="#222"/>
+              <rect x="2" y="182" width="6" height="40" rx="3" fill="#222"/>
+              <!-- Screen area -->
+              <rect x="16" y="16" width="308" height="668" rx="38" fill="#000"/>
+              <!-- Dynamic island -->
+              <rect x="125" y="26" width="90" height="28" rx="14" fill="#1a1a1a"/>
+              <!-- Status bar -->
+              <text x="36" y="52" fill="white" font-size="13" font-family="system-ui" font-weight="600">9:41</text>
+              <rect x="252" y="41" width="28" height="14" rx="3" fill="none" stroke="#fff" stroke-width="1.5"/>
+              <rect x="254" y="43" width="22" height="10" rx="2" fill="#22c55e"/>
+              <rect x="281" y="45" width="4" height="6" rx="1" fill="#fff"/>
+              <!-- Screen content: Home screen -->
+              <!-- App header -->
+              <text x="36" y="92" fill="white" font-size="20" font-family="sans-serif" font-weight="600">PoH Wallet</text>
+              <!-- Balance card -->
+              <rect x="28" y="106" width="284" height="148" rx="16" fill="#0f1a0f"/>
+              <rect x="28" y="106" width="284" height="148" rx="16" fill="none" stroke="#22c55e" stroke-width="0.5" stroke-opacity="0.4"/>
+              <text x="52" y="136" fill="#22c55e" font-size="10" font-family="monospace" letter-spacing="2">AVAILABLE BALANCE</text>
+              <text x="52" y="180" fill="white" font-size="38" font-family="sans-serif" font-weight="200">12.48</text>
+              <text x="176" y="180" fill="#22c55e" font-size="18" font-family="monospace"> POH</text>
+              <text x="52" y="204" fill="#4b5563" font-size="11" font-family="monospace">≈ $18.72 USD</text>
+              <text x="52" y="238" fill="#374151" font-size="10" font-family="monospace">poh3a7f…c2e9  ·  node: 14 peers</text>
+              <!-- Action row -->
+              <rect x="28" y="270" width="88" height="72" rx="12" fill="#111"/>
+              <text x="72" y="302" text-anchor="middle" fill="white" font-size="22" font-family="sans-serif">↑</text>
+              <text x="72" y="326" text-anchor="middle" fill="#9ca3af" font-size="11" font-family="sans-serif">Send</text>
+              <rect x="126" y="270" width="88" height="72" rx="12" fill="#111"/>
+              <text x="170" y="302" text-anchor="middle" fill="white" font-size="22" font-family="sans-serif">↓</text>
+              <text x="170" y="326" text-anchor="middle" fill="#9ca3af" font-size="11" font-family="sans-serif">Receive</text>
+              <rect x="224" y="270" width="88" height="72" rx="12" fill="#111"/>
+              <text x="268" y="302" text-anchor="middle" fill="#22c55e" font-size="18" font-family="sans-serif">⊙</text>
+              <text x="268" y="326" text-anchor="middle" fill="#9ca3af" font-size="11" font-family="sans-serif">Scan</text>
+              <!-- Transactions -->
+              <text x="36" y="368" fill="#4b5563" font-size="10" font-family="monospace" letter-spacing="1.5">RECENT</text>
+              <!-- Tx 1 -->
+              <rect x="28" y="380" width="284" height="52" rx="10" fill="#0d0d0d"/>
+              <circle cx="52" cy="406" r="14" fill="#0f1a0f"/>
+              <text x="52" y="412" text-anchor="middle" fill="#22c55e" font-size="13">⛏</text>
+              <text x="76" y="400" fill="white" font-size="12" font-family="sans-serif">Block #7285 reward</text>
+              <text x="76" y="418" fill="#4b5563" font-size="10" font-family="monospace">2 min ago</text>
+              <text x="290" y="400" text-anchor="end" fill="#22c55e" font-size="13" font-family="monospace">+0.60</text>
+              <text x="290" y="418" text-anchor="end" fill="#4b5563" font-size="10" font-family="monospace">POH</text>
+              <!-- Tx 2 -->
+              <rect x="28" y="440" width="284" height="52" rx="10" fill="#0d0d0d"/>
+              <circle cx="52" cy="466" r="14" fill="#0f1a0f"/>
+              <text x="52" y="472" text-anchor="middle" fill="#22c55e" font-size="13">⛏</text>
+              <text x="76" y="460" fill="white" font-size="12" font-family="sans-serif">Block #7284 reward</text>
+              <text x="76" y="478" fill="#4b5563" font-size="10" font-family="monospace">8 min ago</text>
+              <text x="290" y="460" text-anchor="end" fill="#22c55e" font-size="13" font-family="monospace">+0.60</text>
+              <text x="290" y="478" text-anchor="end" fill="#4b5563" font-size="10" font-family="monospace">POH</text>
+              <!-- Tx 3 -->
+              <rect x="28" y="500" width="284" height="52" rx="10" fill="#0d0d0d"/>
+              <circle cx="52" cy="526" r="14" fill="#160a0a"/>
+              <text x="52" y="532" text-anchor="middle" fill="#ef4444" font-size="14">↑</text>
+              <text x="76" y="520" fill="white" font-size="12" font-family="sans-serif">Sent to poh9k2…d7f1</text>
+              <text x="76" y="538" fill="#4b5563" font-size="10" font-family="monospace">1 hr ago</text>
+              <text x="290" y="520" text-anchor="end" fill="#ef4444" font-size="13" font-family="monospace">−2.00</text>
+              <text x="290" y="538" text-anchor="end" fill="#4b5563" font-size="10" font-family="monospace">POH</text>
+              <!-- Bottom tab bar -->
+              <rect x="16" y="620" width="308" height="64" rx="0" fill="#0a0a0a"/>
+              <line x1="16" y1="620" x2="324" y2="620" stroke="#1c1c1c" stroke-width="1"/>
+              <text x="62" y="644" text-anchor="middle" fill="#22c55e" font-size="8" font-family="monospace">●</text>
+              <text x="62" y="660" text-anchor="middle" fill="#22c55e" font-size="9" font-family="monospace">Home</text>
+              <text x="124" y="644" text-anchor="middle" fill="#374151" font-size="16" font-family="sans-serif">⇄</text>
+              <text x="124" y="660" text-anchor="middle" fill="#374151" font-size="9" font-family="monospace">History</text>
+              <text x="186" y="642" text-anchor="middle" fill="#374151" font-size="16" font-family="sans-serif">⊙</text>
+              <text x="186" y="660" text-anchor="middle" fill="#374151" font-size="9" font-family="monospace">Scan</text>
+              <text x="262" y="644" text-anchor="middle" fill="#374151" font-size="16" font-family="sans-serif">⚙</text>
+              <text x="262" y="660" text-anchor="middle" fill="#374151" font-size="9" font-family="monospace">Settings</text>
+            </svg>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ STATS BAR ═══ -->
+  <div class="border-y border-white/10 py-6 bg-[#050505]">
+    <div class="max-w-5xl mx-auto px-8 grid grid-cols-3 gap-8 text-center">
+      <div>
+        <div class="text-[44px] font-display tracking-tighter neon">v0.2.0</div>
+        <div class="text-xs text-white/50 tracking-widest mt-1">CURRENT VERSION</div>
+      </div>
+      <div>
+        <div class="text-[44px] font-display tracking-tighter">Android</div>
+        <div class="text-xs text-white/50 tracking-widest mt-1">AVAILABLE NOW</div>
+      </div>
+      <div>
+        <div class="text-[44px] font-display tracking-tighter text-white/40">iOS</div>
+        <div class="text-xs text-white/50 tracking-widest mt-1">COMING SOON</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ FEATURE 1: BALANCE ═══ -->
+  <div id="balance" class="max-w-7xl mx-auto px-8 py-32">
+    <div class="flex flex-col lg:flex-row items-center gap-20">
+
+      <!-- iPhone: Balance screen -->
+      <div class="lg:w-1/2 flex justify-center reveal">
+        <div class="phone-glow">
+          <svg viewBox="0 0 340 700" width="280" xmlns="http://www.w3.org/2000/svg">
+            <rect x="4" y="4" width="332" height="692" rx="46" fill="#1a1a1a"/>
+            <rect x="4" y="4" width="332" height="692" rx="46" fill="none" stroke="#2a2a2a" stroke-width="2"/>
+            <rect x="336" y="140" width="8" height="60" rx="4" fill="#222"/>
+            <rect x="2" y="130" width="6" height="40" rx="3" fill="#222"/>
+            <rect x="2" y="182" width="6" height="40" rx="3" fill="#222"/>
+            <rect x="16" y="16" width="308" height="668" rx="38" fill="#000"/>
+            <rect x="125" y="26" width="90" height="28" rx="14" fill="#1a1a1a"/>
+            <text x="36" y="52" fill="white" font-size="13" font-family="system-ui" font-weight="600">9:41</text>
+            <rect x="252" y="41" width="28" height="14" rx="3" fill="none" stroke="#fff" stroke-width="1.5"/>
+            <rect x="254" y="43" width="22" height="10" rx="2" fill="#22c55e"/>
+            <rect x="281" y="45" width="4" height="6" rx="1" fill="#fff"/>
+            <!-- Balance focused view -->
+            <text x="170" y="90" text-anchor="middle" fill="#4b5563" font-size="10" font-family="monospace" letter-spacing="1.5">YOUR BALANCE</text>
+            <text x="170" y="160" text-anchor="middle" fill="white" font-size="52" font-family="sans-serif" font-weight="200">12.48</text>
+            <text x="170" y="190" text-anchor="middle" fill="#22c55e" font-size="20" font-family="monospace">POH</text>
+            <text x="170" y="216" text-anchor="middle" fill="#374151" font-size="12" font-family="monospace">≈ $18.72 · updated just now</text>
+            <!-- Mini chart -->
+            <rect x="36" y="236" width="268" height="100" rx="12" fill="#0a0a0a"/>
+            <polyline points="56,316 90,300 124,308 158,278 192,260 226,252 268,238 288,242" fill="none" stroke="#22c55e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            <text x="52" y="326" fill="#1f2937" font-size="9" font-family="monospace">7d earnings: +4.80 POH</text>
+            <!-- Node connected -->
+            <rect x="36" y="352" width="268" height="48" rx="10" fill="#0d0d0d"/>
+            <circle cx="62" cy="376" r="5" fill="#22c55e"><animate attributeName="opacity" values="1;0.3;1" dur="2s" repeatCount="indefinite"/></circle>
+            <text x="78" y="371" fill="#9ca3af" font-size="11" font-family="sans-serif">miner.proofofhuman.ge</text>
+            <text x="78" y="389" fill="#374151" font-size="10" font-family="monospace">14 peers · latency 18ms</text>
+            <!-- Tx list header -->
+            <text x="52" y="422" fill="#4b5563" font-size="10" font-family="monospace" letter-spacing="1.5">MINING REWARDS</text>
+            <rect x="36" y="432" width="268" height="44" rx="8" fill="#0d0d0d"/>
+            <text x="60" y="452" fill="#9ca3af" font-size="11" font-family="sans-serif">Today</text>
+            <text x="286" y="452" text-anchor="end" fill="#22c55e" font-size="13" font-family="monospace">+3.00 POH</text>
+            <text x="60" y="468" fill="#4b5563" font-size="10" font-family="monospace">5 blocks mined</text>
+            <rect x="36" y="484" width="268" height="44" rx="8" fill="#0d0d0d"/>
+            <text x="60" y="504" fill="#9ca3af" font-size="11" font-family="sans-serif">Yesterday</text>
+            <text x="286" y="504" text-anchor="end" fill="#22c55e" font-size="13" font-family="monospace">+4.80 POH</text>
+            <text x="60" y="520" fill="#4b5563" font-size="10" font-family="monospace">8 blocks mined</text>
+            <!-- Bottom tabs -->
+            <rect x="16" y="620" width="308" height="64" rx="0" fill="#0a0a0a"/>
+            <line x1="16" y1="620" x2="324" y2="620" stroke="#1c1c1c" stroke-width="1"/>
+            <text x="62" y="644" text-anchor="middle" fill="#22c55e" font-size="8" font-family="monospace">●</text>
+            <text x="62" y="660" text-anchor="middle" fill="#22c55e" font-size="9" font-family="monospace">Home</text>
+            <text x="124" y="644" text-anchor="middle" fill="#374151" font-size="16" font-family="sans-serif">⇄</text>
+            <text x="124" y="660" text-anchor="middle" fill="#374151" font-size="9" font-family="monospace">History</text>
+            <text x="186" y="642" text-anchor="middle" fill="#374151" font-size="16" font-family="sans-serif">⊙</text>
+            <text x="186" y="660" text-anchor="middle" fill="#374151" font-size="9" font-family="monospace">Scan</text>
+            <text x="262" y="644" text-anchor="middle" fill="#374151" font-size="16" font-family="sans-serif">⚙</text>
+            <text x="262" y="660" text-anchor="middle" fill="#374151" font-size="9" font-family="monospace">Settings</text>
+          </svg>
+        </div>
+      </div>
+
+      <!-- Text -->
+      <div class="lg:w-1/2 reveal">
+        <div class="uppercase tracking-[3px] text-xs text-[#22c55e] mb-4">LIVE BALANCE</div>
+        <h2 class="font-display text-[80px] leading-[0.9] mb-6">Your rewards.<br>Always current.</h2>
+        <p class="text-[24px] text-white/60 mb-8">
+          Balance updates directly from your connected miner node. See your earnings grow block by block — no refresh, no delays.
+        </p>
+        <div class="space-y-5">
+          <div class="flex items-start gap-4">
+            <div class="w-2 h-2 rounded-full bg-[#22c55e] mt-3 flex-shrink-0"></div>
+            <div>
+              <div class="text-[20px]">Real-time balance pulled from the Wallet API</div>
+              <div class="text-[18px] text-white/40">Connects to any running miner node on the network</div>
+            </div>
+          </div>
+          <div class="flex items-start gap-4">
+            <div class="w-2 h-2 rounded-full bg-[#22c55e] mt-3 flex-shrink-0"></div>
+            <div>
+              <div class="text-[20px]">7-day earnings chart</div>
+              <div class="text-[18px] text-white/40">See your mining output trend at a glance</div>
+            </div>
+          </div>
+          <div class="flex items-start gap-4">
+            <div class="w-2 h-2 rounded-full bg-[#22c55e] mt-3 flex-shrink-0"></div>
+            <div>
+              <div class="text-[20px]">Node connection status</div>
+              <div class="text-[18px] text-white/40">Peer count and latency shown in-app. Auto-switches on disconnect.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ═══ FEATURE 2: SCANNER ═══ -->
+  <div id="scanner" class="border-t border-white/10 bg-[#030303]">
+    <div class="max-w-7xl mx-auto px-8 py-32">
+      <div class="flex flex-col lg:flex-row-reverse items-center gap-20">
+
+        <!-- iPhone: Scanner screen -->
+        <div class="lg:w-1/2 flex justify-center reveal">
+          <div class="phone-glow">
+            <svg viewBox="0 0 340 700" width="280" xmlns="http://www.w3.org/2000/svg">
+              <rect x="4" y="4" width="332" height="692" rx="46" fill="#1a1a1a"/>
+              <rect x="4" y="4" width="332" height="692" rx="46" fill="none" stroke="#2a2a2a" stroke-width="2"/>
+              <rect x="336" y="140" width="8" height="60" rx="4" fill="#222"/>
+              <rect x="2" y="130" width="6" height="40" rx="3" fill="#222"/>
+              <rect x="2" y="182" width="6" height="40" rx="3" fill="#222"/>
+              <rect x="16" y="16" width="308" height="668" rx="38" fill="#000"/>
+              <rect x="125" y="26" width="90" height="28" rx="14" fill="#1a1a1a"/>
+              <text x="36" y="52" fill="white" font-size="13" font-family="system-ui" font-weight="600">9:41</text>
+              <rect x="252" y="41" width="28" height="14" rx="3" fill="none" stroke="#fff" stroke-width="1.5"/>
+              <rect x="254" y="43" width="22" height="10" rx="2" fill="#22c55e"/>
+              <rect x="281" y="45" width="4" height="6" rx="1" fill="#fff"/>
+              <!-- Screen header -->
+              <text x="170" y="88" text-anchor="middle" fill="white" font-size="18" font-family="sans-serif" font-weight="600">Identity Scanner</text>
+              <!-- Input field -->
+              <rect x="28" y="106" width="284" height="44" rx="10" fill="#111"/>
+              <rect x="28" y="106" width="284" height="44" rx="10" fill="none" stroke="#22c55e" stroke-width="1" stroke-opacity="0.6"/>
+              <text x="52" y="133" fill="#9ca3af" font-size="11" font-family="monospace">0x7a3f4b8c2d1e9f6a…c891</text>
+              <rect x="272" y="114" width="28" height="28" rx="6" fill="#22c55e"/>
+              <text x="286" y="132" text-anchor="middle" fill="#000" font-size="14" font-family="sans-serif">⊙</text>
+              <!-- Scan button -->
+              <rect x="28" y="162" width="284" height="44" rx="10" fill="#22c55e"/>
+              <text x="170" y="189" text-anchor="middle" fill="#000" font-size="14" font-family="sans-serif" font-weight="600">Scan Address</text>
+              <!-- Result card -->
+              <rect x="28" y="222" width="284" height="180" rx="14" fill="#0f1a0f"/>
+              <rect x="28" y="222" width="284" height="180" rx="14" fill="none" stroke="#22c55e" stroke-width="1" stroke-opacity="0.4"/>
+              <!-- Verdict badge -->
+              <rect x="100" y="242" width="140" height="36" rx="18" fill="#22c55e"/>
+              <text x="170" y="266" text-anchor="middle" fill="#000" font-size="15" font-family="monospace" font-weight="bold" letter-spacing="2">HUMAN</text>
+              <!-- Confidence -->
+              <text x="170" y="298" text-anchor="middle" fill="#9ca3af" font-size="11" font-family="monospace">Confidence</text>
+              <text x="170" y="330" text-anchor="middle" fill="#22c55e" font-size="28" font-family="sans-serif" font-weight="200">91%</text>
+              <!-- Reasoning -->
+              <text x="52" y="354" fill="#374151" font-size="9.5" font-family="monospace">ENS + Gitcoin + Farcaster confirmed</text>
+              <text x="52" y="370" fill="#374151" font-size="9.5" font-family="monospace">38/47 signals passed</text>
+              <text x="52" y="388" fill="#22c55e" font-size="9.5" font-family="monospace">Powered by qwen2.5:1.5b · node EU</text>
+              <!-- Signals mini bar -->
+              <text x="52" y="420" fill="#4b5563" font-size="9" font-family="monospace" letter-spacing="1.5">SIGNALS PASSED</text>
+              <rect x="52" y="428" width="240" height="10" rx="5" fill="#111"/>
+              <rect x="52" y="428" width="193" height="10" rx="5" fill="#22c55e" opacity="0.7"/>
+              <text x="52" y="452" fill="#374151" font-size="10" font-family="monospace">38 / 47 verified signals passed</text>
+              <!-- Feedback buttons -->
+              <rect x="28" y="470" width="136" height="40" rx="8" fill="#111"/>
+              <text x="96" y="494" text-anchor="middle" fill="#9ca3af" font-size="11" font-family="sans-serif">👍 Correct</text>
+              <rect x="176" y="470" width="136" height="40" rx="8" fill="#111"/>
+              <text x="244" y="494" text-anchor="middle" fill="#9ca3af" font-size="11" font-family="sans-serif">👎 Dispute</text>
+              <!-- Bottom tabs -->
+              <rect x="16" y="620" width="308" height="64" rx="0" fill="#0a0a0a"/>
+              <line x1="16" y1="620" x2="324" y2="620" stroke="#1c1c1c" stroke-width="1"/>
+              <text x="62" y="644" text-anchor="middle" fill="#374151" font-size="8" font-family="monospace">○</text>
+              <text x="62" y="660" text-anchor="middle" fill="#374151" font-size="9" font-family="monospace">Home</text>
+              <text x="124" y="644" text-anchor="middle" fill="#374151" font-size="16" font-family="sans-serif">⇄</text>
+              <text x="124" y="660" text-anchor="middle" fill="#374151" font-size="9" font-family="monospace">History</text>
+              <text x="186" y="642" text-anchor="middle" fill="#22c55e" font-size="16" font-family="sans-serif">⊙</text>
+              <text x="186" y="660" text-anchor="middle" fill="#22c55e" font-size="9" font-family="monospace">Scan</text>
+              <text x="262" y="644" text-anchor="middle" fill="#374151" font-size="16" font-family="sans-serif">⚙</text>
+              <text x="262" y="660" text-anchor="middle" fill="#374151" font-size="9" font-family="monospace">Settings</text>
+            </svg>
+          </div>
+        </div>
+
+        <!-- Text -->
+        <div class="lg:w-1/2 reveal">
+          <div class="uppercase tracking-[3px] text-xs text-[#22c55e] mb-4">AI SCANNER</div>
+          <h2 class="font-display text-[80px] leading-[0.9] mb-6">Scan any address.<br>In seconds.</h2>
+          <p class="text-[24px] text-white/60 mb-8">
+            Paste any wallet address — EVM, Solana, Bitcoin, TON — and get an AI verdict backed by 100+ on-chain signals. Runs on the miner network, not a central server.
+          </p>
+          <div class="space-y-5">
+            <div class="flex items-start gap-4">
+              <div class="w-2 h-2 rounded-full bg-[#22c55e] mt-3 flex-shrink-0"></div>
+              <div>
+                <div class="text-[20px]">100+ live signals. Real AI verdict.</div>
+                <div class="text-[18px] text-white/40">ENS, Gitcoin, Farcaster, Uniswap, Solana DeFi, and 42 more</div>
+              </div>
+            </div>
+            <div class="flex items-start gap-4">
+              <div class="w-2 h-2 rounded-full bg-[#22c55e] mt-3 flex-shrink-0"></div>
+              <div>
+                <div class="text-[20px]">Decentralized inference</div>
+                <div class="text-[18px] text-white/40">Routes through the peer network — no single point of failure</div>
+              </div>
+            </div>
+            <div class="flex items-start gap-4">
+              <div class="w-2 h-2 rounded-full bg-[#22c55e] mt-3 flex-shrink-0"></div>
+              <div>
+                <div class="text-[20px]">Feedback loop</div>
+                <div class="text-[18px] text-white/40">Dispute a verdict. Your correction trains the network's brain.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ FEATURE 3: SEND ═══ -->
+  <div id="send" class="max-w-7xl mx-auto px-8 py-32">
+    <div class="flex flex-col lg:flex-row items-center gap-20">
+
+      <!-- iPhone: Send screen -->
+      <div class="lg:w-1/2 flex justify-center reveal">
+        <div class="phone-glow">
+          <svg viewBox="0 0 340 700" width="280" xmlns="http://www.w3.org/2000/svg">
+            <rect x="4" y="4" width="332" height="692" rx="46" fill="#1a1a1a"/>
+            <rect x="4" y="4" width="332" height="692" rx="46" fill="none" stroke="#2a2a2a" stroke-width="2"/>
+            <rect x="336" y="140" width="8" height="60" rx="4" fill="#222"/>
+            <rect x="2" y="130" width="6" height="40" rx="3" fill="#222"/>
+            <rect x="2" y="182" width="6" height="40" rx="3" fill="#222"/>
+            <rect x="16" y="16" width="308" height="668" rx="38" fill="#000"/>
+            <rect x="125" y="26" width="90" height="28" rx="14" fill="#1a1a1a"/>
+            <text x="36" y="52" fill="white" font-size="13" font-family="system-ui" font-weight="600">9:41</text>
+            <rect x="252" y="41" width="28" height="14" rx="3" fill="none" stroke="#fff" stroke-width="1.5"/>
+            <rect x="254" y="43" width="22" height="10" rx="2" fill="#22c55e"/>
+            <rect x="281" y="45" width="4" height="6" rx="1" fill="#fff"/>
+            <!-- Header -->
+            <text x="170" y="88" text-anchor="middle" fill="white" font-size="18" font-family="sans-serif" font-weight="600">Send POH</text>
+            <!-- To field -->
+            <text x="52" y="120" fill="#4b5563" font-size="10" font-family="monospace" letter-spacing="1.5">TO</text>
+            <rect x="28" y="130" width="284" height="44" rx="10" fill="#111"/>
+            <text x="52" y="157" fill="#9ca3af" font-size="11" font-family="monospace">poh9k2m…d7f1</text>
+            <rect x="272" y="138" width="28" height="28" rx="6" fill="#1a1a1a"/>
+            <text x="286" y="156" text-anchor="middle" fill="#9ca3af" font-size="12" font-family="sans-serif">⊞</text>
+            <!-- Amount -->
+            <text x="52" y="196" fill="#4b5563" font-size="10" font-family="monospace" letter-spacing="1.5">AMOUNT</text>
+            <rect x="28" y="206" width="284" height="80" rx="10" fill="#0f1a0f"/>
+            <rect x="28" y="206" width="284" height="80" rx="10" fill="none" stroke="#22c55e" stroke-width="1" stroke-opacity="0.5"/>
+            <text x="170" y="254" text-anchor="middle" fill="white" font-size="42" font-family="sans-serif" font-weight="200">2.00</text>
+            <text x="170" y="276" text-anchor="middle" fill="#22c55e" font-size="13" font-family="monospace">POH</text>
+            <!-- Balance available -->
+            <text x="170" y="308" text-anchor="middle" fill="#374151" font-size="11" font-family="monospace">Available: 12.48 POH</text>
+            <!-- Quick amounts -->
+            <rect x="28" y="320" width="64" height="32" rx="8" fill="#111"/>
+            <text x="60" y="340" text-anchor="middle" fill="#9ca3af" font-size="11" font-family="monospace">1 POH</text>
+            <rect x="100" y="320" width="64" height="32" rx="8" fill="#111"/>
+            <text x="132" y="340" text-anchor="middle" fill="#9ca3af" font-size="11" font-family="monospace">5 POH</text>
+            <rect x="172" y="320" width="64" height="32" rx="8" fill="#111"/>
+            <text x="204" y="340" text-anchor="middle" fill="#9ca3af" font-size="11" font-family="monospace">10 POH</text>
+            <rect x="244" y="320" width="68" height="32" rx="8" fill="#111"/>
+            <text x="278" y="340" text-anchor="middle" fill="#9ca3af" font-size="11" font-family="monospace">MAX</text>
+            <!-- Confirm section -->
+            <rect x="28" y="370" width="284" height="90" rx="12" fill="#0d0d0d"/>
+            <text x="52" y="392" fill="#4b5563" font-size="10" font-family="monospace" letter-spacing="1.5">SUMMARY</text>
+            <text x="52" y="412" fill="#9ca3af" font-size="11" font-family="sans-serif">Sending</text>
+            <text x="286" y="412" text-anchor="end" fill="white" font-size="11" font-family="monospace">2.00 POH</text>
+            <text x="52" y="432" fill="#9ca3af" font-size="11" font-family="sans-serif">To</text>
+            <text x="286" y="432" text-anchor="end" fill="#9ca3af" font-size="11" font-family="monospace">poh9k2m…d7f1</text>
+            <text x="52" y="452" fill="#9ca3af" font-size="11" font-family="sans-serif">Fee</text>
+            <text x="286" y="452" text-anchor="end" fill="#374151" font-size="11" font-family="monospace">0.001 POH</text>
+            <!-- Send button -->
+            <rect x="28" y="476" width="284" height="48" rx="12" fill="#22c55e"/>
+            <text x="170" y="505" text-anchor="middle" fill="#000" font-size="16" font-family="sans-serif" font-weight="700">Confirm &amp; Send</text>
+            <!-- Bottom tabs -->
+            <rect x="16" y="620" width="308" height="64" rx="0" fill="#0a0a0a"/>
+            <line x1="16" y1="620" x2="324" y2="620" stroke="#1c1c1c" stroke-width="1"/>
+            <text x="62" y="644" text-anchor="middle" fill="#374151" font-size="8" font-family="monospace">○</text>
+            <text x="62" y="660" text-anchor="middle" fill="#374151" font-size="9" font-family="monospace">Home</text>
+            <text x="124" y="644" text-anchor="middle" fill="#22c55e" font-size="16" font-family="sans-serif">↑</text>
+            <text x="124" y="660" text-anchor="middle" fill="#22c55e" font-size="9" font-family="monospace">Send</text>
+            <text x="186" y="642" text-anchor="middle" fill="#374151" font-size="16" font-family="sans-serif">⊙</text>
+            <text x="186" y="660" text-anchor="middle" fill="#374151" font-size="9" font-family="monospace">Scan</text>
+            <text x="262" y="644" text-anchor="middle" fill="#374151" font-size="16" font-family="sans-serif">⚙</text>
+            <text x="262" y="660" text-anchor="middle" fill="#374151" font-size="9" font-family="monospace">Settings</text>
+          </svg>
+        </div>
+      </div>
+
+      <!-- Text -->
+      <div class="lg:w-1/2 reveal">
+        <div class="uppercase tracking-[3px] text-xs text-[#22c55e] mb-4">SEND &amp; RECEIVE</div>
+        <h2 class="font-display text-[80px] leading-[0.9] mb-6">Send POH.<br>In seconds.</h2>
+        <p class="text-[24px] text-white/60 mb-8">
+          Full peer-to-peer POH transfers between any addresses on the network. No exchange, no bridge, no intermediary.
+        </p>
+        <div class="space-y-5">
+          <div class="flex items-start gap-4">
+            <div class="w-2 h-2 rounded-full bg-[#22c55e] mt-3 flex-shrink-0"></div>
+            <div>
+              <div class="text-[20px]">Send to any PoH address</div>
+              <div class="text-[18px] text-white/40">Paste an address, scan a QR code, or pick from history</div>
+            </div>
+          </div>
+          <div class="flex items-start gap-4">
+            <div class="w-2 h-2 rounded-full bg-[#22c55e] mt-3 flex-shrink-0"></div>
+            <div>
+              <div class="text-[20px]">Propagates across the network</div>
+              <div class="text-[18px] text-white/40">Transactions broadcast via P2P gossip — no central server</div>
+            </div>
+          </div>
+          <div class="flex items-start gap-4">
+            <div class="w-2 h-2 rounded-full bg-[#22c55e] mt-3 flex-shrink-0"></div>
+            <div>
+              <div class="text-[20px]">Push notifications on receive</div>
+              <div class="text-[18px] text-white/40">Get alerted when a reward arrives or a transfer confirms</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ═══ NODE CONNECTIVITY ═══ -->
+  <div class="border-t border-white/10 bg-[#030303] py-24">
+    <div class="max-w-5xl mx-auto px-8 text-center reveal">
+      <div class="uppercase tracking-[3px] text-xs text-[#22c55e] mb-4">DECENTRALIZED</div>
+      <h2 class="font-display text-[72px] leading-none mb-6">Connects to the network.<br>Not a company.</h2>
+      <p class="text-[24px] text-white/55 max-w-2xl mx-auto mb-14">
+        The wallet pings all known miner nodes, picks the fastest responding one, and falls back automatically if it goes offline.
+      </p>
+
+      <div class="grid md:grid-cols-3 gap-6 text-left max-w-4xl mx-auto">
+        <div class="glass p-7 rounded-[4px]">
+          <div class="text-[#22c55e] text-sm tracking-widest mb-3">01</div>
+          <h3 class="text-[34px] mb-3">Auto-discovery</h3>
+          <p class="text-white/55 text-[18px]">Three default nodes built in. Add your own miner's address and connect directly to your machine.</p>
+        </div>
+        <div class="glass p-7 rounded-[4px]">
+          <div class="text-[#22c55e] text-sm tracking-widest mb-3">02</div>
+          <h3 class="text-[34px] mb-3">Latency-aware</h3>
+          <p class="text-white/55 text-[18px]">Pings all nodes in parallel and selects the fastest. Automatic failover when a node drops.</p>
+        </div>
+        <div class="glass p-7 rounded-[4px]">
+          <div class="text-[#22c55e] text-sm tracking-widest mb-3">03</div>
+          <h3 class="text-[34px] mb-3">Your node first</h3>
+          <p class="text-white/55 text-[18px]">Running a miner? Point the wallet at your own node for full custody of your balance and scans.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ DOWNLOAD ═══ -->
+  <div id="download" class="max-w-5xl mx-auto px-8 py-32">
+    <div class="text-center reveal">
+      <div class="uppercase tracking-[3px] text-xs text-[#22c55e] mb-4">GET THE APP</div>
+      <h2 class="font-display text-[96px] leading-[0.88] mb-6">Download.<br>Run. Earn.</h2>
+      <p class="text-[24px] text-white/55 max-w-xl mx-auto mb-12">
+        Sideload the APK directly. No Play Store. No tracking. Your keys, your rewards.
+      </p>
+
+      <div class="flex flex-col items-center gap-6">
+        <!-- APK download -->
+        <a href="../binaries/poh-miner-wallet.apk"
+           class="inline-flex items-center gap-4 px-12 py-5 bg-[#22c55e] text-black text-[28px] font-display rounded-[4px] hover:bg-white transition">
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor"><path d="M17.523 15.341l-1.374-1.375A6.012 6.012 0 0016 12c0-1.15.323-2.225.875-3.145L15.5 7.5C14.424 8.819 13.8 10.432 13.8 12c0 1.567.623 3.181 1.699 4.5l1.374-1.375.65.216zM4.477 8.659L3.103 7.284A7.985 7.985 0 002 12c0 1.683.519 3.244 1.406 4.53l1.368-1.368A5.96 5.96 0 013.8 12c0-1.236.37-2.386.998-3.341h-.321zm10.016-5.016L13.12 4.916A7.973 7.973 0 0012 4.8c-1.16 0-2.257.25-3.249.695L10.126 6.87A5.98 5.98 0 0112 6.6c.713 0 1.396.127 2.03.36l.463-.317zM12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm0 18c-4.411 0-8-3.589-8-8s3.589-8 8-8 8 3.589 8 8-3.589 8-8 8z"/></svg>
+          Download Android APK
+        </a>
+
+        <!-- iOS coming soon -->
+        <div class="glass px-10 py-5 rounded-[4px] text-center">
+          <div class="text-[22px] text-white/50 mb-1">iOS — Coming soon</div>
+          <div class="text-[18px] text-white/30">TestFlight beta launching soon</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <footer class="border-t border-white/10 py-8 text-xs text-white/50">
+    <div class="max-w-7xl mx-auto px-8 flex justify-between items-center">
+      <div class="flex items-center gap-4">
+        <img src="../poh-miner.svg" alt="PoH" width="24" height="24" style="opacity:0.5"/>
+        <span>PoH Miner Wallet — companion app for the decentralized identity network</span>
+      </div>
+      <div class="flex gap-6">
+        <a href="../" class="hover:text-white">Miner</a>
+        <a href="https://proofofhuman.ge" target="_blank" class="hover:text-white">proofofhuman.ge</a>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    // Scroll reveal
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('visible'); });
+    }, { threshold: 0.15 });
+    document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+  </script>
+</body>
+</html>

@@ -58,13 +58,14 @@
   "license": "MIT",
   "devDependencies": {
     "@yao-pkg/pkg": "^5.8.1",
+    "electron": "^31.4.0",
     "electron-builder": "^24.13.3",
     "png-to-ico": "^3.0.1",
     "sharp": "^0.34.5",
     "vitest": "^1.6.1"
   },
   "dependencies": {
-    "electron": "^31.4.0"
+    "qrcode": "^1.5.4"
   },
   "build": {
     "appId": "ge.proofofhuman.pohminer",

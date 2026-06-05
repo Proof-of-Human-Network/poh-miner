@@ -39,9 +39,7 @@ export async function mineBlock(block, difficulty, abortSignal) {
       if (abortSignal?.aborted) return null;
     }
 
-    if (attempts % 100_000 === 0) {
-      console.log(`[PoW] Mining block #${block.height} attempt ${attempts} nonce=${block.nonce}`);
-    }
+    // Progress logged only at completion — no per-attempt spam
   }
 
   return attempts;

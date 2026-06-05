@@ -74,7 +74,7 @@
         <a href="#how" class="hover:text-[#22c55e] transition">How it works</a>
         <a href="#network" class="hover:text-[#22c55e] transition">The Network</a>
         <a href="#start" class="hover:text-[#22c55e] transition">Start Earning</a>
-        <a href="#wallet" class="hover:text-[#22c55e] transition">Wallet</a>
+        <a href="wallet/" class="hover:text-[#22c55e] transition">Wallet</a>
         <a href="https://proofofhuman.ge" target="_blank" class="px-5 py-2.5 rounded-[4px] border border-white/20 hover:bg-white/5 transition text-[22px]">proofofhuman.ge</a>
       </div>
     </div>
@@ -134,7 +134,7 @@
   <!-- The Network -->
   <div id="network" class="max-w-7xl mx-auto px-8 p-40">
     <div class="flex flex-col md:flex-row gap-12 items-center">
-      <div class="md:w-5/12">
+      <div style="padding-bottom:10rem" class="md:w-5/12">
         <div class="uppercase tracking-[3px] text-xs text-[#22c55e] mb-3">THE INFRASTRUCTURE</div>
         <h2 class="font-display text-[90px] leading-none ">A living mesh of<br>compute providers.</h2>
         <p class="mt-6 text-[30px] text-white/70">Miners and compute operators around the world form a decentralized inference layer for the most advanced open digital identity system.</p>
@@ -147,6 +147,276 @@
         </div>
       </div>
     </div>
+
+
+  <!-- ═══ APP SHOWCASE ═══ -->
+  <div class="border-t border-white/10 overflow-hidden" style="background:#030303;">
+    <div class="max-w-7xl mx-auto px-8 py-32">
+
+      <div class="text-center mb-4">
+        <div class="uppercase tracking-[3px] text-xs text-[#22c55e] mb-4">THE DESKTOP APP</div>
+        <h2 class="font-display text-[100px] md:text-[130px] leading-[0.88]">PoH Miner.</h2>
+        <p class="mt-6 text-[26px] text-white/55 max-w-2xl mx-auto">One native app. Full node, live AI brain, and LLM chat — all running on your machine.</p>
+      </div>
+
+      <!-- macOS window mockup -->
+      <div class="mt-16 relative max-w-6xl mx-auto">
+        <div class="absolute -inset-10 bg-[#22c55e]/4 blur-3xl rounded-full pointer-events-none"></div>
+        <div class="relative rounded-2xl overflow-hidden border border-white/8 shadow-[0_40px_120px_rgba(0,0,0,0.9)]">
+          <!-- Title bar -->
+          <div class="flex items-center gap-x-2 px-5 bg-[#161616] border-b border-white/5" style="height:42px;">
+            <span style="width:13px;height:13px;border-radius:50%;background:#ff5f57;display:inline-block;"></span>
+            <span style="width:13px;height:13px;border-radius:50%;background:#febc2e;display:inline-block;"></span>
+            <span style="width:13px;height:13px;border-radius:50%;background:#28c840;display:inline-block;"></span>
+            <span class="mx-auto text-white/25 text-xs" style="font-family:system-ui;letter-spacing:0.03em;">PoH Miner — Mining Active</span>
+          </div>
+          <!-- App SVG -->
+          <svg viewBox="0 0 1280 720" xmlns="http://www.w3.org/2000/svg" style="width:100%;display:block;background:#0a0a0a;">
+            <!-- Left status sidebar -->
+            <rect x="0" y="0" width="210" height="720" fill="#111"/>
+            <line x1="210" y1="0" x2="210" y2="720" stroke="#1c1c1c" stroke-width="1"/>
+            <!-- Sidebar header -->
+            <text x="18" y="30" fill="#22c55e" font-size="10" font-family="monospace" letter-spacing="2.5">NODE STATUS</text>
+            <line x1="0" y1="40" x2="210" y2="40" stroke="#1c1c1c" stroke-width="1"/>
+            <!-- Wallet -->
+            <text x="18" y="64" fill="#4b5563" font-size="8.5" font-family="monospace" letter-spacing="1.5">POH WALLET</text>
+            <text x="18" y="80" fill="#e5e7eb" font-size="10.5" font-family="monospace">poh3a7f…c2e9</text>
+            <!-- Balance -->
+            <text x="18" y="108" fill="#4b5563" font-size="8.5" font-family="monospace" letter-spacing="1.5">BALANCE</text>
+            <text x="18" y="132" fill="#22c55e" font-size="30" font-family="sans-serif" font-weight="300">12.48</text>
+            <text x="106" y="132" fill="#22c55e" font-size="13" font-family="monospace">POH</text>
+            <!-- Chain height -->
+            <text x="18" y="162" fill="#4b5563" font-size="8.5" font-family="monospace" letter-spacing="1.5">CHAIN HEIGHT</text>
+            <text x="18" y="184" fill="#f9fafb" font-size="26" font-family="sans-serif" font-weight="300">7,284</text>
+            <!-- Reputation -->
+            <text x="18" y="214" fill="#4b5563" font-size="8.5" font-family="monospace" letter-spacing="1.5">REPUTATION</text>
+            <text x="18" y="236" fill="#22c55e" font-size="26" font-family="sans-serif" font-weight="300">1.00</text>
+            <line x1="18" y1="250" x2="192" y2="250" stroke="#1c1c1c" stroke-width="1"/>
+            <!-- Submissions -->
+            <text x="18" y="272" fill="#4b5563" font-size="8.5" font-family="monospace" letter-spacing="1.5">VALID SCANS</text>
+            <text x="18" y="292" fill="#f9fafb" font-size="22" font-family="sans-serif" font-weight="300">847</text>
+            <text x="18" y="316" fill="#4b5563" font-size="8.5" font-family="monospace" letter-spacing="1.5">REJECTED</text>
+            <text x="18" y="336" fill="#374151" font-size="22" font-family="sans-serif" font-weight="300">3</text>
+            <line x1="18" y1="352" x2="192" y2="352" stroke="#1c1c1c" stroke-width="1"/>
+            <!-- Inference -->
+            <text x="18" y="374" fill="#4b5563" font-size="8.5" font-family="monospace" letter-spacing="1.5">INFERENCE</text>
+            <text x="18" y="392" fill="#9ca3af" font-size="10" font-family="monospace">AUTO · qwen2.5:1.5b</text>
+            <!-- Solana -->
+            <text x="18" y="418" fill="#4b5563" font-size="8.5" font-family="monospace" letter-spacing="1.5">SOLANA</text>
+            <text x="18" y="436" fill="#6b7280" font-size="10" font-family="monospace">FGdB…G15Z</text>
+            <!-- Peers -->
+            <text x="18" y="462" fill="#4b5563" font-size="8.5" font-family="monospace" letter-spacing="1.5">PEERS</text>
+            <text x="18" y="482" fill="#22c55e" font-size="22" font-family="sans-serif" font-weight="300">14 online</text>
+            <!-- Mining pulse -->
+            <circle cx="18" cy="520" r="5" fill="#22c55e">
+              <animate attributeName="opacity" values="1;0.2;1" dur="2s" repeatCount="indefinite"/>
+            </circle>
+            <text x="30" y="524" fill="#22c55e" font-size="10" font-family="monospace">MINING ACTIVE</text>
+            <!-- Region -->
+            <text x="18" y="558" fill="#4b5563" font-size="8.5" font-family="monospace" letter-spacing="1.5">REGION</text>
+            <text x="18" y="576" fill="#9ca3af" font-size="10" font-family="monospace">EU · auto-detected</text>
+
+            <!-- Main area: tab bar -->
+            <rect x="210" y="0" width="760" height="38" fill="#0f0f0f"/>
+            <rect x="210" y="0" width="120" height="38" fill="#0a0a0a"/>
+            <line x1="210" y1="38" x2="970" y2="38" stroke="#1c1c1c" stroke-width="1"/>
+            <text x="270" y="24" text-anchor="middle" fill="#f9fafb" font-size="11" font-family="monospace" letter-spacing="1.5">LOGS</text>
+            <line x1="210" y1="38" x2="330" y2="38" stroke="#22c55e" stroke-width="2"/>
+            <text x="400" y="24" text-anchor="middle" fill="#374151" font-size="11" font-family="monospace" letter-spacing="1.5">CHAT</text>
+            <text x="510" y="24" text-anchor="middle" fill="#374151" font-size="11" font-family="monospace" letter-spacing="1.5">SCANNER</text>
+            <text x="626" y="24" text-anchor="middle" fill="#374151" font-size="11" font-family="monospace" letter-spacing="1.5">SEND</text>
+            <text x="736" y="24" text-anchor="middle" fill="#374151" font-size="11" font-family="monospace" letter-spacing="1.5">RECEIVE</text>
+
+            <!-- Log lines -->
+            <text x="224" y="66" fill="#374151" font-size="10" font-family="monospace">14:22:01</text>
+            <text x="298" y="66" fill="#22c55e" font-size="10" font-family="monospace">[PoH-Miner] Connected to bootnode · 14 peers discovered</text>
+
+            <text x="224" y="86" fill="#374151" font-size="10" font-family="monospace">14:22:04</text>
+            <text x="298" y="86" fill="#9ca3af" font-size="10" font-family="monospace">[RealPOH] Brain state dir: ~/.poh-miner/brain  signals=47</text>
+
+            <text x="224" y="106" fill="#374151" font-size="10" font-family="monospace">14:22:05</text>
+            <text x="298" y="106" fill="#22c55e" font-size="10" font-family="monospace">[RealPOH] ✓ Loaded checker + brain  model=qwen2.5:1.5b</text>
+
+            <text x="224" y="126" fill="#374151" font-size="10" font-family="monospace">14:22:19</text>
+            <text x="298" y="126" fill="#22c55e" font-size="10" font-family="monospace">[PoH-Miner] ⚡ New job: 0x7a3f…c891  starting inference</text>
+
+            <text x="224" y="146" fill="#374151" font-size="10" font-family="monospace">14:22:23</text>
+            <text x="298" y="146" fill="#9ca3af" font-size="10" font-family="monospace">[Checker] Running 47 signals for 0x7a3f…c891</text>
+
+            <text x="224" y="166" fill="#374151" font-size="10" font-family="monospace">14:22:31</text>
+            <text x="298" y="166" fill="#22c55e" font-size="10" font-family="monospace">[brain] HUMAN (conf: 0.91) — "ENS + Gitcoin + Farcaster confirmed"</text>
+
+            <text x="224" y="186" fill="#374151" font-size="10" font-family="monospace">14:22:32</text>
+            <text x="298" y="186" fill="#22c55e" font-size="10" font-family="monospace">[Reward] ✓ Block #7284 mined — +0.6 POH to poh3a7f…c2e9</text>
+
+            <text x="224" y="206" fill="#374151" font-size="10" font-family="monospace">14:22:45</text>
+            <text x="298" y="206" fill="#6b7280" font-size="10" font-family="monospace">[Gossip] Broadcasting block #7284 to 14 peers</text>
+
+            <text x="224" y="226" fill="#374151" font-size="10" font-family="monospace">14:22:58</text>
+            <text x="298" y="226" fill="#22c55e" font-size="10" font-family="monospace">[PoH-Miner] ⚡ New job: FGdBhX…G15Z  starting inference</text>
+
+            <text x="224" y="246" fill="#374151" font-size="10" font-family="monospace">14:23:06</text>
+            <text x="298" y="246" fill="#9ca3af" font-size="10" font-family="monospace">[Checker] Running 47 signals for FGdBhX…G15Z</text>
+
+            <text x="224" y="266" fill="#374151" font-size="10" font-family="monospace">14:23:14</text>
+            <text x="298" y="266" fill="#22c55e" font-size="10" font-family="monospace">[brain] HUMAN (conf: 0.88) — "Solana DeFi activity + age confirmed"</text>
+
+            <text x="224" y="286" fill="#374151" font-size="10" font-family="monospace">14:23:15</text>
+            <text x="298" y="286" fill="#22c55e" font-size="10" font-family="monospace">[Reward] ✓ Block #7285 mined — +0.6 POH to poh3a7f…c2e9</text>
+
+            <text x="224" y="306" fill="#1f2937" font-size="10" font-family="monospace">14:23:31</text>
+            <text x="298" y="306" fill="#1f2937" font-size="10" font-family="monospace">[Gossip] Peer EU-03 reconnected  peers: 14</text>
+
+            <text x="224" y="326" fill="#1f2937" font-size="10" font-family="monospace">14:23:48</text>
+            <text x="298" y="326" fill="#1f2937" font-size="10" font-family="monospace">[brain] Weight update: ENS 2.38 → 2.40  (vote confirmed)</text>
+
+            <!-- Blinking cursor -->
+            <rect x="224" y="345" width="7" height="13" fill="#22c55e">
+              <animate attributeName="opacity" values="1;0;1" dur="1.1s" repeatCount="indefinite"/>
+            </rect>
+
+            <!-- Right brain panel -->
+            <rect x="970" y="0" width="310" height="720" fill="#0d0d0d"/>
+            <line x1="970" y1="0" x2="970" y2="720" stroke="#1c1c1c" stroke-width="1"/>
+            <!-- Brain header -->
+            <rect x="970" y="0" width="310" height="38" fill="#0f0f0f"/>
+            <text x="988" y="24" fill="#22c55e" font-size="10" font-family="monospace" letter-spacing="2.5">AI BRAIN</text>
+            <line x1="970" y1="38" x2="1280" y2="38" stroke="#1c1c1c" stroke-width="1"/>
+            <!-- Model -->
+            <text x="988" y="66" fill="#4b5563" font-size="8.5" font-family="monospace" letter-spacing="1.5">MODEL</text>
+            <text x="988" y="84" fill="#e5e7eb" font-size="11" font-family="monospace">qwen2.5:1.5b</text>
+            <!-- Signals -->
+            <text x="988" y="112" fill="#4b5563" font-size="8.5" font-family="monospace" letter-spacing="1.5">ACTIVE SIGNALS</text>
+            <text x="988" y="148" fill="#22c55e" font-size="42" font-family="sans-serif" font-weight="200">47</text>
+            <!-- Feedback -->
+            <text x="988" y="176" fill="#4b5563" font-size="8.5" font-family="monospace" letter-spacing="1.5">CORRECTIONS LOGGED</text>
+            <text x="988" y="198" fill="#e5e7eb" font-size="22" font-family="sans-serif" font-weight="300">23</text>
+            <line x1="988" y1="214" x2="1260" y2="214" stroke="#1c1c1c" stroke-width="1"/>
+            <!-- Top signals -->
+            <text x="988" y="234" fill="#4b5563" font-size="8.5" font-family="monospace" letter-spacing="1.5">TOP SIGNALS (WEIGHT)</text>
+            <text x="988" y="256" fill="#9ca3af" font-size="10" font-family="monospace">ENS name owned</text>
+            <text x="1255" y="256" text-anchor="end" fill="#22c55e" font-size="10" font-family="monospace">2.40</text>
+            <text x="988" y="274" fill="#9ca3af" font-size="10" font-family="monospace">Gitcoin Passport</text>
+            <text x="1255" y="274" text-anchor="end" fill="#22c55e" font-size="10" font-family="monospace">2.18</text>
+            <text x="988" y="292" fill="#9ca3af" font-size="10" font-family="monospace">Farcaster verified</text>
+            <text x="1255" y="292" text-anchor="end" fill="#22c55e" font-size="10" font-family="monospace">1.95</text>
+            <text x="988" y="310" fill="#9ca3af" font-size="10" font-family="monospace">Uniswap LP position</text>
+            <text x="1255" y="310" text-anchor="end" fill="#22c55e" font-size="10" font-family="monospace">1.72</text>
+            <text x="988" y="328" fill="#9ca3af" font-size="10" font-family="monospace">SOL tx history 90d</text>
+            <text x="1255" y="328" text-anchor="end" fill="#22c55e" font-size="10" font-family="monospace">1.61</text>
+            <line x1="988" y1="344" x2="1260" y2="344" stroke="#1c1c1c" stroke-width="1"/>
+            <!-- Brain state -->
+            <text x="988" y="364" fill="#4b5563" font-size="8.5" font-family="monospace" letter-spacing="1.5">BRAIN STATE</text>
+            <text x="988" y="384" fill="#374151" font-size="9.5" font-family="monospace">Top: ENS (2.40), Gitcoin (2.18).</text>
+            <text x="988" y="400" fill="#374151" font-size="9.5" font-family="monospace">23 corrections improved avg</text>
+            <text x="988" y="416" fill="#374151" font-size="9.5" font-family="monospace">confidence by 4.2%.</text>
+            <line x1="988" y1="432" x2="1260" y2="432" stroke="#1c1c1c" stroke-width="1"/>
+            <!-- Consolidation -->
+            <text x="988" y="452" fill="#4b5563" font-size="8.5" font-family="monospace" letter-spacing="1.5">NEXT CONSOLIDATION</text>
+            <text x="988" y="474" fill="#9ca3af" font-size="20" font-family="sans-serif" font-weight="300">47 min</text>
+            <!-- Ollama status -->
+            <circle cx="988" cy="504" r="4" fill="#22c55e"/>
+            <text x="1000" y="508" fill="#6b7280" font-size="10" font-family="monospace">Ollama running</text>
+            <circle cx="988" cy="528" r="4" fill="#22c55e">
+              <animate attributeName="opacity" values="1;0.2;1" dur="2s" repeatCount="indefinite"/>
+            </circle>
+            <text x="1000" y="532" fill="#6b7280" font-size="10" font-family="monospace">Syncing brain events</text>
+          </svg>
+        </div>
+      </div>
+
+      <!-- Feature callouts -->
+      <div class="mt-20 grid md:grid-cols-3 gap-10 max-w-5xl mx-auto text-center">
+        <div>
+          <div class="text-[#22c55e] text-xs tracking-[3px] mb-3">LIVE CHAIN MONITOR</div>
+          <h3 class="font-display text-[38px] mb-3">Every block. Every reward.</h3>
+          <p class="text-white/55 text-[18px]">Watch the chain grow in real time. Each block you mine confirms in the log within seconds of inference completing.</p>
+        </div>
+        <div>
+          <div class="text-[#22c55e] text-xs tracking-[3px] mb-3">BUILT-IN LLM CHAT</div>
+          <h3 class="font-display text-[38px] mb-3">Talk to your local AI.</h3>
+          <p class="text-white/55 text-[18px]">Switch to the Chat tab and talk to the same qwen2.5 model your node uses for identity inference. Private. Offline.</p>
+        </div>
+        <div>
+          <div class="text-[#22c55e] text-xs tracking-[3px] mb-3">SELF-LEARNING BRAIN</div>
+          <h3 class="font-display text-[38px] mb-3">Gets smarter every hour.</h3>
+          <p class="text-white/55 text-[18px]">Signal weights adjust from every scan, correction, and vote. The brain consolidates what it learned each hour automatically.</p>
+        </div>
+      </div>
+
+      <!-- Chat tab preview (secondary) -->
+      <div class="mt-24 max-w-4xl mx-auto">
+        <div class="mb-8 text-center">
+          <div class="uppercase tracking-[3px] text-xs text-[#22c55e] mb-3">CHAT TAB</div>
+          <h3 class="font-display text-[60px] leading-none">Your node. Your LLM.</h3>
+          <p class="mt-4 text-[22px] text-white/55">Switch tabs. Ask anything. No API key, no cloud, no rate limits.</p>
+        </div>
+        <div class="relative rounded-2xl overflow-hidden border border-white/8 shadow-[0_20px_80px_rgba(0,0,0,0.8)]">
+          <div class="flex items-center gap-x-2 px-5 bg-[#161616] border-b border-white/5" style="height:42px;">
+            <span style="width:13px;height:13px;border-radius:50%;background:#ff5f57;display:inline-block;"></span>
+            <span style="width:13px;height:13px;border-radius:50%;background:#febc2e;display:inline-block;"></span>
+            <span style="width:13px;height:13px;border-radius:50%;background:#28c840;display:inline-block;"></span>
+            <span class="mx-auto text-white/25 text-xs" style="font-family:system-ui;">PoH Miner — Chat</span>
+          </div>
+          <svg viewBox="0 0 1000 480" xmlns="http://www.w3.org/2000/svg" style="width:100%;display:block;background:#0a0a0a;">
+            <!-- Sidebar (abbreviated) -->
+            <rect x="0" y="0" width="180" height="480" fill="#111"/>
+            <line x1="180" y1="0" x2="180" y2="480" stroke="#1c1c1c" stroke-width="1"/>
+            <text x="16" y="30" fill="#22c55e" font-size="9" font-family="monospace" letter-spacing="2">NODE STATUS</text>
+            <line x1="0" y1="40" x2="180" y2="40" stroke="#1c1c1c" stroke-width="1"/>
+            <text x="16" y="68" fill="#4b5563" font-size="8" font-family="monospace" letter-spacing="1.5">BALANCE</text>
+            <text x="16" y="90" fill="#22c55e" font-size="24" font-family="sans-serif" font-weight="300">12.48 POH</text>
+            <text x="16" y="116" fill="#4b5563" font-size="8" font-family="monospace" letter-spacing="1.5">CHAIN HEIGHT</text>
+            <text x="16" y="136" fill="#e5e7eb" font-size="22" font-family="sans-serif" font-weight="300">7,286</text>
+            <circle cx="16" cy="172" r="4" fill="#22c55e"><animate attributeName="opacity" values="1;0.2;1" dur="2s" repeatCount="indefinite"/></circle>
+            <text x="28" y="176" fill="#22c55e" font-size="9" font-family="monospace">MINING ACTIVE</text>
+            <!-- Tab bar -->
+            <rect x="180" y="0" width="820" height="38" fill="#0f0f0f"/>
+            <line x1="180" y1="38" x2="1000" y2="38" stroke="#1c1c1c" stroke-width="1"/>
+            <text x="252" y="24" text-anchor="middle" fill="#374151" font-size="11" font-family="monospace" letter-spacing="1.5">LOGS</text>
+            <rect x="298" y="0" width="120" height="38" fill="#0a0a0a"/>
+            <text x="358" y="24" text-anchor="middle" fill="#f9fafb" font-size="11" font-family="monospace" letter-spacing="1.5">CHAT</text>
+            <line x1="298" y1="38" x2="418" y2="38" stroke="#22c55e" stroke-width="2"/>
+            <text x="474" y="24" text-anchor="middle" fill="#374151" font-size="11" font-family="monospace" letter-spacing="1.5">SCANNER</text>
+            <text x="590" y="24" text-anchor="middle" fill="#374151" font-size="11" font-family="monospace" letter-spacing="1.5">SEND</text>
+            <text x="700" y="24" text-anchor="middle" fill="#374151" font-size="11" font-family="monospace" letter-spacing="1.5">RECEIVE</text>
+            <!-- Model selector -->
+            <rect x="700" y="8" width="180" height="22" rx="3" fill="#1a1a1a" stroke="#2a2a2a" stroke-width="1"/>
+            <text x="714" y="23" fill="#6b7280" font-size="10" font-family="monospace">qwen2.5:1.5b ▾</text>
+            <!-- Chat messages -->
+            <!-- User msg 1 -->
+            <rect x="560" y="58" width="390" height="44" rx="6" fill="#1a1a1a"/>
+            <text x="578" y="76" fill="#e5e7eb" font-size="11" font-family="monospace">What signals does PoH use to detect bots?</text>
+            <text x="916" y="94" text-anchor="end" fill="#374151" font-size="9" font-family="monospace">You</text>
+            <!-- AI msg 1 -->
+            <rect x="198" y="114" width="560" height="76" rx="6" fill="#0f1a0f"/>
+            <text x="216" y="132" fill="#22c55e" font-size="11" font-family="monospace">PoH uses 47 active signals including ENS ownership,</text>
+            <text x="216" y="150" fill="#22c55e" font-size="11" font-family="monospace">Gitcoin Passport score, Farcaster verification, Uniswap</text>
+            <text x="216" y="168" fill="#22c55e" font-size="11" font-family="monospace">LP history, and 43 more on-chain + social indicators.</text>
+            <text x="216" y="184" text-anchor="start" fill="#374151" font-size="9" font-family="monospace">AI · qwen2.5:1.5b</text>
+            <!-- User msg 2 -->
+            <rect x="560" y="204" width="348" height="44" rx="6" fill="#1a1a1a"/>
+            <text x="578" y="222" fill="#e5e7eb" font-size="11" font-family="monospace">Which signal has the highest weight?</text>
+            <text x="890" y="240" text-anchor="end" fill="#374151" font-size="9" font-family="monospace">You</text>
+            <!-- AI msg 2 -->
+            <rect x="198" y="260" width="480" height="60" rx="6" fill="#0f1a0f"/>
+            <text x="216" y="278" fill="#22c55e" font-size="11" font-family="monospace">ENS name ownership (weight: 2.40) is currently the</text>
+            <text x="216" y="296" fill="#22c55e" font-size="11" font-family="monospace">strongest signal, followed by Gitcoin Passport (2.18).</text>
+            <text x="216" y="312" text-anchor="start" fill="#374151" font-size="9" font-family="monospace">AI · qwen2.5:1.5b</text>
+            <!-- Input area -->
+            <rect x="180" y="430" width="820" height="50" fill="#0d0d0d"/>
+            <line x1="180" y1="430" x2="1000" y2="430" stroke="#1c1c1c" stroke-width="1"/>
+            <rect x="198" y="440" width="680" height="32" rx="4" fill="#161616" stroke="#222" stroke-width="1"/>
+            <text x="214" y="460" fill="#374151" font-size="11" font-family="monospace">Ask anything about the network, signals, or your node…</text>
+            <rect x="888" y="440" width="80" height="32" rx="4" fill="#22c55e"/>
+            <text x="928" y="460" text-anchor="middle" fill="#000" font-size="11" font-family="monospace" font-weight="bold">SEND</text>
+          </svg>
+        </div>
+      </div>
+
+    </div>
+  </div>
+  <!-- ═══ END APP SHOWCASE ═══ -->
 
     <!-- CTA: Ready to contribute real compute? -->
   <div id="start" class="max-w-5xl mx-auto px-6 p-40 border-t border-white/10">
@@ -542,10 +812,14 @@
       </div>
     </div>
 
-    <div class="text-center">
+    <div class="text-center flex flex-col sm:flex-row gap-4 justify-center">
+      <a href="wallet/"
+         class="inline-flex items-center justify-center px-10 py-4 bg-white hover:bg-[#22c55e] hover:text-black transition text-black text-[24px] font-medium rounded-[4px]">
+        See Wallet →
+      </a>
       <a href="binaries/poh-miner-wallet.apk"
          class="inline-flex items-center justify-center px-10 py-4 bg-[#22c55e] hover:bg-white hover:text-black transition text-black text-[24px] font-medium rounded-[4px]">
-        Download Android Wallet (.apk)
+        Download Android (.apk)
       </a>
     </div>
   </div>
