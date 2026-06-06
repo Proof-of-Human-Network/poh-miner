@@ -2344,9 +2344,12 @@ async function executeSend() {
   const btn    = document.getElementById('send-btn');
   const res    = document.getElementById('send-result');
 
-  if (!to)           { showSendResult(res, false, 'Enter a recipient address'); return; }
-  if (!(amount > 0)) { showSendResult(res, false, 'Enter a valid amount'); return; }
-  if (amount > _sendWalletPoh) { showSendResult(res, false, `Insufficient balance (${_sendWalletPoh.toFixed(4)} POH)`); return; }
+  const isValidAddr = a => /^poh[0-9a-f]{40}$/i.test(a) || /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(a);
+  if (!_sendWalletAddr)  { showSendResult(res, false, 'No wallet loaded — start the miner first'); return; }
+  if (!to)               { showSendResult(res, false, 'Enter a recipient address'); return; }
+  if (!isValidAddr(to))  { showSendResult(res, false, 'Invalid address — must be a PoH or Solana wallet address'); return; }
+  if (!(amount > 0))     { showSendResult(res, false, 'Enter a valid amount'); return; }
+  if (amount > _sendWalletPoh) { showSendResult(res, false, `Insufficient balance (${_sendWalletPoh.toFixed(4)} POH available)`); return; }
 
   btn.disabled = true;
   btn.textContent = 'Sending…';
@@ -2364,12 +2367,17 @@ async function executeSend() {
       showSendResult(res, true, `Sent ${amount} POH → ${to.slice(0, 12)}…`);
       document.getElementById('send-to').value = '';
       document.getElementById('send-amount').value = '';
-      setTimeout(syncSendWallet, 1000); // refresh balance
+      updateSendSummary();
+      setTimeout(syncSendWallet, 1200);
     } else {
       showSendResult(res, false, data.error || 'Transaction failed');
     }
   } catch (err) {
-    showSendResult(res, false, err.message);
+    if (err.message.includes('fetch') || err.message.includes('Failed')) {
+      showSendResult(res, false, 'Cannot connect to miner — make sure it is running');
+    } else {
+      showSendResult(res, false, err.message);
+    }
   } finally {
     btn.disabled = false;
     btn.textContent = 'Confirm & Send';

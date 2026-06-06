@@ -381,7 +381,7 @@ export class PohMinerNode {
         req.on('end', () => {
           try {
             const { from, to, amount } = JSON.parse(body);
-            const amt = parseFloat(amount);
+            const amt = Math.round(parseFloat(amount) * POH_DECIMALS);
 
             if (!from || !to || !amt || amt <= 0) {
               res.statusCode = 400;

@@ -288,7 +288,9 @@ export async function getBrain() {
 }
 
 export function getBrainDataDir() {
-  return process.env.BRAIN_DATA_DIR || null;
+  if (process.env.BRAIN_DATA_DIR) return process.env.BRAIN_DATA_DIR;
+  const homeDir = process.env.HOME || process.env.USERPROFILE || '.';
+  return path.join(homeDir, '.poh-miner', 'brain');
 }
 
 function simulateVerdict(job, config, mgr = null) {
