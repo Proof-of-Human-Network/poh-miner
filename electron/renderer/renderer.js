@@ -1196,11 +1196,11 @@ async function loadChatBrainContext(force = false) {
   try {
     // Manual timeout via Promise.race for broad compatibility
     const timeout = new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 8000));
-    const fetchP  = fetch(`http://localhost:${port}/api/brain/state?full=1`);
+    const fetchP  = fetch(`http://localhost:${port}/api/brain/state`);
     const r = await Promise.race([fetchP, timeout]);
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     const d = await r.json();
-    const stateText = d.stateSummary || '';
+    const stateText = (d.stateSummary || '').slice(0, 3000);
     if (!stateText.trim()) throw new Error('brain_state.md is empty');
 
     _brainSystemPrompt =
@@ -1655,6 +1655,11 @@ async function sendChatMessage() {
         if (!line.trim()) continue;
         try {
           const evt = JSON.parse(line);
+          if (evt.error) {
+            appendToLastBubble(`[Ollama error: ${evt.error}]`);
+            fullResponse += `[Error: ${evt.error}]`;
+            break;
+          }
           const token = evt.message?.content || '';
           if (token) {
             appendToLastBubble(token);
@@ -1665,8 +1670,9 @@ async function sendChatMessage() {
       }
     }
 
+    if (!fullResponse) appendToLastBubble('[No response — is Ollama running with the selected model?]');
     finalizeLastBubble();
-    chatHistory.push({ role: 'assistant', content: fullResponse });
+    chatHistory.push({ role: 'assistant', content: fullResponse || '[no response]' });
   } catch (err) {
     if (err.name === 'AbortError') {
       // User interrupted — finalize whatever was streamed so far
