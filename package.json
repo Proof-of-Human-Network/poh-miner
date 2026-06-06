@@ -82,7 +82,10 @@
       "src/**/*",
       "landing/**/*",
       "package.json",
-      "node_modules/**/*"
+      "node_modules/**/*",
+      "!config.json",
+      "!.poh-miner/**/*",
+      "!dist/**/*"
     ],
     "mac": {
       "category": "public.app-category.utilities",

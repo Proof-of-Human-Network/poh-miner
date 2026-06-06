@@ -23,7 +23,7 @@ import { fileURLToPath } from 'url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const home = process.env.HOME || process.env.USERPROFILE || '.';
-const GLOBAL_CONFIG_PATH = path.join(__dirname, '../config.json');
+const GLOBAL_CONFIG_PATH = path.join(home, '.poh-miner', 'config.json');
 
 /**
  * Detect whether we appear to be running inside the poh-miner-network source tree.
