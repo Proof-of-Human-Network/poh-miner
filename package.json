@@ -73,7 +73,7 @@
   },
   "build": {
     "appId": "ge.proofofhuman.pohminer",
-    "productName": "PoH Miner",
+    "productName": "PoH-Miner",
     "directories": {
       "output": "dist/electron"
     },
@@ -135,7 +135,8 @@
       "icon": "assets/icons"
     },
     "deb": {
-      "depends": []
+      "depends": [],
+      "afterInstall": "scripts/after-install.sh"
     }
   }
 }
