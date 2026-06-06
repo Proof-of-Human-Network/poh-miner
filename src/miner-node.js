@@ -255,19 +255,11 @@ export class PohMinerNode {
     const hasAnyEvm = Object.keys(rpcEndpoints).length > 0;
 
     if (!hasSolana) {
-      const msg =
-        '❌ Missing required Solana RPC endpoint.\n\n' +
-        'Many critical POH signals (especially those using Meteora conviction curves and Solana on-chain data) ' +
-        'require a reliable Solana RPC.\n\n' +
-        'Please set one of the following:\n' +
-        '  • "solanaRpc" field in ~/.poh-miner/config.json\n' +
-        '  • SOLANA_RPC environment variable\n\n' +
-        'Example:\n' +
-        '  "solanaRpc": "https://api.mainnet-beta.solana.com"\n' +
-        '  or a paid RPC like Helius, QuickNode, etc. for better reliability.\n\n' +
-        'You can disable this check by setting "requireRpcs": false in your config (not recommended).';
-
-      throw new Error(msg);
+      console.warn(
+        '⚠️  No Solana RPC configured. Signals that rely on Solana on-chain data will be skipped.\n' +
+        '   Add one via Settings → RPC, or set "solanaRpc" in ~/.poh-miner/config.json.\n' +
+        '   Example: "solanaRpc": "https://api.mainnet-beta.solana.com"'
+      );
     }
 
     if (!hasAnyEvm) {
@@ -1013,7 +1005,7 @@ export class PohMinerNode {
       const genesis = new PohBlock({
         height: 0,
         previousHash: '0'.repeat(64),
-        timestamp: Date.now(),
+        timestamp: 1780700000000,
         minerWallet: 'genesis',
         difficulty: this.currentDifficulty,
       });

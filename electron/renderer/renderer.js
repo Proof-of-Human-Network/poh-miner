@@ -173,8 +173,9 @@ if (window.pohMinerAPI) {
     setTimeout(loadBrainState, 1500);
   });
 } else {
-  // Fallback for development
-  addLog('[UI] Running outside Electron. IPC not available.');
+  // Preload IPC unavailable — poll the miner HTTP API directly for status and brain state
+  setTimeout(pollNodeStatus, 500);
+  setTimeout(loadBrainState, 1500);
 }
 
 // Initial state - safely set if elements exist
@@ -1793,17 +1794,15 @@ async function loadBrainState() {
 // Poll brain state every 15s
 setInterval(loadBrainState, 15000);
 
-// Also poll live node status (peer count, region, etc.)
+// Poll live node status — updates all sidebar fields (wallet, peers, chain height, etc.)
+// This is the primary data source when running without IPC (e.g. web mode or sandbox preload).
 async function pollNodeStatus() {
   const port = window._minerApiPort || 3456;
   try {
     const res  = await fetch(`http://localhost:${port}/status`, { timeout: 4000 });
     if (!res.ok) return;
     const data = await res.json();
-    if (data.peers != null) {
-      const el = document.getElementById('sidebar-peers');
-      if (el) el.textContent = data.peers + ' online';
-    }
+    updateStatus(data);
   } catch {}
 }
 setInterval(pollNodeStatus, 10000);

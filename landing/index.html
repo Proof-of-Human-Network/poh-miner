@@ -59,7 +59,7 @@
 
     /* ── Mobile nav ─────────────────────────────────── */
     .nav-links { display: none; }
-    @media (min-width: 768px) { .nav-links { display: flex; } }
+    @media (min-width: 1024px) { .nav-links { display: flex; } }
 
     /* Mobile hamburger */
     .hamburger { display: flex; flex-direction: column; gap: 5px; cursor: pointer; padding: 4px; }
@@ -67,40 +67,41 @@
     .hamburger.open span:nth-child(1) { transform: translateY(7px) rotate(45deg); }
     .hamburger.open span:nth-child(2) { opacity: 0; }
     .hamburger.open span:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
-    @media (min-width: 768px) { .hamburger { display: none; } }
+    @media (min-width: 1024px) { .hamburger { display: none; } }
 
     /* Mobile menu drawer */
     .mobile-drawer {
-      display: none; position: fixed; top: 80px; left: 0; right: 0; z-index: 49;
+      display: none; position: fixed; top: 64px; left: 0; right: 0; z-index: 49;
       background: #0a0a0a; border-bottom: 1px solid #1f1f1f;
       flex-direction: column; padding: 16px 24px 24px;
       gap: 0;
     }
+    @media (min-width: 640px) { .mobile-drawer { top: 80px; } }
     .mobile-drawer.open { display: flex; }
     .mobile-drawer a {
       padding: 14px 0; font-size: 22px; color: #fff;
       border-bottom: 1px solid #1a1a1a; text-decoration: none;
     }
     .mobile-drawer a:last-child { border-bottom: none; }
-    @media (min-width: 768px) { .mobile-drawer { display: none !important; } }
+    @media (min-width: 1024px) { .mobile-drawer { display: none !important; } }
   </style>
 </head>
 <body class="bg-black text-white overflow-x-hidden">
   <!-- Nav -->
   <nav class="border-b border-white/10 bg-black/80 backdrop-blur-xl fixed w-full z-50">
-    <div class="max-w-7xl mx-auto px-8 h-20 flex items-center justify-between">
-      <div class="flex items-center gap-x-4">
-        <div class="flex items-center gap-x-3">
-          <img src="poh-miner.svg" alt="PoH Logo" width="48" height="48" style="vertical-align: middle;" />
-          <span class="font-display text-[60px]">Miner</span>
+    <div class="max-w-7xl mx-auto px-4 sm:px-8 h-16 sm:h-20 flex items-center justify-between">
+      <div class="flex items-center gap-x-2 sm:gap-x-4">
+        <div class="flex items-center gap-x-2 sm:gap-x-3">
+          <img src="poh-miner.svg" alt="PoH Logo" width="36" height="36" class="sm:w-[48px] sm:h-[48px]" style="vertical-align: middle;" />
+          <span class="font-display text-[32px] sm:text-[48px] md:text-[60px] leading-none">Miner</span>
         </div>
       </div>
-      <div class="nav-links flex items-center gap-x-9 text-[22px]">
-        <a href="#how" class="hover:text-[#22c55e] transition">How it works</a>
-        <a href="#network" class="hover:text-[#22c55e] transition">The Network</a>
-        <a href="#start" class="hover:text-[#22c55e] transition">Start Earning</a>
-        <a href="wallet/" class="hover:text-[#22c55e] transition">Wallet</a>
-        <a href="https://proofofhuman.ge" target="_blank" class="px-5 py-2.5 rounded-[4px] border border-white/20 hover:bg-white/5 transition text-[22px]">proofofhuman.ge</a>
+      <div class="nav-links items-center gap-x-6 xl:gap-x-9 text-[17px] xl:text-[20px]">
+        <a href="#how" class="hover:text-[#22c55e] transition whitespace-nowrap">How it works</a>
+        <a href="#network" class="hover:text-[#22c55e] transition whitespace-nowrap">The Network</a>
+        <a href="#start" class="hover:text-[#22c55e] transition whitespace-nowrap">Start Earning</a>
+        <a href="wallet/" class="hover:text-[#22c55e] transition whitespace-nowrap">Wallet</a>
+        <a href="https://proofofhuman.ge" target="_blank" class="px-3 lg:px-5 py-2 rounded-[4px] border border-white/20 hover:bg-white/5 transition whitespace-nowrap">proofofhuman.ge</a>
       </div>
       <button class="hamburger" id="hamburger" aria-label="Open menu">
         <span></span><span></span><span></span>
@@ -118,7 +119,7 @@
   </div>
 
   <!-- Hero -->
-  <div class="relative min-h-[100dvh] flex items-center justify-center pt-20">
+  <div class="relative min-h-[100dvh] flex items-center justify-center pt-16 sm:pt-20">
     <!-- Background mesh -->
     <canvas id="node-mesh" class="absolute inset-0"></canvas>
     

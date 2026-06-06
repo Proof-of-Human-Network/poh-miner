@@ -137,7 +137,7 @@ if (chain.length === 0) {
   const genesis = new PohBlock({
     height: 0,
     previousHash: '0'.repeat(64),
-    timestamp: Date.now(),
+    timestamp: 1780700000000,
     minerWallet: 'bootnode-genesis',
     difficulty: 4,
   });

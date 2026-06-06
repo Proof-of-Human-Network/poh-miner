@@ -281,6 +281,11 @@ app.on('will-quit', () => {
 });
 
 ipcMain.handle('get-logs', () => logs.slice(-300));
+
+ipcMain.handle('generate-qr', async (_event, text, size = 220) => {
+  const QRCode = require('qrcode');
+  return QRCode.toDataURL(text, { width: size, margin: 2, color: { dark: '#000', light: '#fff' } });
+});
 ipcMain.handle('get-status', () => {
   if (!minerNode) return null;
 

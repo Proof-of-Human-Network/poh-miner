@@ -22,24 +22,26 @@
       "provider": "helius",
       "apiKey": "YOUR_HELIUS_KEY"
     },
-    "1": {
-      "provider": "alchemy",
-      "apiKey": "YOUR_ALCHEMY_KEY"
-    },
-    "8453": {
-      "provider": "alchemy",
-      "apiKey": "YOUR_ALCHEMY_KEY"
-    },
-    "42161": {
-      "provider": "alchemy",
-      "apiKey": "YOUR_ALCHEMY_KEY"
-    }
+    "1": { "provider": "alchemy", "apiKey": "API_KEY" },
+    "8453": { "provider": "alchemy", "apiKey": "API_KEY" },
+    "42161": { "provider": "alchemy", "apiKey": "API_KEY" },
+    "56": { "provider": "alchemy", "apiKey": "API_KEY" },
+    "137": { "provider": "alchemy", "apiKey": "API_KEY" },
+    "10": { "provider": "alchemy", "apiKey": "API_KEY" },
+    "5000": { "provider": "alchemy", "apiKey": "API_KEY" },
+    "43114": { "provider": "alchemy", "apiKey": "API_KEY" },
+    "324": { "provider": "alchemy", "apiKey": "API_KEY" },
+    "59144": { "provider": "alchemy", "apiKey": "API_KEY" },
+    "143": { "provider": "alchemy", "apiKey": "API_KEY" },
+    "534352": { "provider": "alchemy", "apiKey": "API_KEY" },
+    "25": { "provider": "alchemy", "apiKey": "API_KEY" },
+    "480": { "provider": "alchemy", "apiKey": "API_KEY" }
   },
 
   "rpcOverrides": {
     "btc": "https://mempool.space/api",
-    "tron": "",
-    "ton": "",
+    "tron": "https://api.trongrid.io/jsonrpc?api_key=YOUR_TRONGRID_KEY",
+    "ton": "https://toncenter.com/api/v2/jsonRPC?api_key=YOUR_TONCENTER_KEY",
     "xlm": "https://horizon.stellar.org"
   },
 
