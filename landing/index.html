@@ -588,11 +588,11 @@
             </div>
           </div>
           <div class="text-[22px] text-white/70 mb-4 flex-1">Double-click installer. Adds system menu entry, desktop icon, and CLI. Easiest for most Linux users.</div>
-          <a href="https://ipfs.io/ipfs/QmReplaceWithActualCID/binaries/poh-miner-linux-x64.deb" download="poh-miner-linux-x64.deb"
+          <a href="binaries/poh-miner-linux-x64.deb" download="poh-miner-linux-x64.deb"
              class="block w-full text-center bg-[#22c55e] hover:bg-white hover:text-black transition text-black py-3 rounded-[4px] text-sm font-medium">
             Download .deb (64-bit)
           </a>
-          <div class="text-[10px] text-center text-white/40 mt-1">~30 MB • run scripts/build-deb.sh after build:bin</div>
+          <div class="text-[10px] text-center text-white/40 mt-1">~190 MB • double-click to install</div>
         </div>
 
         <!-- Linux AppImage -->
@@ -605,7 +605,7 @@
             </div>
           </div>
           <div class="text-sm text-white/70 mb-4 flex-1">Portable single file. No root install. Download → chmod +x → double-click or run from anywhere.</div>
-          <a href="https://ipfs.io/ipfs/QmReplaceWithActualCID/binaries/poh-miner-linux-x64.AppImage" download="poh-miner-linux-x64.AppImage"
+          <a href="binaries/poh-miner-linux-x64.AppImage" download="poh-miner-linux-x64.AppImage"
              class="block w-full text-center border border-white/30 hover:bg-white/5 py-3 rounded-[4px] text-sm font-medium transition">
             Download AppImage
           </a>
@@ -623,13 +623,13 @@
           </div>
           <div class="text-sm text-white/70 mb-3 flex-1">Perfect for Mac Mini users. Download the binary for your arch. (Or use the one-liner below for easiest setup.)</div>
           <div class="flex flex-col gap-2">
-            <a href="https://ipfs.io/ipfs/QmReplaceWithActualCID/binaries/poh-miner-macos-arm64" download="poh-miner-macos-arm64"
-               class="block w-full text-center bg-[#22c55e] hover:bg-white hover:text-black transition text-black py-2.5 rounded-[4px] text-sm font-medium">
-              Download Apple Silicon
+            <a href="#"
+               class="block w-full text-center bg-white/10 text-white/40 cursor-not-allowed py-2.5 rounded-[4px] text-sm font-medium">
+              Apple Silicon — Coming Soon
             </a>
-            <a href="https://ipfs.io/ipfs/QmReplaceWithActualCID/binaries/poh-miner-macos-x64" download="poh-miner-macos-x64"
-               class="block w-full text-center border border-white/30 hover:bg-white/5 py-2 rounded-[4px] text-xs transition">
-              Intel Mac (x64)
+            <a href="#"
+               class="block w-full text-center border border-white/10 text-white/30 cursor-not-allowed py-2 rounded-[4px] text-xs">
+              Intel Mac — Coming Soon
             </a>
           </div>
           <div class="text-[10px] text-center text-white/40 mt-1">chmod +x then run • may need “Open Anyway” in Security</div>
@@ -645,7 +645,7 @@
             </div>
           </div>
           <div class="text-sm text-white/70 mb-4 flex-1">Standard .exe installer with shortcuts, Start Menu entry, and clean uninstaller. Built with NSIS.</div>
-          <a href="binaries/PoH Miner 0.1.0.exe" download="poh-miner-windows-x64.exe"
+          <a href="binaries/poh-miner-windows-x64.exe" download="poh-miner-windows-x64.exe"
              class="block w-full text-center bg-[#22c55e] hover:bg-white hover:text-black transition text-black py-3 rounded-[4px] text-sm font-medium">
             Download Windows Installer
           </a>
@@ -656,12 +656,12 @@
       <div class="mt-8 text-center">
         <div class="text-[18px] uppercase tracking-[1.5px] text-white/50 mb-2">Power users &amp; one-liner install</div>
         <div class="inline-flex flex-col sm:flex-row items-center gap-2 bg-black/60 border border-white/10 rounded-[4px] px-5 py-3 text-sm font-mono max-w-full overflow-x-auto">
-          curl -fsSL https://ipfs.io/ipfs/QmReplaceWithActualCID/scripts/easy-start.sh | bash
+          curl -fsSL https://miner.proofofhuman.ge/scripts/easy-start.sh | bash
         </div>
         <div class="mt-3 flex flex-wrap justify-center gap-x-4 text-xs">
-          <a href="https://ipfs.io/ipfs/QmReplaceWithActualCID/scripts/easy-start.sh" download="easy-start.sh" class="text-[#22c55e] hover:underline">Download easy-start.sh</a>
+          <a href="scripts/easy-start.sh" download="easy-start.sh" class="text-[#22c55e] hover:underline">Download easy-start.sh</a>
           <span class="text-white/20">•</span>
-          <a href="https://ipfs.io/ipfs/QmReplaceWithActualCID/scripts/download-latest.sh" download class="text-[#22c55e] hover:underline">download-latest.sh (picks binary)</a>
+          <a href="scripts/download-latest.sh" download="download-latest.sh" class="text-[#22c55e] hover:underline">download-latest.sh (picks binary)</a>
           <span class="text-white/20">•</span>
           <a href="https://github.com/poh/poh-miner-network" target="_blank" class="text-white/60 hover:text-white">View build scripts + source</a>
         </div>
