@@ -85,7 +85,7 @@ async function resolveIdentityHubUsername(query, apiKey, filterPlatform = null) 
     );
     if (!res.ok) return null;
     const data = await res.json();
-    const agents = data.agents || data.items || (Array.isArray(data) ? data : []);
+    const agents = data?.data?.items || data?.agents || data?.items || (Array.isArray(data) ? data : []);
     if (!agents.length) return null;
 
     let agent;
@@ -127,7 +127,7 @@ async function fetchIdentityHubProfile(address, apiKey) {
     );
     if (!res.ok) return null;
     const data = await res.json();
-    const agents = data.agents || data.items || (Array.isArray(data) ? data : []);
+    const agents = data?.data?.items || data?.agents || data?.items || (Array.isArray(data) ? data : []);
     const agent = agents.find(a =>
       (a.ownerAddress || '').toLowerCase() === address.toLowerCase() ||
       (a.walletAddress || '').toLowerCase() === address.toLowerCase()
