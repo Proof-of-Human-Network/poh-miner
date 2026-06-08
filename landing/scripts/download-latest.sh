@@ -1,9 +1,6 @@
 #!/usr/bin/env bash
 #
-# download-latest.sh
-#
-# Downloads the latest PoH Miner binary for your platform from IPFS.
-# Falls back to GitHub releases if IPFS is unavailable.
+# download-latest.sh  —  Download the latest PoH Miner binary for your platform.
 #
 # Usage:
 #   ./scripts/download-latest.sh
@@ -12,20 +9,7 @@
 
 set -e
 
-IPFS_CID_FILE="$(dirname "$0")/../ipfs/binaries.txt"
-GITHUB_RELEASES="https://github.com/poh/poh-miner-network/releases/latest/download"
-
-if [ -f "$IPFS_CID_FILE" ]; then
-  CID=$(cat "$IPFS_CID_FILE" | tr -d '[:space:]')
-else
-  CID=""
-fi
-
-IPFS_GATEWAYS=(
-  "https://ipfs.io/ipfs"
-  "https://gateway.pinata.cloud/ipfs"
-  "https://cloudflare-ipfs.com/ipfs"
-)
+BASE_URL="https://miner.proofofhuman.ge"
 
 detect_platform() {
   OS=$(uname -s | tr '[:upper:]' '[:lower:]')
@@ -34,15 +18,15 @@ detect_platform() {
   case "$OS" in
     linux*)
       case "$ARCH" in
-        x86_64)   echo "linux-x64" ;;
+        x86_64)        echo "linux-x64" ;;
         aarch64|arm64) echo "linux-arm64" ;;
         *) echo "unsupported" ;;
       esac
       ;;
     darwin*)
       case "$ARCH" in
-        x86_64)   echo "macos-x64" ;;
-        arm64)    echo "macos-arm64" ;;
+        x86_64) echo "macos-x64" ;;
+        arm64)  echo "macos-arm64" ;;
         *) echo "unsupported" ;;
       esac
       ;;
@@ -62,53 +46,19 @@ if [ "$PLATFORM" = "unsupported" ]; then
   exit 1
 fi
 
-FILENAME="poh-miner-${PLATFORM}"
-if [[ "$PLATFORM" == win-* ]]; then
-  FILENAME="${FILENAME}.exe"
-fi
+case "$PLATFORM" in
+  linux-x64)   FILENAME="poh-miner-linux-x64.AppImage" ;;
+  linux-arm64) FILENAME="poh-miner-linux-arm64.AppImage" ;;
+  win-x64)     FILENAME="poh-miner-windows-x64.exe" ;;
+  macos-*)     echo "macOS builds are coming soon. Use the AppImage on Linux."; exit 0 ;;
+esac
 
+DOWNLOAD_URL="$BASE_URL/binaries/$FILENAME"
 echo "Detected platform: $PLATFORM"
-echo "Looking for: $FILENAME"
+echo "Downloading: $DOWNLOAD_URL"
 
-download_from_ipfs() {
-  local url="$1/$CID/binaries/$FILENAME"
-  echo "→ Trying IPFS: $url"
-  if curl -fsSL -o "$FILENAME" "$url"; then
-    echo "✓ Downloaded from IPFS"
-    return 0
-  fi
-  return 1
-}
-
-download_from_github() {
-  local url="$GITHUB_RELEASES/$FILENAME"
-  echo "→ Trying GitHub: $url"
-  if curl -fsSL -L -o "$FILENAME" "$url"; then
-    echo "✓ Downloaded from GitHub"
-    return 0
-  fi
-  return 1
-}
-
-success=false
-
-if [ -n "$CID" ] && [ "$CID" != "QmReplaceWithActualCID" ]; then
-  for gateway in "${IPFS_GATEWAYS[@]}"; do
-    if download_from_ipfs "$gateway"; then
-      success=true
-      break
-    fi
-  done
-fi
-
-if [ "$success" = false ]; then
-  if download_from_github; then
-    success=true
-  fi
-fi
-
-if [ "$success" = false ]; then
-  echo "❌ Failed to download from all sources."
+if ! curl -fsSL -o "$FILENAME" "$DOWNLOAD_URL"; then
+  echo "❌ Download failed. Check https://miner.proofofhuman.ge for manual downloads."
   exit 1
 fi
 
@@ -128,4 +78,4 @@ else
 fi
 
 echo ""
-echo "After first run, configure with: poh-miner init"
+echo "Source + build scripts: https://github.com/Proof-of-Human-Network/poh-miner"

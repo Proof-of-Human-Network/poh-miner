@@ -31,7 +31,7 @@ import { IPFSSync } from './storage/ipfs-sync.js';
 import fs from 'fs';
 import path from 'path';
 import { ChainStore } from './storage/chain-store.js';
-import { WalletManager } from './wallet/wallet.js';
+import { WalletManager, Wallet } from './wallet/wallet.js';
 import { RewardClaimStore } from './storage/reward-claim-store.js';
 import http from 'http';
 import { resolveRpcConfig } from './rpc/resolver.js';
@@ -356,6 +356,47 @@ export class PohMinerNode {
         return res.end(JSON.stringify({ address, balance }));
       }
 
+      if (url.pathname === '/api/wallet/nonce') {
+        const address = url.searchParams.get('address');
+        if (!address) {
+          res.statusCode = 400;
+          return res.end(JSON.stringify({ error: 'address required' }));
+        }
+        const nonce = this.walletManager.getNonce(address);
+        return res.end(JSON.stringify({ address, nonce }));
+      }
+
+      // Register an ed25519 signing public key for a wallet address.
+      // Authenticated via a self-signature: proof = sign(address, signingPrivateKey).
+      if (req.method === 'POST' && url.pathname === '/api/wallet/register-key') {
+        let body = '';
+        req.on('data', c => body += c);
+        req.on('end', () => {
+          try {
+            const { address, signingPublicKey, proof } = JSON.parse(body);
+            if (!address || !signingPublicKey || !proof) {
+              res.statusCode = 400;
+              return res.end(JSON.stringify({ error: 'address, signingPublicKey, and proof required' }));
+            }
+            if (!Wallet.verifySignature(signingPublicKey, address, proof)) {
+              res.statusCode = 403;
+              return res.end(JSON.stringify({ error: 'invalid proof' }));
+            }
+            let wallet = this.walletManager.loadWallet(address);
+            if (!wallet) {
+              wallet = new Wallet({ address, privateKey: null, publicKey: null, createdAt: Date.now() });
+            }
+            wallet.signingPublicKey = signingPublicKey;
+            this.walletManager.saveWallet(wallet);
+            return res.end(JSON.stringify({ ok: true }));
+          } catch (e) {
+            res.statusCode = 400;
+            res.end(JSON.stringify({ error: e.message }));
+          }
+        });
+        return;
+      }
+
       if (url.pathname === '/api/wallet/transactions') {
         const address = url.searchParams.get('address');
         const history = (this.submissionHistory || [])
@@ -374,13 +415,15 @@ export class PohMinerNode {
         }));
       }
 
-      // Simple send endpoint (demo for wallet)
+      // Send endpoint — builds, signs, and submits a proper on-chain PoHTransaction.
+      // For local wallets (created by this node) the signing key is on disk; for external
+      // wallets that registered a key via /api/wallet/register-key this also works.
       if (req.method === 'POST' && url.pathname === '/api/wallet/send') {
         let body = '';
         req.on('data', chunk => body += chunk);
-        req.on('end', () => {
+        req.on('end', async () => {
           try {
-            const { from, to, amount } = JSON.parse(body);
+            const { from, to, amount, fee = 0, memo = '' } = JSON.parse(body);
             const amt = Math.round(parseFloat(amount) * POH_DECIMALS);
 
             if (!from || !to || !amt || amt <= 0) {
@@ -388,25 +431,26 @@ export class PohMinerNode {
               return res.end(JSON.stringify({ error: 'Invalid parameters' }));
             }
 
-            const success = this.walletManager.transfer(from, to, amt);
-            if (success) {
-              // Record as transaction for history
-              this.submissionHistory.push({
-                id: 'tx-' + Date.now(),
-                type: 'send',
-                from,
-                to,
-                amount: amt,
-                timestamp: Date.now(),
-                status: 'confirmed'
-              });
-              this._saveQualityState(); // reuse the file for simplicity
-
-              return res.end(JSON.stringify({ success: true, message: 'Transaction sent' }));
-            } else {
+            const senderWallet = this.walletManager.loadWallet(from);
+            if (!senderWallet?.signingPublicKey || !senderWallet?.signingPrivateKey) {
               res.statusCode = 400;
-              return res.end(JSON.stringify({ error: 'Insufficient balance or invalid sender' }));
+              return res.end(JSON.stringify({ error: 'Sender wallet has no signing key on this node. Use /api/wallet/register-key first.' }));
             }
+
+            const nonce = this.walletManager.getNonce(from) + 1;
+            const tx = new PoHTransaction({ from, to, amount: amt, fee, nonce, memo });
+            tx.sign(senderWallet);
+
+            const submitResult = this.txMempool.submit(tx);
+            if (submitResult !== true) {
+              res.statusCode = 400;
+              return res.end(JSON.stringify({ error: submitResult.error || 'Transaction rejected by mempool' }));
+            }
+
+            // Gossip to peers so all miners can include it
+            this.gossip.publish('new-tx', tx.toJSON()).catch(() => {});
+
+            return res.end(JSON.stringify({ success: true, txHash: tx.txHash, status: 'pending', message: 'Transaction submitted to mempool' }));
           } catch (e) {
             res.statusCode = 400;
             res.end(JSON.stringify({ error: e.message }));
@@ -444,7 +488,17 @@ export class PohMinerNode {
               return res.end(JSON.stringify({ error: 'payload.address is required for verdict jobs' }));
             }
 
-            console.log(`[PoH-Miner] Received job via ${url.pathname}: ${job.id} (${job.type}) for ${job.payload.address}`);
+            // Auto-detect chain type from address format if no chainFilter was specified.
+            // This tells the checker which signals to run and prevents evaluating irrelevant signals.
+            if (!job.payload.chainFilter) {
+              const addr = job.payload.address.trim();
+              if (/^0x[0-9a-fA-F]{40}$/.test(addr)) job.payload.chainFilter = 'evm';
+              else if (/^(1|3)[a-km-zA-HJ-NP-Z1-9]{24,33}$/.test(addr) || /^bc1[a-z0-9]{6,87}$/.test(addr)) job.payload.chainFilter = 'bitcoin';
+              else if (/^(EQ|UQ)[A-Za-z0-9+/=_-]{46}$/.test(addr)) job.payload.chainFilter = 'ton';
+              else if (/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(addr)) job.payload.chainFilter = 'solana';
+            }
+
+            console.log(`[PoH-Miner] Received job via ${url.pathname}: ${job.id} (${job.type}) for ${job.payload.address}` + (job.payload.chainFilter ? ` [chain:${job.payload.chainFilter}]` : ''));
 
             // Record for status polling immediately (non-blocking)
             this._recordJob(job);
@@ -1390,6 +1444,18 @@ export class PohMinerNode {
           this.walletManager.credit(block.minerWallet, tx.fee);
           this.balanceJournal.record(block.height, block.minerWallet, tx.fee, 0, tx.txHash);
         }
+        // Record in transaction history so /api/wallet/transactions can serve it
+        this.submissionHistory.push({
+          id: tx.txHash,
+          type: 'send',
+          from: tx.from,
+          to: tx.to,
+          amount: tx.amount,
+          fee: tx.fee || 0,
+          timestamp: tx.timestamp,
+          blockHeight: block.height,
+          status: 'mined',
+        });
       } else {
         console.warn(`[PoH-Miner] Tx ${tx.txHash.slice(0,12)} failed in block #${block.height}: ${result}`);
       }

@@ -22,21 +22,81 @@ async function getManager() {
 }
 
 /**
- * Minimum percentage of live signals a miner must evaluate.
- * Relaxed to 0.5 because for a given address only a subset of signals apply
- * (e.g. EVM-only methods for 0x... addresses; solana-specific skipped).
- * The high-value (curve-backed) gate + methodsHash + profile checks are the
- * stronger guarantees of real work.
+ * Minimum percentage of applicable live signals a miner must evaluate.
+ * "Applicable" = signals that match the address's chain type.
+ * A Bitcoin address has no Solana signals applicable to it; counting all 148
+ * as the denominator would always fail BTC/TON/etc. addresses.
  */
 const MIN_SIGNALS_FRACTION = 0.50;
+
+/**
+ * Detect which blockchain chains an address belongs to.
+ * Returns an array of chain tags: 'evm', 'solana', 'bitcoin', 'ton', 'poh'
+ */
+function detectAddressChains(address) {
+  if (!address || typeof address !== 'string') return ['universal'];
+  const a = address.trim();
+
+  if (/^0x[0-9a-fA-F]{40}$/.test(a))  return ['evm'];
+  if (/^(1|3)[a-km-zA-HJ-NP-Z1-9]{24,33}$/.test(a) || /^bc1[a-z0-9]{6,87}$/.test(a)) return ['bitcoin'];
+  if (/^(EQ|UQ)[A-Za-z0-9+/=_-]{46}$/.test(a)) return ['ton'];
+  if (/^poh[0-9a-f]{40}$/i.test(a)) return ['poh'];
+  // Solana: base58, 32-44 chars, no 0 or O or l or I
+  if (/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(a)) return ['solana'];
+  return ['universal'];
+}
+
+/**
+ * Filter live signals to only those applicable to the detected chain(s).
+ * Falls back to the full set if the signal metadata has no chain info.
+ */
+function filterApplicableSignals(liveSignals, chains) {
+  if (chains.includes('universal')) return liveSignals;
+
+  return liveSignals.filter(m => {
+    const id = (m.id || m.methodId || '').toLowerCase();
+    const chainField = (m.chain || m.chains || m.network || '');
+    const chainStr = Array.isArray(chainField) ? chainField.join(',') : String(chainField || '').toLowerCase();
+
+    // If signal has explicit chain metadata, use it
+    if (chainStr) {
+      return chains.some(c => chainStr.includes(c)) || chainStr.includes('universal') || chainStr.includes('all');
+    }
+
+    // Infer from signal ID naming convention
+    if (chains.includes('evm') &&
+      (id.includes('evm') || id.includes('eth') || id.includes('_1_') || id.includes('arbitrum') || id.includes('base') || id.includes('polygon')))
+      return true;
+    if (chains.includes('solana') && (id.includes('solana') || id.includes('sol') || id.includes('spl'))) return true;
+    if (chains.includes('bitcoin') && (id.includes('bitcoin') || id.includes('btc'))) return true;
+    if (chains.includes('ton') && (id.includes('ton') || id.includes('toncenter') || id.includes('ston') || id.includes('omniston'))) return true;
+    if (chains.includes('poh') && (id.includes('poh'))) return true;
+
+    // Cross-chain / universal signals — always count regardless of address type
+    const universalKeywords = ['ofac', 'identity', 'ens', 'onchain', 'social', 'nft', 'defi', 'web3'];
+    if (universalKeywords.some(k => id.includes(k))) return true;
+
+    // Unknown convention: include to avoid false negatives
+    return true;
+  });
+}
 
 /**
  * Validates that a ScanResult represents honest, full work.
  */
 export async function validateResultWork(result, request = {}) {
   const manager = await getManager();
-  const liveSignals = manager.getActiveMethods();
+  const allLiveSignals = manager.getActiveMethods();
+
+  // Filter to signals applicable for this address's chain type
+  const address = result.address || request?.payload?.address || '';
+  const chains = detectAddressChains(address);
+  const liveSignals = filterApplicableSignals(allLiveSignals, chains);
   const liveCount = liveSignals.length;
+
+  if (liveCount < allLiveSignals.length) {
+    console.log(`[validator] Chain filter for ${address} (${chains.join('+')}): ${liveCount}/${allLiveSignals.length} applicable signals`);
+  }
 
   const errors = [];
 

@@ -2363,6 +2363,8 @@ async function executeSend() {
 
   const port = window._minerApiPort || 3456;
   try {
+    // On-chain send: node builds + signs the PoHTransaction using the wallet's stored signing key,
+    // submits to mempool, and gossips to all peers. Returns txHash + status:'pending'.
     const r = await fetch(`http://localhost:${port}/api/wallet/send`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -2370,11 +2372,13 @@ async function executeSend() {
     });
     const data = await r.json();
     if (r.ok && data.success) {
-      showSendResult(res, true, `Sent ${amount} POH → ${to.slice(0, 12)}…`);
+      const hashShort = data.txHash ? data.txHash.slice(0, 12) + '…' : '';
+      showSendResult(res, true, `Submitted ${amount} POH → ${to.slice(0, 12)}… ${hashShort ? '(tx: ' + hashShort + ')' : ''} — pending block`);
       document.getElementById('send-to').value = '';
       document.getElementById('send-amount').value = '';
       updateSendSummary();
-      setTimeout(syncSendWallet, 1200);
+      // Refresh balance after expected block time
+      setTimeout(syncSendWallet, 12000);
     } else {
       showSendResult(res, false, data.error || 'Transaction failed');
     }

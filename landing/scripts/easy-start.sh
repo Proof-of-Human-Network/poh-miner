@@ -147,7 +147,7 @@ if [ ! -d "$INSTALL_DIR/src" ]; then
     if [ "${INSTALLED_AS:-}" != "appimage" ]; then
         echo "   No pre-built binary for $OS/$ARCH — cloning source..."
         if command -v git >/dev/null 2>&1; then
-            git clone --depth 1 https://github.com/proofofhuman/poh-miner-network.git "$TMP_DIR/repo" 2>/dev/null && {
+            git clone --depth 1 https://github.com/Proof-of-Human-Network/poh-miner.git "$TMP_DIR/repo" 2>/dev/null && {
                 cp -r "$TMP_DIR/repo"/. "$INSTALL_DIR/"
                 rm -rf "$TMP_DIR"
                 cd "$INSTALL_DIR"
