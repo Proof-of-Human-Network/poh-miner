@@ -488,9 +488,14 @@ export class PohMinerNode {
               return res.end(JSON.stringify({ error: 'payload.address is required for verdict jobs' }));
             }
 
+            // Allow username/handle queries (e.g. "KsaRedFx") — real-poh adapter will
+            // resolve via IdentityHub. Skip chain detection for non-address queries.
+            const queryLooksLikeAddress = /^(0x[0-9a-fA-F]{40}|[1-9A-HJ-NP-Za-km-z]{32,44}|(bc1|[13])[a-zA-HJ-NP-Z0-9]{25,87}|(EQ|UQ)[A-Za-z0-9+/=_-]{46}|poh[0-9a-f]{40})$/i.test(job.payload.address.trim());
+            const queryLooksLikeDomain = /^[a-zA-Z0-9_-]+\.[a-zA-Z0-9]+$/.test(job.payload.address.trim()) && !queryLooksLikeAddress;
+
             // Auto-detect chain type from address format if no chainFilter was specified.
-            // This tells the checker which signals to run and prevents evaluating irrelevant signals.
-            if (!job.payload.chainFilter) {
+            // Only applies to actual wallet addresses — domain/username queries are resolved later.
+            if (!job.payload.chainFilter && queryLooksLikeAddress) {
               const addr = job.payload.address.trim();
               if (/^0x[0-9a-fA-F]{40}$/.test(addr)) job.payload.chainFilter = 'evm';
               else if (/^(1|3)[a-km-zA-HJ-NP-Z1-9]{24,33}$/.test(addr) || /^bc1[a-z0-9]{6,87}$/.test(addr)) job.payload.chainFilter = 'bitcoin';

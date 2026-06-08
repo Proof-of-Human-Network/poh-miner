@@ -15,6 +15,7 @@ import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { getMethodsManager } from '../../signals/methods-manager.js';
 import { resolveRpcConfig } from '../../rpc/resolver.js';
+import { runIdentityHubSignal } from '../../signals/identity-hub-signal.js';
 
 // ── Domain name → wallet address resolution ───────────────────────────────────
 // Runs before runFullCheck so the checker always receives a raw address.
@@ -29,6 +30,7 @@ const ZNS_TLD_CHAIN = {
 
 const ADDRESS_RE = /^(0x[0-9a-fA-F]{40}|[1-9A-HJ-NP-Za-km-z]{32,44}|(bc1|[13])[a-zA-HJ-NP-Z0-9]{25,87}|T[1-9A-HJ-NP-Za-km-z]{33}|(EQ|UQ|kQ|0Q)[a-zA-Z0-9_-]{46}|G[A-Z2-7]{55})$/;
 const DOMAIN_RE  = /^[a-zA-Z0-9_-]+\.[a-zA-Z0-9]+$/;
+const USERNAME_RE = /^[a-zA-Z0-9_.-]{2,64}$/; // handle/username — no dots → not a domain
 
 async function resolveDomainName(name) {
   let axios;
@@ -64,6 +66,80 @@ async function resolveDomainName(name) {
   }
 
   return null;
+}
+
+/**
+ * Look up a username/handle in IdentityHub and return { address, agentData } if found.
+ * Used when the scan query is not a wallet address or domain name.
+ */
+async function resolveIdentityHubUsername(query, apiKey) {
+  try {
+    const headers = { 'Accept': 'application/json' };
+    if (apiKey) headers['X-Agent-Key'] = apiKey;
+    const res = await fetch(
+      `https://api.identityhub.app/agents?q=${encodeURIComponent(query)}`,
+      { headers, signal: AbortSignal.timeout(8000) }
+    );
+    if (!res.ok) return null;
+    const data = await res.json();
+    const agents = data.agents || data.items || (Array.isArray(data) ? data : []);
+    if (!agents.length) return null;
+    // Prefer exact username match
+    const agent = agents.find(a =>
+      (a.username || '').toLowerCase() === query.toLowerCase() ||
+      (a.name || '').toLowerCase() === query.toLowerCase()
+    ) || agents[0];
+    const address = agent.ownerAddress || agent.walletAddress;
+    if (!address) return null;
+    return { address, agentData: agent };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Fetch IdentityHub profile for a wallet address, return normalized profile fields.
+ * Used to enrich the scan result profile regardless of query type.
+ */
+async function fetchIdentityHubProfile(address, apiKey) {
+  try {
+    const headers = { 'Accept': 'application/json' };
+    if (apiKey) headers['X-Agent-Key'] = apiKey;
+    const res = await fetch(
+      `https://api.identityhub.app/agents?q=${encodeURIComponent(address)}`,
+      { headers, signal: AbortSignal.timeout(8000) }
+    );
+    if (!res.ok) return null;
+    const data = await res.json();
+    const agents = data.agents || data.items || (Array.isArray(data) ? data : []);
+    const agent = agents.find(a =>
+      (a.ownerAddress || '').toLowerCase() === address.toLowerCase() ||
+      (a.walletAddress || '').toLowerCase() === address.toLowerCase()
+    );
+    if (!agent) return null;
+
+    const socials = (agent.socialAccounts || agent.social || []).map(s => ({
+      platform: s.platform || s.type || 'social',
+      identity: s.handle || s.username || s.id,
+      displayName: s.displayName || s.name,
+      url: s.url || s.profileUrl,
+    })).filter(s => s.identity);
+
+    return {
+      displayName: agent.name || agent.username,
+      bio: agent.bio || agent.description,
+      avatar: agent.avatar || agent.avatarUrl,
+      identityHubId: agent.id || agent._id,
+      identityHubUsername: agent.username,
+      identityHubHumanSignal: agent.humanSignal ?? (agent.status === 'ACTIVATED'),
+      identityHubStatus: agent.status,
+      identityHubScore: agent.score,
+      identityHubTags: agent.tags || [],
+      socialAccounts: socials,
+    };
+  } catch {
+    return null;
+  }
 }
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -232,13 +308,28 @@ export async function computeWithRealPoh(job, config) {
   // Resolve domain names (e.g. assetux.bnb, vitalik.eth, name.sol) to raw addresses
   // before running the checker — checker only knows ZNS, not SPACEID/ENS/Bonfida.
   let scanAddress = address;
-  if (DOMAIN_RE.test(address) && !ADDRESS_RE.test(address)) {
-    const resolved = await resolveDomainName(address).catch(() => null);
-    if (resolved) {
-      console.log(`[RealPOH] Domain resolved: ${address} → ${resolved}`);
-      scanAddress = resolved;
-    } else {
-      console.warn(`[RealPOH] Could not resolve domain "${address}" — scanning as-is`);
+  let identityHubAgentData = null;
+
+  if (!ADDRESS_RE.test(address)) {
+    if (DOMAIN_RE.test(address)) {
+      const resolved = await resolveDomainName(address).catch(() => null);
+      if (resolved) {
+        console.log(`[RealPOH] Domain resolved: ${address} → ${resolved}`);
+        scanAddress = resolved;
+      } else {
+        console.warn(`[RealPOH] Could not resolve domain "${address}" — scanning as-is`);
+      }
+    } else if (USERNAME_RE.test(address) && !address.includes('.')) {
+      // Looks like a username/handle — try IdentityHub lookup
+      const ihApiKey = config?.identityHubApiKey;
+      const ihResult = await resolveIdentityHubUsername(address, ihApiKey).catch(() => null);
+      if (ihResult) {
+        console.log(`[RealPOH] IdentityHub resolved username "${address}" → ${ihResult.address}`);
+        scanAddress = ihResult.address;
+        identityHubAgentData = ihResult.agentData;
+      } else {
+        console.warn(`[RealPOH] IdentityHub: no address found for username "${address}"`);
+      }
     }
   }
 
@@ -253,9 +344,61 @@ export async function computeWithRealPoh(job, config) {
       profile = { address, generatedAt: Date.now(), fallback: true, links: [], domains: [] };
     }
 
+    // Enrich profile with IdentityHub data (bio, display name, socials, human signal)
+    const ihApiKey = config?.identityHubApiKey;
+    const ihProfile = identityHubAgentData
+      ? await Promise.resolve(null).then(() => { // already have agent from username resolution
+          const a = identityHubAgentData;
+          const socials = (a.socialAccounts || a.social || []).map(s => ({
+            platform: s.platform || s.type || 'social',
+            identity: s.handle || s.username || s.id,
+            displayName: s.displayName || s.name,
+            url: s.url || s.profileUrl,
+          })).filter(s => s.identity);
+          return {
+            displayName: a.name || a.username,
+            bio: a.bio || a.description,
+            avatar: a.avatar || a.avatarUrl,
+            identityHubId: a.id || a._id,
+            identityHubUsername: a.username,
+            identityHubHumanSignal: a.humanSignal ?? (a.status === 'ACTIVATED'),
+            identityHubStatus: a.status,
+            identityHubScore: a.score,
+            identityHubTags: a.tags || [],
+            socialAccounts: socials,
+          };
+        })
+      : await fetchIdentityHubProfile(scanAddress, ihApiKey).catch(() => null);
+
+    if (ihProfile) {
+      if (ihProfile.displayName && !profile.displayName) profile.displayName = ihProfile.displayName;
+      if (ihProfile.bio && !profile.bio) profile.bio = ihProfile.bio;
+      if (ihProfile.avatar && !profile.avatar) profile.avatar = ihProfile.avatar;
+      profile.identityHub = ihProfile;
+      // Merge social accounts into profile.links (dedup by platform+identity)
+      if (ihProfile.socialAccounts?.length) {
+        if (!Array.isArray(profile.links)) profile.links = [];
+        const existingKeys = new Set(profile.links.map(l => `${l.platform}:${l.identity}`));
+        for (const s of ihProfile.socialAccounts) {
+          const key = `${s.platform}:${s.identity}`;
+          if (!existingKeys.has(key)) { profile.links.push(s); existingKeys.add(key); }
+        }
+      }
+    }
+
     // Pass the *array* of results (not a count). Validator and ScanResult expect array of {methodId,...}
     // for % work, unknown-signal detection, curve-backed fraction, and getResultHash.
     const resultsArray = Array.isArray(fullResult.results) ? fullResult.results : [];
+
+    // Add IdentityHub human signal to signalsUsed so it contributes to verdict confidence
+    if (ihProfile) {
+      resultsArray.push({
+        methodId: 'identity_hub_social_linked',
+        chain: 'universal',
+        result: ihProfile.identityHubHumanSignal ?? ihProfile.socialAccounts?.length > 0,
+        details: { agentId: ihProfile.identityHubId, status: ihProfile.identityHubStatus },
+      });
+    }
 
     return {
       verdict: fullResult.verdict || 'UNCERTAIN',

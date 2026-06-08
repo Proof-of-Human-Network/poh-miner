@@ -2006,6 +2006,16 @@ function _profileBadges(p, verdict, conf, ofac, eu, uk) {
   if (ip.poh)       b.push(badge('ok',   '⚖️ PoH'));
   if (ip.brightid)  b.push(badge('ok',   '🔆 BrightID'));
   if (ip.bab)       b.push(badge('ok',   '🏦 BAB KYC'));
+
+  const ih = p.identityHub;
+  if (ih) {
+    const ihHuman = ih.identityHubHumanSignal;
+    const ihStatus = ih.identityHubStatus;
+    const ihLabel = ih.identityHubUsername ? `@${ih.identityHubUsername}` : 'IdentityHub';
+    if (ihHuman) b.push(badge('ok', `🪪 ${escHtml(ihLabel)} · Human`));
+    else if (ihStatus) b.push(badge('warn', `🪪 ${escHtml(ihLabel)} · ${escHtml(ihStatus)}`));
+    else b.push(badge('warn', `🪪 ${escHtml(ihLabel)}`));
+  }
   if (p.gitcoin)    b.push(badge(p.gitcoin.passing ? 'ok' : 'warn',
     `${p.gitcoin.passing ? '✓' : '⚠'} Gitcoin ${(p.gitcoin.score || 0).toFixed(1)}`));
 
@@ -2221,15 +2231,21 @@ function renderSearchResult(container, data, address) {
   const profile = data.profile || {};
   const model   = data.evidence?.modelUsed || data.modelUsed || '';
 
-  // Unresolvable domain / no-signal fallback
+  // Unresolvable domain/username / no-signal fallback
   const tooFew = signals.length <= 1 && (data.evidence?.methodsCount > 10 || 0);
   if (tooFew || (signals.length === 1 && !signals[0]?.methodId)) {
+    const isAddr = /^(0x[0-9a-fA-F]{40}|[1-9A-HJ-NP-Za-km-z]{32,44}|(bc1|[13])[a-zA-HJ-NP-Z0-9]{25,87}|(EQ|UQ)[A-Za-z0-9+/=_-]{46})/i.test(address);
+    const isDomain = !isAddr && address.includes('.');
+    const isUsername = !isAddr && !isDomain;
+    const hint = isDomain
+      ? `Domain <b>${escHtml(address)}</b> could not be resolved.<br>Try the raw wallet address.`
+      : isUsername
+        ? `Username <b>${escHtml(address)}</b> not found in IdentityHub.<br>Try the raw wallet address.`
+        : 'Address format not recognised.';
     container.style.display = 'block';
     container.innerHTML = `<div class="result-card" style="border-color:#374151;">
-      <div style="font-family:monospace;font-size:12px;color:#f59e0b;margin-bottom:8px;">⚠ Could not evaluate address</div>
-      <div style="font-family:monospace;font-size:11px;color:#6b7280;line-height:1.6;">
-        ${address.includes('.') ? `Domain <b>${escHtml(address)}</b> could not be resolved.<br>Try the raw wallet address.` : 'Address format not recognised.'}
-      </div></div>`;
+      <div style="font-family:monospace;font-size:12px;color:#f59e0b;margin-bottom:8px;">⚠ Could not evaluate query</div>
+      <div style="font-family:monospace;font-size:11px;color:#6b7280;line-height:1.6;">${hint}</div></div>`;
     return;
   }
 
