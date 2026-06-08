@@ -421,17 +421,9 @@ export async function computeWithRealPoh(job, config) {
 
     // Pass the *array* of results (not a count). Validator and ScanResult expect array of {methodId,...}
     // for % work, unknown-signal detection, curve-backed fraction, and getResultHash.
+    // Note: identity_hub_social_linked is NOT included here — it's profile enrichment, not a
+    // registered live signal, and would be flagged as unknown by the validator.
     const resultsArray = Array.isArray(fullResult.results) ? fullResult.results : [];
-
-    // Add IdentityHub human signal to signalsUsed so it contributes to verdict confidence
-    if (ihProfile) {
-      resultsArray.push({
-        methodId: 'identity_hub_social_linked',
-        chain: 'universal',
-        result: ihProfile.identityHubHumanSignal ?? ihProfile.socialAccounts?.length > 0,
-        details: { agentId: ihProfile.identityHubId, status: ihProfile.identityHubStatus },
-      });
-    }
 
     return {
       verdict: fullResult.verdict || 'UNCERTAIN',

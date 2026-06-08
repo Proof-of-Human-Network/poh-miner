@@ -48,36 +48,42 @@ function detectAddressChains(address) {
 
 /**
  * Filter live signals to only those applicable to the detected chain(s).
- * Falls back to the full set if the signal metadata has no chain info.
+ * Mirrors the filtering logic in checker.js scanWallet so liveCount matches
+ * what the checker actually ran for a given address type.
  */
 function filterApplicableSignals(liveSignals, chains) {
   if (chains.includes('universal')) return liveSignals;
 
-  return liveSignals.filter(m => {
-    const id = (m.id || m.methodId || '').toLowerCase();
-    const chainField = (m.chain || m.chains || m.network || '');
-    const chainStr = Array.isArray(chainField) ? chainField.join(',') : String(chainField || '').toLowerCase();
+  const chain = chains[0]; // primary chain
 
-    // If signal has explicit chain metadata, use it
-    if (chainStr) {
-      return chains.some(c => chainStr.includes(c)) || chainStr.includes('universal') || chainStr.includes('all');
+  return liveSignals.filter(m => {
+    const type        = (m.type || '').toLowerCase();
+    const chainField  = (m.chain || m.network || '').toLowerCase();
+    const addressType = (m.addressType || '').toLowerCase();
+    const supported   = Array.isArray(m.supportedChains) ? m.supportedChains : [];
+
+    // Labeled wallets (CEX, sanctions, etc.) apply to every chain
+    if (type === 'labeled') return true;
+
+    // If addressType is set and conflicts, exclude
+    if (addressType && addressType !== chain) return false;
+
+    if (chain === 'evm') {
+      // EVM: include evm-typed and REST methods (REST filtered later by chainId inside scanWallet)
+      return type === 'evm' || type === 'rest';
     }
 
-    // Infer from signal ID naming convention
-    if (chains.includes('evm') &&
-      (id.includes('evm') || id.includes('eth') || id.includes('_1_') || id.includes('arbitrum') || id.includes('base') || id.includes('polygon')))
-      return true;
-    if (chains.includes('solana') && (id.includes('solana') || id.includes('sol') || id.includes('spl'))) return true;
-    if (chains.includes('bitcoin') && (id.includes('bitcoin') || id.includes('btc'))) return true;
-    if (chains.includes('ton') && (id.includes('ton') || id.includes('toncenter') || id.includes('ston') || id.includes('omniston'))) return true;
-    if (chains.includes('poh') && (id.includes('poh'))) return true;
+    if (chain === 'solana') {
+      // Solana: solana-typed + REST methods that explicitly list solana in supportedChains
+      return type === 'solana' ||
+             (type === 'rest' && supported.includes('solana'));
+    }
 
-    // Cross-chain / universal signals — always count regardless of address type
-    const universalKeywords = ['ofac', 'identity', 'ens', 'onchain', 'social', 'nft', 'defi', 'web3'];
-    if (universalKeywords.some(k => id.includes(k))) return true;
-
-    // Unknown convention: include to avoid false negatives
-    return true;
+    // TON, Bitcoin, Tron, XLM:
+    //   • native type matches (e.g. type === 'ton')
+    //   • REST methods that declare this chain in supportedChains or chain field
+    return type === chain ||
+           (type === 'rest' && (chainField === chain || supported.includes(chain)));
   });
 }
 
@@ -170,10 +176,9 @@ export async function validateResultWork(result, request = {}) {
       errors.push(`Insufficient high-value (curve-backed) signals: only ${(highValueFraction * 100).toFixed(1)}% of evaluated work. Minimum 20% required.`);
     }
   } else {
-    // No live signals yet — be lenient during bootstrap
-    if (signalsEvaluated < 5) {
-      errors.push('Too few signals evaluated during bootstrap phase');
-    }
+    // No applicable live signals for this chain type (e.g. TON with no TON methods registered).
+    // The miner did all it could — accept the result.
+    console.log(`[validator] No applicable live signals for chain ${chains.join('+')} — skipping coverage check`);
   }
 
   // 3. Must include verdict + profile (as required for proper POH work)
