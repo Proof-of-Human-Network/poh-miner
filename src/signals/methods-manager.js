@@ -44,6 +44,14 @@ const LIVE_SIGNALS_SOURCES = [
   'https://proofofhuman.ge/miner/signals/transactions',
 ];
 
+// Local supplemental signals (always merged into the active set when available)
+const LOCAL_SIGNALS = [
+  { id: 'omniston_ton_swap_activity', chain: 'ton', type: 'behavioral',
+    description: 'Detects bot-like swap frequency on TON Omniston/STON.fi DEX' },
+  { id: 'identity_hub_social_linked', chain: 'universal', type: 'identity',
+    description: 'Checks IdentityHub for verified social accounts linked to this wallet' },
+];
+
 function computeMethodsHash(methods) {
   if (!Array.isArray(methods) || methods.length === 0) return 'empty';
 
@@ -271,7 +279,10 @@ export class MethodsManager {
   }
 
   getActiveMethods() {
-    return this.methods;
+    // Merge locally-defined supplemental signals that may not yet be in the remote list
+    const remoteIds = new Set(this.methods.map(m => m.id || m.methodId));
+    const extra = LOCAL_SIGNALS.filter(s => !remoteIds.has(s.id));
+    return extra.length > 0 ? [...this.methods, ...extra] : this.methods;
   }
 
   getStatus() {
