@@ -72,7 +72,10 @@ async function resolveDomainName(name) {
  * Look up a username/handle in IdentityHub and return { address, agentData } if found.
  * Used when the scan query is not a wallet address or domain name.
  */
-async function resolveIdentityHubUsername(query, apiKey) {
+// Platforms that IdentityHub supports but web3.bio doesn't (route IH-only)
+const IH_ONLY_PLATFORMS = new Set(['telegram', 'tg', 'discord', 'identityhub', 'ih']);
+
+async function resolveIdentityHubUsername(query, apiKey, filterPlatform = null) {
   try {
     const headers = { 'Accept': 'application/json' };
     if (apiKey) headers['X-Agent-Key'] = apiKey;
@@ -84,11 +87,24 @@ async function resolveIdentityHubUsername(query, apiKey) {
     const data = await res.json();
     const agents = data.agents || data.items || (Array.isArray(data) ? data : []);
     if (!agents.length) return null;
-    // Prefer exact username match
-    const agent = agents.find(a =>
+
+    let agent;
+    if (filterPlatform) {
+      // Find agent that has a social account on this platform with matching handle
+      agent = agents.find(a => {
+        const socials = a.socialAccounts || a.social || [];
+        return socials.some(s =>
+          (s.platform || s.type || '').toLowerCase() === filterPlatform &&
+          (s.handle || s.username || '').toLowerCase() === query.toLowerCase()
+        );
+      });
+    }
+    // Fall back to exact username/name match, then first result
+    agent = agent || agents.find(a =>
       (a.username || '').toLowerCase() === query.toLowerCase() ||
       (a.name || '').toLowerCase() === query.toLowerCase()
     ) || agents[0];
+
     const address = agent.ownerAddress || agent.walletAddress;
     if (!address) return null;
     return { address, agentData: agent };
@@ -319,16 +335,33 @@ export async function computeWithRealPoh(job, config) {
       } else {
         console.warn(`[RealPOH] Could not resolve domain "${address}" — scanning as-is`);
       }
-    } else if (USERNAME_RE.test(address) && !address.includes('.')) {
-      // Looks like a username/handle — try IdentityHub lookup
+    } else {
+      // Try to resolve as username/handle via IdentityHub
+      // Accepts: bare handle, @handle, platform:handle (including telegram:, discord:, etc.)
       const ihApiKey = config?.identityHubApiKey;
-      const ihResult = await resolveIdentityHubUsername(address, ihApiKey).catch(() => null);
-      if (ihResult) {
-        console.log(`[RealPOH] IdentityHub resolved username "${address}" → ${ihResult.address}`);
-        scanAddress = ihResult.address;
-        identityHubAgentData = ihResult.agentData;
-      } else {
-        console.warn(`[RealPOH] IdentityHub: no address found for username "${address}"`);
+      let ihQuery = address;
+      let ihPlatform = null;
+
+      // Strip leading @ (e.g. @vitalik → vitalik)
+      if (ihQuery.startsWith('@')) ihQuery = ihQuery.slice(1);
+
+      // Parse platform:handle (e.g. telegram:bogidotcom, twitter:vitalikbuterin)
+      const colonIdx = ihQuery.indexOf(':');
+      if (colonIdx > 0 && colonIdx < 20) {
+        const plat = ihQuery.slice(0, colonIdx).toLowerCase();
+        const handle = ihQuery.slice(colonIdx + 1).replace(/^@/, '');
+        if (handle) { ihQuery = handle; ihPlatform = plat; }
+      }
+
+      if (USERNAME_RE.test(ihQuery)) {
+        const ihResult = await resolveIdentityHubUsername(ihQuery, ihApiKey, ihPlatform).catch(() => null);
+        if (ihResult) {
+          console.log(`[RealPOH] IdentityHub resolved "${address}" → ${ihResult.address}`);
+          scanAddress = ihResult.address;
+          identityHubAgentData = ihResult.agentData;
+        } else {
+          console.warn(`[RealPOH] IdentityHub: no address found for "${address}"`);
+        }
       }
     }
   }

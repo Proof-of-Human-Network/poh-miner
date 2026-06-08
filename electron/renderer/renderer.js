@@ -1817,27 +1817,34 @@ setInterval(pollNodeStatus, 10000);
 
 let _searchPollTimer = null;
 
-// Raw address patterns — if none match and it looks like a domain, warn early
+// Raw address patterns
 const RAW_ADDR_RE = /^(0x[0-9a-fA-F]{40}|[1-9A-HJ-NP-Za-km-z]{32,44}|(bc1|[13])[a-zA-HJ-NP-Z0-9]{25,87}|T[1-9A-HJ-NP-Za-km-z]{33}|(EQ|UQ|kQ|0Q)[a-zA-Z0-9_-]{46}|G[A-Z2-7]{55})$/;
 const DOMAIN_INPUT_RE = /^[a-zA-Z0-9_-]+\.[a-zA-Z0-9]+$/;
+// platform:handle or @handle — will be resolved via IdentityHub
+const HANDLE_INPUT_RE = /^(@[a-zA-Z0-9_.-]{1,64}|[a-zA-Z]{2,15}:[a-zA-Z0-9_.-]{1,64})$/;
 
 async function runSearch() {
   const input = document.getElementById('search-input');
   const address = (input?.value || '').trim();
   if (!address) { input?.focus(); return; }
 
-  // If it looks like a domain name, show an informational note
-  if (DOMAIN_INPUT_RE.test(address) && !RAW_ADDR_RE.test(address)) {
+  const isAddress = RAW_ADDR_RE.test(address);
+  const isDomain  = DOMAIN_INPUT_RE.test(address) && !isAddress;
+  const isHandle  = HANDLE_INPUT_RE.test(address) && !isAddress;
+
+  if (isDomain || isHandle) {
     const resultEl = document.getElementById('search-result');
     if (resultEl) {
+      const hint = isDomain
+        ? 'Trying SPACEID · ZNS · Bonfida · IdentityHub.'
+        : 'Looking up via IdentityHub (telegram, discord, twitter, farcaster…).';
       resultEl.style.display = 'block';
       resultEl.innerHTML = `<div class="result-card" style="border-color:#374151;">
         <div style="font-family:monospace;font-size:11px;color:#9ca3af;margin-bottom:8px;">
-          🔍 Resolving <strong>${address}</strong>…
+          🔍 Resolving <strong>${escHtml(address)}</strong>…
         </div>
         <div style="font-family:monospace;font-size:10px;color:#4b5563;">
-          Trying SPACEID · ZNS · Bonfida. If the domain doesn't exist the scan will fail.<br>
-          Tip: paste the raw wallet address for faster results.
+          ${hint}
         </div>
       </div>`;
     }
@@ -2235,13 +2242,16 @@ function renderSearchResult(container, data, address) {
   const tooFew = signals.length <= 1 && (data.evidence?.methodsCount > 10 || 0);
   if (tooFew || (signals.length === 1 && !signals[0]?.methodId)) {
     const isAddr = /^(0x[0-9a-fA-F]{40}|[1-9A-HJ-NP-Za-km-z]{32,44}|(bc1|[13])[a-zA-HJ-NP-Z0-9]{25,87}|(EQ|UQ)[A-Za-z0-9+/=_-]{46})/i.test(address);
-    const isDomain = !isAddr && address.includes('.');
-    const isUsername = !isAddr && !isDomain;
+    const isDomain   = !isAddr && address.includes('.') && !address.startsWith('@') && !address.includes(':');
+    const isHandle   = !isAddr && !isDomain && (address.startsWith('@') || /^[a-zA-Z]{2,15}:/.test(address));
+    const isUsername = !isAddr && !isDomain && !isHandle;
     const hint = isDomain
       ? `Domain <b>${escHtml(address)}</b> could not be resolved.<br>Try the raw wallet address.`
-      : isUsername
-        ? `Username <b>${escHtml(address)}</b> not found in IdentityHub.<br>Try the raw wallet address.`
-        : 'Address format not recognised.';
+      : isHandle
+        ? `Handle <b>${escHtml(address)}</b> not found in IdentityHub.<br>Try telegram:username, @username, or the raw wallet address.`
+        : isUsername
+          ? `Username <b>${escHtml(address)}</b> not found in IdentityHub.<br>Try the raw wallet address.`
+          : 'Address format not recognised.';
     container.style.display = 'block';
     container.innerHTML = `<div class="result-card" style="border-color:#374151;">
       <div style="font-family:monospace;font-size:12px;color:#f59e0b;margin-bottom:8px;">⚠ Could not evaluate query</div>
