@@ -202,6 +202,17 @@ export class WalletManager {
     return w ? (w.nonce || 0) : 0;
   }
 
+  // SHA-256 over sorted wallet states — deterministic fingerprint of account ledger
+  getStateRoot() {
+    const entries = this.listWallets()
+      .map(address => {
+        const w = this.loadWallet(address);
+        return { address, balance: w?.balance || 0, nonce: w?.nonce || 0 };
+      })
+      .sort((a, b) => a.address.localeCompare(b.address));
+    return crypto.createHash('sha256').update(JSON.stringify(entries)).digest('hex');
+  }
+
   // Apply a signed transaction: validate nonce + balance, then mutate state.
   // Returns true on success, or an error string on failure.
   applyTransaction(tx) {

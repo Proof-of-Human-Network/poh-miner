@@ -963,8 +963,9 @@ window.showSettings = async function() {
   modal.classList.remove('hidden');
 
   // Try to get latest status
+  let status = null;
   try {
-    const status = await window.pohMinerAPI.getStatus?.();
+    status = await window.pohMinerAPI.getStatus?.();
     if (status) {
       const addrEl = document.getElementById('settings-poh-address');
       const solInput = document.getElementById('settings-solana');
@@ -973,6 +974,35 @@ window.showSettings = async function() {
       if (solInput) solInput.value = status.solanaAddress || '';
     }
   } catch (e) {}
+
+  // Populate mining model dropdown
+  const miningModelSel = document.getElementById('settings-mining-model');
+  if (miningModelSel) {
+    try {
+      const port = window._minerApiPort || 3456;
+      const res = await fetch(`http://localhost:${port}/api/models`);
+      if (res.ok) {
+        const data = await res.json();
+        const models = (data.models || []).map(m => m.name || m.model).filter(Boolean);
+        if (models.length) {
+          miningModelSel.innerHTML = '';
+          for (const m of models) {
+            const opt = document.createElement('option');
+            opt.value = opt.textContent = m;
+            miningModelSel.appendChild(opt);
+          }
+          if (status?.model && models.includes(status.model)) {
+            miningModelSel.value = status.model;
+          } else {
+            const qwen = models.find(m => m.includes('qwen'));
+            if (qwen) miningModelSel.value = qwen;
+          }
+        } else {
+          miningModelSel.innerHTML = '<option value="">No models installed</option>';
+        }
+      }
+    } catch { miningModelSel.innerHTML = '<option value="">Ollama not running</option>'; }
+  }
 };
 
 window.hideSettings = function() {
@@ -984,9 +1014,13 @@ window.saveSettings = async function() {
   const solInput = document.getElementById('settings-solana');
   if (!solInput || !window.pohMinerAPI?.onboarding) return;
 
+  const miningModelSel = document.getElementById('settings-mining-model');
+  const model = miningModelSel?.value?.trim() || undefined;
+
   try {
     await window.pohMinerAPI.onboarding.complete({
       solanaAddress: solInput.value.trim(),
+      ...(model ? { model } : {}),
     });
     hideSettings();
     // Refresh status
@@ -1146,8 +1180,8 @@ initEtherscanUI();
 
 // ── Tab switching ──────────────────────────────────────────────────────────────
 
-const TAB_PANELS = { home: 'home-panel', logs: 'logs', chat: 'chat-panel', search: 'search-panel', send: 'send-panel' };
-const TAB_BTNS   = { home: 'tab-home-btn', logs: 'tab-logs-btn', chat: 'tab-chat-btn', search: 'tab-search-btn', send: 'tab-send-btn' };
+const TAB_PANELS = { home: 'home-panel', logs: 'logs', chat: 'chat-panel', search: 'search-panel', send: 'send-panel', skills: 'skills-panel' };
+const TAB_BTNS   = { home: 'tab-home-btn', logs: 'tab-logs-btn', chat: 'tab-chat-btn', search: 'tab-search-btn', send: 'tab-send-btn', skills: 'tab-skills-btn' };
 
 function switchTab(name) {
   Object.entries(TAB_PANELS).forEach(([key, panelId]) => {
@@ -1159,6 +1193,7 @@ function switchTab(name) {
   if (name === 'home')   { syncHomeBalance(); }
   if (name === 'chat')   { loadChatModels(); loadChatBrainContext(true); document.getElementById('chat-input')?.focus(); }
   if (name === 'send')   { syncSendWallet(); showSendView(); }
+  if (name === 'skills') { loadSkills(); }
 }
 
 // ── Chat state ─────────────────────────────────────────────────────────────────
@@ -1325,6 +1360,8 @@ async function _fetchSocialContextForAddress(address) {
 
 // Inject (or replace) the social characteristic section inside the rendered result.
 function _injectSocialIntoResult(vibeData, farcasterData, paragraphData) {
+  console.log(vibeData, farcasterData, paragraphData)
+
   const root = document.querySelector('#search-result .wp-root');
   if (!root) return;
   root.querySelector('.wp-social-inject')?.remove();
@@ -1396,17 +1433,24 @@ async function _enrichResultWithGraph(address) {
 
     const root = document.querySelector('#search-result .wp-root');
     if (!root) return;
+    // Remove any existing injected graph (avoid duplicate on re-scan)
     root.querySelector('.wp-graph-inject')?.remove();
+    // Also stop any running simulation in the old SVG
+    root.querySelectorAll('.txg-svg').forEach(s => { if (s._sim) s._sim.stop(); });
+
     const html = _txGraph(profile);
     if (!html) return;
     const wrap = document.createElement('div');
     wrap.className = 'wp-graph-inject';
     wrap.innerHTML = html;
-    // Insert before feedback row (at bottom of profile, before evidence/feedback)
+    // Insert before feedback row
     const fb = root.querySelector('.feedback-row');
     const socialInject = root.querySelector('.wp-social-inject');
     const anchor = socialInject || fb;
     anchor ? root.insertBefore(wrap, anchor) : root.appendChild(wrap);
+
+    // SVG elements are now in the DOM — draw
+    _drawPendingTxGraphs();
   } catch {}
 }
 
@@ -1901,8 +1945,14 @@ async function runSearch() {
         if (!data.profile?.graph?.nodes?.length || data.profile.graph.nodes.length < 2) {
           _enrichResultWithGraph(address);
         }
+        // Fetch brain weights for evidence map tile sizing (fast local read)
+        let weightsMap = {};
         try {
-          renderSearchResult(resultEl, data, address);
+          const wr = await fetch(`http://localhost:${port}/api/brain/weights`, { signal: AbortSignal.timeout(2000) });
+          if (wr.ok) weightsMap = await wr.json();
+        } catch {}
+        try {
+          renderSearchResult(resultEl, data, address, weightsMap);
         } catch (renderErr) {
           console.error('[Search] renderSearchResult threw:', renderErr);
           resultEl.style.display = 'block';
@@ -2135,59 +2185,219 @@ function _crossChain(p) {
   return `<div class="wp-section"><div class="wp-section-title">Cross-chain Activity</div><div class="wp-cc-grid">${cards.join('')}</div></div>`;
 }
 
+let _txGraphSeq = 0;
+const _txGraphPending = new Map(); // svgId → graph data
+
 function _txGraph(p) {
   if (!p.graph?.nodes?.length || p.graph.nodes.length < 2) return '';
-  const nodes = p.graph.nodes.slice(0, 10).map(n => {
-    const id = n.id || n.address || String(n);
-    return `<span class="wp-graph-node" onclick="document.getElementById('search-input').value='${escHtml(id)}'">${escHtml(fmtAddr(id))}</span>`;
-  }).join('');
-  const more = p.graph.nodes.length > 10 ? `<span class="wp-graph-more">+${p.graph.nodes.length - 10} more</span>` : '';
-  return `<div class="wp-section"><div class="wp-section-title">Transaction Graph <span class="wp-section-hint">${p.graph.nodes.length} nodes · ${p.graph.edges?.length || 0} edges · click to scan</span></div>
-    <div class="wp-graph-nodes">${nodes}${more}</div></div>`;
+  const all   = p.graph.nodes;
+  const edges = p.graph.edges || [];
+  const id    = 'txg-' + (++_txGraphSeq);
+  const hop2Count = all.filter(n => n.hop === 2).length;
+  const hint  = `2-hop · ${all.length} nodes · ${edges.length} edges`;
+
+  // Store graph data so _drawPendingTxGraphs can pick it up after innerHTML is set
+  _txGraphPending.set(id, p.graph);
+
+  return `<div class="wp-section">
+    <div class="wp-section-title">Transaction Graph <span class="wp-section-hint">${escHtml(hint)}</span></div>
+    <div class="txg-wrap" id="${id}-wrap">
+      <svg class="txg-svg" id="${id}"></svg>
+      <div class="txg-legend">
+        <span class="txg-legend-dot" style="background:#22c55e;box-shadow:0 0 0 1.5px #4ade80"></span>center
+        <span class="txg-legend-dot" style="background:#111827;box-shadow:0 0 0 1.5px #374151;margin-left:6px"></span>1-hop
+        ${hop2Count ? `<span class="txg-legend-dot" style="background:#0a0a0a;box-shadow:0 0 0 1px #1f2937;width:5px;height:5px;margin-left:6px"></span>2-hop` : ''}
+      </div>
+      <div class="txg-tooltip" id="${id}-tip" style="display:none">
+        <span class="txg-tooltip-addr" id="${id}-tip-addr"></span>
+        <button class="txg-tooltip-scan" onclick="_txGraphScan('${id}')">Scan</button>
+      </div>
+    </div>
+  </div>`;
 }
 
-function _evidenceAccordion(signals) {
+// Call after any innerHTML assignment that may contain a tx graph
+function _drawPendingTxGraphs() {
+  for (const [id, graph] of _txGraphPending) {
+    if (document.getElementById(id)) {
+      _drawTxGraphD3(id, graph);
+      _txGraphPending.delete(id);
+    }
+  }
+}
+
+// Called after _txGraph HTML is inserted into the DOM.
+function _drawTxGraphD3(svgId, graph) {
+  if (typeof d3 === 'undefined' || !graph?.nodes?.length) return;
+
+  const svgEl  = document.getElementById(svgId);
+  const wrapEl = document.getElementById(svgId + '-wrap');
+  const tipEl  = document.getElementById(svgId + '-tip');
+  const tipAddr = document.getElementById(svgId + '-tip-addr');
+  if (!svgEl || !wrapEl) return;
+
+  const W = wrapEl.clientWidth  || 520;
+  const H = wrapEl.clientHeight || 300;
+
+  const nodes = graph.nodes.map(n => ({ ...n }));
+  const edges = (graph.edges || []).map(e => ({ ...e }));
+
+  const svg = d3.select(svgEl).attr('width', W).attr('height', H);
+
+  // Arrow marker
+  svg.append('defs').append('marker')
+    .attr('id', svgId + '-arrow')
+    .attr('viewBox', '0 -4 8 8').attr('refX', 16).attr('refY', 0)
+    .attr('markerWidth', 5).attr('markerHeight', 5).attr('orient', 'auto')
+    .append('path').attr('d', 'M0,-4L8,0L0,4').attr('fill', '#1f2937');
+
+  const g = svg.append('g');
+
+  svg.call(d3.zoom().scaleExtent([0.25, 4]).on('zoom', e => g.attr('transform', e.transform)));
+
+  // Close tooltip when clicking background
+  svg.on('click', () => { if (tipEl) tipEl.style.display = 'none'; });
+
+  const isHop2Edge = e => {
+    const srcId = e.source?.id ?? e.source;
+    const src   = nodes.find(n => n.id === srcId);
+    return src?.hop === 1;
+  };
+
+  const hop1Edges = edges.filter(e => !isHop2Edge(e));
+  const hop2Edges = edges.filter(isHop2Edge);
+
+  // Draw edges (hop2 dashed, below hop1)
+  const linkHop2 = g.append('g').selectAll('line').data(hop2Edges).join('line')
+    .attr('class', 'txg-edge txg-edge-hop2').attr('marker-end', `url(#${svgId}-arrow)`);
+  const linkHop1 = g.append('g').selectAll('line').data(hop1Edges).join('line')
+    .attr('class', 'txg-edge').attr('marker-end', `url(#${svgId}-arrow)`);
+
+  // Draw nodes
+  const nodeG = g.append('g').selectAll('g').data(nodes).join('g').style('cursor', d => d.hop === 0 ? 'default' : 'pointer');
+
+  nodeG.append('circle')
+    .attr('r', d => d.hop === 0 ? 14 : d.hop === 2 ? 5 : 8)
+    .attr('class', d => d.hop === 0 ? 'txg-node-center' : d.hop === 2 ? 'txg-node-hop2' : 'txg-node-hop1');
+
+  nodeG.append('text')
+    .attr('dy', d => d.hop === 0 ? 26 : d.hop === 2 ? 14 : 18)
+    .attr('text-anchor', 'middle')
+    .attr('class', d => d.hop === 0 ? 'txg-label-center' : d.hop === 2 ? 'txg-label-hop2' : 'txg-label')
+    .text(d => {
+      const addr = d.id || '';
+      if (d.hop === 2) return addr.slice(0, 5) + '…';
+      if (addr.length > 10) return addr.slice(0, 6) + '…' + addr.slice(-4);
+      return addr;
+    });
+
+  // Drag
+  nodeG.call(d3.drag()
+    .on('start', (ev, d) => { if (!ev.active) sim.alphaTarget(0.3).restart(); d.fx = d.x; d.fy = d.y; })
+    .on('drag',  (ev, d) => { d.fx = ev.x; d.fy = ev.y; })
+    .on('end',   (ev, d) => { if (!ev.active) sim.alphaTarget(0); d.fx = null; d.fy = null; })
+  );
+
+  // Click → tooltip
+  nodeG.filter(d => d.hop !== 0).on('click', (ev, d) => {
+    ev.stopPropagation();
+    if (!tipEl || !tipAddr) return;
+    const rect   = wrapEl.getBoundingClientRect();
+    const svgRect = svgEl.getBoundingClientRect();
+    tipAddr.textContent = d.id;
+    tipEl.dataset.addr  = d.id;
+    tipEl.style.display = 'flex';
+    tipEl.style.left    = (ev.clientX - svgRect.left + 12) + 'px';
+    tipEl.style.top     = (ev.clientY - svgRect.top  - 10) + 'px';
+  });
+
+  // Force simulation
+  const sim = d3.forceSimulation(nodes)
+    .force('link', d3.forceLink(edges).id(d => d.id)
+      .distance(d => {
+        const srcId = d.source?.id ?? d.source;
+        const src   = nodes.find(n => n.id === srcId);
+        return src?.hop === 1 ? 65 : 105;
+      }))
+    .force('charge', d3.forceManyBody().strength(d => d.hop === 2 ? -60 : -180))
+    .force('center', d3.forceCenter(W / 2, H / 2))
+    .force('collision', d3.forceCollide(d => d.hop === 2 ? 14 : 22));
+
+  sim.on('tick', () => {
+    const setLine = sel => sel
+      .attr('x1', d => d.source.x).attr('y1', d => d.source.y)
+      .attr('x2', d => d.target.x).attr('y2', d => d.target.y);
+    setLine(linkHop1);
+    setLine(linkHop2);
+    nodeG.attr('transform', d => `translate(${d.x},${d.y})`);
+  });
+
+  // Store sim handle for cleanup if the section is replaced
+  svgEl._sim = sim;
+}
+
+// Called by the Scan button inside the tooltip
+function _txGraphScan(svgId) {
+  const tip  = document.getElementById(svgId + '-tip');
+  const addr = tip?.dataset?.addr;
+  if (!addr) return;
+  tip.style.display = 'none';
+  const inp = document.getElementById('search-input');
+  if (inp) { inp.value = addr; inp.dispatchEvent(new Event('input')); }
+  // Trigger scan if doSearch exists
+  if (typeof doSearch === 'function') doSearch();
+}
+
+// ── Evidence market map ───────────────────────────────────────────────────────
+
+function _treemap(items, x, y, w, h) {
+  if (!items.length) return [];
+  if (items.length === 1) return [{ ...items[0], x, y, w, h }];
+  const total = items.reduce((s, i) => s + i.value, 0);
+  let acc = 0, split = 1;
+  for (let i = 0; i < items.length - 1; i++) {
+    acc += items[i].value / total;
+    split = i + 1;
+    if (acc >= 0.5) break;
+  }
+  const ratio = items.slice(0, split).reduce((s, i) => s + i.value, 0) / total;
+  if (w >= h) {
+    const lw = w * ratio;
+    return [
+      ..._treemap(items.slice(0, split), x, y, lw, h),
+      ..._treemap(items.slice(split), x + lw, y, w - lw, h),
+    ];
+  } else {
+    const th = h * ratio;
+    return [
+      ..._treemap(items.slice(0, split), x, y, w, th),
+      ..._treemap(items.slice(split), x, y + th, w, h - th),
+    ];
+  }
+}
+
+function _evidenceMap(signals, weights = {}) {
   if (!signals.length) return '';
-  const real    = signals.filter(s => s.methodId !== 'ofac_check');
-  const passed  = real.filter(s => s.result !== false);
-  const failed  = real.filter(s => s.result === false);
-  const flagged = signals.filter(s => s.methodId?.startsWith('usdt_blacklist') && s.result);
-
-  const dots = real.slice(0, 28).map(s => {
-    const isBlacklist = s.methodId?.startsWith('usdt_blacklist') && s.result;
-    const cls = isBlacklist ? 'ev-blacklist' : s.result !== false ? 'ev-pass' : 'ev-fail';
-    return `<span class="ev-dot ${cls}" title="${escHtml(s.description || '')}"></span>`;
+  const real = signals.filter(s => s.methodId !== 'ofac_check');
+  if (!real.length) return '';
+  const items = real
+    .map(s => ({ ...s, value: Math.max(+(weights[s.methodId] ?? s.weight ?? 1), 0.1) }))
+    .sort((a, b) => b.value - a.value);
+  const tiles  = _treemap(items, 0, 0, 100, 100);
+  const passed = real.filter(s => s.result !== false).length;
+  const tileHtml = tiles.map(t => {
+    const cls  = t.result !== false ? 'em-pass' : 'em-fail';
+    const wt   = +(weights[t.methodId] ?? t.weight ?? 1).toFixed(2);
+    const tip  = escHtml(`${t.description || t.methodId} | ${t.result !== false ? 'PASS' : 'FAIL'} | weight ${wt}`);
+    const lbl  = (t.w > 11 && t.h > 22)
+      ? `<span class="em-lbl">${escHtml(t.methodId)}</span>` : '';
+    return `<div class="em-tile ${cls}" title="${tip}"
+      style="left:${t.x.toFixed(2)}%;top:${t.y.toFixed(2)}%;width:${t.w.toFixed(2)}%;height:${t.h.toFixed(2)}%">${lbl}</div>`;
   }).join('');
-
-  const flagHtml = flagged.length
-    ? `<div class="ev-flags">${flagged.map(s => `<div class="ev-flag-row"><span class="ev-dot ev-blacklist"></span><span style="color:#fca5a5;font-size:11px;">${escHtml(s.description||'')}</span></div>`).join('')}</div>`
-    : '';
-
-  const passRows = passed.length
-    ? passed.map(s => `<div class="ev-row ev-row-pass"><span class="ev-dot ev-pass"></span><span class="ev-desc">${escHtml(s.description||s.methodId||'Signal')}</span></div>`).join('')
-    : `<div class="ev-empty">No signals passed</div>`;
-  const failRows = failed.length
-    ? failed.map(s => `<div class="ev-row ev-row-fail"><span class="ev-dot ev-fail"></span><span class="ev-desc">${escHtml(s.description||s.methodId||'Signal')}</span></div>`).join('')
-    : `<div class="ev-empty">No signals failed</div>`;
-
   return `
-    <div class="wp-section">
-      <div class="wp-section-title">Evidence</div>
-      <div class="evidence-summary">
-        ${dots}
-        <span class="ev-count">${passed.length}/${real.length} passed</span>
-      </div>
-      ${flagHtml}
-      <button class="ev-accordion-btn" onclick="toggleAccordion('ev-pass')">
-        <span>✓ Passed (${passed.length})</span>
-        <span class="ev-chevron open" id="chev-ev-pass">›</span>
-      </button>
-      <div id="ev-pass" class="ev-list">${passRows}</div>
-      <button class="ev-accordion-btn" onclick="toggleAccordion('ev-fail')">
-        <span>✗ Failed (${failed.length})</span>
-        <span class="ev-chevron" id="chev-ev-fail">›</span>
-      </button>
-      <div id="ev-fail" class="ev-list" style="display:none;">${failRows}</div>
+    <div class="em-section">
+      <div class="em-hdr"><span class="em-title">Evidence</span><span class="em-ct">${passed}/${real.length} passed</span></div>
+      <div class="em-map">${tileHtml}</div>
     </div>`;
 }
 
@@ -2229,7 +2439,7 @@ function _socialChar(vibeData, farcasterData, paragraphData) {
 
 // ── Main render ───────────────────────────────────────────────────────────────
 
-function renderSearchResult(container, data, address) {
+function renderSearchResult(container, data, address, weights = {}) {
   const v       = (data.verdict || 'UNCERTAIN').toUpperCase();
   const cls     = v === 'HUMAN' ? 'human' : v === 'AI' ? 'ai' : 'uncertain';
   const cardCls = v === 'HUMAN' ? 'human-result' : v === 'AI' ? 'ai-result' : '';
@@ -2286,7 +2496,7 @@ function renderSearchResult(container, data, address) {
       ${_associatedWallets(profile)}
       ${_crossChain(profile)}
       ${_txGraph(profile)}
-      ${_evidenceAccordion(signals)}
+      ${_evidenceMap(signals, weights)}
       ${_socialChar(data.vibeData, data.farcasterData, data.paragraphData)}
 
       <div class="feedback-row">
@@ -2294,15 +2504,9 @@ function renderSearchResult(container, data, address) {
         <button class="feedback-btn" onclick="submitFeedback('dispute')">👎 Dispute</button>
       </div>
     </div>`;
-}
 
-function toggleAccordion(id) {
-  const list    = document.getElementById(id);
-  const chevron = document.getElementById('chev-' + id);
-  if (!list) return;
-  const open = list.style.display !== 'none';
-  list.style.display = open ? 'none' : 'block';
-  if (chevron) chevron.classList.toggle('open', !open);
+  // Draw D3 tx graph(s) now that the SVG elements exist in the DOM
+  _drawPendingTxGraphs();
 }
 
 function submitFeedback(type) {
@@ -2500,6 +2704,93 @@ async function drawQR(canvasId, text) {
     ctx.fillStyle = '#000';
     ctx.font = '11px monospace';
     ctx.fillText('QR error', 10, 110);
+  }
+}
+
+// ── Skills tab ─────────────────────────────────────────────────────────────────
+
+function skillsView(view) {
+  document.getElementById('skills-browse-view').style.display = view === 'browse' ? 'block' : 'none';
+  document.getElementById('skills-submit-view').style.display = view === 'submit' ? 'flex' : 'none';
+  document.getElementById('skills-browse-btn').style.color   = view === 'browse' ? '#22c55e' : '#aaa';
+  document.getElementById('skills-submit-btn').style.color   = view === 'submit' ? '#22c55e' : '#aaa';
+  if (view === 'browse') loadSkills();
+}
+
+async function loadSkills() {
+  const port = window._minerApiPort || 3456;
+  try {
+    const res = await fetch(`http://localhost:${port}/api/skills`);
+    if (!res.ok) return;
+    const { skills } = await res.json();
+    const activeEl   = document.getElementById('skills-active-list');
+    const proposedEl = document.getElementById('skills-proposed-list');
+    const emptyEl    = document.getElementById('skills-empty');
+    activeEl.innerHTML = '';
+    proposedEl.innerHTML = '';
+
+    const active   = skills.filter(s => s.status === 'active');
+    const proposed = skills.filter(s => s.status !== 'active' && s.status !== 'deprecated');
+
+    if (!active.length && !proposed.length) { emptyEl.style.display = 'block'; return; }
+    emptyEl.style.display = 'none';
+
+    const card = (s) => `
+      <div style="background:#0c0c0c;border:1px solid #1e1e1e;border-radius:6px;padding:10px 12px;">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+          <span style="font-size:12px;font-weight:600;color:#fff;">${s.id}</span>
+          <span style="font-size:10px;color:${s.status === 'active' ? '#22c55e' : '#666'};border:1px solid;border-color:${s.status === 'active' ? '#1a3a27' : '#252525'};border-radius:3px;padding:1px 6px;">${s.status || 'proposed'}</span>
+        </div>
+        <div style="font-size:11px;color:#555;">${s.description || ''}</div>
+        ${s.author ? `<div style="font-size:10px;color:#333;margin-top:4px;">by ${s.author.slice(0, 20)}…</div>` : ''}
+      </div>`;
+    active.forEach(s => { activeEl.innerHTML += card(s); });
+    proposed.forEach(s => { proposedEl.innerHTML += card(s); });
+  } catch (e) {
+    document.getElementById('skills-empty').style.display = 'block';
+    document.getElementById('skills-empty').textContent = 'Could not reach miner API';
+  }
+}
+
+async function submitSkill() {
+  const port    = window._minerApiPort || 3456;
+  const id      = document.getElementById('skill-id-input').value.trim();
+  const desc    = document.getElementById('skill-desc-input').value.trim();
+  const ep      = document.getElementById('skill-endpoints-input').value.trim();
+  const code    = document.getElementById('skill-code-input').value.trim();
+  const context = document.getElementById('skill-context-input').value.trim();
+  const resultEl = document.getElementById('skill-submit-result');
+
+  if (!id) { resultEl.style.display = 'block'; resultEl.style.color = '#ef4444'; resultEl.textContent = 'Skill ID required'; return; }
+  resultEl.style.display = 'none';
+
+  const manifest = {
+    id,
+    version: '1.0.0',
+    description: desc,
+    allowedEndpoints: ep ? ep.split(',').map(s => s.trim()) : [],
+    stateId: null,
+  };
+
+  try {
+    const res = await fetch(`http://localhost:${port}/api/skills/propose`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ manifest, code: code || null, context: context || null }),
+    });
+    const data = await res.json();
+    resultEl.style.display = 'block';
+    if (data.ok) {
+      resultEl.style.color = '#22c55e';
+      resultEl.textContent = `Proposed: ${id}`;
+    } else {
+      resultEl.style.color = '#ef4444';
+      resultEl.textContent = data.error || 'Failed';
+    }
+  } catch (e) {
+    resultEl.style.display = 'block';
+    resultEl.style.color = '#ef4444';
+    resultEl.textContent = e.message;
   }
 }
 

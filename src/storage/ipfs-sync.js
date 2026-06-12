@@ -154,15 +154,17 @@ export class IPFSSync {
 
   async _snapBrain() {
     const brainDir = getBrainDataDir();
-    if (!brainDir) return;
+    if (!brainDir) return null;
     try {
       const cid = await this.store.addBrainState(brainDir);
-      if (!cid) return;
+      if (!cid) return null;
       this.latestCIDs.brain = cid;
       console.log(`[IPFSSync] Brain state pinned: ${cid.slice(0, 20)}…`);
       await this._pushCIDs({ brain: cid });
+      return cid;
     } catch (e) {
       console.warn('[IPFSSync] Brain snapshot failed:', e.message);
+      return null;
     }
   }
 

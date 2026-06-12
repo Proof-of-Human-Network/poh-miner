@@ -10,6 +10,7 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- Markdown + Math rendering for chat -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/d3@7/dist/d3.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/marked@12.0.0/marked.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
@@ -642,11 +643,43 @@
     .wp-cc-link { display: block; font-size: 9px; font-family: monospace; color: #374151; text-decoration: none; margin-top: 4px; }
     .wp-cc-link:hover { color: #22c55e; }
 
-    /* Tx graph */
+    /* Tx graph — D3 force visualization */
+    .txg-wrap { position: relative; width: 100%; height: 300px; background: rgba(255,255,255,0.02); border-radius: 8px; overflow: hidden; margin-top: 6px; }
+    .txg-svg  { width: 100%; height: 100%; display: block; }
+    .txg-edge       { stroke: #1f2937; stroke-width: 1.5; fill: none; }
+    .txg-edge-hop2  { stroke: #141414; stroke-width: 1; stroke-dasharray: 3 3; fill: none; }
+    .txg-node-center { fill: #22c55e; stroke: #4ade80; stroke-width: 2; cursor: default; }
+    .txg-node-hop1   { fill: #111827; stroke: #374151; stroke-width: 1.5; cursor: pointer; transition: stroke 0.15s; }
+    .txg-node-hop1:hover { stroke: #22c55e; fill: #1f2937; }
+    .txg-node-hop2   { fill: #0a0a0a; stroke: #1f2937; stroke-width: 1; cursor: pointer; transition: stroke 0.15s; }
+    .txg-node-hop2:hover { stroke: #374151; }
+    .txg-label       { font-size: 9px; fill: #6b7280; pointer-events: none; font-family: monospace; }
+    .txg-label-center { font-size: 9px; fill: #4ade80; pointer-events: none; font-family: monospace; font-weight: 600; }
+    .txg-label-hop2  { font-size: 8px; fill: #374151; pointer-events: none; font-family: monospace; }
+    .txg-legend { position: absolute; bottom: 7px; right: 10px; display: flex; align-items: center; gap: 8px; font-size: 9px; color: #4b5563; pointer-events: none; font-family: monospace; }
+    .txg-legend-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; margin-right: 2px; vertical-align: middle; }
+    .txg-tooltip { position: absolute; background: #0d1117; border: 1px solid #1f2937; border-radius: 6px; padding: 6px 10px; display: flex; align-items: center; gap: 8px; z-index: 30; white-space: nowrap; pointer-events: all; box-shadow: 0 4px 16px rgba(0,0,0,0.6); font-size: 11px; }
+    .txg-tooltip-addr { font-family: monospace; color: #e5e7eb; }
+    .txg-tooltip-scan { background: #22c55e; color: #000; border: none; border-radius: 4px; padding: 2px 8px; font-size: 10px; cursor: pointer; font-weight: 600; }
+    .txg-tooltip-scan:hover { background: #4ade80; }
+    /* legacy chip fallback (used if D3 unavailable) */
     .wp-graph-nodes { display: flex; flex-wrap: wrap; gap: 5px; }
-    .wp-graph-node { font-family: monospace; font-size: 10px; color: #9ca3af; background: #111; border: 1px solid #1c1c1c; border-radius: 4px; padding: 3px 8px; cursor: pointer; transition: border-color 0.15s; }
-    .wp-graph-node:hover { border-color: #22c55e; color: #22c55e; }
+    .wp-graph-node { font-family: monospace; font-size: 10px; color: #9ca3af; background: #111; border: 1px solid #1c1c1c; border-radius: 4px; padding: 3px 8px; cursor: pointer; }
     .wp-graph-more { font-family: monospace; font-size: 10px; color: #374151; padding: 3px 0; }
+
+    /* Evidence market map */
+    .em-section { margin-bottom: 10px; }
+    .em-hdr { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+    .em-title { font-size: 10px; font-family: monospace; color: #4b5563; text-transform: uppercase; letter-spacing: 0.1em; font-weight: 600; }
+    .em-ct { font-size: 10px; font-family: monospace; color: #374151; }
+    .em-map { position: relative; width: 100%; padding-bottom: 35%; background: #050505; border: 1px solid #1a1a1a; border-radius: 3px; overflow: hidden; margin-bottom: 8px; }
+    .em-tile { position: absolute; box-sizing: border-box; padding: 1px; }
+    .em-tile::after { content: ''; display: block; width: 100%; height: 100%; border-radius: 1px; }
+    .em-pass::after { background: #166534; }
+    .em-fail::after { background: #111; border: 1px solid #1a1a1a; }
+    .em-pass:hover::after { background: #22c55e; }
+    .em-fail:hover::after { background: #2a2a2a; }
+    .em-lbl { position: absolute; inset: 3px; display: flex; align-items: center; justify-content: center; font-size: 8px; font-family: monospace; color: rgba(255,255,255,0.35); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; pointer-events: none; z-index: 1; }
 
     /* Evidence (already styled, keep ev-* namespace) */
     .evidence-summary { display: flex; flex-wrap: wrap; align-items: center; gap: 3px; margin-bottom: 8px; }
@@ -1194,10 +1227,11 @@
     <div class="content-area">
       <div class="tab-nav">
         <button class="tab-btn active" id="tab-home-btn"   onclick="switchTab('home')">HOME</button>
-        <button class="tab-btn"        id="tab-logs-btn"   onclick="switchTab('logs')">LOGS</button>
+        <button class="tab-btn"        id="tab-send-btn"   onclick="switchTab('send')">SEND</button>
         <button class="tab-btn"        id="tab-chat-btn"   onclick="switchTab('chat')">CHAT</button>
         <button class="tab-btn"        id="tab-search-btn" onclick="switchTab('search')">SCANNER</button>
-        <button class="tab-btn"        id="tab-send-btn"   onclick="switchTab('send')">SEND</button>
+        <button class="tab-btn"        id="tab-skills-btn" onclick="switchTab('skills')">SKILLS</button>
+        <button class="tab-btn"        id="tab-logs-btn"   onclick="switchTab('logs')">LOGS</button>
       </div>
 
       <!-- HOME -->
@@ -1352,6 +1386,51 @@
 
         </div>
       </div>
+
+      <!-- SKILLS -->
+      <div class="panel" id="skills-panel">
+        <div style="display:flex;flex-direction:column;gap:1rem;padding:1rem;height:100%;overflow-y:auto;">
+          <div style="display:flex;align-items:center;justify-content:space-between;">
+            <div class="panel-eyebrow">SKILLS</div>
+            <div style="display:flex;gap:0.5rem;">
+              <button onclick="skillsView('browse')" id="skills-browse-btn"
+                      style="font-size:11px;padding:4px 10px;border-radius:4px;border:1px solid #333;background:#111;color:#aaa;cursor:pointer;">Browse</button>
+              <button onclick="skillsView('submit')" id="skills-submit-btn"
+                      style="font-size:11px;padding:4px 10px;border-radius:4px;border:1px solid #333;background:#111;color:#aaa;cursor:pointer;">+ Submit</button>
+            </div>
+          </div>
+
+          <!-- Browse view -->
+          <div id="skills-browse-view">
+            <div style="font-size:10px;color:#444;margin-bottom:0.5rem;letter-spacing:0.1em;">ACTIVE SKILLS</div>
+            <div id="skills-active-list" style="display:flex;flex-direction:column;gap:0.5rem;"></div>
+            <div style="font-size:10px;color:#444;margin:1rem 0 0.5rem;letter-spacing:0.1em;">PROPOSED</div>
+            <div id="skills-proposed-list" style="display:flex;flex-direction:column;gap:0.5rem;"></div>
+            <div id="skills-empty" style="color:#333;font-size:11px;text-align:center;padding:2rem 0;display:none;">No skills found</div>
+          </div>
+
+          <!-- Submit view -->
+          <div id="skills-submit-view" style="display:none;flex-direction:column;gap:0.75rem;">
+            <div style="font-size:10px;color:#444;letter-spacing:0.1em;">SKILL ID</div>
+            <input id="skill-id-input" type="text" placeholder="e.g. arena_social_activity"
+                   style="background:#111;border:1px solid #252525;border-radius:4px;color:#e5e7eb;font-size:12px;padding:8px 10px;outline:none;width:100%;box-sizing:border-box;" />
+            <div style="font-size:10px;color:#444;letter-spacing:0.1em;">DESCRIPTION</div>
+            <input id="skill-desc-input" type="text" placeholder="What this skill detects"
+                   style="background:#111;border:1px solid #252525;border-radius:4px;color:#e5e7eb;font-size:12px;padding:8px 10px;outline:none;width:100%;box-sizing:border-box;" />
+            <div style="font-size:10px;color:#444;letter-spacing:0.1em;">ALLOWED ENDPOINTS (comma-separated)</div>
+            <input id="skill-endpoints-input" type="text" placeholder="api.example.com"
+                   style="background:#111;border:1px solid #252525;border-radius:4px;color:#e5e7eb;font-size:12px;padding:8px 10px;outline:none;width:100%;box-sizing:border-box;" />
+            <div style="font-size:10px;color:#444;letter-spacing:0.1em;">run.js CODE</div>
+            <textarea id="skill-code-input" placeholder="export async function run(input, config) { ... }" rows="8"
+                      style="background:#111;border:1px solid #252525;border-radius:4px;color:#e5e7eb;font-size:11px;font-family:monospace;padding:8px 10px;outline:none;width:100%;box-sizing:border-box;resize:vertical;"></textarea>
+            <div style="font-size:10px;color:#444;letter-spacing:0.1em;">SKILL.md CONTEXT</div>
+            <textarea id="skill-context-input" placeholder="# Skill context for the brain..." rows="5"
+                      style="background:#111;border:1px solid #252525;border-radius:4px;color:#e5e7eb;font-size:11px;font-family:monospace;padding:8px 10px;outline:none;width:100%;box-sizing:border-box;resize:vertical;"></textarea>
+            <button onclick="submitSkill()" style="background:#22c55e;color:#000;border:none;padding:10px;border-radius:4px;font-weight:600;cursor:pointer;font-size:12px;">Submit Transaction</button>
+            <div id="skill-submit-result" style="font-size:11px;color:#22c55e;display:none;"></div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- ─── RIGHT: AI Brain ─── -->
@@ -1426,6 +1505,14 @@
         <div>
           <div class="text-xs text-zinc-400 mb-1">Solana Identity</div>
           <input id="settings-solana" class="w-full bg-black border border-white/20 rounded-xl px-3 py-2 text-xs font-mono" />
+        </div>
+
+        <div>
+          <div class="text-xs text-zinc-400 mb-1">Mining Model</div>
+          <select id="settings-mining-model" class="w-full bg-black border border-white/20 rounded-xl px-3 py-2 text-xs font-mono">
+            <option value="">Loading models…</option>
+          </select>
+          <div class="text-xs text-zinc-600 mt-1">Select from locally installed Ollama models</div>
         </div>
 
         <div class="pt-3 border-t border-white/10">

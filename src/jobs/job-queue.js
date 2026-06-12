@@ -23,6 +23,11 @@ export class Job {
     createdAt = Date.now(),
     expiresAt = null,
     priority = 0,
+    requesterAddress = null,
+    maxBudget = 0,
+    maxWait = null,
+    paymentTxHash = null,
+    estimatedTokens = null,
   }) {
     this.id = id;
     this.type = type;
@@ -33,6 +38,11 @@ export class Job {
     this.createdAt = createdAt;
     this.expiresAt = expiresAt;
     this.priority = priority;
+    this.requesterAddress = requesterAddress;
+    this.maxBudget = maxBudget;
+    this.maxWait = maxWait;
+    this.paymentTxHash = paymentTxHash;
+    this.estimatedTokens = estimatedTokens;
   }
 }
 
@@ -58,7 +68,11 @@ export class JobQueue {
   getPendingJobs() {
     return Array.from(this.jobs.values())
       .filter(j => !this.completed.has(j.id))
-      .sort((a, b) => b.fee - a.fee); // highest fee first
+      .sort((a, b) => {
+        const budgetDiff = (b.maxBudget || 0) - (a.maxBudget || 0);
+        if (budgetDiff !== 0) return budgetDiff; // highest maxBudget first
+        return b.fee - a.fee;                    // fall back to fee
+      });
   }
 
   /**

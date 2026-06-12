@@ -29,6 +29,15 @@ export class ScanRequest {
   }
 }
 
+// Layer 5: SkillRequest extends ScanRequest with a skillId field.
+// 'poh_identity' is the built-in skill; third-party skills use their own ids.
+export class SkillRequest extends ScanRequest {
+  constructor(params) {
+    super(params);
+    this.skillId = params.skillId || 'poh_identity';
+  }
+}
+
 export class ScanResult {
   constructor({
     requestId,

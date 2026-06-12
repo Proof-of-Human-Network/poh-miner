@@ -20,6 +20,8 @@ export class PohBlock {
     chainWork = '0',       // cumulative difficulty as hex bigint string (Fix 3)
     minerSignature = null, // ed25519 signature over block hash (Fix 2)
     minerSigningPublicKey = null,
+    stateRoot = null,      // SHA-256 of sorted {address,balance,nonce} at this height
+    brainStateRoot = null, // SHA-256 of weights.json + pools.json at this height
   }) {
     this.height = height;
     this.previousHash = previousHash;
@@ -34,7 +36,13 @@ export class PohBlock {
     this.chainWork = chainWork;
     this.minerSignature = minerSignature;
     this.minerSigningPublicKey = minerSigningPublicKey;
+    this.stateRoot = stateRoot;
+    this.brainStateRoot = brainStateRoot;
   }
+
+  // Layer 5: skillResults is the canonical name; scanResults kept for on-disk compat
+  get skillResults() { return this.scanResults; }
+  set skillResults(v) { this.scanResults = v; }
 
   // Synchronous SHA-256 (Node.js crypto) — used in the hot PoW loop
   getHashSync() {
@@ -50,6 +58,8 @@ export class PohBlock {
         totalNewSupply: this.coinbaseReward.totalNewSupply,
         proposerReward: this.coinbaseReward.proposerReward,
       } : null,
+      stateRoot: this.stateRoot,
+      brainStateRoot: this.brainStateRoot,
       nonce: this.nonce,
     });
     return crypto.createHash('sha256').update(data).digest('hex');
