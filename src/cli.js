@@ -56,13 +56,6 @@ async function main() {
       process.exit(1);
     }
 
-    // The real validation for RPCs happens inside PohMinerNode.start(),
-    // but we can give an early hint here too.
-    const hasSolanaRpc = config.solanaRpc || config.rpc?.solana?.apiKey;
-    if (!hasSolanaRpc && !process.env.SOLANA_RPC) {
-      console.warn('⚠️  No Solana RPC configured. Many signals will not work without it.');
-    }
-
     const locationNote = source.includes('local') ? ' (local project)' : '';
     console.log(`Config: ${configPath}${locationNote}\n`);
 

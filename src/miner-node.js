@@ -30,15 +30,20 @@ import { BalanceJournal } from './storage/balance-journal.js';
 import { IPFSSync } from './storage/ipfs-sync.js';
 import fs from 'fs';
 import path from 'path';
+import { execSync as _execSync } from 'child_process';
 import { ChainStore } from './storage/chain-store.js';
 import { WalletManager, Wallet } from './wallet/wallet.js';
 import { RewardClaimStore } from './storage/reward-claim-store.js';
 import { skillsManager } from './skills/manager.js';
+import { loadAllSkills, writeSkillFile } from './skills/loader.js';
 import { estimateTokens, settleFee, timeoutFee, GAS } from './jobs/gas-estimator.js';
 import { feedbackStore } from './jobs/feedback-store.js';
 import http from 'http';
 import { resolveRpcConfig } from './rpc/resolver.js';
 import crypto from 'crypto';
+import { buildManifest, serveDataset, pullDataset } from './storage/dataset-sync.js';
+import { OrderStore, QUOTE_CURRENCIES } from './p2p/order-store.js';
+import { EscrowManager, ESCROW_ADDRESS } from './p2p/escrow.js';
 
 function computeBrainStateRoot(brainDir) {
   if (!brainDir) return null;
@@ -51,6 +56,16 @@ function computeBrainStateRoot(brainDir) {
     return h.digest('hex');
   } catch { return null; }
 }
+
+// Builtin skills that are ON by default for every node.
+// All other skills (community-proposed) start disabled until the node operator enables them.
+const DEFAULT_ENABLED_SKILLS = new Set([
+  'poh_identity',
+  'read_farcaster',
+  'read_paragraph',
+  'read_zora',
+  'code_audit',
+]);
 
 // Well-known production bootnodes. Used when no bootnodes are configured
 // (e.g. fresh GUI onboarding). Individual users can override via config.bootnodes.
@@ -107,6 +122,8 @@ export class PohMinerNode {
     this.chainStore = new ChainStore();
     this.walletManager = new WalletManager();
     this.txMempool = new TxMempool(this.walletManager);
+    this.p2pOrderStore = new OrderStore();
+    this.p2pEscrow = new EscrowManager();
     // push token registry: address → { token, platform, registeredAt }
     this.pushTokens = new Map();
     this.rewardClaimStore = new RewardClaimStore();
@@ -125,6 +142,9 @@ export class PohMinerNode {
     this.reputation = 1.0; // 1.0 = perfect, goes down on bad submissions
     this.isTemporarilyRestricted = false;
     this.escrow = new Map(); // jobId → { amount, requesterAddress, minerAddress }
+    this._appliedEscrowJobIds = new Set(); // prevents double-debit when block replay re-runs job-escrow
+    this._appliedP2PIds = new Set(); // prevents double-apply of p2p-order/trade transitions during block replay
+    this._pendingProposals = new Map(); // auditJobId → { manifest, code, context, proposerAddress }
 
     // Future: TEE attestation could further strengthen these guarantees
     // (see docs/tee-protection-architecture.md)
@@ -177,8 +197,15 @@ export class PohMinerNode {
     // Brain mutations buffered since last block — flushed into block.stateTransitions at mining time
     this.pendingBrainTransitions = [];
 
-    // Off-chain skill staking: skillId → { total: number, stakers: Map(address → amount) }
+    // Skill staking: skillId → { total: number (μPOH), stakers: Map(address → amount) }
     this._skillStakes = new Map();
+    this._appliedStakeTxs = new Set(); // txHashes of applied skill-staked/skill-unstaked transitions (prevents double-apply)
+    this.SKILL_STAKE_VAULT = null; // address of stake vault wallet, set in _initStakeVault()
+
+    // Per-node skill enable/disable: skills are disabled by default until explicitly enabled.
+    // The four builtin skills below are enabled by default; everything else starts off.
+    this._skillPrefs         = new Set(); // explicitly enabled skillIds
+    this._explicitDisabled   = new Set(); // user-turned-off skills from the default-on set
 
     // IPFSSync — durability layer for chain + brain state
     this.ipfsSync = new IPFSSync({
@@ -187,11 +214,21 @@ export class PohMinerNode {
       identityWallet: this.identityWallet,
     });
 
+    // Load built-in skills from src/skills/builtin/ and user skills from brain data dir
+    loadAllSkills(getBrainDataDir());
+    this._initStakeVault();
+    this._loadSkillStakes();
+    this._loadSkillPrefs();
+
     console.log(`[PoH-Miner] Starting node for wallet ${this.config.wallet}`);
 
     const mode = this.config.inferenceMode;
     const model = this.config.model;
     console.log(`[PoH-Miner] Inference mode: ${mode.toUpperCase()} | Model: ${model}`);
+
+    // Benchmark compute speed (non-blocking)
+    this.tflops = null;
+    this.benchmarkTflops().then(t => { this.tflops = t; }).catch(() => {});
 
     // Run GPU detection asynchronously so it doesn't block startup
     this.detectGpuCapability().then(actualGpu => {
@@ -242,24 +279,167 @@ export class PohMinerNode {
     }
   }
 
-  async detectGpuCapability() {
-    // Simple runtime detection (works on most systems)
-    const { execSync } = await import('child_process');
+  // Probe nvidia-smi across common install locations on Linux/Windows/Mac.
+  // Quotes the path so Windows paths with spaces work.
+  _runNvidiaSmi(args, opts = {}) {
+    const candidates = [
+      'nvidia-smi',
+      '/usr/bin/nvidia-smi',
+      '/usr/local/bin/nvidia-smi',
+      '/opt/cuda/bin/nvidia-smi',
+      'C:\\Windows\\System32\\nvidia-smi.exe',
+      'C:\\Program Files\\NVIDIA Corporation\\NVSMI\\nvidia-smi.exe',
+    ];
+    for (const p of candidates) {
+      try {
+        const cmd = p.includes(' ') ? `"${p}" ${args}` : `${p} ${args}`;
+        return _execSync(cmd, { timeout: 6000, ...opts });
+      } catch {}
+    }
+    return null;
+  }
 
+  // Query display adapters via wmic (Windows-only, works for NVIDIA/AMD/Intel).
+  _wmicGpuNames() {
+    if (process.platform !== 'win32') return [];
     try {
-      // NVIDIA
-      execSync('nvidia-smi --query-gpu=name --format=csv,noheader', { stdio: 'ignore' });
-      return { available: true, type: 'NVIDIA' };
-    } catch {}
+      const out = _execSync('wmic path win32_VideoController get Name /value', { timeout: 5000, encoding: 'utf8' });
+      return out.split(/\r?\n/).filter(l => l.startsWith('Name=')).map(l => l.slice(5).trim().toLowerCase()).filter(Boolean);
+    } catch { return []; }
+  }
 
-    // Apple Silicon (Metal)
-    if (process.platform === 'darwin' && process.arch === 'arm64') {
-      return { available: true, type: 'Apple Silicon (Metal)' };
+  // Detect GPU name on macOS using system_profiler (works on Intel + Apple Silicon).
+  _macGpuName() {
+    if (process.platform !== 'darwin') return null;
+    try {
+      // Apple Silicon — chip name from system_profiler
+      if (process.arch === 'arm64') {
+        const out = _execSync('system_profiler SPHardwareDataType', { timeout: 6000, encoding: 'utf8' });
+        const m = out.match(/Chip:\s*Apple\s+(M\d+(?:\s+(?:Ultra|Max|Pro))?)/i);
+        if (m) return `apple ${m[1].toLowerCase()}`; // e.g. "apple m2 pro"
+        return 'apple m1'; // fallback if system_profiler format differs
+      }
+      // Intel Mac — GPU from display info
+      const out = _execSync('system_profiler SPDisplaysDataType', { timeout: 6000, encoding: 'utf8' });
+      const m = out.match(/Chipset Model:\s*(.+)/i);
+      return m ? m[1].trim().toLowerCase() : null;
+    } catch { return process.arch === 'arm64' ? 'apple m1' : null; }
+  }
+
+  async benchmarkTflops() {
+    const GPU_TFLOPS = {
+      // NVIDIA data-center
+      'h200': 141.0, 'h100': 134.0, 'a100': 77.6,
+      'l40s': 91.6, 'l40': 90.5, 'l4': 30.3, 'a40': 37.4, 'a10g': 31.2, 'a10': 31.2,
+      'v100': 14.0, 't4': 8.1,
+      // NVIDIA RTX 40xx (longer key first to avoid partial match)
+      'rtx 4090': 82.6, 'rtx 4080 super': 52.2, 'rtx 4080': 48.7,
+      'rtx 4070 ti super': 44.1, 'rtx 4070 ti': 40.1, 'rtx 4070 super': 35.5, 'rtx 4070': 29.1,
+      'rtx 4060 ti': 22.1, 'rtx 4060': 15.1,
+      // NVIDIA RTX 30xx
+      'rtx 3090 ti': 40.0, 'rtx 3090': 35.6, 'rtx 3080 ti': 34.1, 'rtx 3080': 29.8,
+      'rtx 3070 ti': 21.7, 'rtx 3070': 20.4, 'rtx 3060 ti': 16.2, 'rtx 3060': 12.7,
+      // NVIDIA RTX 20xx / GTX
+      'rtx 2080 ti': 13.4, 'rtx 2080 super': 11.2, 'rtx 2080': 10.6, 'rtx 2070': 7.5,
+      'gtx 1080 ti': 11.3, 'gtx 1080': 8.9, 'gtx 1070': 6.5,
+      // AMD Radeon RX 7xxx / 6xxx (longer key first)
+      'rx 7900 xtx': 61.4, 'rx 7900 xt': 51.6, 'rx 7800 xt': 37.3, 'rx 7700 xt': 27.0,
+      'rx 6950 xt': 23.7, 'rx 6900 xt': 23.0, 'rx 6800 xt': 20.7, 'rx 6800': 16.2,
+      'rx 6750 xt': 13.9, 'rx 6700 xt': 13.2, 'rx 6700': 11.4,
+      // Apple Silicon (GPU cores × peak TFLOPS FP32)
+      'apple m3 ultra': 28.0, 'apple m3 max': 14.2, 'apple m3 pro': 7.4, 'apple m3': 3.6,
+      'apple m2 ultra': 27.2, 'apple m2 max': 13.6, 'apple m2 pro': 6.8, 'apple m2': 3.4,
+      'apple m1 ultra': 21.2, 'apple m1 max': 10.6, 'apple m1 pro': 5.3, 'apple m1': 2.6,
+    };
+
+    const lookupName = (name) => {
+      for (const [key, tflops] of Object.entries(GPU_TFLOPS)) {
+        if (name.includes(key)) return tflops;
+      }
+      return null;
+    };
+
+    // 1. NVIDIA via nvidia-smi (Linux / Windows / Mac with eGPU)
+    const nvidiaRaw = this._runNvidiaSmi('--query-gpu=name --format=csv,noheader', { encoding: 'utf8' });
+    if (nvidiaRaw) {
+      const name = nvidiaRaw.trim().split('\n')[0].trim().toLowerCase();
+      const found = lookupName(name);
+      if (found) { console.log(`[PoH-Miner] TFLOPS: GPU "${name}" → ${found} TFLOPS`); return found; }
+      // Unknown NVIDIA model — estimate from VRAM
+      const vramRaw = this._runNvidiaSmi('--query-gpu=memory.total --format=csv,noheader,nounits', { encoding: 'utf8' });
+      const vramMb = vramRaw ? parseInt(vramRaw.trim()) : 0;
+      const est = vramMb >= 40000 ? 60 : vramMb >= 20000 ? 35 : vramMb >= 10000 ? 20 : vramMb >= 6000 ? 12 : 8;
+      console.log(`[PoH-Miner] TFLOPS: GPU "${name}" (~${Math.round(vramMb/1024)}GB VRAM) → ~${est} TFLOPS`);
+      return est;
     }
 
+    // 2. macOS — Apple Silicon or Intel dGPU
+    if (process.platform === 'darwin') {
+      const macName = this._macGpuName();
+      if (macName) {
+        const found = lookupName(macName);
+        if (found) { console.log(`[PoH-Miner] TFLOPS: Mac GPU "${macName}" → ${found} TFLOPS`); return found; }
+      }
+      if (process.arch === 'arm64') return 2.6; // conservative Apple Silicon fallback
+    }
+
+    // 3. Windows — AMD / Intel via wmic
+    if (process.platform === 'win32') {
+      for (const name of this._wmicGpuNames()) {
+        const found = lookupName(name);
+        if (found) { console.log(`[PoH-Miner] TFLOPS: GPU "${name}" → ${found} TFLOPS`); return found; }
+      }
+    }
+
+    // 4. Linux AMD via rocm-smi
     try {
-      // AMD ROCm
-      execSync('rocm-smi --showproductname', { stdio: 'ignore' });
+      const rocmOut = _execSync('rocm-smi --showproductname', { timeout: 5000, encoding: 'utf8' });
+      const name = (rocmOut.match(/GPU\[\d+\]\s*:\s*Card series:\s*(.+)/i) || [])[1]?.trim().toLowerCase() || '';
+      const found = lookupName(name);
+      if (found) { console.log(`[PoH-Miner] TFLOPS: AMD GPU "${name}" → ${found} TFLOPS`); return found; }
+      if (name) { console.log(`[PoH-Miner] TFLOPS: AMD GPU "${name}" (unknown model) → ~10 TFLOPS`); return 10; }
+    } catch {}
+
+    // 5. CPU FP benchmark fallback
+    const N = 512;
+    const a = new Float64Array(N * N).fill(1.5);
+    const b = new Float64Array(N * N).fill(0.7);
+    const c = new Float64Array(N * N);
+    const t0 = performance.now();
+    for (let i = 0; i < N; i++) {
+      for (let k = 0; k < N; k++) {
+        const aik = a[i * N + k];
+        for (let j = 0; j < N; j++) c[i * N + j] += aik * b[k * N + j];
+      }
+    }
+    const elapsed = (performance.now() - t0) / 1000;
+    const tflops = Math.round((2 * N * N * N) / elapsed / 1e12 * 1000) / 1000;
+    console.log(`[PoH-Miner] TFLOPS: CPU matmul → ${tflops} TFLOPS`);
+    return tflops || 0.001;
+  }
+
+  async detectGpuCapability() {
+    // NVIDIA — probe multiple paths (PATH may be stripped in pm2/systemd)
+    const nvidiaRaw = this._runNvidiaSmi('--query-gpu=name --format=csv,noheader', { encoding: 'utf8' });
+    if (nvidiaRaw) {
+      return { available: true, type: `NVIDIA ${nvidiaRaw.trim().split('\n')[0].trim()}` };
+    }
+
+    // Apple Silicon (always has GPU)
+    if (process.platform === 'darwin' && process.arch === 'arm64') {
+      const chip = this._macGpuName() || 'Apple Silicon';
+      return { available: true, type: chip };
+    }
+
+    // Windows — AMD/Intel/other via wmic
+    if (process.platform === 'win32') {
+      const names = this._wmicGpuNames().filter(n => !n.includes('microsoft') && !n.includes('basic display'));
+      if (names.length) return { available: true, type: names[0] };
+    }
+
+    // Linux AMD via rocm-smi
+    try {
+      _execSync('rocm-smi --showproductname', { stdio: 'ignore', timeout: 5000 });
       return { available: true, type: 'AMD ROCm' };
     } catch {}
 
@@ -271,34 +451,19 @@ export class PohMinerNode {
    * Without these, many signals in the real POH checker will fail or return poor data.
    */
   _validateRequiredApiKeys() {
-    const solanaRpc = this.config.solanaRpc || process.env.SOLANA_RPC;
-    const rpcEndpoints = this.config.rpcEndpoints || {};
+    // All signals have public-endpoint fallbacks; missing keys are fine at startup.
+    // We just log what's configured so it's visible in the debug log, nothing more.
+    const hasSolanaRpc = !!(this.config.solanaRpc || process.env.SOLANA_RPC ||
+      this.config.rpc?.solana?.apiKey);
+    const hasEvmRpc    = Object.keys(this.config.rpcEndpoints || {}).length > 0 ||
+      Object.keys(this.config.rpc || {}).some(k => k !== 'solana' && this.config.rpc[k]?.apiKey);
+    const hasEtherscan = !!(this.config.etherscanApiKey || process.env.ETHERSCAN_API_KEY);
 
-    const hasSolana = !!solanaRpc;
-    const hasAnyEvm = Object.keys(rpcEndpoints).length > 0;
-
-    if (!hasSolana) {
-      console.warn(
-        '⚠️  No Solana RPC configured. Signals that rely on Solana on-chain data will be skipped.\n' +
-        '   Add one via Settings → RPC, or set "solanaRpc" in ~/.poh-miner/config.json.\n' +
-        '   Example: "solanaRpc": "https://api.mainnet-beta.solana.com"'
-      );
-    }
-
-    if (!hasAnyEvm) {
-      console.warn(
-        '⚠️  No EVM RPC endpoints configured (rpcEndpoints).\n' +
-        '   Signals that rely on Ethereum, Base, Arbitrum, etc. may fail or return incomplete data.\n' +
-        '   It is strongly recommended to add at least one good RPC, for example:\n' +
-        '     "rpcEndpoints": { "1": "https://eth-mainnet.g.alchemy.com/v2/YOUR_KEY" }\n'
-      );
-    }
-
-    // Allow opting out (advanced users)
-    if (this.config.requireRpcs === false) {
-      console.warn('⚠️  RPC requirement validation is disabled (requireRpcs: false).');
-      return;
-    }
+    console.log(
+      `[PoH-Miner] API keys: solana=${hasSolanaRpc ? 'configured' : 'public fallback'} ` +
+      `evm=${hasEvmRpc ? 'configured' : 'public fallback'} ` +
+      `etherscan=${hasEtherscan ? 'configured' : 'not set (enrichment signals disabled)'}`
+    );
   }
 
   async start() {
@@ -322,6 +487,14 @@ export class PohMinerNode {
 
     // 3. Connect to the P2P network
     await this.connectToNetwork();
+
+    // 3b. Sync brain datasets from peers (non-blocking — best effort)
+    {
+      const brainDir = getBrainDataDir();
+      if (brainDir && this.peers?.length) {
+        pullDataset(this.peers, brainDir).catch(e => console.warn('[PoH-Miner] Dataset sync failed:', e.message));
+      }
+    }
 
     // 4. Start listening for jobs (now using the smart JobQueue)
     this.startJobListener();
@@ -347,6 +520,80 @@ export class PohMinerNode {
    *   GET /api/wallet/balance?address=xxx
    *   GET /api/wallet/transactions?address=xxx
    */
+
+  // ── Shared routing logic used by /chat/route and /chat/ask ───────────────
+  async _routeMessage(message) {
+    const allSkills = skillsManager.getAllSkills().filter(s => s.context && (s.status === 'active' || s.status === 'proposed'));
+    if (!allSkills.length) return { type: 'chat' };
+
+    const msgLower = message.toLowerCase();
+    const ADDR_RE   = /0x[0-9a-fA-F]{40}|[1-9A-HJ-NP-Za-km-z]{32,44}/;
+    const ENS_RE    = /\b([\w-]+\.eth)\b/i;
+    const HANDLE_RE = /@([\w.-]+)/;
+    const addrMatch   = message.match(ADDR_RE);
+    const ensMatch    = message.match(ENS_RE);
+    const handleMatch = message.match(HANDLE_RE);
+    const extractedInput = {};
+    if (addrMatch)   extractedInput.address  = addrMatch[0];
+    if (ensMatch)    extractedInput.username  = ensMatch[1].replace(/\.eth$/i, '');
+    else if (handleMatch) extractedInput.username = handleMatch[1].replace(/\.eth$/i, '');
+
+    const queryMatch = message.match(/(?:about|search(?:ing)?(?: for)?|topic|regarding|mentioning|posts?(?:\s+about)?|casts?(?:\s+about)?)\s+[""']?([a-zA-Z0-9 ]{2,30})[""']?/i);
+    if (queryMatch) {
+      const q = queryMatch[1].trim().toLowerCase();
+      if (q !== (extractedInput.username || '').toLowerCase()) extractedInput.query = q;
+    }
+
+    let matched = null;
+    let matchedScore = 0;
+    for (const skill of allSkills) {
+      const triggers = skill.triggers || [];
+      let score = 0;
+      for (const trigger of triggers) {
+        if (msgLower.includes(trigger.toLowerCase())) score++;
+      }
+      if (score > matchedScore) { matchedScore = score; matched = skill; }
+    }
+
+    if (matched && matchedScore > 0) {
+      if (!extractedInput.address && !extractedInput.username) {
+        const bareMatch = message.match(/\b(?:of|for|from|does|did|by|check|lookup)\s+([\w-]{2,30})\b/i);
+        if (bareMatch) {
+          const candidate = bareMatch[1].toLowerCase();
+          const triggerWords = new Set((matched.triggers || []).map(t => t.toLowerCase()));
+          const BARE_STOP = new Set(['what','who','how','the','this','that','here','there','some','any','all',
+            'user','profile','account','farcaster','warpcast','cast','casts','posts','topic','search']);
+          if (!triggerWords.has(candidate) && !BARE_STOP.has(candidate) && candidate.length >= 2) {
+            extractedInput.username = candidate;
+          }
+        }
+      }
+      return { type: 'skill', skillId: matched.id, input: extractedInput, skillContext: matched.context || null, reason: `trigger match (score ${matchedScore})` };
+    }
+
+    const ollamaBase = this.config.ollamaUrl || 'http://localhost:11434';
+    const selModel   = this.config.model || 'qwen2.5:1.5b';
+    const skillBlock = allSkills.map(s => `[${s.id}] ${s.description || s.id}\nTriggers: ${(s.triggers || []).join(', ')}`).join('\n\n');
+    const routePrompt = `You are a routing agent. Decide which skill to invoke for this message.\n\nSKILLS:\n${skillBlock}\n\nUSER MESSAGE: "${message.slice(0, 500)}"\n\nIf a skill applies, respond with JSON:\n{"skillId":"<id>","input":{"address":"<wallet address if present, else null>"},"reason":"<one sentence>"}\n\nIf no skill applies, respond with:\n{"skillId":null,"reason":"<why not>"}\n\nOutput ONLY valid JSON.`;
+
+    const ollamaRes = await fetch(`${ollamaBase}/api/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: selModel, messages: [{ role: 'user', content: routePrompt }], stream: false, format: 'json', options: { temperature: 0 } }),
+      signal: AbortSignal.timeout(15_000),
+    });
+    const ollamaData = await ollamaRes.json();
+    let route = null;
+    try {
+      const raw = ollamaData.message?.content || ollamaData.response || '';
+      route = JSON.parse(raw.match(/\{[\s\S]*\}/)?.[0] || raw);
+    } catch { route = { skillId: null }; }
+
+    if (!route?.skillId) return { type: 'chat', reason: route?.reason };
+    const llmSkill = allSkills.find(s => s.id === route.skillId);
+    return { type: 'skill', skillId: route.skillId, input: { ...extractedInput, ...route.input }, skillContext: llmSkill?.context || null, reason: route.reason };
+  }
+
   startWalletApiServer(port = 3456) {
     const server = http.createServer((req, res) => {
       // CORS support for browser clients (e.g. dev frontend on :5173 calling miner :3456)
@@ -452,6 +699,24 @@ export class PohMinerNode {
         }));
       }
 
+      // Balance journal history for the sidebar transaction feed
+      if (url.pathname === '/api/wallet/history') {
+        const address = url.searchParams.get('address') || (this.config.pohWallet || this.config.wallet);
+        const limit   = parseInt(url.searchParams.get('limit') || '30', 10);
+        const entries = (this.balanceJournal?._entries || [])
+          .filter(e => !address || e.address === address)
+          .slice(-limit)
+          .reverse()
+          .map(e => ({
+            height:    e.height,
+            delta:     e.delta,
+            txHash:    e.txHash,
+            ts:        e.ts,
+            label:     e.delta > 0 ? (e.txHash?.startsWith('reward-') || e.txHash?.startsWith('coinbase') ? 'Mining reward' : 'Received') : 'Sent',
+          }));
+        return res.end(JSON.stringify({ address, entries }));
+      }
+
       // Send endpoint — builds, signs, and submits a proper on-chain PoHTransaction.
       // For local wallets (created by this node) the signing key is on disk; for external
       // wallets that registered a key via /api/wallet/register-key this also works.
@@ -474,7 +739,9 @@ export class PohMinerNode {
               return res.end(JSON.stringify({ error: 'Sender wallet has no signing key on this node. Use /api/wallet/register-key first.' }));
             }
 
-            const nonce = this.walletManager.getNonce(from) + 1;
+            const confirmedNonce = this.walletManager.getNonce(from);
+            const pendingNonce   = this.txMempool.accountPendingNonce.get(from) ?? confirmedNonce;
+            const nonce = pendingNonce + 1;
             const tx = new PoHTransaction({ from, to, amount: amt, fee, nonce, memo });
             tx.sign(senderWallet);
 
@@ -510,7 +777,23 @@ export class PohMinerNode {
             const parsed = JSON.parse(body);
             const { paymentTx, ...rawJob } = parsed;
 
+            // Skill jobs must have a non-zero budget — the network charges for AI execution.
+            // The default LLM chat is free, but skills (real-time data fetching) require a
+            // fee that goes to the skill developer (20%) and the miner running it (80%).
+            if (rawJob.type === 'skill' && !(rawJob.maxBudget > 0)) {
+              res.statusCode = 402;
+              return res.end(JSON.stringify({
+                error: 'Skills require a fee (maxBudget > 0). The default LLM chat is free, but skill execution tips the developer and miner.',
+                code: 'SKILL_FEE_REQUIRED',
+              }));
+            }
+
             // Payment validation (Phase 1: unverified allowed when no key registered)
+            if (!rawJob.requesterAddress && rawJob.maxBudget > 0) {
+              res.statusCode = 402;
+              return res.end(JSON.stringify({ error: 'requesterAddress is required when maxBudget > 0' }));
+            }
+
             if (rawJob.requesterAddress && rawJob.maxBudget > 0) {
               // Signature check
               let unverified = false;
@@ -545,36 +828,51 @@ export class PohMinerNode {
               id: rawJob.id || (url.pathname === '/test/job' ? `test-${Date.now()}-${Math.random().toString(36).slice(2, 8)}` : `job-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`),
               type: rawJob.type || 'verdict',
               payload: rawJob.payload || { address: rawJob.address },
-              fee: rawJob.fee || 10_000_000,
               originCountry: rawJob.originCountry || rawJob.originRegion,
               source: 'api', // marks as local UI job — skip network slashing
               ...rawJob,
             };
+            // Use maxBudget as fee when no explicit fee provided (budget slider → job priority)
+            if (!job.fee) job.fee = job.maxBudget || 10_000_000;
 
-            if (!job.payload?.address) {
+            if (!job.payload?.address && job.type !== 'skill') {
               res.statusCode = 400;
               return res.end(JSON.stringify({ error: 'payload.address is required for verdict jobs' }));
             }
 
-            // Allow username/handle queries (e.g. "KsaRedFx") — real-poh adapter will
-            // resolve via IdentityHub. Skip chain detection for non-address queries.
-            const queryLooksLikeAddress = /^(0x[0-9a-fA-F]{40}|[1-9A-HJ-NP-Za-km-z]{32,44}|(bc1|[13])[a-zA-HJ-NP-Z0-9]{25,87}|(EQ|UQ)[A-Za-z0-9+/=_-]{46}|poh[0-9a-f]{40})$/i.test(job.payload.address.trim());
-            const queryLooksLikeDomain = /^[a-zA-Z0-9_-]+\.[a-zA-Z0-9]+$/.test(job.payload.address.trim()) && !queryLooksLikeAddress;
+            // Skill jobs may not have an address — skip address-specific processing
+            if (job.type !== 'skill' && job.payload?.address) {
+              // Allow username/handle queries (e.g. "KsaRedFx") — real-poh adapter will
+              // resolve via IdentityHub. Skip chain detection for non-address queries.
+              const queryLooksLikeAddress = /^(0x[0-9a-fA-F]{40}|[1-9A-HJ-NP-Za-km-z]{32,44}|(bc1|[13])[a-zA-HJ-NP-Z0-9]{25,87}|(EQ|UQ)[A-Za-z0-9+/=_-]{46}|poh[0-9a-f]{40})$/i.test(job.payload.address.trim());
+              const queryLooksLikeDomain = /^[a-zA-Z0-9_-]+\.[a-zA-Z0-9]+$/.test(job.payload.address.trim()) && !queryLooksLikeAddress;
 
-            // Auto-detect chain type from address format if no chainFilter was specified.
-            // Only applies to actual wallet addresses — domain/username queries are resolved later.
-            if (!job.payload.chainFilter && queryLooksLikeAddress) {
-              const addr = job.payload.address.trim();
-              if (/^0x[0-9a-fA-F]{40}$/.test(addr)) job.payload.chainFilter = 'evm';
-              else if (/^(1|3)[a-km-zA-HJ-NP-Z1-9]{24,33}$/.test(addr) || /^bc1[a-z0-9]{6,87}$/.test(addr)) job.payload.chainFilter = 'bitcoin';
-              else if (/^(EQ|UQ)[A-Za-z0-9+/=_-]{46}$/.test(addr)) job.payload.chainFilter = 'ton';
-              else if (/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(addr)) job.payload.chainFilter = 'solana';
+              // Auto-detect chain type from address format if no chainFilter was specified.
+              if (!job.payload.chainFilter && queryLooksLikeAddress) {
+                const addr = job.payload.address.trim();
+                if (/^0x[0-9a-fA-F]{40}$/.test(addr)) job.payload.chainFilter = 'evm';
+                else if (/^(1|3)[a-km-zA-HJ-NP-Z1-9]{24,33}$/.test(addr) || /^bc1[a-z0-9]{6,87}$/.test(addr)) job.payload.chainFilter = 'bitcoin';
+                else if (/^(EQ|UQ)[A-Za-z0-9+/=_-]{46}$/.test(addr)) job.payload.chainFilter = 'ton';
+                else if (/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(addr)) job.payload.chainFilter = 'solana';
+              }
             }
 
-            console.log(`[PoH-Miner] Received job via ${url.pathname}: ${job.id} (${job.type}) for ${job.payload.address}` + (job.payload.chainFilter ? ` [chain:${job.payload.chainFilter}]` : ''));
+            console.log(`[PoH-Miner] Received job via ${url.pathname}: ${job.id} (${job.type}) for ${job.payload?.address || job.skillId || 'skill-job'}` + (job.payload?.chainFilter ? ` [chain:${job.payload.chainFilter}]` : ''));
 
             // Record for status polling immediately (non-blocking)
             this._recordJob(job);
+
+            // Commit job submission to chain so all nodes have the full job history
+            this.pendingBrainTransitions.push({
+              type: 'job-submitted',
+              jobId: job.id,
+              jobType: job.type,
+              address: job.payload?.address || null,
+              skillId: job.skillId || null,
+              requesterAddress: job.requesterAddress || null,
+              maxBudget: job.maxBudget || 0,
+              timestamp: Date.now(),
+            });
 
             // Emit escrow transition if this is a paid job
             if (job.requesterAddress && job.maxBudget > 0) {
@@ -608,8 +906,12 @@ export class PohMinerNode {
               message: 'Job accepted. Poll status or result URL.',
             };
 
-            // Broadcast to network so other miners can compete
-            this.gossip.publish('new-job', job).catch(() => {});
+            // Broadcast to network so other miners can compete.
+            // code_audit is a builtin that runs on all nodes — gossip it so miners race.
+            // Other skill jobs stay local (private sandbox execution).
+            if (job.type !== 'skill' || job.skillId === 'code_audit') {
+              this.gossip.publish('new-job', job).catch(() => {});
+            }
 
             // Fire background compute (do not block the HTTP response)
             setImmediate(() => {
@@ -667,6 +969,17 @@ export class PohMinerNode {
         }
 
         if (action === 'result') {
+          // Audit-rejected jobs are done but have no ScanResult — return rejection details directly
+          if (rec.status === 'done' && rec.rejected) {
+            return res.end(JSON.stringify({
+              jobId: rec.id,
+              status: 'done',
+              verdict: 'REJECTED',
+              rejected: true,
+              reason: rec.reason || 'Dangerous code detected',
+              issues: rec.issues || [],
+            }));
+          }
           if (rec.status !== 'done' || !rec.result) {
             res.statusCode = 202; // Accepted, still processing
             return res.end(JSON.stringify({
@@ -685,6 +998,9 @@ export class PohMinerNode {
             confidence: r.confidence,
             reasoning: r.reasoning,
             profile: r.profile || null,
+            farcasterData: r.profile?.farcasterData || null,
+            paragraphData: r.profile?.paragraphData || null,
+            zoraData:      r.profile?.zoraData      || null,
             evidence: {
               signalsUsed: r.signalsUsed,
               methodsHash: r.methodsHash,
@@ -755,6 +1071,13 @@ export class PohMinerNode {
             };
             feedbackStore.apply(transition);
             this.pendingBrainTransitions.push(transition);
+            // Immediately propagate to peers so reputation updates are near-real-time
+            this.gossip.publish('job-feedback', transition).catch(() => {});
+            // Slash own reputation if the negative feedback targets this node's work
+            if (transition.rating === 'negative' && transition.minerAddress === this.config.wallet) {
+              this.applySlashing(0.05);
+              console.log(`[PoH-Miner] Reputation slashed (dislike on job ${jobId}): ${this.reputation.toFixed(3)}`);
+            }
             return res.end(JSON.stringify({ ok: true, jobId, rating }));
           } catch (e) {
             res.statusCode = 400;
@@ -1114,11 +1437,90 @@ export class PohMinerNode {
 
       // ── Skills API (/api/skills/*) ────────────────────────────────────────────
       if (req.method === 'GET' && url.pathname === '/api/skills') {
+        const walletParam = url.searchParams?.get('wallet') || null;
         const skills = skillsManager.getAllSkills().map(s => {
-          const stakeInfo = this._skillStakes.get(s.id) || { total: 0 };
-          return { ...s, totalStaked: stakeInfo.total || 0 };
+          const stakeInfo = this._skillStakes.get(s.id) || { total: 0, stakers: new Map() };
+          const myStake = walletParam ? (stakeInfo.stakers?.get(walletParam) || 0) : 0;
+          return { ...s, totalStaked: stakeInfo.total || 0, myStake, enabled: this.isSkillEnabled(s.id) };
         });
-        return res.end(JSON.stringify({ skills }));
+        return res.end(JSON.stringify({ skills, stakeVault: this.SKILL_STAKE_VAULT }));
+      }
+
+      // ── Skill prefs: GET /api/skills/prefs ───────────────────────────────────
+      if (req.method === 'GET' && url.pathname === '/api/skills/prefs') {
+        return res.end(JSON.stringify({ enabled: [...this._skillPrefs] }));
+      }
+
+      // ── Skill enable/disable: POST /api/skills/:skillId/enable|disable ───────
+      const skillToggleMatch = url.pathname.match(/^\/api\/skills\/([^/]+)\/(enable|disable)$/);
+      if (req.method === 'POST' && skillToggleMatch) {
+        const skillId = decodeURIComponent(skillToggleMatch[1]);
+        const action  = skillToggleMatch[2];
+        if (action === 'enable') {
+          this._skillPrefs.add(skillId);
+          this._explicitDisabled.delete(skillId); // un-mark any explicit disable
+        } else {
+          this._skillPrefs.delete(skillId);
+          if (DEFAULT_ENABLED_SKILLS.has(skillId)) {
+            this._explicitDisabled.add(skillId);  // remember this default was turned off
+          }
+        }
+        this._saveSkillPrefs();
+        return res.end(JSON.stringify({ ok: true, skillId, enabled: this.isSkillEnabled(skillId) }));
+      }
+
+      // ── Chat skill routing: POST /chat/route ─────────────────────────────────
+      if (req.method === 'POST' && url.pathname === '/chat/route') {
+        let body = '';
+        req.on('data', c => body += c);
+        req.on('end', async () => {
+          try {
+            const { message, budget = 0 } = JSON.parse(body);
+            if (!message) { res.statusCode = 400; return res.end(JSON.stringify({ error: 'message required' })); }
+            const route = await this._routeMessage(message);
+            return res.end(JSON.stringify({ ...route, budget }));
+          } catch (err) {
+            res.end(JSON.stringify({ type: 'chat', error: err.message }));
+          }
+        });
+        return;
+      }
+
+      // ── Free chat + skill dispatch: POST /chat/ask ────────────────────────────
+      // Routes the message; if a skill matches returns { type:'skill', skillId, input };
+      // otherwise calls the local LLM and returns { type:'chat', message } — no fee.
+      if (req.method === 'POST' && url.pathname === '/chat/ask') {
+        let body = '';
+        req.on('data', c => body += c);
+        req.on('end', async () => {
+          try {
+            const { message, history = [], model: reqModel } = JSON.parse(body);
+            if (!message) { res.statusCode = 400; return res.end(JSON.stringify({ error: 'message required' })); }
+
+            const route = await this._routeMessage(message);
+
+            if (route.type === 'skill') {
+              return res.end(JSON.stringify({ type: 'skill', skillId: route.skillId, input: route.input, skillContext: route.skillContext }));
+            }
+
+            // Free LLM answer (non-streaming so any client can use it)
+            const ollamaBase = this.config.ollamaUrl || 'http://localhost:11434';
+            const selModel   = reqModel || this.config.model || 'qwen2.5:1.5b';
+            const messages   = [...history, { role: 'user', content: message }];
+            const ollamaRes  = await fetch(`${ollamaBase}/api/chat`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ model: selModel, messages, stream: false, options: { temperature: 0.7 } }),
+              signal: AbortSignal.timeout(60_000),
+            });
+            const data  = await ollamaRes.json();
+            const reply = data.message?.content || '';
+            return res.end(JSON.stringify({ type: 'chat', message: reply }));
+          } catch (err) {
+            res.end(JSON.stringify({ type: 'chat', error: err.message, message: 'An error occurred. Please try again.' }));
+          }
+        });
+        return;
       }
 
       if (req.method === 'POST' && url.pathname === '/api/skills/propose') {
@@ -1127,19 +1529,72 @@ export class PohMinerNode {
         req.on('end', async () => {
           try {
             const payload = JSON.parse(body);
-            const { manifest, code, context, authorSignature } = payload;
+            const { manifest, code, context, authorSignature, requesterAddress } = payload;
             const isPrivate = !!payload.private;
             if (!manifest?.id) { res.statusCode = 400; return res.end(JSON.stringify({ error: 'manifest.id required' })); }
-            if (isPrivate) {
-              // Private: store locally only — no gossip, no block inclusion
-              skillsManager.addPrivateSkill(manifest, code, context);
-            } else {
-              const transition = { type: 'skill-proposed', manifest, code, context, authorSignature, txHash: `skill-${manifest.id}-${Date.now()}` };
-              this.pendingBrainTransitions.push(transition);
-              skillsManager.processTransition(transition);
-              this.gossip.publish('skill-proposed', transition).catch(() => {});
+
+            // Public proposals cost 1,000 POH
+            const PROPOSE_FEE = 1_000 * 1_000_000_000; // 1000 POH (9 decimals: 1 POH = 1e9)
+            if (!isPrivate) {
+              if (!requesterAddress) {
+                res.statusCode = 402;
+                return res.end(JSON.stringify({ error: 'requesterAddress required to pay the 1,000 POH proposal fee' }));
+              }
+              const balance = this.walletManager.getBalance(requesterAddress);
+              if (balance < PROPOSE_FEE) {
+                res.statusCode = 402;
+                return res.end(JSON.stringify({ error: 'Insufficient balance', balance, required: PROPOSE_FEE }));
+              }
+              const ok = this.walletManager.debit(requesterAddress, PROPOSE_FEE);
+              if (!ok) {
+                res.statusCode = 402;
+                return res.end(JSON.stringify({ error: 'Balance deduction failed' }));
+              }
             }
-            return res.end(JSON.stringify({ ok: true, skillId: manifest.id, private: isPrivate }));
+
+            if (isPrivate) {
+              // Private: store locally only — no gossip, no fee, no audit
+              skillsManager.addPrivateSkill(manifest, code, context);
+              return res.end(JSON.stringify({ ok: true, skillId: manifest.id, private: true }));
+            }
+
+            // Public proposal with code: publish as a code_audit network job so any miner can
+            // run the audit and earn the 1,000 POH fee.  The skill is only broadcast after the
+            // auditing miner returns a safe verdict.
+            if (code) {
+              const auditJobId = `audit-${manifest.id}-${Date.now()}`;
+              const auditJob = {
+                id:               auditJobId,
+                type:             'skill',
+                skillId:          'code_audit',
+                payload:          { manifest, code, context, _isProposalAudit: true, proposerAddress: requesterAddress, authorSignature },
+                fee:              PROPOSE_FEE,
+                maxBudget:        PROPOSE_FEE,
+                requesterAddress,
+                source:           'network',
+                createdAt:        Date.now(),
+              };
+              this._recordJob(auditJob); // also adds to jobQueue internally
+              // Fee already debited above — set escrow manually so settlement can credit the auditing miner
+              this.escrow.set(auditJobId, { amount: PROPOSE_FEE, requesterAddress, minerAddress: this.config.wallet });
+              this._appliedEscrowJobIds.add(auditJobId); // prevent replay double-debit
+              // Gossip the audit job so network miners compete (unlike ordinary skill jobs)
+              this.gossip.publish('new-job', auditJob).catch(() => {});
+              // Store pending proposal — completed by the auditing miner (possibly this node)
+              this._pendingProposals.set(auditJobId, { manifest, code, context, authorSignature, proposerAddress: requesterAddress });
+              // Fire local compute in background (this node competes too)
+              setImmediate(() => this._processJobInBackground(auditJob).catch(() => {}));
+              return res.end(JSON.stringify({ pending: true, jobId: auditJobId, skillId: manifest.id, message: 'Skill submitted for network security audit. 1,000 POH escrowed. Result will be broadcast once an auditing miner completes the job.' }));
+            }
+
+            // No sandboxed code (context-only skill) — publish immediately
+            const transition = { type: 'skill-proposed', manifest, code, context, authorSignature, proposerAddress: requesterAddress || null, txHash: `skill-${manifest.id}-${Date.now()}` };
+            // Audit fee goes to this miner since we're approving instantly (no LLM work required)
+            this.walletManager.credit(this.config.wallet, PROPOSE_FEE);
+            this.pendingBrainTransitions.push(transition);
+            skillsManager.processTransition(transition);
+            this.gossip.publish('skill-proposed', transition).catch(() => {});
+            return res.end(JSON.stringify({ ok: true, skillId: manifest.id, private: false }));
           } catch (e) { res.statusCode = 400; res.end(JSON.stringify({ error: e.message })); }
         });
         return;
@@ -1175,26 +1630,30 @@ export class PohMinerNode {
         req.on('end', () => {
           try {
             const skillId = decodeURIComponent(skillStakeMatch[1]);
-            const { amount, stakerAddress = 'anon' } = JSON.parse(body);
+            const { amount, stakerAddress } = JSON.parse(body);
             if (!amount || amount <= 0) { res.statusCode = 400; return res.end(JSON.stringify({ error: 'amount must be positive' })); }
-            // Deduct from local wallet balance if stakerAddress is a known local wallet
-            const localWallet = this.walletManager.loadWallet(stakerAddress);
-            if (localWallet) {
-              const bal = this.walletManager.getBalance(stakerAddress);
-              if (bal < amount) { res.statusCode = 400; return res.end(JSON.stringify({ error: 'insufficient balance' })); }
-              this.walletManager.debit(stakerAddress, amount);
+            if (!stakerAddress) { res.statusCode = 400; return res.end(JSON.stringify({ error: 'stakerAddress required' })); }
+
+            const amountRaw = Math.round(parseFloat(amount) * POH_DECIMALS);
+
+            // Apply immediately (mirrors _applyEscrow pattern): debit staker, credit vault.
+            // Balance updates are visible at once; the on-chain record is the skill-staked
+            // stateTransition included in the next mined block.
+            if (!this.walletManager.debit(stakerAddress, amountRaw)) {
+              res.statusCode = 400; return res.end(JSON.stringify({ error: 'insufficient balance' }));
             }
-            // Update off-chain stake map
-            if (!this._skillStakes.has(skillId)) {
-              this._skillStakes.set(skillId, { total: 0, stakers: new Map() });
-            }
+            if (this.SKILL_STAKE_VAULT) this.walletManager.credit(this.SKILL_STAKE_VAULT, amountRaw);
+            const txHash = crypto.createHash('sha256')
+              .update(`stake:${skillId}:${stakerAddress}:${amountRaw}:${Date.now()}`)
+              .digest('hex');
+
+            if (!this._skillStakes.has(skillId)) this._skillStakes.set(skillId, { total: 0, stakers: new Map() });
             const entry = this._skillStakes.get(skillId);
             const prev = entry.stakers.get(stakerAddress) || 0;
-            entry.stakers.set(stakerAddress, prev + amount);
-            entry.total = (entry.total || 0) + amount;
-            const myStake = entry.stakers.get(stakerAddress);
-            // Check graduation threshold (10,000 POH)
-            const GRADUATION_THRESHOLD = 10000;
+            entry.stakers.set(stakerAddress, prev + amountRaw);
+            entry.total = (entry.total || 0) + amountRaw;
+
+            const GRADUATION_THRESHOLD = 10000 * POH_DECIMALS;
             if (entry.total >= GRADUATION_THRESHOLD) {
               const skill = skillsManager.getAllSkills().find(s => s.id === skillId);
               if (skill && skill.status !== 'active') {
@@ -1203,7 +1662,14 @@ export class PohMinerNode {
                 skillsManager.processTransition(transition);
               }
             }
-            return res.end(JSON.stringify({ ok: true, total: entry.total, myStake }));
+
+            this._saveSkillStakes();
+            // Queue as on-chain stateTransition so any node can replay from chain history
+            const stakeTransition = { type: 'skill-staked', skillId, staker: stakerAddress, amount: amountRaw, txHash: txHash || null, ts: Date.now() };
+            this.pendingBrainTransitions.push(stakeTransition);
+            if (txHash) this._appliedStakeTxs.add(txHash); // mark applied so block replay skips it
+            this.gossip.publish('skill-staked', { skillId, stakerAddress, amount: amountRaw, total: entry.total, txHash }).catch(() => {});
+            return res.end(JSON.stringify({ ok: true, total: entry.total, myStake: entry.stakers.get(stakerAddress), txHash }));
           } catch (e) { res.statusCode = 400; res.end(JSON.stringify({ error: e.message })); }
         });
         return;
@@ -1217,21 +1683,32 @@ export class PohMinerNode {
         req.on('end', () => {
           try {
             const skillId = decodeURIComponent(skillUnstakeMatch[1]);
-            const { amount, stakerAddress = 'anon' } = JSON.parse(body);
+            const { amount, stakerAddress } = JSON.parse(body);
             if (!amount || amount <= 0) { res.statusCode = 400; return res.end(JSON.stringify({ error: 'amount must be positive' })); }
+            if (!stakerAddress) { res.statusCode = 400; return res.end(JSON.stringify({ error: 'stakerAddress required' })); }
+
+            const amountRaw = Math.round(parseFloat(amount) * POH_DECIMALS);
             const entry = this._skillStakes.get(skillId);
             const currentStake = entry?.stakers?.get(stakerAddress) || 0;
-            if (currentStake < amount) { res.statusCode = 400; return res.end(JSON.stringify({ error: 'insufficient stake' })); }
-            // Credit local wallet if stakerAddress is a known local wallet
-            const localWallet = this.walletManager.loadWallet(stakerAddress);
-            if (localWallet) {
-              this.walletManager.credit(stakerAddress, amount);
-            }
-            // Update off-chain stake map
-            entry.stakers.set(stakerAddress, currentStake - amount);
-            entry.total = Math.max(0, (entry.total || 0) - amount);
-            const myStake = entry.stakers.get(stakerAddress);
-            return res.end(JSON.stringify({ ok: true, total: entry.total, myStake }));
+            if (currentStake < amountRaw) { res.statusCode = 400; return res.end(JSON.stringify({ error: 'insufficient stake' })); }
+
+            // Apply immediately: debit vault, credit staker.
+            if (this.SKILL_STAKE_VAULT) this.walletManager.debit(this.SKILL_STAKE_VAULT, amountRaw);
+            this.walletManager.credit(stakerAddress, amountRaw);
+            const txHash = crypto.createHash('sha256')
+              .update(`unstake:${skillId}:${stakerAddress}:${amountRaw}:${Date.now()}`)
+              .digest('hex');
+            console.log(`[PoH-Miner] Skill unstake: ${(amountRaw / POH_DECIMALS).toFixed(2)} POH returned to ${stakerAddress.slice(0,8)} from ${skillId}`);
+
+            entry.stakers.set(stakerAddress, currentStake - amountRaw);
+            entry.total = Math.max(0, (entry.total || 0) - amountRaw);
+
+            this._saveSkillStakes();
+            const unstakeTransition = { type: 'skill-unstaked', skillId, staker: stakerAddress, amount: amountRaw, txHash: txHash || null, ts: Date.now() };
+            this.pendingBrainTransitions.push(unstakeTransition);
+            if (txHash) this._appliedStakeTxs.add(txHash);
+            this.gossip.publish('skill-unstaked', { skillId, stakerAddress, amount: amountRaw, total: entry.total, txHash }).catch(() => {});
+            return res.end(JSON.stringify({ ok: true, total: entry.total, myStake: entry.stakers.get(stakerAddress), txHash }));
           } catch (e) { res.statusCode = 400; res.end(JSON.stringify({ error: e.message })); }
         });
         return;
@@ -1260,6 +1737,29 @@ export class PohMinerNode {
         return;
       }
 
+      // ── Chain serving (peer-to-peer sync) ────────────────────────────────────
+      if (req.method === 'GET' && url.pathname === '/chain/tip') {
+        const tip = this.chain[this.chain.length - 1];
+        if (!tip) { res.statusCode = 404; res.end(JSON.stringify({ error: 'no chain' })); return; }
+        res.end(JSON.stringify({ height: tip.height, hash: tip.getHashSync(), timestamp: tip.timestamp }));
+        return;
+      }
+
+      if (req.method === 'GET' && url.pathname === '/chain/blocks') {
+        const from  = Math.max(0, parseInt(url.searchParams.get('from') || '0'));
+        const to    = Math.min(this.chain.length - 1, parseInt(url.searchParams.get('to') || String(this.chain.length - 1)));
+        const limit = 500; // cap per request to avoid OOM
+        const slice = this.chain.slice(from, Math.min(to + 1, from + limit));
+        res.end(JSON.stringify(slice.map(b => b.toJSON ? b.toJSON() : b)));
+        return;
+      }
+
+      // ── Dataset serving (/api/dataset, /api/dataset/:file) ───────────────────
+      {
+        const brainDir = getBrainDataDir();
+        if (brainDir && serveDataset(req, res, brainDir)) return;
+      }
+
       // ── Cached profile by address (/profile/:address) ─────────────────────────
       // Returns the enriched profile from the most recent completed job for this
       // address. Frontend calls this after a decentralized scan for the profile card.
@@ -1275,6 +1775,285 @@ export class PohMinerNode {
         }
         res.statusCode = 404;
         return res.end(JSON.stringify({ error: 'No profile cached for this address' }));
+      }
+
+      // ── P2P Exchange API (/api/p2p/*) ─────────────────────────────────────────
+
+      // Helper: read + parse body
+      const readBody = () => new Promise((resolve, reject) => {
+        let raw = '';
+        req.on('data', c => raw += c);
+        req.on('end', () => { try { resolve(JSON.parse(raw)); } catch (e) { reject(e); } });
+      });
+
+      // Helper: verify that caller owns `address` by checking their ed25519 signature
+      // over JSON.stringify({address, timestamp, ...actionFields}) using signingPublicKey.
+      const verifyP2PAuth = (address, signingPublicKey, signature, payloadObj) => {
+        if (!address || !signingPublicKey || !signature) return { error: 'missing auth fields' };
+        if (Math.abs(Date.now() - (payloadObj.timestamp || 0)) > 5 * 60 * 1000) return { error: 'request expired' };
+        const payloadStr = JSON.stringify(payloadObj);
+        if (!Wallet.verifySignature(signingPublicKey, payloadStr, signature)) return { error: 'invalid signature' };
+        const stored = this.walletManager.loadWallet(address);
+        if (stored?.signingPublicKey && stored.signingPublicKey !== signingPublicKey) {
+          return { error: 'signing key mismatch' };
+        }
+        return true;
+      };
+
+      // GET /api/p2p/currencies — list supported quote currencies
+      if (req.method === 'GET' && url.pathname === '/api/p2p/currencies') {
+        return res.end(JSON.stringify({ currencies: QUOTE_CURRENCIES }));
+      }
+
+      // GET /api/p2p/orders — list open orders (filters: side, quoteCurrency)
+      if (req.method === 'GET' && url.pathname === '/api/p2p/orders') {
+        const side         = url.searchParams.get('side') || undefined;
+        const quoteCurrency= url.searchParams.get('quoteCurrency') || undefined;
+        const status       = url.searchParams.get('status') || 'open';
+        const orders = this.p2pOrderStore.listOrders({ side, quoteCurrency, status });
+        return res.end(JSON.stringify({ orders }));
+      }
+
+      // GET /api/p2p/orders/my?address=xxx — my orders
+      if (req.method === 'GET' && url.pathname === '/api/p2p/orders/my') {
+        const address = url.searchParams.get('address');
+        if (!address) { res.statusCode = 400; return res.end(JSON.stringify({ error: 'address required' })); }
+        return res.end(JSON.stringify({ orders: this.p2pOrderStore.listMyOrders(address) }));
+      }
+
+      // GET /api/p2p/orders/:id
+      const orderDetailMatch = url.pathname.match(/^\/api\/p2p\/orders\/([^/]+)$/);
+      if (req.method === 'GET' && orderDetailMatch) {
+        const order = this.p2pOrderStore.getOrder(orderDetailMatch[1]);
+        if (!order) { res.statusCode = 404; return res.end(JSON.stringify({ error: 'not found' })); }
+        return res.end(JSON.stringify({ order }));
+      }
+
+      // POST /api/p2p/orders — create order
+      if (req.method === 'POST' && url.pathname === '/api/p2p/orders') {
+        readBody().then(body => {
+          const { address, signingPublicKey, signature, timestamp, ...orderFields } = body;
+          const auth = verifyP2PAuth(address, signingPublicKey, signature,
+            { address, timestamp, action: 'create-order', side: orderFields.side, pohAmount: orderFields.pohAmount });
+          if (auth !== true) { res.statusCode = 401; return res.end(JSON.stringify(auth)); }
+
+          // For sell orders: lock POH in escrow now
+          if (orderFields.side === 'sell') {
+            const lockResult = this.p2pEscrow.lock(this.walletManager, address, orderFields.pohAmount);
+            if (lockResult !== true) { res.statusCode = 400; return res.end(JSON.stringify(lockResult)); }
+          }
+
+          const result = this.p2pOrderStore.createOrder({ maker: address, ...orderFields });
+          if (result.error) {
+            // Refund escrow if order creation failed after locking
+            if (orderFields.side === 'sell') this.p2pEscrow.release(this.walletManager, address, orderFields.pohAmount);
+            res.statusCode = 400; return res.end(JSON.stringify(result));
+          }
+
+          result.order.escrowLocked = (orderFields.side === 'sell');
+          this.p2pOrderStore._patchOrder(result.order.id, { escrowLocked: result.order.escrowLocked });
+          this._appliedP2PIds.add(`order-${result.order.id}`);
+          this.pendingBrainTransitions.push({ type: 'p2p-order-created', ...result.order });
+          this.gossip.publish('p2p-order', result.order).catch(() => {});
+          return res.end(JSON.stringify(result));
+        }).catch(e => { res.statusCode = 400; res.end(JSON.stringify({ error: e.message })); });
+        return;
+      }
+
+      // POST /api/p2p/orders/:id/cancel
+      const orderActionMatch = url.pathname.match(/^\/api\/p2p\/orders\/([^/]+)\/([^/]+)$/);
+      if (req.method === 'POST' && orderActionMatch) {
+        const [, orderId, action] = orderActionMatch;
+
+        if (action === 'cancel') {
+          readBody().then(body => {
+            const { address, signingPublicKey, signature, timestamp } = body;
+            const auth = verifyP2PAuth(address, signingPublicKey, signature,
+              { address, timestamp, action: 'cancel-order', orderId });
+            if (auth !== true) { res.statusCode = 401; return res.end(JSON.stringify(auth)); }
+
+            const order = this.p2pOrderStore.getOrder(orderId);
+            if (!order) { res.statusCode = 404; return res.end(JSON.stringify({ error: 'order not found' })); }
+            if (order.maker !== address) { res.statusCode = 403; return res.end(JSON.stringify({ error: 'not your order' })); }
+
+            // Capture before cancelOrder mutates the object in-place via Object.assign
+            const { side: orderSide, escrowLocked: wasEscrowLocked, pohAmount: orderPohAmount } = order;
+
+            const result = this.p2pOrderStore.cancelOrder(orderId);
+            if (result.error) { res.statusCode = 400; return res.end(JSON.stringify(result)); }
+
+            // Refund escrow for sell orders
+            if (orderSide === 'sell' && wasEscrowLocked) {
+              this.p2pEscrow.release(this.walletManager, address, orderPohAmount);
+            }
+            // Refund escrow for buy orders where taker locked (handled in trade cancel)
+            this._appliedP2PIds.add(`order-cancel-${orderId}`);
+            this.pendingBrainTransitions.push({ type: 'p2p-order-cancelled', orderId, maker: address, side: orderSide, escrowLocked: wasEscrowLocked, pohAmount: orderPohAmount, updatedAt: Date.now() });
+            this.gossip.publish('p2p-order', result.order).catch(() => {});
+            return res.end(JSON.stringify(result));
+          }).catch(e => { res.statusCode = 400; res.end(JSON.stringify({ error: e.message })); });
+          return;
+        }
+
+        // POST /api/p2p/orders/:id/select — taker selects order
+        if (action === 'select') {
+          readBody().then(body => {
+            const { address, signingPublicKey, signature, timestamp, pohAmount, quoteAmount } = body;
+            const auth = verifyP2PAuth(address, signingPublicKey, signature,
+              { address, timestamp, action: 'select-order', orderId, pohAmount, quoteAmount });
+            if (auth !== true) { res.statusCode = 401; return res.end(JSON.stringify(auth)); }
+
+            const order = this.p2pOrderStore.getOrder(orderId);
+            if (!order) { res.statusCode = 404; return res.end(JSON.stringify({ error: 'order not found' })); }
+
+            // For buy orders: taker is selling POH, so lock taker's POH in escrow
+            if (order.side === 'buy') {
+              const lockResult = this.p2pEscrow.lock(this.walletManager, address, pohAmount);
+              if (lockResult !== true) { res.statusCode = 400; return res.end(JSON.stringify(lockResult)); }
+            }
+
+            const result = this.p2pOrderStore.selectOrder(orderId, { taker: address, pohAmount, quoteAmount });
+            if (result.error) {
+              if (order.side === 'buy') this.p2pEscrow.release(this.walletManager, address, pohAmount);
+              res.statusCode = 400; return res.end(JSON.stringify(result));
+            }
+
+            this._appliedP2PIds.add(`trade-${result.trade.id}`);
+            this.pendingBrainTransitions.push({ type: 'p2p-trade-created', ...result.trade, orderSide: order.side });
+            this.gossip.publish('p2p-order', this.p2pOrderStore.getOrder(orderId)).catch(() => {});
+            this.gossip.publish('p2p-trade', result.trade).catch(() => {});
+            return res.end(JSON.stringify(result));
+          }).catch(e => { res.statusCode = 400; res.end(JSON.stringify({ error: e.message })); });
+          return;
+        }
+      }
+
+      // GET /api/p2p/trades/my?address=xxx
+      if (req.method === 'GET' && url.pathname === '/api/p2p/trades/my') {
+        const address = url.searchParams.get('address');
+        if (!address) { res.statusCode = 400; return res.end(JSON.stringify({ error: 'address required' })); }
+        const trades = this.p2pOrderStore.listMyTrades(address).map(t => ({
+          ...t,
+          order: this.p2pOrderStore.getOrder(t.orderId),
+        }));
+        return res.end(JSON.stringify({ trades }));
+      }
+
+      // GET /api/p2p/trades/:id
+      const tradeDetailMatch = url.pathname.match(/^\/api\/p2p\/trades\/([^/]+)$/);
+      if (req.method === 'GET' && tradeDetailMatch) {
+        const trade = this.p2pOrderStore.getTrade(tradeDetailMatch[1]);
+        if (!trade) { res.statusCode = 404; return res.end(JSON.stringify({ error: 'not found' })); }
+        const order = this.p2pOrderStore.getOrder(trade.orderId);
+        return res.end(JSON.stringify({ trade, order }));
+      }
+
+      // POST /api/p2p/trades/:id/:action
+      const tradeActionMatch = url.pathname.match(/^\/api\/p2p\/trades\/([^/]+)\/([^/]+)$/);
+      if (req.method === 'POST' && tradeActionMatch) {
+        const [, tradeId, action] = tradeActionMatch;
+
+        readBody().then(body => {
+          const { address, signingPublicKey, signature, timestamp, reason } = body;
+          const auth = verifyP2PAuth(address, signingPublicKey, signature,
+            { address, timestamp, action, tradeId });
+          if (auth !== true) { res.statusCode = 401; return res.end(JSON.stringify(auth)); }
+
+          const trade = this.p2pOrderStore.getTrade(tradeId);
+          if (!trade) { res.statusCode = 404; return res.end(JSON.stringify({ error: 'trade not found' })); }
+          const order = this.p2pOrderStore.getOrder(trade.orderId);
+
+          if (action === 'payment-sent') {
+            // Only the taker (for sell orders) or maker (for buy orders) marks payment sent
+            const payer = order?.side === 'sell' ? trade.taker : order?.maker;
+            if (address !== payer) { res.statusCode = 403; return res.end(JSON.stringify({ error: 'not the payer' })); }
+            const result = this.p2pOrderStore.markPaymentSent(tradeId);
+            if (result.error) { res.statusCode = 400; return res.end(JSON.stringify(result)); }
+            this._appliedP2PIds.add(`trade-${tradeId}-payment-sent`);
+            this.pendingBrainTransitions.push({ type: 'p2p-trade-payment-sent', tradeId, updatedAt: Date.now() });
+            this.gossip.publish('p2p-trade', result.trade).catch(() => {});
+            return res.end(JSON.stringify(result));
+          }
+
+          if (action === 'release') {
+            // Seller releases escrow → POH goes to buyer
+            // Sell order: maker is seller, taker is buyer. Maker releases to taker.
+            // Buy order: taker is seller, maker is buyer. Taker releases to maker.
+            const releaser = order?.side === 'sell' ? order?.maker : trade.taker;
+            const recipient = order?.side === 'sell' ? trade.taker : order?.maker;
+            if (address !== releaser) { res.statusCode = 403; return res.end(JSON.stringify({ error: 'not authorized to release' })); }
+
+            const releaseResult = this.p2pEscrow.release(this.walletManager, recipient, trade.pohAmount);
+            if (releaseResult !== true) { res.statusCode = 400; return res.end(JSON.stringify(releaseResult)); }
+
+            const result = this.p2pOrderStore.completeTrade(tradeId);
+            if (result.error) { res.statusCode = 400; return res.end(JSON.stringify(result)); }
+            this._appliedP2PIds.add(`trade-${tradeId}-release`);
+            this.pendingBrainTransitions.push({ type: 'p2p-trade-release', tradeId, recipient, pohAmount: trade.pohAmount, updatedAt: Date.now() });
+            this.gossip.publish('p2p-trade', result.trade).catch(() => {});
+            this.gossip.publish('p2p-order', this.p2pOrderStore.getOrder(trade.orderId)).catch(() => {});
+            return res.end(JSON.stringify(result));
+          }
+
+          if (action === 'cancel') {
+            const canCancel = address === trade.taker || (order && address === order.maker);
+            if (!canCancel) { res.statusCode = 403; return res.end(JSON.stringify({ error: 'not a trade participant' })); }
+
+            // Refund escrow to the party who locked
+            const locker  = order?.side === 'sell' ? order?.maker : trade.taker;
+            const lockAmt  = trade.pohAmount;
+            if (order?.escrowLocked) {
+              this.p2pEscrow.release(this.walletManager, locker, lockAmt);
+            }
+            const result = this.p2pOrderStore.cancelTrade(tradeId);
+            if (result.error) { res.statusCode = 400; return res.end(JSON.stringify(result)); }
+            this._appliedP2PIds.add(`trade-${tradeId}-cancel`);
+            this.pendingBrainTransitions.push({ type: 'p2p-trade-cancel', tradeId, locker, pohAmount: lockAmt, escrowLocked: !!order?.escrowLocked, updatedAt: Date.now() });
+            this.gossip.publish('p2p-trade', result.trade).catch(() => {});
+            this.gossip.publish('p2p-order', this.p2pOrderStore.getOrder(trade.orderId)).catch(() => {});
+            return res.end(JSON.stringify(result));
+          }
+
+          if (action === 'dispute') {
+            const canDispute = address === trade.taker || (order && address === order.maker);
+            if (!canDispute) { res.statusCode = 403; return res.end(JSON.stringify({ error: 'not a trade participant' })); }
+            const result = this.p2pOrderStore.disputeTrade(tradeId, { reason });
+            if (result.error) { res.statusCode = 400; return res.end(JSON.stringify(result)); }
+            this._appliedP2PIds.add(`trade-${tradeId}-dispute`);
+            this.pendingBrainTransitions.push({ type: 'p2p-trade-dispute', tradeId, reason: reason || '', updatedAt: Date.now() });
+            this.gossip.publish('p2p-trade', result.trade).catch(() => {});
+            return res.end(JSON.stringify(result));
+          }
+
+          res.statusCode = 400;
+          res.end(JSON.stringify({ error: `unknown action: ${action}` }));
+        }).catch(e => { res.statusCode = 400; res.end(JSON.stringify({ error: e.message })); });
+        return;
+      }
+
+      // POST /api/p2p/local-auth — sign a P2P auth payload using the local node wallet
+      // Renderer calls this to get a signed auth token without needing the private key.
+      if (req.method === 'POST' && url.pathname === '/api/p2p/local-auth') {
+        readBody().then(body => {
+          const wallet = this.identityWallet;
+          if (!wallet?.signingPublicKey || !wallet?.sign) {
+            res.statusCode = 503;
+            return res.end(JSON.stringify({ error: 'signing key not available' }));
+          }
+          const { action, ...extraFields } = body;
+          if (!action) { res.statusCode = 400; return res.end(JSON.stringify({ error: 'action required' })); }
+          const timestamp = Date.now();
+          const address = wallet.address;
+          const payloadObj = { address, timestamp, action, ...extraFields };
+          const signature = wallet.sign(JSON.stringify(payloadObj));
+          return res.end(JSON.stringify({
+            address,
+            signingPublicKey: wallet.signingPublicKey,
+            signature,
+            timestamp,
+          }));
+        }).catch(e => { res.statusCode = 400; res.end(JSON.stringify({ error: e.message })); });
+        return;
       }
 
       res.statusCode = 404;
@@ -1439,46 +2218,115 @@ export class PohMinerNode {
   }
 
   async syncFromBootnodes() {
-    console.log('[PoH-Miner] Attempting to sync from bootnodes...');
+    // Build a candidate list: registered peers first, then bootnodes
+    const candidates = [];
 
-    for (const bootnode of this.config.bootnodes) {
+    // 1. Query bootnode(s) for known peers — they expose host:walletApiPort
+    for (const bootnode of (this.config.bootnodes || [])) {
       try {
-        const url = bootnode.endsWith('/') ? bootnode : bootnode + '/';
-        const tipRes = await fetch(`${url}chain/tip`);
-        if (!tipRes.ok) continue;
-
-        const tip = await tipRes.json();
-        const localHeight = this.chain.length - 1;
-
-        if (tip.height > localHeight) {
-          console.log(`[PoH-Miner] Bootnode ${bootnode} is at height ${tip.height}, we are at ${localHeight}. Fetching blocks...`);
-
-          const from = localHeight + 1;
-          const to = tip.height;
-
-          const blocksRes = await fetch(`${url}chain/blocks?from=${from}&to=${to}`);
-          if (!blocksRes.ok) continue;
-
-          const newBlocks = await blocksRes.json();
-
-          for (const blockData of newBlocks) {
-            const block = PohBlock.fromJSON ? PohBlock.fromJSON(blockData) : new PohBlock(blockData);
-            // Basic validation before appending
-            const prev = this.chain[this.chain.length - 1];
-            const prevHash = await prev.getHash();
-            if (block.previousHash === prevHash && block.height === this.chain.length) {
-              this.chain.push(block);
-            }
+        const base = bootnode.endsWith('/') ? bootnode : bootnode + '/';
+        const r = await fetch(`${base}peers`, { signal: AbortSignal.timeout(6000) });
+        if (!r.ok) continue;
+        const { peers } = await r.json();
+        for (const p of (peers || [])) {
+          if (p.host && p.walletApiPort && p.host !== 'localhost' && p.host !== '127.0.0.1') {
+            candidates.push({ label: p.wallet?.slice(0, 8) ?? p.host, base: `http://${p.host}:${p.walletApiPort}` });
           }
-
-          this.chainStore.saveChain(this.chain);
-          console.log(`[PoH-Miner] Synced ${newBlocks.length} new blocks from ${bootnode}`);
-          break; // success, stop trying other bootnodes
         }
-      } catch (err) {
-        console.warn(`[PoH-Miner] Failed to sync from bootnode ${bootnode}:`, err.message);
+      } catch { /* bootnode unreachable */ }
+    }
+
+    // 2. Also try bootnodes directly (they accumulate blocks via /submit-block)
+    for (const bootnode of (this.config.bootnodes || [])) {
+      const base = bootnode.endsWith('/') ? bootnode : bootnode + '/';
+      candidates.push({ label: bootnode, base: bootnode.replace(/\/$/, '') });
+    }
+
+    if (!candidates.length) {
+      console.log('[PoH-Miner] No sync candidates found');
+      return;
+    }
+
+    // 3. Find the candidate with the best (longest) chain
+    let bestHeight = this.chain.length - 1;
+    let bestBase   = null;
+    let bestLabel  = null;
+
+    await Promise.allSettled(candidates.map(async c => {
+      try {
+        const r = await fetch(`${c.base}/chain/tip`, { signal: AbortSignal.timeout(5000) });
+        if (!r.ok) return;
+        const tip = await r.json();
+        if ((tip.height ?? -1) > bestHeight) {
+          bestHeight = tip.height;
+          bestBase   = c.base;
+          bestLabel  = c.label;
+        }
+      } catch { /* unreachable */ }
+    }));
+
+    // 4. IPFS fallback if no live peer has a longer chain
+    if (!bestBase && this.ipfsSync) {
+      const snap = await this.ipfsSync.fetchChainSnapshot();
+      if (snap?.blocks?.length && snap.height > this.chain.length - 1) {
+        console.log(`[PoH-Miner] Applying IPFS chain snapshot (height ${snap.height})`);
+        try {
+          let valid = true;
+          const blocks = snap.blocks.map(b => PohBlock.fromJSON ? PohBlock.fromJSON(b) : new PohBlock(b));
+          for (let i = 1; i < blocks.length; i++) {
+            if (blocks[i].previousHash !== blocks[i - 1].getHashSync()) { valid = false; break; }
+          }
+          if (valid) {
+            this.chain = blocks;
+            this.chainStore.saveChain(this.chain);
+            for (const b of this.chain) {
+              for (const r of (b.scanResults || [])) {
+                if (r.requestId) this.minedRequestIds.add(r.requestId);
+              }
+            }
+            console.log(`[PoH-Miner] IPFS sync: now at height ${snap.height}`);
+          }
+        } catch (e) { console.warn('[PoH-Miner] IPFS chain apply failed:', e.message); }
+      }
+      return;
+    }
+
+    if (!bestBase) return;
+
+    // 5. Download blocks in chunks of 500
+    const CHUNK = 500;
+    let localHeight = this.chain.length - 1;
+    console.log(`[PoH-Miner] Syncing from ${bestLabel} (height ${bestHeight}, we are at ${localHeight})`);
+
+    while (localHeight < bestHeight) {
+      const from = localHeight + 1;
+      const to   = Math.min(localHeight + CHUNK, bestHeight);
+      try {
+        const r = await fetch(`${bestBase}/chain/blocks?from=${from}&to=${to}`, { signal: AbortSignal.timeout(30000) });
+        if (!r.ok) break;
+        const blocks = await r.json();
+        let added = 0;
+        for (const bd of blocks) {
+          const block = PohBlock.fromJSON ? PohBlock.fromJSON(bd) : new PohBlock(bd);
+          const prev  = this.chain[this.chain.length - 1];
+          const prevHash = prev.getHashSync();
+          if (block.previousHash === prevHash && block.height === this.chain.length) {
+            this._applyBlockState(block);
+            this.chain.push(block);
+            this.currentDifficulty = getNextDifficulty(this.chain);
+            added++;
+          }
+        }
+        if (!added) break; // no progress — stop
+        localHeight = this.chain.length - 1;
+      } catch (e) {
+        console.warn(`[PoH-Miner] Chunk fetch failed:`, e.message);
+        break;
       }
     }
+
+    this.chainStore.saveChain(this.chain);
+    console.log(`[PoH-Miner] Chain sync complete — height ${this.chain.length - 1}`);
   }
 
   /**
@@ -1500,6 +2348,7 @@ export class PohMinerNode {
       region: this.myLocation?.country || null,
       timestamp: ts,
       methodsHash,
+      tflops: this.tflops || null,
     };
 
     // Attach proof that we are a real running poh-miner node (possess local wallet privkey)
@@ -1702,7 +2551,71 @@ export class PohMinerNode {
       if (transition?.manifest?.id) {
         skillsManager.processTransition(transition);
         this.pendingBrainTransitions.push(transition);
+        // Persist to disk so the skill survives restart
+        try {
+          const brainDir = getBrainDataDir();
+          const skillsDir = path.join(brainDir, 'skills');
+          writeSkillFile(skillsDir, transition.manifest, transition.code || null, transition.context || '');
+          console.log(`[PoH-Miner] Persisted skill ${transition.manifest.id} to ${skillsDir}`);
+        } catch (err) {
+          console.warn('[PoH-Miner] Failed to persist skill to disk:', err.message);
+        }
       }
+    });
+
+    // Audit result from a peer miner — proposer's node finalizes balance + skill broadcast
+    this.gossip.subscribe('skill-audit-result', (verdict) => {
+      this._applySkillAuditResult(verdict, null);
+    });
+
+    // Peer feedback — sync reputation across all nodes; slash if this node was the miner
+    this.gossip.subscribe('job-feedback', (transition) => {
+      if (!transition?.jobId || !transition?.rating) return;
+      if (feedbackStore.getByJob(transition.jobId)) return; // already applied
+      feedbackStore.apply(transition);
+      if (transition.rating === 'negative' && transition.minerAddress === this.config.wallet) {
+        this.applySlashing(0.05);
+        console.log(`[PoH-Miner] Reputation slashed via peer feedback (job ${transition.jobId}): ${this.reputation.toFixed(3)}`);
+      }
+    });
+
+    // Skill stake events from peers — apply immediately for UX, mark txHash so
+    // block replay (processStateTransition) skips the same event to prevent double-apply.
+    this.gossip.subscribe('skill-staked', ({ skillId, stakerAddress, amount, total, txHash }) => {
+      if (!skillId || !stakerAddress || !amount) return;
+      if (!this._skillStakes.has(skillId)) this._skillStakes.set(skillId, { total: 0, stakers: new Map() });
+      const entry = this._skillStakes.get(skillId);
+      entry.stakers.set(stakerAddress, (entry.stakers.get(stakerAddress) || 0) + amount);
+      entry.total = (total !== undefined) ? total : (entry.total || 0) + amount;
+      if (txHash) this._appliedStakeTxs.add(txHash);
+      this._saveSkillStakes();
+      const GRADUATION_THRESHOLD = 10000 * POH_DECIMALS;
+      if (entry.total >= GRADUATION_THRESHOLD) {
+        const skill = skillsManager.getAllSkills().find(s => s.id === skillId);
+        if (skill && skill.status !== 'active') {
+          const transition = { type: 'skill-graduated', skillId };
+          skillsManager.processTransition(transition);
+          this.pendingBrainTransitions.push(transition);
+        }
+      }
+    });
+
+    this.gossip.subscribe('skill-unstaked', ({ skillId, stakerAddress, amount, total, txHash }) => {
+      if (!skillId || !stakerAddress || !amount) return;
+      const entry = this._skillStakes.get(skillId);
+      if (!entry) return;
+      entry.stakers.set(stakerAddress, Math.max(0, (entry.stakers.get(stakerAddress) || 0) - amount));
+      entry.total = (total !== undefined) ? total : Math.max(0, (entry.total || 0) - amount);
+      if (txHash) this._appliedStakeTxs.add(txHash);
+      this._saveSkillStakes();
+    });
+
+    // P2P exchange order/trade sync
+    this.gossip.subscribe('p2p-order', (order) => {
+      try { this.p2pOrderStore.ingestGossipOrder(order); } catch { /* ignore malformed */ }
+    });
+    this.gossip.subscribe('p2p-trade', (trade) => {
+      try { this.p2pOrderStore.ingestGossipTrade(trade); } catch { /* ignore malformed */ }
     });
 
     // Layer 3: P2P block requests — serve block ranges to any peer that asks
@@ -1807,32 +2720,26 @@ export class PohMinerNode {
     }
   }
 
-  _appendBlock(block, from) {
-    // Apply formal transactions in the block to wallet state
+  // Apply all state mutations from a block (transactions, rewards, state transitions).
+  // Called by _appendBlock (live path) and syncFromBootnodes (batch sync path).
+  // Does NOT push to this.chain or touch difficulty — caller handles those.
+  _applyBlockState(block) {
     const appliedTxHashes = [];
     for (const txData of (block.transactions || [])) {
       const tx = PoHTransaction.fromJSON(txData);
       const result = this.walletManager.applyTransaction(tx);
       if (result === true) {
         appliedTxHashes.push(tx.txHash);
-        // Record journal entries for rollback capability
         this.balanceJournal.record(block.height, tx.from, -(tx.amount + tx.fee), 1, tx.txHash);
         this.balanceJournal.record(block.height, tx.to, tx.amount, 0, tx.txHash);
         if (tx.fee > 0 && block.minerWallet) {
           this.walletManager.credit(block.minerWallet, tx.fee);
           this.balanceJournal.record(block.height, block.minerWallet, tx.fee, 0, tx.txHash);
         }
-        // Record in transaction history so /api/wallet/transactions can serve it
         this.submissionHistory.push({
-          id: tx.txHash,
-          type: 'send',
-          from: tx.from,
-          to: tx.to,
-          amount: tx.amount,
-          fee: tx.fee || 0,
-          timestamp: tx.timestamp,
-          blockHeight: block.height,
-          status: 'mined',
+          id: tx.txHash, type: 'send', from: tx.from, to: tx.to,
+          amount: tx.amount, fee: tx.fee || 0, timestamp: tx.timestamp,
+          blockHeight: block.height, status: 'mined',
         });
       } else {
         console.warn(`[PoH-Miner] Tx ${tx.txHash.slice(0,12)} failed in block #${block.height}: ${result}`);
@@ -1840,41 +2747,33 @@ export class PohMinerNode {
     }
     if (appliedTxHashes.length) this.txMempool.onBlockApplied(appliedTxHashes);
 
-    // Register all scan results in this block as mined — drop any pending
-    // results for the same requestIds so miners don't re-mine them.
-    let dropped = 0;
     for (const r of (block.scanResults || [])) {
-      if (r.requestId) {
-        if (this.minedRequestIds.has(r.requestId)) continue; // already known
-        this.minedRequestIds.add(r.requestId);
-      }
+      if (r.requestId) this.minedRequestIds.add(r.requestId);
     }
     const before = this.pendingValidResults.length;
-    this.pendingValidResults = this.pendingValidResults.filter(
-      r => !this.minedRequestIds.has(r.requestId)
-    );
-    dropped = before - this.pendingValidResults.length;
-    if (dropped > 0) {
-      console.log(`[PoH-Miner] Dropped ${dropped} pending result(s) already mined in block #${block.height}`);
-    }
+    this.pendingValidResults = this.pendingValidResults.filter(r => !this.minedRequestIds.has(r.requestId));
+    const dropped = before - this.pendingValidResults.length;
+    if (dropped > 0) console.log(`[PoH-Miner] Dropped ${dropped} pending result(s) already mined in block #${block.height}`);
 
-    // Abort current mining immediately — we need to mine on the new tip
-    this._abortMining();
-
-    this.chain.push(block);
-    this.chainStore.saveChain(this.chain);
-    console.log(`[PoH-Miner] Accepted block #${block.height} chainWork=${block.chainWork} txs=${appliedTxHashes.length} [sig:${block.minerSignature ? '✓' : 'none'}] from ${from?.slice(0,8)}`);
     this.processIncomingBlockRewards(block);
 
-    // Replay brain/signal state transitions from the block
     if (block.stateTransitions?.length) {
       for (const tx of block.stateTransitions) {
         this.processStateTransition(tx).catch(() => {});
       }
     }
+  }
 
-    // Recalculate difficulty after each new block
+  _appendBlock(block, from) {
+    this._applyBlockState(block);
+
+    // Abort current mining immediately — we need to mine on the new tip
+    this._abortMining();
+
+    this.chain.push(block);
+    this.chainStore.saveBlock(block);
     this.currentDifficulty = getNextDifficulty(this.chain);
+    console.log(`[PoH-Miner] Accepted block #${block.height} chainWork=${block.chainWork} txs=${(block.transactions||[]).length} [sig:${block.minerSignature ? '✓' : 'none'}] from ${from?.slice(0,8)}`);
 
     // Trigger IPFS chain snapshot every 100 blocks (fire-and-forget)
     this.ipfsSync.onBlockAppended(block).catch(() => {});
@@ -2085,6 +2984,147 @@ export class PohMinerNode {
   async computeAndSubmitJob(job) {
     const start = Date.now();
 
+    // ── Skill job path ────────────────────────────────────────────────────────
+    if (job.type === 'skill' && job.skillId) {
+      // Gate: skill must be enabled on this node
+      if (!this.isSkillEnabled(job.skillId)) {
+        console.log(`[PoH-Miner] Skipping skill job ${job.id} — skill ${job.skillId} is disabled on this node`);
+        this._updateJob(job.id, { status: 'ignored', error: 'skill disabled by miner' });
+        return;
+      }
+      // poh_identity has no sandboxed code — delegate to the full verdict pipeline
+      if (job.skillId === 'poh_identity') {
+        return this.computeAndSubmitJob({ ...job, type: 'verdict' });
+      }
+      try {
+        console.log(`[PoH-Miner] Running skill ${job.skillId} for job ${job.id}`);
+        const { output, tokensUsed } = await skillsManager.runSkill(job.skillId, job.payload, this.config, job.maxBudget);
+
+        // If the job carries a user question, generate a natural-language LLM response
+        // before marking the job done so the fee is only released after full LLM work.
+        let nlResponse = null;
+        const userQuestion = job.payload?.question;
+        if (userQuestion && output !== null && output !== undefined && !job.payload?._isProposalAudit) {
+          try {
+            const ollamaBase = this.config.ollamaUrl || 'http://localhost:11434';
+            const skillEntry = skillsManager.getSkill(job.skillId);
+            const skillCtx = skillEntry?.context || '';
+            const systemContent = [
+              'You are an AI assistant with access to real-time data fetched by a skill.',
+              'Answer the user\'s question using only the provided data. Be concise and specific.',
+              skillCtx ? `\n\nSkill context (how to interpret this data):\n${skillCtx}` : '',
+            ].join('');
+            const dataStr = JSON.stringify(output, null, 2).slice(0, 10000);
+            const userContent = `Fetched data:\n\`\`\`json\n${dataStr}\n\`\`\`\n\nUser question: ${userQuestion}`;
+            const ollamaRes = await fetch(`${ollamaBase}/api/chat`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                model: this.config.model || 'qwen2.5:1.5b',
+                messages: [
+                  { role: 'system', content: systemContent },
+                  { role: 'user', content: userContent },
+                ],
+                stream: false,
+                options: { temperature: 0.5 },
+              }),
+              signal: AbortSignal.timeout(30000),
+            });
+            if (ollamaRes.ok) {
+              const d = await ollamaRes.json();
+              nlResponse = d.message?.content || d.response || null;
+              if (nlResponse) console.log(`[PoH-Miner] LLM analysis done for job ${job.id} (${nlResponse.length} chars)`);
+            }
+          } catch (e) {
+            console.warn(`[PoH-Miner] LLM analysis skipped for job ${job.id}:`, e.message);
+          }
+        }
+
+        const result = new ScanResult({
+          requestId:        job.id,
+          address:          job.payload?.address || 'skill-job',
+          verdict:          'SKILL_RESULT',
+          confidence:       1,
+          reasoning:        `Skill ${job.skillId} executed successfully`,
+          signalsUsed:      [],
+          modelUsed:        'skill-runner',
+          computationTimeMs: Date.now() - start,
+          minerWallet:      this.config.wallet,
+          methodsHash:      this.methodsManager?.getStatus().hash || 'skill',
+          methodsCount:     0,
+          realPohUsed:      false,
+          profile:          { skillOutput: output, skillId: job.skillId, tokensUsed, nlResponse },
+        });
+        // ── Proposal audit post-processing ── runs BEFORE submitResult so the renderer
+        // never sees a SKILL_RESULT for a rejected audit (race between submitResult and
+        // _applySkillAuditResult setting rec.rejected would show "audit passed" incorrectly)
+        if (job.payload?._isProposalAudit) {
+          const safe = output?.safe !== false;
+          const auditVerdict = {
+            type:             'skill-audit-result',
+            jobId:            job.id,
+            skillId:          job.payload.manifest?.id,
+            safe,
+            reason:           output?.reason,
+            issues:           output?.issues || [],
+            proposerAddress:  job.payload.proposerAddress,
+            auditorAddress:   this.config.wallet,
+            fee:              job.maxBudget,
+            ts:               Date.now(),
+          };
+          this.gossip.publish('skill-audit-result', auditVerdict).catch(() => {});
+          this.pendingBrainTransitions.push({ type: 'skill-audit-result', ...auditVerdict });
+          this._applySkillAuditResult(auditVerdict, job);
+          if (!safe) {
+            // Ensure rejected status is set even if _applySkillAuditResult returned early
+            this._updateJob(job.id, { status: 'done', verdict: 'REJECTED', reason: output?.reason, issues: output?.issues || [], rejected: true });
+            this.jobQueue.markCompleted(job.id);
+            // Fall through to settlement — miner gets paid for the audit even on rejection
+          }
+        }
+
+        if (!job.payload?._isProposalAudit || output?.safe !== false) {
+          await this.submitResult(job, result);
+
+          // Broadcast skill result hash on-chain for audit trail
+          try {
+            const resultHash = crypto.createHash('sha256')
+              .update(JSON.stringify(output ?? ''))
+              .digest('hex')
+              .slice(0, 32);
+            this.gossip.publish('skill-result-hash', { jobId: job.id, skillId: job.skillId, hash: resultHash, miner: this.config.wallet, ts: Date.now() }).catch(() => {});
+          } catch {}
+        }
+
+        if (!this.jobQueue.completed.has(job.id)) this.jobQueue.markCompleted(job.id);
+
+        if (job.requesterAddress && job.maxBudget > 0) {
+          const gasPrice = this.config.gasPrice || GAS.DEFAULT_GAS_PRICE;
+          // For proposal audits pay the full fee flat (not per-token) — it's a governance fee
+          const fee   = job.payload?._isProposalAudit ? job.maxBudget : settleFee(tokensUsed, gasPrice, job.maxBudget).fee;
+          const refund = job.maxBudget - fee;
+          // 80% to miner, 20% to skill proposer (if proposer exists; builtins go 100% to miner)
+          const skillEntry = skillsManager.getSkill(job.skillId);
+          const proposerAddress = (!job.payload?._isProposalAudit && skillEntry?.proposerAddress) ? skillEntry.proposerAddress : null;
+          const proposerFee = proposerAddress ? Math.floor(fee * 0.2) : 0;
+          const minerFee    = fee - proposerFee;
+          const settled = { type: 'job-settled', jobId: job.id, requesterAddress: job.requesterAddress, minerAddress: this.config.wallet, actualTokens: tokensUsed, actualFee: minerFee, proposerAddress, proposerFee, refund, gasPrice, completedAt: Date.now() };
+          this.pendingBrainTransitions.push(settled);
+          this._applySettlement(settled);
+        }
+        return result;
+      } catch (err) {
+        console.error(`[PoH-Miner] Skill job ${job.id} failed:`, err.message);
+        this._updateJob(job.id, { status: 'error', error: err.message });
+        if (job.requesterAddress && job.maxBudget > 0 && this.escrow.has(job.id)) {
+          const timeout = { type: 'job-timeout', jobId: job.id, requesterAddress: job.requesterAddress, minerAddress: this.config.wallet, reservationFee: 0, refund: job.maxBudget, completedAt: Date.now() };
+          this.pendingBrainTransitions.push(timeout);
+          this._applySettlement(timeout);
+        }
+        return null;
+      }
+    }
+
     try {
       console.log(`[PoH-Miner] Computing ${job.type} for job ${job.id} using real POH brain (geo-aware)`);
 
@@ -2176,6 +3216,11 @@ export class PohMinerNode {
         rec.error = err.message;
         rec.updatedAt = Date.now();
       }
+      if (job.requesterAddress && job.maxBudget > 0 && this.escrow.has(job.id)) {
+        const timeout = { type: 'job-timeout', jobId: job.id, requesterAddress: job.requesterAddress, minerAddress: this.config.wallet, reservationFee: 0, refund: job.maxBudget, completedAt: Date.now() };
+        this.pendingBrainTransitions.push(timeout);
+        this._applySettlement(timeout);
+      }
       return null;
     }
   }
@@ -2215,6 +3260,8 @@ export class PohMinerNode {
   _applyEscrow(transition) {
     const { jobId, requesterAddress, amount, minerAddress } = transition;
     if (!requesterAddress || !amount) return;
+    if (this._appliedEscrowJobIds.has(jobId)) return; // block replay — already debited locally
+    this._appliedEscrowJobIds.add(jobId);
     this.walletManager.debit(requesterAddress, amount);
     this.escrow.set(jobId, { amount, requesterAddress, minerAddress });
   }
@@ -2224,11 +3271,42 @@ export class PohMinerNode {
     if (!entry) return;
     this.escrow.delete(transition.jobId);
     if (transition.type === 'job-settled') {
-      if (transition.actualFee > 0) this.walletManager.credit(transition.minerAddress, transition.actualFee);
-      if (transition.refund > 0)    this.walletManager.credit(transition.requesterAddress, transition.refund);
+      if (transition.actualFee > 0)  this.walletManager.credit(transition.minerAddress, transition.actualFee);
+      if (transition.proposerFee > 0 && transition.proposerAddress)
+        this.walletManager.credit(transition.proposerAddress, transition.proposerFee);
+      if (transition.refund > 0)     this.walletManager.credit(transition.requesterAddress, transition.refund);
     } else if (transition.type === 'job-timeout') {
       if (transition.reservationFee > 0) this.walletManager.credit(transition.minerAddress, transition.reservationFee);
       if (transition.refund > 0)         this.walletManager.credit(transition.requesterAddress, transition.refund);
+    }
+  }
+
+  /**
+   * Finalize a skill proposal audit result — called on both the auditing node and the proposer's
+   * node (via skill-audit-result gossip).  Only acts if this node holds the pending proposal.
+   */
+  _applySkillAuditResult(verdict, job) {
+    const pending = this._pendingProposals.get(verdict.jobId);
+    if (!pending) return; // not our proposal — nothing to do
+    this._pendingProposals.delete(verdict.jobId);
+
+    if (!verdict.safe) {
+      // Miner earned the fee by doing the audit — DO NOT refund the proposer.
+      // Settlement in computeAndSubmitJob will credit the miner from escrow.
+      if (job) {
+        this._updateJob(job.id, { status: 'done', verdict: 'REJECTED', reason: verdict.reason, issues: verdict.issues, rejected: true });
+      }
+      console.log(`[PoH-Miner] Skill proposal ${verdict.skillId} REJECTED: ${verdict.reason}`);
+      if (typeof this.onSkillRejectedHook === 'function') {
+        this.onSkillRejectedHook({ skillId: verdict.skillId, reason: verdict.reason, issues: verdict.issues || [] });
+      }
+    } else {
+      // Publish the skill to the network
+      const transition = { type: 'skill-proposed', manifest: pending.manifest, code: pending.code, context: pending.context, authorSignature: pending.authorSignature, proposerAddress: pending.proposerAddress || null, txHash: `skill-${pending.manifest.id}-${Date.now()}` };
+      this.pendingBrainTransitions.push(transition);
+      skillsManager.processTransition(transition);
+      this.gossip.publish('skill-proposed', transition).catch(() => {});
+      console.log(`[PoH-Miner] Skill proposal ${verdict.skillId} APPROVED — broadcasting`);
     }
   }
 
@@ -2247,6 +3325,21 @@ export class PohMinerNode {
     // 1. Basic methods hash check (already existed)
     if (!this._validateResultMethods(result)) {
       console.warn(`[PoH-Miner] Rejecting result for ${request.id} — used stale methodsHash`);
+      return;
+    }
+
+    // Skill results are local-only — no network validation, just store for polling
+    if (result.verdict === 'SKILL_RESULT') {
+      result.isValidWork = true;
+      if (this.jobResults && this.jobResults.has(request.id)) {
+        const rec = this.jobResults.get(request.id);
+        rec.result = result;
+        rec.status = 'done';
+        rec.updatedAt = Date.now();
+      } else if (this.jobResults) {
+        this.jobResults.set(request.id, { id: request.id, status: 'done', job: request, result, error: null, createdAt: Date.now(), updatedAt: Date.now() });
+      }
+      console.log(`[PoH-Miner] ✓ Skill result stored for polling: ${request.id} (skill: ${result.profile?.skillId})`);
       return;
     }
 
@@ -2312,6 +3405,9 @@ export class PohMinerNode {
    * Fault tolerance check: ensure the result was computed with the current signals set.
    */
   _validateResultMethods(result) {
+    // Skill results don't use signal methods — bypass validation
+    if (result.verdict === 'SKILL_RESULT') return true;
+
     if (!this.methodsManager) return true; // during early bootstrap
     if (!result.methodsHash) return false;
 
@@ -2434,8 +3530,31 @@ export class PohMinerNode {
       }
 
       this.chain.push(newBlock);
-      this.chainStore.saveChain(this.chain);  // persist local blocks so they survive restart
-      console.log(`[PoH-Miner] Produced block #${newBlock.height} (nonce ${newBlock.nonce}) — minted fixed ${BLOCK_REWARD_POH} POH | included ${validResultsForBlock.length} validated scan results`);
+      this.chainStore.saveBlock(newBlock);
+      console.log(`[PoH-Miner] Produced block #${newBlock.height} (nonce ${newBlock.nonce})`);
+
+      // Apply transactions from self-mined block — _applyBlockState is only called
+      // for received blocks; we must do it here so balances/nonces update and the
+      // mempool clears when this node is the block producer.
+      const appliedTxHashes = [];
+      for (const txData of (newBlock.transactions || [])) {
+        const tx = PoHTransaction.fromJSON(txData);
+        if (this.walletManager.applyTransaction(tx) === true) {
+          appliedTxHashes.push(tx.txHash);
+          this.balanceJournal.record(newBlock.height, tx.from, -(tx.amount + tx.fee), 1, tx.txHash);
+          this.balanceJournal.record(newBlock.height, tx.to, tx.amount, 0, tx.txHash);
+          if (tx.fee > 0) {
+            this.walletManager.credit(newBlock.minerWallet, tx.fee);
+            this.balanceJournal.record(newBlock.height, newBlock.minerWallet, tx.fee, 0, tx.txHash);
+          }
+          this.submissionHistory.push({
+            id: tx.txHash, type: 'send', from: tx.from, to: tx.to,
+            amount: tx.amount, fee: tx.fee || 0, timestamp: tx.timestamp,
+            blockHeight: newBlock.height, status: 'mined',
+          });
+        }
+      }
+      if (appliedTxHashes.length) this.txMempool.onBlockApplied(appliedTxHashes);
 
       // Credit the proposer reward (only the producer claims this)
       if (this.config.wallet && coinbase.proposerReward > 0) {
@@ -2448,6 +3567,18 @@ export class PohMinerNode {
 
       // Broadcast the new block to the network
       this.gossip.publish('new-block', newBlock.toJSON());
+
+      // Submit to bootnodes so they accumulate chain history (fire-and-forget)
+      const blockPayload = JSON.stringify(newBlock.toJSON ? newBlock.toJSON() : newBlock);
+      for (const bootnode of (this.config.bootnodes || [])) {
+        const base = bootnode.endsWith('/') ? bootnode : bootnode + '/';
+        fetch(`${base}submit-block`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: blockPayload,
+          signal: AbortSignal.timeout(5000),
+        }).catch(() => {});
+      }
 
       // Process any signals updates in this block
       if (newBlock.stateTransitions?.length) {
@@ -2482,6 +3613,7 @@ export class PohMinerNode {
       quality: this.qualityStats,
       reputation: this.reputation,
       rewardMultiplier: (this.reputation || 1.0).toFixed(2),
+      tflops: this.tflops || null,
     };
   }
 
@@ -2641,9 +3773,94 @@ export class PohMinerNode {
 
     if (transition.type === 'brain-state-root') return; // informational only
 
+    // Job submission history — reconstruct job record on new nodes
+    if (transition.type === 'job-submitted') {
+      if (this.jobResults && !this.jobResults.has(transition.jobId)) {
+        this.jobResults.set(transition.jobId, {
+          id: transition.jobId,
+          status: 'archived',
+          job: { id: transition.jobId, type: transition.jobType, payload: { address: transition.address }, skillId: transition.skillId, requesterAddress: transition.requesterAddress, maxBudget: transition.maxBudget },
+          result: null,
+          createdAt: transition.timestamp,
+          updatedAt: transition.timestamp,
+        });
+      }
+      return;
+    }
+
+    // P2P order/trade lifecycle — rebuild order book from chain on new nodes
+    if (transition.type === 'p2p-order-created') {
+      if (this._appliedP2PIds.has(`order-${transition.id}`)) return;
+      this.p2pOrderStore.ingestGossipOrder(transition);
+      if (transition.side === 'sell' && transition.escrowLocked) {
+        this.p2pEscrow.lock(this.walletManager, transition.maker, transition.pohAmount);
+      }
+      return;
+    }
+    if (transition.type === 'p2p-order-cancelled') {
+      if (this._appliedP2PIds.has(`order-cancel-${transition.orderId}`)) return;
+      const cancelOrder = this.p2pOrderStore.getOrder(transition.orderId);
+      if (cancelOrder && cancelOrder.status !== 'cancelled') {
+        this.p2pOrderStore.cancelOrder(transition.orderId);
+        if (transition.side === 'sell' && transition.escrowLocked) {
+          this.p2pEscrow.release(this.walletManager, transition.maker, transition.pohAmount);
+        }
+      }
+      return;
+    }
+    if (transition.type === 'p2p-trade-created') {
+      if (this._appliedP2PIds.has(`trade-${transition.id}`)) return;
+      this.p2pOrderStore.ingestGossipTrade(transition);
+      if (transition.orderSide === 'buy') {
+        this.p2pEscrow.lock(this.walletManager, transition.taker, transition.pohAmount);
+      }
+      return;
+    }
+    if (transition.type === 'p2p-trade-payment-sent') {
+      if (this._appliedP2PIds.has(`trade-${transition.tradeId}-payment-sent`)) return;
+      this.p2pOrderStore.markPaymentSent(transition.tradeId);
+      return;
+    }
+    if (transition.type === 'p2p-trade-release') {
+      if (this._appliedP2PIds.has(`trade-${transition.tradeId}-release`)) return;
+      const releaseTrade = this.p2pOrderStore.getTrade(transition.tradeId);
+      if (releaseTrade) {
+        this.p2pEscrow.release(this.walletManager, transition.recipient, transition.pohAmount);
+        this.p2pOrderStore.completeTrade(transition.tradeId);
+      }
+      return;
+    }
+    if (transition.type === 'p2p-trade-cancel') {
+      if (this._appliedP2PIds.has(`trade-${transition.tradeId}-cancel`)) return;
+      const cancelTrade = this.p2pOrderStore.getTrade(transition.tradeId);
+      if (cancelTrade) {
+        if (transition.escrowLocked) {
+          this.p2pEscrow.release(this.walletManager, transition.locker, transition.pohAmount);
+        }
+        this.p2pOrderStore.cancelTrade(transition.tradeId);
+      }
+      return;
+    }
+    if (transition.type === 'p2p-trade-dispute') {
+      if (this._appliedP2PIds.has(`trade-${transition.tradeId}-dispute`)) return;
+      this.p2pOrderStore.disputeTrade(transition.tradeId, { reason: transition.reason });
+      return;
+    }
+
+    // Skill audit verdict — replayed on proposer node to finalize the proposal
+    if (transition.type === 'skill-audit-result') {
+      this._applySkillAuditResult(transition, null);
+      return;
+    }
+
     // Job payment lifecycle transitions
     if (transition.type === 'job-feedback') {
-      feedbackStore.apply(transition);
+      if (!feedbackStore.getByJob(transition.jobId)) {
+        feedbackStore.apply(transition);
+        if (transition.rating === 'negative' && transition.minerAddress === this.config.wallet) {
+          this.applySlashing(0.05);
+        }
+      }
       return;
     }
     if (transition.type === 'job-escrow') {
@@ -2658,6 +3875,43 @@ export class PohMinerNode {
     // Layer 6: skill lifecycle transitions
     if (transition.type === 'skill-proposed' || transition.type === 'skill-graduated' || transition.type === 'skill-deprecated') {
       skillsManager.processTransition(transition);
+      return;
+    }
+
+    // Skill stake tally — replayed on all nodes so stake state is deterministic.
+    // txHash dedup prevents double-apply when both gossip and block carry the same event.
+    if (transition.type === 'skill-staked') {
+      const { skillId, staker, amount, txHash } = transition;
+      if (!skillId || !staker || !amount) return;
+      if (txHash && this._appliedStakeTxs.has(txHash)) return;
+      if (!this._skillStakes.has(skillId)) this._skillStakes.set(skillId, { total: 0, stakers: new Map() });
+      const entry = this._skillStakes.get(skillId);
+      entry.stakers.set(staker, (entry.stakers.get(staker) || 0) + amount);
+      entry.total = (entry.total || 0) + amount;
+      if (txHash) this._appliedStakeTxs.add(txHash);
+      const GRADUATION_THRESHOLD = 10000 * POH_DECIMALS;
+      if (entry.total >= GRADUATION_THRESHOLD) {
+        const skill = skillsManager.getAllSkills().find(s => s.id === skillId);
+        if (skill && skill.status !== 'active') {
+          const grad = { type: 'skill-graduated', skillId };
+          skillsManager.processTransition(grad);
+          this.pendingBrainTransitions.push(grad);
+        }
+      }
+      this._saveSkillStakes();
+      return;
+    }
+
+    if (transition.type === 'skill-unstaked') {
+      const { skillId, staker, amount, txHash } = transition;
+      if (!skillId || !staker || !amount) return;
+      if (txHash && this._appliedStakeTxs.has(txHash)) return;
+      const entry = this._skillStakes.get(skillId);
+      if (!entry) return;
+      entry.stakers.set(staker, Math.max(0, (entry.stakers.get(staker) || 0) - amount));
+      entry.total = Math.max(0, (entry.total || 0) - amount);
+      if (txHash) this._appliedStakeTxs.add(txHash);
+      this._saveSkillStakes();
       return;
     }
 
@@ -2681,6 +3935,130 @@ export class PohMinerNode {
         console.log('[PoH-Miner] Saw on-chain CID for signals list:', transition.cid);
         await this.methodsManager.sync(); // will try IPFS path if configured
       }
+    }
+  }
+
+  // ── Skill staking helpers ───────────────────────────────────────────────────
+
+  _getStakeDir() {
+    const brainDir = getBrainDataDir();
+    const homeDir = process.env.HOME || process.env.USERPROFILE || '.';
+    return brainDir || path.join(homeDir, '.poh-miner', 'brain');
+  }
+
+  _initStakeVault() {
+    try {
+      const stakeDir = this._getStakeDir();
+      fs.mkdirSync(stakeDir, { recursive: true });
+      const vaultRefPath = path.join(stakeDir, 'skill_stake_vault.json');
+      if (fs.existsSync(vaultRefPath)) {
+        const { address } = JSON.parse(fs.readFileSync(vaultRefPath, 'utf8'));
+        // Verify the vault wallet exists in walletManager (has signing keys)
+        if (this.walletManager.loadWallet(address)) {
+          this.SKILL_STAKE_VAULT = address;
+        } else {
+          // Vault reference exists but wallet file missing — recreate
+          const vault = this.walletManager.createWallet();
+          fs.writeFileSync(vaultRefPath, JSON.stringify({ address: vault.address }));
+          this.SKILL_STAKE_VAULT = vault.address;
+          console.log(`[PoH-Miner] Skill stake vault recreated: ${vault.address}`);
+        }
+      } else {
+        const vault = this.walletManager.createWallet();
+        fs.writeFileSync(vaultRefPath, JSON.stringify({ address: vault.address }));
+        this.SKILL_STAKE_VAULT = vault.address;
+        console.log(`[PoH-Miner] Skill stake vault created: ${vault.address}`);
+      }
+    } catch (e) {
+      console.warn('[PoH-Miner] Skill stake vault init failed:', e.message);
+    }
+  }
+
+  _loadSkillStakes() {
+    try {
+      const stakesPath = path.join(this._getStakeDir(), 'skill_stakes.json');
+      if (!fs.existsSync(stakesPath)) return;
+      const data = JSON.parse(fs.readFileSync(stakesPath, 'utf8'));
+      this._skillStakes = new Map();
+      for (const [skillId, entry] of Object.entries(data)) {
+        this._skillStakes.set(skillId, {
+          total: entry.total || 0,
+          stakers: new Map(Object.entries(entry.stakers || {})),
+        });
+      }
+      console.log(`[PoH-Miner] Loaded skill stakes: ${this._skillStakes.size} skills`);
+    } catch (e) {
+      console.warn('[PoH-Miner] Failed to load skill stakes:', e.message);
+    }
+  }
+
+  _saveSkillStakes() {
+    try {
+      const stakesPath = path.join(this._getStakeDir(), 'skill_stakes.json');
+      const data = {};
+      for (const [skillId, entry] of this._skillStakes) {
+        data[skillId] = {
+          total: entry.total || 0,
+          stakers: Object.fromEntries(entry.stakers || new Map()),
+        };
+      }
+      fs.writeFileSync(stakesPath, JSON.stringify(data, null, 2));
+    } catch (e) {
+      console.warn('[PoH-Miner] Failed to save skill stakes:', e.message);
+    }
+  }
+
+  // Returns true if the skill is active on this node.
+  // DEFAULT_ENABLED_SKILLS are on unless the user explicitly toggled them off.
+  // All other skills are off unless the user explicitly enabled them.
+  isSkillEnabled(skillId) {
+    if (DEFAULT_ENABLED_SKILLS.has(skillId)) {
+      return !this._explicitDisabled.has(skillId);
+    }
+    return this._skillPrefs.has(skillId);
+  }
+
+  _loadSkillPrefs() {
+    try {
+      const prefsPath = path.join(this._getStakeDir(), 'skill_prefs.json');
+      if (!fs.existsSync(prefsPath)) {
+        // First run: start with all defaults enabled
+        for (const id of DEFAULT_ENABLED_SKILLS) this._skillPrefs.add(id);
+        this._saveSkillPrefs();
+        console.log(`[PoH-Miner] Initialized skill prefs with ${DEFAULT_ENABLED_SKILLS.size} default skills`);
+        return;
+      }
+      const data = JSON.parse(fs.readFileSync(prefsPath, 'utf8'));
+      const enabled  = Array.isArray(data.enabled)  ? data.enabled  : [];
+      const disabled = Array.isArray(data.disabled)  ? data.disabled  : [];
+      this._skillPrefs       = new Set(enabled);
+      this._explicitDisabled = new Set(disabled);
+      // Auto-enable any new default skills not yet seen in this node's prefs
+      const seenDefaults = new Set(data.seenDefaults || []);
+      let changed = false;
+      for (const id of DEFAULT_ENABLED_SKILLS) {
+        if (!seenDefaults.has(id) && !this._explicitDisabled.has(id)) {
+          this._skillPrefs.add(id);
+          changed = true;
+        }
+      }
+      if (changed) this._saveSkillPrefs();
+      console.log(`[PoH-Miner] Loaded skill prefs: ${this._skillPrefs.size} enabled, ${this._explicitDisabled.size} explicitly disabled`);
+    } catch (e) {
+      console.warn('[PoH-Miner] Failed to load skill prefs:', e.message);
+    }
+  }
+
+  _saveSkillPrefs() {
+    try {
+      const prefsPath = path.join(this._getStakeDir(), 'skill_prefs.json');
+      fs.writeFileSync(prefsPath, JSON.stringify({
+        enabled:       [...this._skillPrefs],
+        disabled:      [...this._explicitDisabled],
+        seenDefaults:  [...DEFAULT_ENABLED_SKILLS],
+      }, null, 2));
+    } catch (e) {
+      console.warn('[PoH-Miner] Failed to save skill prefs:', e.message);
     }
   }
 }

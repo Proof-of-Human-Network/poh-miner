@@ -271,6 +271,7 @@ const server = http.createServer(async (req, res) => {
             lastSeen: Date.now(),
             signingPublicKey: peerInfo.signingPublicKey,
             methodsHash: peerInfo.methodsHash || null,
+            tflops: typeof peerInfo.tflops === 'number' ? peerInfo.tflops : null,
             registeredAt: ts,
           };
 
@@ -385,13 +386,14 @@ const server = http.createServer(async (req, res) => {
         p2pPort: p.p2pPort,
         region: p.region,
         lastSeen: p.lastSeen,
-        // verification info (frontends / other nodes can use to pick trusted nodes)
         verified: !!p.signingPublicKey,
         signingPublicKey: p.signingPublicKey || null,
         methodsHash: p.methodsHash || null,
+        tflops: p.tflops || null,
         registeredAt: p.registeredAt || p.lastSeen,
       }));
-      res.end(JSON.stringify({ peers: peerList, count: peerList.length }));
+      const totalTflops = peerList.reduce((s, p) => s + (p.tflops || 0), 0);
+      res.end(JSON.stringify({ peers: peerList, count: peerList.length, totalTflops: Math.round(totalTflops * 10) / 10 }));
       return;
     }
 
