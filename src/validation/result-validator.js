@@ -91,6 +91,11 @@ function filterApplicableSignals(liveSignals, chains) {
  * Validates that a ScanResult represents honest, full work.
  */
 export async function validateResultWork(result, request = {}) {
+  // Skill jobs return arbitrary JSON — signal-count validation doesn't apply
+  if (result.verdict === 'SKILL_RESULT') {
+    return { isValid: true, errors: [], signalsEvaluated: 0, liveCount: 0, fraction: 1 };
+  }
+
   const manager = await getManager();
   const allLiveSignals = manager.getActiveMethods();
 
