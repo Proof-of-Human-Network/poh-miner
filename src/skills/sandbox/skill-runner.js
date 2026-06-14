@@ -13,9 +13,10 @@
  */
 import { workerData, parentPort } from 'worker_threads';
 
-const { code, input, config, allowedEndpoints = [] } = workerData;
+const { code, input, config, maxBudget = 0, allowedEndpoints = [] } = workerData;
 
-// ── Patch fetch to enforce allowedEndpoints ────────────────────────────────────
+// ── Patch fetch to enforce allowedEndpoints and count calls ───────────────────
+let _fetchCallCount = 0;
 const _origFetch = globalThis.fetch;
 globalThis.fetch = async (url, opts) => {
   const host = new URL(url).hostname;
@@ -24,6 +25,7 @@ globalThis.fetch = async (url, opts) => {
       throw new Error(`Skill fetch blocked: ${host} not in allowedEndpoints`);
     }
   }
+  _fetchCallCount++;
   return _origFetch(url, opts);
 };
 
@@ -54,11 +56,13 @@ try {
   const runFn = mod.exports.run || mod.exports.default;
   if (typeof runFn !== 'function') throw new Error('Skill must export async function run(input, config)');
 
-  const result = await runFn(input, config);
+  const _start = Date.now();
+  const result = await runFn(input, { ...config, maxBudget });
+  const _computeMs = Date.now() - _start;
 
   // Sanitize output — only allow plain serialisable values
   const safe = JSON.parse(JSON.stringify(result ?? null));
-  parentPort.postMessage(safe);
+  parentPort.postMessage({ result: safe, meta: { fetchCalls: _fetchCallCount, computeMs: _computeMs } });
 } catch (err) {
   parentPort.postMessage({ __error: err.message });
 }

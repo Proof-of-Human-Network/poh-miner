@@ -13,7 +13,10 @@ import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SKILL_RUNNER = path.join(__dirname, 'sandbox', 'skill-runner.js');
-const SKILL_TIMEOUT_MS = 15_000;
+const SKILL_TIMEOUT_MS  = 15_000;
+const TOKENS_PER_FETCH  = 50;   // per outbound API call
+const TOKENS_PER_100MS  = 5;    // compute time cost
+const TOKENS_BASE       = 10;   // minimum per skill execution
 
 export class SkillsManager {
   constructor() {
@@ -26,7 +29,7 @@ export class SkillsManager {
   // Called from processStateTransition for skill-related transitions
   processTransition(transition) {
     if (transition.type === 'skill-proposed') {
-      const { manifest, code, context, authorSignature, txHash } = transition;
+      const { manifest, code, context, authorSignature, proposerAddress, txHash } = transition;
       if (!manifest?.id) return;
       const codeHash    = code    ? crypto.createHash('sha256').update(code).digest('hex')    : null;
       const contextHash = context ? crypto.createHash('sha256').update(context).digest('hex') : null;
@@ -37,6 +40,7 @@ export class SkillsManager {
         status: 'proposed',
         private: false,
         proposedAt: Date.now(),
+        proposerAddress: proposerAddress || null,
         txHash,
         authorSignature,
       });
@@ -98,7 +102,7 @@ export class SkillsManager {
   }
 
   getAllSkills() {
-    return [...this._skills.values()].map(s => ({ ...s.manifest, status: s.status, private: s.private || false }));
+    return [...this._skills.values()].map(s => ({ ...s.manifest, status: s.status, private: s.private || false, context: s.context || null }));
   }
 
   getSkill(skillId) {
@@ -107,15 +111,24 @@ export class SkillsManager {
 
   // ── Sandboxed execution ───────────────────────────────────────────────────
 
-  async runSkill(skillId, input, config) {
+  async runSkill(skillId, input, config, maxBudget = 0) {
     const skill = this._skills.get(skillId);
     if (!skill || !skill.code) throw new Error(`Skill ${skillId} not found or has no run.js`);
+
+    if (maxBudget > 0) {
+      const estimatedCost = (skill.manifest.allowedEndpoints?.length || 1) * 10;
+      if (estimatedCost > maxBudget) {
+        throw new Error(`Skill cost estimate (${estimatedCost}) exceeds job budget (${maxBudget})`);
+      }
+    }
+
     return new Promise((resolve, reject) => {
       const worker = new Worker(SKILL_RUNNER, {
         workerData: {
           code: skill.code,
           input,
           config,
+          maxBudget,
           allowedEndpoints: skill.manifest.allowedEndpoints || [],
         },
       });
@@ -123,10 +136,22 @@ export class SkillsManager {
         worker.terminate();
         reject(new Error(`Skill ${skillId} timed out after ${SKILL_TIMEOUT_MS}ms`));
       }, SKILL_TIMEOUT_MS);
-      worker.on('message', result => {
+      worker.on('message', msg => {
         clearTimeout(timer);
-        if (result?.__error) reject(new Error(result.__error));
-        else resolve(result);
+        if (msg?.__error) {
+          reject(new Error(msg.__error));
+        } else if (msg?.meta !== undefined) {
+          // New format: { result, meta: { fetchCalls, computeMs } }
+          const { fetchCalls = 0, computeMs = 0 } = msg.meta;
+          const tokensUsed = Math.max(
+            TOKENS_BASE,
+            fetchCalls * TOKENS_PER_FETCH + Math.ceil(computeMs / 100) * TOKENS_PER_100MS,
+          );
+          resolve({ output: msg.result, tokensUsed });
+        } else {
+          // Legacy format (plain result, no meta)
+          resolve({ output: msg, tokensUsed: TOKENS_BASE });
+        }
       });
       worker.on('error', err => { clearTimeout(timer); reject(err); });
     });
