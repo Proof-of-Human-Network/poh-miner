@@ -3,7 +3,7 @@ export const GAS = {
   TOKENS_PER_SIGNAL:    60,
   TOKENS_PER_CHAIN:    120,
   OUTPUT_TOKENS:       350,
-  DEFAULT_GAS_PRICE:   0.000001,  // POH per token
+  DEFAULT_GAS_PRICE:   1_000_000,  // μPOH per token (= 0.001 POH per token)
   TIMEOUT_RESERVE_PCT: 0.05,      // 5% of maxBudget kept on timeout
 };
 

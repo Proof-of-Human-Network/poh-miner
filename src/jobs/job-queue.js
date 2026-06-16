@@ -16,6 +16,7 @@ export class Job {
   constructor({
     id,
     type = 'verdict',
+    skillId = null,
     payload,
     fee,
     originCountry = null,         // ISO 3166-1 alpha-2 (e.g. "GE", "US", "SG")
@@ -31,6 +32,7 @@ export class Job {
   }) {
     this.id = id;
     this.type = type;
+    this.skillId = skillId;
     this.payload = payload;
     this.fee = fee;
     this.originCountry = originCountry;
