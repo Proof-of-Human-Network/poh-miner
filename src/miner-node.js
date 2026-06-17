@@ -228,7 +228,7 @@ export class PohMinerNode {
 
     // Benchmark compute speed (non-blocking)
     this.tflops = null;
-    this.benchmarkTflops().then(t => { this.tflops = t; }).catch(() => {});
+    this._tflopsPromise = this.benchmarkTflops().then(t => { this.tflops = t; return t; }).catch(() => null);
 
     // Run GPU detection asynchronously so it doesn't block startup
     this.detectGpuCapability().then(actualGpu => {
@@ -2368,6 +2368,15 @@ export class PohMinerNode {
     const walletAddr = this.config.pohWallet || this.config.wallet;
     const ts = Date.now();
     const methodsHash = this.methodsManager?.hash || 'unknown';
+
+    // Wait for the benchmark if it hasn't resolved yet (started in constructor in parallel
+    // with start() steps; usually done by now but not guaranteed on slow GPU probes).
+    if (this.tflops == null && this._tflopsPromise) {
+      this.tflops = await Promise.race([
+        this._tflopsPromise,
+        new Promise(r => setTimeout(() => r(null), 8000)),
+      ]);
+    }
 
     const baseInfo = {
       wallet: walletAddr,

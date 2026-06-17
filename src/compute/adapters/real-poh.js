@@ -159,11 +159,10 @@ async function fetchIdentityHubProfile(address, apiKey) {
 }
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const POH_DEV_PATH = process.env.POH_DEV_PATH || path.resolve(__dirname, '../../../../../dev/src');
 
 let checker = null;
-let brain = null;
-let loaded = false;
+let brain   = null;
+let loaded  = false;
 let methodsManager = null;
 
 async function ensureOllamaModel(model, baseUrl = 'http://localhost:11434') {
@@ -189,59 +188,34 @@ async function ensureOllamaModel(model, baseUrl = 'http://localhost:11434') {
 async function loadRealPohModules() {
   if (loaded) return;
 
-  // Set miner-local brain data dir BEFORE require() — brain.js captures paths as
-  // constants at load time, so this must happen before the first require call.
   if (!process.env.BRAIN_DATA_DIR) {
     const homeDir = process.env.HOME || process.env.USERPROFILE || '.';
     const brainDir = path.join(homeDir, '.poh-miner', 'brain');
     fs.mkdirSync(brainDir, { recursive: true });
-
-    // Bootstrap miner's brain with dev weights if not yet present
-    const devDataDir = path.resolve(POH_DEV_PATH, '../data');
-    for (const f of ['weights.json', 'pools.json', 'brain_state.md']) {
-      const src = path.join(devDataDir, f);
-      const dst = path.join(brainDir, f);
-      if (!fs.existsSync(dst) && fs.existsSync(src)) {
-        try { fs.copyFileSync(src, dst); } catch (_) {}
-      }
-    }
     process.env.BRAIN_DATA_DIR = brainDir;
     console.log(`[RealPOH] Brain state dir: ${brainDir}`);
   }
 
   try {
-    // Dynamically require the existing modules
-    const checkerPath = path.join(POH_DEV_PATH, 'routes/checker.js');
-    const brainPath = path.join(POH_DEV_PATH, 'utils/brain.js');
-
     const { createRequire } = await import('module');
     const require = createRequire(import.meta.url);
 
+    const checkerPath = path.join(__dirname, '../../checker/index.js');
     checker = require(checkerPath);
-    brain = require(brainPath);
+    brain   = require(path.join(__dirname, '../../checker/utils/brain.js'));
 
-    // === KEY INTEGRATION: Force the checker to use our network-synced methods ===
     methodsManager = await getMethodsManager();
-
     const originalGetMethods = checker.getMethods || (() => []);
     checker.getMethods = () => {
       const managed = methodsManager.getActiveMethods();
       return managed.length > 0 ? managed : originalGetMethods();
     };
 
-    // Also patch the internal one if it exists on the module
-    if (typeof checker.getMethods === 'function') {
-      // Already replaced above
-    }
-
-    console.log('[RealPOH] Successfully loaded existing POH checker + brain from dev/');
-    console.log('[RealPOH] Using network-managed signals (hash=' + methodsManager.hash + ', count=' + methodsManager.getActiveMethods().length + ')');
-
+    console.log('[RealPOH] Loaded embedded checker + brain');
+    console.log('[RealPOH] Network signals: hash=' + methodsManager.hash + ', count=' + methodsManager.getActiveMethods().length);
     loaded = true;
   } catch (err) {
-    console.error('[RealPOH] Could not load real POH modules. Falling back to simulation.');
-    console.error('[RealPOH] Load error:', err.message);
-    console.error('[RealPOH] POH_DEV_PATH:', POH_DEV_PATH);
+    console.error('[RealPOH] Failed to load checker:', err.message);
     loaded = true;
   }
 }
@@ -302,23 +276,9 @@ export async function computeWithRealPoh(job, config) {
   const activeMethods = methodsManager ? methodsManager.getActiveMethods() : [];
   const methodsHash = methodsManager ? methodsManager.hash : 'unknown';
 
-  // === CRITICAL: Sync our network methods into the checker's data/ so its getMethods() sees them ===
-  // The checker reads from its own dev/data/methods.json ; we overwrite it with the synced set.
-  if (methodsManager && activeMethods.length > 0) {
-    try {
-      const devDataDir = path.resolve(POH_DEV_PATH, '../data');
-      if (!fs.existsSync(devDataDir)) {
-        fs.mkdirSync(devDataDir, { recursive: true });
-      }
-      const devMethodsPath = path.join(devDataDir, 'methods.json');
-      fs.writeFileSync(devMethodsPath, JSON.stringify(activeMethods, null, 2));
-      // Also patch the exported getMethods in case some code calls checker.getMethods()
-      if (checker) {
-        checker.getMethods = () => activeMethods;
-      }
-    } catch (e) {
-      console.warn('[RealPOH] Could not write synced methods.json to dev/data:', e.message);
-    }
+  // Keep checker's getMethods patched with the latest network-synced set
+  if (checker && methodsManager && activeMethods.length > 0) {
+    checker.getMethods = () => activeMethods;
   }
 
   // Resolve domain names (e.g. assetux.bnb, vitalik.eth, name.sol) to raw addresses
