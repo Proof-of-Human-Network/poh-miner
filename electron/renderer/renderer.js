@@ -2,7 +2,6 @@ const logContent = document.getElementById('log-content');
 const chainHeightEl = document.getElementById('chain-height');
 const reputationEl = document.getElementById('reputation');
 const validSubEl = document.getElementById('valid-submissions');
-const invalidSubEl = document.getElementById('invalid-submissions');
 
 // Legacy elements (may not exist after UI updates)
 const walletAddressEl = document.getElementById('wallet-address');
@@ -65,10 +64,9 @@ function updateStatus(status) {
   if (typeof status.chainHeight === 'number') { set('chain-height', status.chainHeight.toLocaleString()); if (chainHeightEl) chainHeightEl.textContent = status.chainHeight; }
   if (typeof status.reputation  === 'number') { set('reputation', status.reputation.toFixed(2)); if (reputationEl) reputationEl.textContent = status.reputation.toFixed(2); }
   if (status.qualityStats) {
-    set('valid-submissions',   status.qualityStats.validSubmissions   || 0);
-    set('invalid-submissions', status.qualityStats.invalidSubmissions || 0);
-    if (validSubEl)   validSubEl.textContent   = status.qualityStats.validSubmissions   || 0;
-    if (invalidSubEl) invalidSubEl.textContent = status.qualityStats.invalidSubmissions || 0;
+    const total = (status.qualityStats.validSubmissions || 0) + (status.qualityStats.invalidSubmissions || 0);
+    set('valid-submissions', total);
+    if (validSubEl) validSubEl.textContent = total;
   }
   if (status.solanaAddress) {
     const short = status.solanaAddress.length > 14 ? status.solanaAddress.slice(0, 6) + '…' + status.solanaAddress.slice(-4) : status.solanaAddress;
@@ -78,7 +76,8 @@ function updateStatus(status) {
     const mode  = (status.inferenceMode || 'AUTO').toUpperCase();
     const model = status.model || 'qwen2.5:1.5b';
     set('sidebar-inference', `${mode} · ${model}`);
-    set('brain-model', model);
+    // Seed the active model from miner config on first load (before user picks one)
+    if (!window._modelUserPicked) setActiveModel(model);
   }
   if (typeof status.peers === 'number' || status.peerCount != null) {
     const count = status.peers ?? status.peerCount ?? status.activeJobs;
@@ -91,7 +90,7 @@ function updateStatus(status) {
   const dot = document.getElementById('mining-dot');
   const lbl = document.getElementById('mining-label');
   if (dot) dot.className = 'mining-dot' + (isActive ? ' active' : '');
-  if (lbl) { lbl.textContent = isActive ? 'MINING ACTIVE' : 'WAITING'; lbl.className = 'sb-mining-label' + (isActive ? ' active' : ''); }
+  if (lbl) { lbl.textContent = isActive ? (window.t ? t('sidebar.mining') : 'MINING ACTIVE') : (window.t ? t('sidebar.waiting') : 'WAITING'); lbl.className = 'sb-mining-label' + (isActive ? ' active' : ''); }
 
   // Keep port in sync
   if (status?.walletApiPort) window._minerApiPort = status.walletApiPort;
@@ -155,6 +154,13 @@ if (window.pohMinerAPI) {
       const mainAppDiv = document.getElementById('main-app');
       if (onboardingDiv) onboardingDiv.classList.add('hidden');
       if (mainAppDiv) mainAppDiv.classList.remove('hidden');
+    });
+  }
+
+  // Show rejection modal whenever a skill audit fails (local or gossip path)
+  if (window.pohMinerAPI?.onSkillRejected) {
+    window.pohMinerAPI.onSkillRejected(({ reason, issues }) => {
+      showAuditRejectionModal(reason, issues);
     });
   }
 
@@ -541,9 +547,6 @@ function showOnboardingStep(step) {
 
 window.goToStep = function(step) {
   showOnboardingStep(step);
-  if (step === 'evm') initOnboardEvmStep();
-  else if (step === 'solana-rpc') initOnboardSolanaRpcStep();
-  else if (step === 'other-chains') initOnboardOtherChainsStep();
 };
 
 window.createPohWallet = async function() {
@@ -614,6 +617,48 @@ window.saveSolanaAndContinue = function() {
   goToStep('etherscan');
 };
 
+window.saveSolanaAndFinish = function() {
+  const input = document.getElementById('solana-address-input').value.trim();
+  currentOnboardingData.solanaAddress = input || '';
+  completeOnboarding();
+};
+
+// Close API-key setup steps (kept for any legacy references)
+window.closeApiKeySetup = function() { closeRpcConfig(); };
+
+// =====================================================
+// RPC Configuration Overlay (separate from onboarding)
+// =====================================================
+
+function showRpcStep(name) {
+  document.querySelectorAll('#rpc-config .rpc-step').forEach(el => el.classList.add('hidden'));
+  const target = document.getElementById('rpc-step-' + name);
+  if (target) target.classList.remove('hidden');
+}
+
+window.goToRpcStep = function(name) {
+  showRpcStep(name);
+  if (name === 'evm')          initOnboardEvmStep();
+  else if (name === 'solana-rpc') initOnboardSolanaRpcStep();
+  else if (name === 'other-chains') initOnboardOtherChainsStep();
+};
+
+window.openRpcConfig = function() {
+  // Reset init guards so forms re-initialize each time the overlay opens
+  window._obEvmInited      = false;
+  window._obSolRpcInited   = false;
+  window._obOtherInited    = false;
+  const rpcDiv = document.getElementById('rpc-config');
+  if (rpcDiv) rpcDiv.classList.remove('hidden');
+  showRpcStep('etherscan');
+};
+
+function closeRpcConfig() {
+  const rpcDiv = document.getElementById('rpc-config');
+  if (rpcDiv) rpcDiv.classList.add('hidden');
+}
+window.closeRpcConfig = closeRpcConfig;
+
 window.completeOnboarding = async function() {
   const payload = {
     pohWallet: currentOnboardingData.pohWallet,
@@ -636,9 +681,7 @@ window.completeOnboarding = async function() {
 window.openFullRpcSettings = function() {
   document.getElementById('onboarding').classList.add('hidden');
   document.getElementById('main-app').classList.remove('hidden');
-  if (typeof showSettings === 'function') {
-    showSettings();
-  }
+  switchTab('settings');
 };
 
 // =====================================================
@@ -659,7 +702,7 @@ window.saveEtherscanAndContinue = async function() {
     }
   }
 
-  goToStep('evm');
+  goToRpcStep('evm');
 };
 
 // =====================================================
@@ -953,24 +996,23 @@ window.skipOtherChain = function(chainId) {
 };
 
 // =====================================================
-// Settings Modal
+// Settings Page
 // =====================================================
 
-window.showSettings = async function() {
-  const modal = document.getElementById('settings-modal');
-  if (!modal) return;
+async function loadSettingsPanel() {
+  // Build language selector
+  if (window.buildLangSelector) {
+    buildLangSelector(document.getElementById('settings-language'));
+  }
 
-  modal.classList.remove('hidden');
-
-  // Try to get latest status
+  // Populate fields from status
   let status = null;
   try {
-    status = await window.pohMinerAPI.getStatus?.();
+    status = await window.pohMinerAPI?.getStatus?.();
     if (status) {
-      const addrEl = document.getElementById('settings-poh-address');
+      const addrEl  = document.getElementById('settings-poh-address');
       const solInput = document.getElementById('settings-solana');
-
-      if (addrEl) addrEl.textContent = status.pohWallet || status.wallet || '—';
+      if (addrEl)  addrEl.textContent = status.pohWallet || status.wallet || '—';
       if (solInput) solInput.value = status.solanaAddress || '';
     }
   } catch (e) {}
@@ -1003,11 +1045,14 @@ window.showSettings = async function() {
       }
     } catch { miningModelSel.innerHTML = '<option value="">Ollama not running</option>'; }
   }
+}
+
+window.showSettings = function() {
+  switchTab('settings');
 };
 
 window.hideSettings = function() {
-  const modal = document.getElementById('settings-modal');
-  if (modal) modal.classList.add('hidden');
+  switchTab('home');
 };
 
 window.saveSettings = async function() {
@@ -1016,18 +1061,19 @@ window.saveSettings = async function() {
 
   const miningModelSel = document.getElementById('settings-mining-model');
   const model = miningModelSel?.value?.trim() || undefined;
+  const statusEl = document.getElementById('settings-save-status');
 
   try {
     await window.pohMinerAPI.onboarding.complete({
       solanaAddress: solInput.value.trim(),
       ...(model ? { model } : {}),
     });
-    hideSettings();
-    // Refresh status
+    if (statusEl) { statusEl.textContent = 'Saved ✓'; statusEl.style.color = '#22c55e'; }
+    setTimeout(() => { if (statusEl) statusEl.textContent = ''; }, 2000);
     const newStatus = await window.pohMinerAPI.getStatus?.();
     if (newStatus) updateStatus(newStatus);
   } catch (err) {
-    alert('Failed to save settings');
+    if (statusEl) { statusEl.textContent = 'Failed to save'; statusEl.style.color = '#f87171'; }
   }
 };
 
@@ -1045,6 +1091,68 @@ window.showPrivateKeyWarning = function() {
   alert("Private key reveal is not implemented for security reasons in this build.\n\n" +
         "Your key is stored at: ~/.poh-miner/wallets/");
   hideSettings();
+};
+
+// ── Skill audit rejection modal ───────────────────────────────────────────────
+
+function showAuditRejectionModal(reason, issues) {
+  let modal = document.getElementById('audit-rejection-modal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'audit-rejection-modal';
+    modal.className = 'fixed inset-0 bg-black/80 z-[200] flex items-center justify-center';
+    modal.innerHTML = `
+      <div class="glass w-full max-w-sm rounded-3xl p-6 border border-red-900/50 text-center">
+        <div class="text-3xl mb-3">🚫</div>
+        <h3 class="font-display text-lg mb-2 text-red-400">Skill Rejected</h3>
+        <p class="text-xs text-zinc-400 mb-3" id="audit-rejection-reason"></p>
+        <ul id="audit-rejection-issues" class="text-left text-xs text-zinc-500 mb-5 space-y-1 pl-4 list-disc"></ul>
+        <button onclick="document.getElementById('audit-rejection-modal').remove()"
+                class="w-full py-2.5 border border-white/20 rounded-2xl text-sm">Dismiss</button>
+      </div>`;
+    document.body.appendChild(modal);
+  }
+  document.getElementById('audit-rejection-reason').textContent = reason;
+  const ul = document.getElementById('audit-rejection-issues');
+  ul.innerHTML = (issues || []).map(i => `<li>${escHtml(i)}</li>`).join('');
+}
+
+// ── Skill-disabled modal ──────────────────────────────────────────────────────
+
+let _skillDisabledResolve = null;
+
+function showSkillDisabledModal(skillId) {
+  return new Promise(resolve => {
+    _skillDisabledResolve = resolve;
+    const nameEl = document.getElementById('skill-disabled-name');
+    if (nameEl) nameEl.textContent = `Skill: ${skillId}`;
+    document.getElementById('skill-disabled-modal')?.classList.remove('hidden');
+  });
+}
+
+window.hideSkillDisabledModal = function() {
+  document.getElementById('skill-disabled-modal')?.classList.add('hidden');
+  if (_skillDisabledResolve) { _skillDisabledResolve(false); _skillDisabledResolve = null; }
+};
+
+window.skillDisabledGoEnable = function() {
+  document.getElementById('skill-disabled-modal')?.classList.add('hidden');
+  if (_skillDisabledResolve) { _skillDisabledResolve(false); _skillDisabledResolve = null; }
+  switchTab('skills');
+};
+
+window.skillDisabledProceedCommunity = function() {
+  document.getElementById('skill-disabled-modal')?.classList.add('hidden');
+  if (_skillDisabledResolve) { _skillDisabledResolve(true); _skillDisabledResolve = null; }
+};
+
+window.restartApp = async function() {
+  if (!confirm('Restart the app now? This will reload the miner and clear any stuck transactions.')) return;
+  try {
+    await window.pohMinerAPI?.app?.restart();
+  } catch (e) {
+    alert('Restart failed: ' + e.message);
+  }
 };
 
 // Boot the app - ensure DOM is ready
@@ -1180,20 +1288,23 @@ initEtherscanUI();
 
 // ── Tab switching ──────────────────────────────────────────────────────────────
 
-const TAB_PANELS = { home: 'home-panel', logs: 'logs', chat: 'chat-panel', search: 'search-panel', send: 'send-panel', skills: 'skills-panel' };
-const TAB_BTNS   = { home: 'tab-home-btn', logs: 'tab-logs-btn', chat: 'tab-chat-btn', search: 'tab-search-btn', send: 'tab-send-btn', skills: 'tab-skills-btn' };
+const TAB_PANELS = { home: 'home-panel', logs: 'logs', chat: 'chat-panel', search: 'search-panel', send: 'send-panel', skills: 'skills-panel', settings: 'settings-panel', p2p: 'p2p-panel' };
+const TAB_BTNS   = { home: 'tab-home-btn', logs: 'tab-logs-btn', chat: 'tab-chat-btn', search: 'tab-search-btn', send: 'tab-send-btn', skills: 'tab-skills-btn', settings: null, p2p: 'tab-p2p-btn' };
 
 function switchTab(name) {
   Object.entries(TAB_PANELS).forEach(([key, panelId]) => {
     const panel = document.getElementById(panelId);
-    const btn   = document.getElementById(TAB_BTNS[key]);
+    const btnId = TAB_BTNS[key];
+    const btn   = btnId ? document.getElementById(btnId) : null;
     if (panel) panel.classList.toggle('active', key === name);
     if (btn)   btn.classList.toggle('active', key === name);
   });
-  if (name === 'home')   { syncHomeBalance(); }
-  if (name === 'chat')   { loadChatModels(); loadChatBrainContext(true); document.getElementById('chat-input')?.focus(); }
-  if (name === 'send')   { syncSendWallet(); showSendView(); }
-  if (name === 'skills') { loadSkills(); }
+  if (name === 'home')     { syncHomeBalance(); }
+  if (name === 'chat')     { loadChatModels(); loadChatBrainContext(true); document.getElementById('chat-input')?.focus(); }
+  if (name === 'send')     { syncSendWallet(); showSendView(); }
+  if (name === 'skills')   { loadSkills(); }
+  if (name === 'settings') { loadSettingsPanel(); }
+  if (name === 'p2p')      { p2pInit(); }
 }
 
 // ── Chat state ─────────────────────────────────────────────────────────────────
@@ -1262,86 +1373,79 @@ let _lastScannedAddress = null;
 async function _fetchSocialContextForAddress(address) {
   if (!address || !/^0x[0-9a-fA-F]{40}$/i.test(address)) return;
   _lastScannedAddress = address;
+  const port = window._minerApiPort || 3456;
 
-  const WARPCAST  = 'https://api.warpcast.com/v2';
-  const PARAGRAPH = 'https://paragraph.xyz/api';
+  // Show loading placeholder
+  const root = document.querySelector('#search-result .wp-root');
+  if (root) {
+    root.querySelector('.wp-social-inject')?.remove();
+    const ph = document.createElement('div');
+    ph.className = 'wp-social-inject';
+    ph.innerHTML = `<div class="wp-section"><div class="wp-section-title">Social Activity</div><div style="font-size:11px;color:#555;padding:6px 0;">Fetching social data via skills…</div></div>`;
+    const fb = root.querySelector('.feedback-row');
+    fb ? root.insertBefore(ph, fb) : root.appendChild(ph);
+  }
+
+  // Submit a skill job and poll until result is ready (30 s timeout)
+  async function runSkill(skillId, payload) {
+    try {
+      const jobRes = await fetch(`http://localhost:${port}/job`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'skill', skillId, payload }),
+      });
+      if (!jobRes.ok) return null;
+      const { jobId } = await jobRes.json();
+      if (!jobId) return null;
+
+      const deadline = Date.now() + 30000;
+      while (Date.now() < deadline) {
+        await new Promise(r => setTimeout(r, 2000));
+        try {
+          const r = await fetch(`http://localhost:${port}/job/${jobId}/result`);
+          if (r.status === 202) continue;
+          if (!r.ok) return null;
+          const data = await r.json();
+          // Skill results are stored in profile.skillOutput
+          if (data?.profile?.skillOutput !== undefined) return data.profile.skillOutput;
+        } catch { /* keep polling */ }
+      }
+    } catch {}
+    return null;
+  }
+
+  // Run read_farcaster first (resolves by EVM address)
+  const farcasterData = await runSkill('read_farcaster', { address });
+
+  // Run read_paragraph using the Farcaster username as the handle
+  let paragraphData = null;
+  if (farcasterData?.username) {
+    paragraphData = await runSkill('read_paragraph', { username: farcasterData.username });
+  }
+
+  if (!farcasterData && !paragraphData) {
+    document.querySelector('#search-result .wp-social-inject')?.remove();
+    return;
+  }
+
+  // Build chat system context from skill summaries
   const systemParts = [];
   let label = address.slice(0, 8) + '…';
-  let farcasterData = null;
-  let paragraphData = null;
-
-  // ── Farcaster ───────────────────────────────────────────────────────────────
-  try {
-    const userRes = await fetch(`${WARPCAST}/user-by-verification?address=${address.toLowerCase()}`)
-      .then(r => r.ok ? r.json() : null).catch(() => null);
-    const user = userRes?.result?.user;
-
-    if (user?.fid) {
-      label = `@${user.username}`;
-      const castsRes = await fetch(`${WARPCAST}/casts?fid=${user.fid}&limit=15`)
-        .then(r => r.ok ? r.json() : null).catch(() => null);
-      const rawCasts = castsRes?.result?.casts || [];
-
-      farcasterData = {
-        fid:           user.fid,
-        username:      user.username      || '',
-        displayName:   user.displayName   || user.username || '',
-        bio:           user.profile?.bio?.text || '',
-        followerCount: user.followerCount || 0,
-        followingCount:user.followingCount|| 0,
-        casts: rawCasts.slice(0, 12).map(c => ({
-          text:    c.text || '',
-          likes:   c.reactions?.count || 0,
-          replies: c.replies?.count   || 0,
-          recasts: c.recasts?.count   || 0,
-        })).filter(c => c.text.length > 2),
-      };
-
-      const sysLines = [`FARCASTER — @${user.username} (${user.followerCount?.toLocaleString()} followers)`];
-      if (farcasterData.bio) sysLines.push(`Bio: "${farcasterData.bio}"`);
-      if (farcasterData.casts.length) {
-        sysLines.push('Recent posts:');
-        farcasterData.casts.forEach(c => {
-          const m = [c.likes && `♥${c.likes}`, c.replies && `${c.replies} replies`].filter(Boolean).join(' · ');
-          sysLines.push(`  • "${c.text}"${m ? ` [${m}]` : ''}`);
-        });
-      }
-      systemParts.push(sysLines.join('\n'));
-    }
-  } catch {}
-
-  // ── Paragraph ───────────────────────────────────────────────────────────────
-  try {
-    const blogsRes = await fetch(`${PARAGRAPH}/blogs?address=${address.toLowerCase()}`)
-      .then(r => r.ok ? r.json() : null).catch(() => null);
-    const blogs = Array.isArray(blogsRes) ? blogsRes : (blogsRes?.blogs || []);
-    const blog  = blogs[0];
-
-    if (blog?.id) {
-      const postsRes = await fetch(`${PARAGRAPH}/blogs/${blog.id}/posts?limit=8`)
-        .then(r => r.ok ? r.json() : null).catch(() => null);
-      const rawPosts = Array.isArray(postsRes) ? postsRes : (postsRes?.posts || []);
-
-      paragraphData = {
-        blogId:          blog.id,
-        title:           blog.title || blog.name || '',
-        description:     blog.description || blog.subtitle || '',
-        subscriberCount: blog.subscriberCount || 0,
-        postCount:       rawPosts.length,
-        posts: rawPosts.slice(0, 8).map(p => ({ title: p.title||'', subtitle: p.subtitle||'' })),
-      };
-
-      const sysLines = [`PARAGRAPH — "${paragraphData.title}" (${paragraphData.subscriberCount} subscribers)`];
-      if (paragraphData.description) sysLines.push(`Description: "${paragraphData.description}"`);
-      if (paragraphData.posts.length) {
-        sysLines.push('Articles:');
-        paragraphData.posts.forEach(p => sysLines.push(`  • "${p.title}"${p.subtitle ? ` — ${p.subtitle}` : ''}`));
-      }
-      systemParts.push(sysLines.join('\n'));
-    }
-  } catch {}
-
-  if (!farcasterData && !paragraphData) return;
+  if (farcasterData) {
+    label = `@${farcasterData.username}`;
+    systemParts.push([
+      `FARCASTER — @${farcasterData.username} (${(farcasterData.followerCount || 0).toLocaleString()} followers)`,
+      farcasterData.bio ? `Bio: "${farcasterData.bio}"` : '',
+      farcasterData.analysis?.summary || '',
+    ].filter(Boolean).join('\n'));
+  }
+  if (paragraphData) {
+    const authorName = paragraphData.author?.displayName || paragraphData.author?.handle || '';
+    systemParts.push([
+      `PARAGRAPH — ${authorName}`,
+      paragraphData.analysis?.summary || '',
+    ].filter(Boolean).join('\n'));
+  }
 
   _chatSocialContext = {
     address, label,
@@ -1350,22 +1454,15 @@ async function _fetchSocialContextForAddress(address) {
     system: `You have access to real-time social activity for wallet address ${address}.\nUse this context to answer questions about this person's views, interests, and recent activity.\n\n${systemParts.join('\n\n')}`,
   };
   _updateChatContextIndicator();
-
-  // ── Inject raw social data into result immediately ──────────────────────────
-  _injectSocialIntoResult(null, farcasterData, paragraphData);
-
-  // ── Ask local LLM to summarise vibe, then update ───────────────────────────
-  _generateVibeAndUpdate(farcasterData, paragraphData);
+  _injectSocialIntoResult(farcasterData, paragraphData);
 }
 
 // Inject (or replace) the social characteristic section inside the rendered result.
-function _injectSocialIntoResult(vibeData, farcasterData, paragraphData) {
-  console.log(vibeData, farcasterData, paragraphData)
-
+function _injectSocialIntoResult(farcasterData, paragraphData) {
   const root = document.querySelector('#search-result .wp-root');
   if (!root) return;
   root.querySelector('.wp-social-inject')?.remove();
-  const html = _socialChar(vibeData, farcasterData, paragraphData);
+  const html = _socialChar(farcasterData, paragraphData);
   if (!html) return;
   const wrap = document.createElement('div');
   wrap.className = 'wp-social-inject';
@@ -1374,61 +1471,16 @@ function _injectSocialIntoResult(vibeData, farcasterData, paragraphData) {
   fb ? root.insertBefore(wrap, fb) : root.appendChild(wrap);
 }
 
-// Call local Ollama for a fast vibe JSON, then update the injected section.
-async function _generateVibeAndUpdate(farcasterData, paragraphData) {
-  try {
-    const port = window._minerApiPort || 3456;
-    const contextLines = [];
-    if (farcasterData) {
-      contextLines.push(`Farcaster @${farcasterData.username} (${farcasterData.followerCount} followers, bio: "${farcasterData.bio}")`);
-      farcasterData.casts.slice(0, 6).forEach(c => contextLines.push(`- "${c.text}"`));
-    }
-    if (paragraphData) {
-      contextLines.push(`Paragraph "${paragraphData.title}" (${paragraphData.subscriberCount} subscribers)`);
-      paragraphData.posts.slice(0, 4).forEach(p => contextLines.push(`- "${p.title}"`));
-    }
-
-    const prompt = `Analyze this social media content and return ONLY valid JSON with no other text:
-{"vibe":"<2-3 sentence personality and interests summary>","topics":["topic1","topic2","topic3"],"humanSignals":["signal1","signal2"]}
-
-Content:
-${contextLines.join('\n')}`;
-
-    const res = await fetch(`http://localhost:${port}/api/chat`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model:   document.getElementById('chat-model-select')?.value || 'qwen2.5:1.5b',
-        messages:[{ role: 'user', content: prompt }],
-        stream:  false,
-        options: { temperature: 0.4 },
-      }),
-    });
-    if (!res.ok) return;
-    const d = await res.json();
-    const text = d.message?.content || '';
-    const m = text.match(/\{[\s\S]*\}/);
-    if (!m) return;
-    const vibeData = JSON.parse(m[0]);
-    // Update displayed section with vibe
-    _injectSocialIntoResult(vibeData, farcasterData, paragraphData);
-    // Also store vibe in context for chat
-    if (_chatSocialContext) _chatSocialContext.vibeData = vibeData;
-  } catch {}
-}
-
-// Fetch enriched profile (including tx graph) from dev backend and inject graph section.
+// Fetch enriched profile (including tx graph) from the local miner node and inject graph section.
 async function _enrichResultWithGraph(address) {
   try {
-    // Try dev backend on its default port (3000 → 3001 → 3456 as fallback)
-    const ports = [3000, 3001, 3002];
+    // Use the miner's own cached profile endpoint (populated after scan completes)
+    const port = window._minerApiPort || 3456;
     let profile = null;
-    for (const p of ports) {
-      try {
-        const r = await fetch(`http://localhost:${p}/checker/profile/${encodeURIComponent(address)}`, { signal: AbortSignal.timeout(5000) });
-        if (r.ok) { profile = await r.json(); break; }
-      } catch {}
-    }
+    try {
+      const r = await fetch(`http://localhost:${port}/profile/${encodeURIComponent(address)}`, { signal: AbortSignal.timeout(8000) });
+      if (r.ok) profile = await r.json();
+    } catch {}
     if (!profile?.graph?.nodes?.length || profile.graph.nodes.length < 2) return;
 
     const root = document.querySelector('#search-result .wp-root');
@@ -1481,7 +1533,84 @@ function stopChatStream() {
   if (chatAbortController) chatAbortController.abort();
 }
 
-// ── Model loader ───────────────────────────────────────────────────────────────
+// ── Global active model ────────────────────────────────────────────────────────
+// Single source of truth for the model used by scan, chat, and skills.
+
+window._activeModel  = 'qwen2.5:1.5b';
+window._cachedModels = [];
+
+function getActiveModel() {
+  return window._activeModel || 'qwen2.5:1.5b';
+}
+
+function setActiveModel(name) {
+  window._activeModel = name;
+  // Keep hidden select in sync (used by legacy code that still reads it)
+  const sel = document.getElementById('chat-model-select');
+  if (sel) sel.value = name;
+  // Update sidebar button label
+  const btn = document.getElementById('brain-model');
+  if (btn) btn.textContent = name;
+}
+
+// ── Model picker modal ─────────────────────────────────────────────────────────
+
+window.openModelPicker = async function() {
+  document.getElementById('model-picker-backdrop')?.classList.remove('hidden');
+  await _renderModelList();
+};
+
+window.closeModelPicker = function() {
+  document.getElementById('model-picker-backdrop')?.classList.add('hidden');
+};
+
+async function _renderModelList() {
+  const listEl = document.getElementById('mp-list');
+  if (!listEl) return;
+
+  // Use cache if fresh, otherwise re-fetch
+  if (!window._cachedModels.length) {
+    listEl.innerHTML = '<div class="mp-empty">Loading…</div>';
+    try {
+      const port = window._minerApiPort || 3456;
+      const res  = await fetch(`http://localhost:${port}/api/models`);
+      if (res.ok) {
+        const data = await res.json();
+        window._cachedModels = (data.models || []).map(m => m.name || m.model).filter(Boolean);
+      }
+    } catch {}
+  }
+
+  const models = window._cachedModels;
+  if (!models.length) {
+    listEl.innerHTML = '<div class="mp-empty">No models found.<br>Make sure Ollama is running and has models installed.</div>';
+    return;
+  }
+
+  const icons = { qwen: '🧠', llama: '🦙', mistral: '🌪', gemma: '💎', phi: '🔬', deepseek: '🔍', default: '⚡' };
+  function modelIcon(name) {
+    const n = name.toLowerCase();
+    for (const [k, v] of Object.entries(icons)) if (n.includes(k)) return v;
+    return icons.default;
+  }
+
+  listEl.innerHTML = models.map(m => {
+    const active = m === window._activeModel;
+    return `<div class="mp-item${active ? ' active' : ''}" onclick="pickModel('${m.replace(/'/g,"\\'")}')">
+      <div class="mp-item-icon">${modelIcon(m)}</div>
+      <span class="mp-item-name">${m}</span>
+      ${active ? '<span class="mp-item-badge">ACTIVE</span>' : ''}
+    </div>`;
+  }).join('');
+}
+
+window.pickModel = function(name) {
+  window._modelUserPicked = true;
+  setActiveModel(name);
+  closeModelPicker();
+};
+
+// ── Model loader (for backward compat + hidden select population) ──────────────
 
 async function loadChatModels() {
   const sel = document.getElementById('chat-model-select');
@@ -1492,6 +1621,7 @@ async function loadChatModels() {
     if (!res.ok) return;
     const data = await res.json();
     const models = (data.models || []).map(m => m.name || m.model).filter(Boolean);
+    window._cachedModels = models;
     sel.innerHTML = '';
     if (!models.length) {
       sel.innerHTML = '<option value="">No models found</option>';
@@ -1502,9 +1632,9 @@ async function loadChatModels() {
       opt.value = opt.textContent = m;
       sel.appendChild(opt);
     }
-    // Default to qwen if available
-    const qwen = models.find(m => m.includes('qwen'));
-    if (qwen) sel.value = qwen;
+    // Default to qwen if available, else first model
+    const qwen = models.find(m => m.includes('qwen')) || models[0];
+    if (qwen) setActiveModel(qwen);
     sel.dataset.loaded = '1';
   } catch { /* Ollama not running */ }
 }
@@ -1585,7 +1715,25 @@ function renderMessage(role, content, streaming = false) {
 
   const meta = document.createElement('div');
   meta.className = 'chat-meta';
-  meta.textContent = role === 'user' ? 'You' : 'AI';
+
+  if (role === 'assistant') {
+    const label = document.createElement('span');
+    label.textContent = 'AI';
+    const copyBtn = document.createElement('button');
+    copyBtn.className = 'chat-copy-btn';
+    copyBtn.textContent = '⎘';
+    copyBtn.title = 'Copy response';
+    copyBtn.onclick = () => {
+      const text = bubble._rawText || bubble.innerText || '';
+      navigator.clipboard.writeText(text).catch(() => {});
+      copyBtn.textContent = '✓';
+      setTimeout(() => { copyBtn.textContent = '⎘'; }, 1500);
+    };
+    meta.appendChild(label);
+    meta.appendChild(copyBtn);
+  } else {
+    meta.textContent = 'You';
+  }
 
   wrap.appendChild(bubble);
   wrap.appendChild(meta);
@@ -1632,6 +1780,21 @@ function finalizeLastBubble() {
 
 // ── Send + stream ──────────────────────────────────────────────────────────────
 
+function getChatBudget() {
+  const slider = document.getElementById('chat-budget-slider');
+  const n = parseInt(slider?.value || '0', 10);
+  return n > 0 ? n * BUDGET_DECIMALS : 0;
+}
+
+window.updateChatBudgetDisplay = function(val) {
+  const n = parseInt(val, 10);
+  const el = document.getElementById('chat-budget-display');
+  if (!el) return;
+  el.textContent = n <= 0 ? 'No limit' : `${n} POH`;
+  const slider = document.getElementById('chat-budget-slider');
+  if (slider) slider.style.setProperty('--fill', `${(n / 500) * 100}%`);
+};
+
 async function sendChatMessage() {
   if (chatStreaming) return;
   const input = document.getElementById('chat-input');
@@ -1646,9 +1809,217 @@ async function sendChatMessage() {
   chatHistory.push({ role: 'user', content: text });
   renderMessage('user', text);
 
-  const sel   = document.getElementById('chat-model-select');
-  const model = sel?.value || 'qwen2.5:1.5b';
+  const model = getActiveModel();
   const port  = window._minerApiPort || 3456;
+
+  // ── Skill routing ──────────────────────────────────────────────────────────
+  const ADDR_RE = /0x[0-9a-fA-F]{40}|[1-9A-HJ-NP-Za-km-z]{32,44}(?=[\s,!?"]|$)|(bc1|[13])[a-zA-HJ-NP-Z0-9]{25,62}|(EQ|UQ)[A-Za-z0-9+/_-]{46}|[\w-]+\.eth\b|[\w-]+\.sol\b|[\w-]+\.bnb\b/;
+  const addrMatch = text.match(ADDR_RE);
+
+  async function _submitSkillJob(skillId, payload) {
+    const budget = getChatBudget();
+    const body = { type: 'skill', skillId, payload };
+    if (budget > 0) { body.maxBudget = budget; body.requesterAddress = window._localWallet; }
+    const r = await fetch(`http://localhost:${port}/job`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    if (!r.ok) throw new Error(`job submit HTTP ${r.status}`);
+    return (await r.json()).jobId;
+  }
+
+  function _appendFeedbackButtons(jobId) {
+    const msgs = document.getElementById('chat-messages');
+    if (!msgs || !jobId) return;
+    const fb = document.createElement('div');
+    fb.className = 'chat-feedback';
+    fb.dataset.jobId = jobId;
+    fb.innerHTML = `<span class="chat-feedback-label">Was this helpful?</span>
+      <button class="chat-fb-btn" data-rating="positive" onclick="window._sendJobFeedback('${jobId}','positive',this.closest('.chat-feedback'))">👍</button>
+      <button class="chat-fb-btn" data-rating="negative" onclick="window._sendJobFeedback('${jobId}','negative',this.closest('.chat-feedback'))">👎</button>`;
+    msgs.appendChild(fb);
+    msgs.scrollTop = msgs.scrollHeight;
+  }
+
+  window._sendJobFeedback = async function(jobId, rating, container) {
+    try {
+      const r = await fetch(`http://localhost:${port}/api/jobs/${jobId}/feedback`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ rating, requesterAddress: window._localWallet }),
+      });
+      if (r.ok && container) {
+        container.innerHTML = `<span class="chat-feedback-label">${rating === 'positive' ? '👍 Thanks!' : '👎 Noted — miner penalised'}</span>`;
+      }
+    } catch {}
+  };
+
+  // Phase 1: poll job until verdict is ready, return raw job result object
+  async function _waitForSkillRawOutput(jobId) {
+    let attempts = 0;
+    return new Promise(resolve => {
+      const t = setInterval(async () => {
+        attempts++;
+        try {
+          const r = await fetch(`http://localhost:${port}/job/${jobId}/result`);
+          const data = await r.json();
+          if (r.status === 202) {
+            // Still processing — but bail early if job errored or is stuck
+            if (data.status === 'error' || data.status === 'ignored') {
+              clearInterval(t);
+              resolve({ _jobError: data.status, error: data.message || data.error });
+              return;
+            }
+            if (attempts % 5 === 0) appendToLastBubble('.');
+            if (attempts > 30) { clearInterval(t); resolve(null); } // 60s hard timeout
+            return;
+          }
+          if (!r.ok || !data.verdict) return;
+          clearInterval(t);
+          resolve(data);
+        } catch { if (attempts > 30) { clearInterval(t); resolve(null); } }
+      }, 2000);
+    });
+  }
+
+  // Phase 2: inject skill output as context, stream LLM answer
+  async function _streamSkillAnalysis(skillContext, skillOutput, userQuestion) {
+    const dataStr = JSON.stringify(skillOutput, null, 2);
+    const systemContent = [
+      'You are an AI assistant with access to real-time data fetched by a skill.',
+      'Answer the user\'s question using only the provided data. Be concise and specific.',
+      skillContext ? `\n\nSkill context (how to interpret this data):\n${skillContext}` : '',
+    ].join('');
+
+    const userContent = `Fetched data:\n\`\`\`json\n${dataStr.slice(0, 12000)}\n\`\`\`\n\nUser question: ${userQuestion}`;
+
+    const res = await fetch(`http://localhost:${port}/api/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      signal: chatAbortController.signal,
+      body: JSON.stringify({
+        model,
+        messages: [{ role: 'system', content: systemContent }, { role: 'user', content: userContent }],
+        stream: true,
+        options: { temperature: 0.5 },
+      }),
+    });
+
+    if (!res.ok) throw new Error(`Ollama ${res.status}`);
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buf = '', fullReply = '';
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      const lines = buf.split('\n');
+      buf = lines.pop();
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        try {
+          const evt = JSON.parse(line);
+          const token = evt.message?.content || '';
+          if (token) { appendToLastBubble(token); fullReply += token; }
+          if (evt.done) break;
+        } catch {}
+      }
+    }
+    finalizeLastBubble();
+    chatHistory.push({ role: 'assistant', content: fullReply || '[no response]' });
+  }
+
+  let _skillDone = false;
+
+  // Route message to a skill via backend (keyword fast path + LLM fallback)
+  try {
+    const routeRes = await fetch(`http://localhost:${port}/chat/route`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: text, budget: getChatBudget() }),
+      signal: AbortSignal.timeout(8000),
+    });
+    if (routeRes.ok) {
+      const route = await routeRes.json();
+      if (route.type === 'skill' && route.skillId) {
+        // Skills are not free — require a budget tip to the developer and miner
+        if (getChatBudget() === 0) {
+          document.getElementById('skill-fee-modal')?.classList.remove('hidden');
+          setChatStreaming(false);
+          document.getElementById('chat-input').disabled = false;
+          return;
+        }
+
+        // Check if skill is enabled locally before submitting
+        const skillInfo = window._skillsData?.[route.skillId];
+        if (skillInfo && skillInfo.enabled === false) {
+          const proceed = await showSkillDisabledModal(route.skillId);
+          if (!proceed) {
+            setChatStreaming(false);
+            document.getElementById('chat-input').disabled = false;
+            return;
+          }
+          // User chose to proceed via community — continue (miner gate will skip, community picks up)
+        }
+
+        // Show fetching indicator
+        renderMessage('assistant', `Fetching data via \`${route.skillId}\`…`, true);
+        chatAbortController = new AbortController();
+
+        // Include the user's question so the miner can run LLM analysis server-side.
+        // Fee is only settled after the miner submits both the skill output and nlResponse.
+        const jobId = await _submitSkillJob(route.skillId, { ...(route.input || {}), question: text });
+        const jobResult = await _waitForSkillRawOutput(jobId);
+        finalizeLastBubble();
+
+        if (jobResult?._jobError) {
+          const msg = `Skill failed (${jobResult.error || jobResult._jobError}).`;
+          renderMessage('assistant', msg);
+          chatHistory.push({ role: 'assistant', content: msg });
+          _skillDone = true;
+        } else if (jobResult && jobResult.verdict && jobResult.verdict !== 'SKILL_RESULT') {
+          // Verdict result (poh_identity) — display directly, no LLM needed
+          const pct = jobResult.confidence != null ? ` · ${(jobResult.confidence * 100).toFixed(0)}% confidence` : '';
+          const reply = `**${jobResult.verdict}${pct}**\n\n${jobResult.reasoning || ''}`;
+          renderMessage('assistant', reply);
+          chatHistory.push({ role: 'assistant', content: reply });
+          _skillDone = true;
+        } else if (jobResult) {
+          const skillOutput  = jobResult.profile?.skillOutput;
+          const nlResponse   = jobResult.profile?.nlResponse;
+
+          if (skillOutput === null && !nlResponse) {
+            const msg = 'No data found for this query.';
+            renderMessage('assistant', msg);
+            chatHistory.push({ role: 'assistant', content: msg });
+          } else if (nlResponse) {
+            // Miner already ran LLM analysis server-side — display directly
+            renderMessage('assistant', nlResponse);
+            chatHistory.push({ role: 'assistant', content: nlResponse });
+            _appendFeedbackButtons(jobId);
+          } else if (skillOutput?.analysis?.summary) {
+            // Summary field from the skill — natural language without LLM round-trip
+            const reply = skillOutput.analysis.summary;
+            renderMessage('assistant', reply);
+            chatHistory.push({ role: 'assistant', content: reply });
+            _appendFeedbackButtons(jobId);
+          } else {
+            // Fallback: stream Ollama analysis client-side
+            renderMessage('assistant', '', true);
+            await _streamSkillAnalysis(route.skillContext || '', skillOutput, text);
+            _appendFeedbackButtons(jobId);
+          }
+          _skillDone = true;
+        }
+      }
+    }
+  } catch { /* fall through to Ollama */ }
+
+  if (_skillDone) {
+    chatAbortController = null;
+    setChatStreaming(false);
+    input.disabled = false;
+    input.focus();
+    return;
+  }
+  // ── End skill routing ─────────────────────────────────────────────────────
 
   renderMessage('assistant', '', true); // empty bubble with cursor
 
@@ -1744,8 +2115,8 @@ function clearChat() {
   msgs.innerHTML = `
     <div class="chat-empty" id="chat-empty">
       <div class="chat-empty-icon">◈</div>
-      <div>Chat with your local LLM</div>
-      <div style="font-size:11px;color:#2a2a2a">Powered by Ollama · running on this machine</div>
+      <div>Chat with your Artificial Intelligence</div>
+      <div style="font-size:11px;color:#2a2a2a">Powered by local, free to use inference and community skills.</div>
     </div>`;
 }
 
@@ -1783,7 +2154,7 @@ async function loadBrainState() {
       const set = (id, v) => { const el = document.getElementById(id); if (el && v != null) el.textContent = v; };
       // Active signals = live method count from /methods, not weights.json count
       set('brain-corrections', s.feedbackCount ?? '—');
-      set('brain-model',       s.model || 'qwen2.5:1.5b');
+      if (s.model && !window._modelUserPicked) setActiveModel(s.model);
       {
         const summary = (s.stateSummary || '').replace(/^#.*\n/m, '').trim().slice(0, 200);
         set('brain-state-summary', summary || '(no state yet)');
@@ -1857,6 +2228,88 @@ async function pollNodeStatus() {
 }
 setInterval(pollNodeStatus, 10000);
 
+async function pollTxHistory() {
+  const port = window._minerApiPort || 3456;
+  const addr = window._localWallet;
+  if (!addr) return;
+  try {
+    const res = await fetch(`http://localhost:${port}/api/wallet/history?address=${encodeURIComponent(addr)}&limit=5`);
+    if (!res.ok) return;
+    const { entries } = await res.json();
+    const el = document.getElementById('sidebar-tx-history');
+    if (!el || !entries?.length) return;
+    const POH = 1_000_000_000;
+    el.innerHTML = entries.map(e => {
+      const sign  = e.delta > 0 ? '+' : '';
+      const amt   = (e.delta / POH).toFixed(3);
+      const color = e.delta > 0 ? '#22c55e' : '#ef4444';
+      const ts    = e.ts ? new Date(e.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+      return `<div style="display:flex;justify-content:space-between;"><span>${e.label}</span><span style="color:${color}">${sign}${amt} POH${ts ? ' · ' + ts : ''}</span></div>`;
+    }).join('');
+  } catch {}
+}
+setInterval(pollTxHistory, 15000);
+
+// ── Scanner welcome overlay ────────────────────────────────────────────────────
+
+function hasScannerWelcomeSeen() {
+  return localStorage.getItem('scannerWelcomeSeen') === '1';
+}
+
+function markScannerWelcomeSeen() {
+  localStorage.setItem('scannerWelcomeSeen', '1');
+}
+
+// Called when user clicks SCAN button or presses Enter in the search input
+window.handleScanClick = function() {
+  if (!hasScannerWelcomeSeen()) {
+    document.getElementById('scanner-welcome')?.classList.remove('hidden');
+    return;
+  }
+  runSearch();
+};
+
+window.scannerWelcomeSkip = function() {
+  markScannerWelcomeSeen();
+  document.getElementById('scanner-welcome')?.classList.add('hidden');
+  runSearch();
+};
+
+window.scannerWelcomeSetup = function() {
+  markScannerWelcomeSeen();
+  document.getElementById('scanner-welcome')?.classList.add('hidden');
+  openRpcConfig();
+};
+
+// ── Budget slider ──────────────────────────────────────────────────────────────
+
+// POH token has 9 decimals; slider value is in whole POH
+const BUDGET_DECIMALS = 1_000_000_000;
+
+window.updateBudgetDisplay = function(val) {
+  const n = parseInt(val, 10);
+  const display = document.getElementById('budget-display');
+  if (!display) return;
+  if (n <= 0) {
+    display.textContent = 'No limit';
+  } else {
+    display.textContent = `${n} POH`;
+  }
+  // Update slider fill colour via CSS custom property
+  const slider = document.getElementById('budget-slider');
+  if (slider) {
+    const pct = (n / parseInt(slider.max, 10)) * 100;
+    slider.style.setProperty('--fill', pct + '%');
+  }
+};
+
+function getBudgetValue() {
+  const slider = document.getElementById('budget-slider');
+  if (!slider) return 0;
+  const n = parseInt(slider.value, 10);
+  return n > 0 ? n * BUDGET_DECIMALS : 0;
+}
+
 // ── Search (identity scanner) ──────────────────────────────────────────────────
 
 let _searchPollTimer = null;
@@ -1909,11 +2362,17 @@ async function runSearch() {
   const port = window._minerApiPort || 3456;
 
   try {
-    statusTx.textContent = 'Submitting job…';
+    statusTx.textContent = window.t ? t('scanner.submitting') : 'Submitting job…';
+    const budget = getBudgetValue();
+    const jobBody = { type: 'verdict', payload: { address } };
+    if (budget > 0) {
+      jobBody.maxBudget = budget;
+      jobBody.requesterAddress = window._localWallet;
+    }
     const jobRes = await fetch(`http://localhost:${port}/job`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ type: 'verdict', payload: { address } }),
+      body: JSON.stringify(jobBody),
     });
 
     if (!jobRes.ok) {
@@ -2344,8 +2803,7 @@ function _txGraphScan(svgId) {
   tip.style.display = 'none';
   const inp = document.getElementById('search-input');
   if (inp) { inp.value = addr; inp.dispatchEvent(new Event('input')); }
-  // Trigger scan if doSearch exists
-  if (typeof doSearch === 'function') doSearch();
+  handleScanClick();
 }
 
 // ── Evidence market map ───────────────────────────────────────────────────────
@@ -2376,6 +2834,61 @@ function _treemap(items, x, y, w, h) {
   }
 }
 
+// ── Social sections: Articles / Social Activity / Zora ────────────────────────
+
+function _articleSection(d) {
+  if (!d?.posts?.length) return '';
+  const rows = d.posts.slice(0, 6).map(p => {
+    const date = p.publishedAt ? new Date(p.publishedAt * 1000).toLocaleDateString('en-US', { year:'numeric', month:'short' }) : '';
+    return `<div style="padding:5px 0;border-bottom:1px solid #111;display:flex;justify-content:space-between;align-items:baseline;gap:8px;">
+      <a href="${escHtml(p.url || '#')}" target="_blank" rel="noopener"
+         style="font-size:12px;color:#d1d5db;text-decoration:none;flex:1;line-height:1.4;" onmouseover="this.style.color='#818cf8'" onmouseout="this.style.color='#d1d5db'">${escHtml(p.title)}</a>
+      ${date ? `<span style="font-size:10px;color:#374151;flex-shrink:0;">${date}</span>` : ''}
+    </div>`;
+  }).join('');
+  const author = d.author?.displayName || d.author?.handle || '';
+  return `<div class="wp-section">
+    <div class="wp-section-title">Articles${author ? ` · <span style="font-weight:400;color:#4b5563;">${escHtml(author)}</span>` : ''}</div>
+    <div style="display:flex;flex-direction:column;">${rows}</div>
+  </div>`;
+}
+
+function _farcasterSection(d) {
+  if (!d?.casts?.length) return '';
+  const casts = d.casts.slice(0, 4).map(c => `
+    <div style="padding:5px 0;border-bottom:1px solid #111;font-size:12px;color:#6b7280;line-height:1.45;display:flex;justify-content:space-between;gap:8px;">
+      <span style="flex:1;">${escHtml(c.text.slice(0, 200))}${c.text.length > 200 ? '…' : ''}</span>
+      ${(c.likes || c.replies) ? `<span style="font-size:10px;color:#374151;flex-shrink:0;font-family:monospace;">${c.likes ? `♥${c.likes}` : ''}${c.replies ? ` ${c.replies}r` : ''}</span>` : ''}
+    </div>`).join('');
+  const meta = [
+    d.followerCount ? `${d.followerCount.toLocaleString()} followers` : '',
+    d.followingCount ? `${d.followingCount.toLocaleString()} following` : '',
+  ].filter(Boolean).join(' · ');
+  return `<div class="wp-section">
+    <div class="wp-section-title">Social Activity · <span style="font-weight:400;color:#4b5563;">@${escHtml(d.username || '')} on Farcaster</span>${meta ? ` <span style="font-size:10px;color:#374151;">${escHtml(meta)}</span>` : ''}</div>
+    ${d.bio ? `<div style="font-size:11px;color:#6b7280;font-style:italic;margin-bottom:6px;">"${escHtml(d.bio)}"</div>` : ''}
+    <div>${casts}</div>
+  </div>`;
+}
+
+function _zoraSection(d) {
+  if (!d?.createdCoins?.length) return '';
+  const coins = d.createdCoins.slice(0, 5).map(c => {
+    const mc = parseFloat(c.marketCap || 0);
+    const mcStr = mc > 1000 ? `$${(mc / 1000).toFixed(1)}k` : mc > 0 ? `$${mc.toFixed(0)}` : '';
+    return `<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px solid #111;font-size:12px;">
+      <span style="color:#d1d5db;flex:1;">${escHtml(c.name)}${c.symbol ? ` <span style="color:#4b5563;font-family:monospace;">${escHtml(c.symbol)}</span>` : ''}</span>
+      ${mcStr ? `<span style="color:#22c55e;font-family:monospace;font-size:10px;">${mcStr}</span>` : ''}
+      ${c.uniqueHolders ? `<span style="color:#374151;font-size:10px;">${c.uniqueHolders} holders</span>` : ''}
+    </div>`;
+  }).join('');
+  const handle = d.profile?.handle || d.profile?.displayName || '';
+  return `<div class="wp-section">
+    <div class="wp-section-title">Zora${handle ? ` · <span style="font-weight:400;color:#4b5563;">${escHtml(handle)}</span>` : ''} <span style="font-weight:400;color:#4b5563;">${d.totalCreated} coin${d.totalCreated !== 1 ? 's' : ''} created</span></div>
+    <div>${coins}</div>
+  </div>`;
+}
+
 function _evidenceMap(signals, weights = {}) {
   if (!signals.length) return '';
   const real = signals.filter(s => s.methodId !== 'ofac_check');
@@ -2401,40 +2914,61 @@ function _evidenceMap(signals, weights = {}) {
     </div>`;
 }
 
-function _socialChar(vibeData, farcasterData, paragraphData) {
-  if (!vibeData && !farcasterData && !paragraphData) return '';
-  const vd = vibeData || {};
-  const topics = (vd.topics || []).map(t => `<span class="char-topic">${escHtml(t)}</span>`).join('');
-  const sigs   = (vd.humanSignals || []).map(s => `<li>${escHtml(s)}</li>`).join('');
-  const casts  = (farcasterData?.casts || []).slice(0, 4).map(c => `
-    <div class="char-cast">
-      <span class="char-cast-text">${escHtml(c.text)}</span>
-      ${c.likes||c.replies ? `<span class="char-cast-meta">${c.likes?`♥${c.likes}`:''}${c.replies?` ·${c.replies}r`:''}</span>` : ''}
-    </div>`).join('');
-  const arts = (paragraphData?.posts || []).slice(0, 4).map(p => `
-    <div class="char-article"><span class="char-article-title">${escHtml(p.title)}</span>${p.subtitle?`<span class="char-article-sub"> — ${escHtml(p.subtitle)}</span>`:''}</div>`).join('');
+function _socialChar(farcasterData, paragraphData) {
+  if (!farcasterData && !paragraphData) return '';
+  let inner = '';
 
-  return `
-    <div class="wp-section">
-      <div class="wp-section-title">Social Characteristic</div>
-      ${vd.vibe ? `<p class="char-text">${escHtml(vd.vibe)}</p>` : ''}
-      ${topics  ? `<div class="char-topics">${topics}</div>` : ''}
-      ${sigs    ? `<ul class="char-signals">${sigs}</ul>` : ''}
-      ${farcasterData ? `
-        <div class="char-source">
-          <div class="char-source-label">🟣 Farcaster — @${escHtml(farcasterData.username||'')}
-            <span class="char-follow-meta">${(farcasterData.followerCount||0).toLocaleString()} followers</span></div>
-          ${farcasterData.bio ? `<div class="char-bio">"${escHtml(farcasterData.bio)}"</div>` : ''}
-          ${casts}
-        </div>` : ''}
-      ${paragraphData ? `
-        <div class="char-source">
-          <div class="char-source-label">✍️ Paragraph — ${escHtml(paragraphData.title||'')}
-            <span class="char-follow-meta">${(paragraphData.subscriberCount||0).toLocaleString()} subscribers</span></div>
-          ${paragraphData.description ? `<div class="char-bio">"${escHtml(paragraphData.description)}"</div>` : ''}
-          ${arts}
-        </div>` : ''}
-    </div>`;
+  if (farcasterData) {
+    const meta = [
+      farcasterData.followerCount  ? `${farcasterData.followerCount.toLocaleString()} followers`  : '',
+      farcasterData.followingCount ? `${farcasterData.followingCount.toLocaleString()} following` : '',
+    ].filter(Boolean).join(' · ');
+    const topics = (farcasterData.analysis?.keyTopics || [])
+      .map(t => `<span class="char-topic">${escHtml(t)}</span>`).join('');
+    const casts = (farcasterData.casts || []).slice(0, 4).map(c => `
+      <div class="char-cast">
+        <span class="char-cast-text">${escHtml((c.text || '').slice(0, 200))}${(c.text||'').length > 200 ? '…' : ''}</span>
+        ${(c.likes || c.replies) ? `<span class="char-cast-meta">${c.likes ? `♥${c.likes}` : ''}${c.replies ? ` · ${c.replies}r` : ''}</span>` : ''}
+      </div>`).join('');
+    inner += `
+      <div class="char-source">
+        <div class="char-source-label">🟣 Farcaster — @${escHtml(farcasterData.username || '')}
+          ${meta ? `<span class="char-follow-meta">${escHtml(meta)}</span>` : ''}</div>
+        ${farcasterData.bio ? `<div class="char-bio">"${escHtml(farcasterData.bio)}"</div>` : ''}
+        ${farcasterData.analysis?.summary ? `<p class="char-text">${escHtml(farcasterData.analysis.summary)}</p>` : ''}
+        ${topics ? `<div class="char-topics">${topics}</div>` : ''}
+        ${casts}
+      </div>`;
+  }
+
+  if (paragraphData) {
+    const author = paragraphData.author || {};
+    const authorName = author.displayName || author.handle || '';
+    const subs = author.followerCount ? `${author.followerCount.toLocaleString()} subscribers` : '';
+    const topics = (paragraphData.analysis?.keyTopics || [])
+      .map(t => `<span class="char-topic">${escHtml(t)}</span>`).join('');
+    const posts = (paragraphData.posts || []).slice(0, 4).map(p => {
+      const date = p.publishedAt
+        ? new Date(p.publishedAt * 1000).toLocaleDateString('en-US', { year: 'numeric', month: 'short' }) : '';
+      const excerpt = (p.excerpt || '').slice(0, 80);
+      return `<div class="char-article">
+        <span class="char-article-title">${escHtml(p.title || '')}</span>
+        ${excerpt ? `<span class="char-article-sub"> — ${escHtml(excerpt)}${(p.excerpt||'').length > 80 ? '…' : ''}</span>` : ''}
+        ${date ? `<span style="font-size:9px;color:#374151;margin-left:4px;">${date}</span>` : ''}
+      </div>`;
+    }).join('');
+    inner += `
+      <div class="char-source">
+        <div class="char-source-label">✍️ Paragraph${authorName ? ` — ${escHtml(authorName)}` : ''}
+          ${subs ? `<span class="char-follow-meta">${escHtml(subs)}</span>` : ''}</div>
+        ${author.bio ? `<div class="char-bio">"${escHtml(author.bio)}"</div>` : ''}
+        ${paragraphData.analysis?.summary ? `<p class="char-text">${escHtml(paragraphData.analysis.summary)}</p>` : ''}
+        ${topics ? `<div class="char-topics">${topics}</div>` : ''}
+        ${posts}
+      </div>`;
+  }
+
+  return `<div class="wp-section"><div class="wp-section-title">Social Activity</div>${inner}</div>`;
 }
 
 // ── Main render ───────────────────────────────────────────────────────────────
@@ -2496,8 +3030,11 @@ function renderSearchResult(container, data, address, weights = {}) {
       ${_associatedWallets(profile)}
       ${_crossChain(profile)}
       ${_txGraph(profile)}
+      ${_articleSection(profile.paragraphData)}
+      ${_farcasterSection(profile.farcasterData)}
+      ${_zoraSection(profile.zoraData)}
       ${_evidenceMap(signals, weights)}
-      ${_socialChar(data.vibeData, data.farcasterData, data.paragraphData)}
+      ${_socialChar(data.farcasterData, data.paragraphData)}
 
       <div class="feedback-row">
         <button class="feedback-btn" onclick="submitFeedback('correct')">👍 Correct</button>
@@ -2711,18 +3248,141 @@ async function drawQR(canvasId, text) {
 
 function skillsView(view) {
   document.getElementById('skills-browse-view').style.display = view === 'browse' ? 'block' : 'none';
+  document.getElementById('skills-detail-view').style.display = view === 'detail' ? 'flex' : 'none';
   document.getElementById('skills-submit-view').style.display = view === 'submit' ? 'flex' : 'none';
   document.getElementById('skills-browse-btn').style.color   = view === 'browse' ? '#22c55e' : '#aaa';
   document.getElementById('skills-submit-btn').style.color   = view === 'submit' ? '#22c55e' : '#aaa';
   if (view === 'browse') loadSkills();
 }
 
+window._skillsData = {};
+
+function showSkillDetail(id) {
+  const s = window._skillsData[id];
+  if (!s) return;
+
+  document.getElementById('skill-detail-id').textContent    = s.id;
+  document.getElementById('skill-detail-desc').innerHTML    = _mdParse(s.description || '');
+  document.getElementById('skill-detail-version').textContent = s.version || '1.0.0';
+
+  const badge = document.getElementById('skill-detail-badge');
+  badge.textContent    = (s.status || 'proposed').toUpperCase();
+  badge.style.color    = s.status === 'active' ? '#22c55e' : '#666';
+  badge.style.borderColor = s.status === 'active' ? '#1a3a27' : '#252525';
+
+  const endpoints = (s.allowedEndpoints || []);
+  const epWrap = document.getElementById('skill-detail-endpoints-wrap');
+  if (endpoints.length) {
+    document.getElementById('skill-detail-endpoints').textContent = endpoints.join(', ');
+    epWrap.style.display = 'flex';
+  } else {
+    epWrap.style.display = 'none';
+  }
+
+  const triggers = (s.triggers || []);
+  const trWrap = document.getElementById('skill-detail-triggers-wrap');
+  if (triggers.length) {
+    document.getElementById('skill-detail-triggers').innerHTML = triggers
+      .map(t => `<span style="background:#0c0c0c;border:1px solid #1e1e1e;border-radius:3px;padding:2px 7px;font-size:10px;color:#555;">${t}</span>`)
+      .join('');
+    trWrap.style.display = 'flex';
+  } else {
+    trWrap.style.display = 'none';
+  }
+
+  const ctxWrap = document.getElementById('skill-detail-context-wrap');
+  if (s.context) {
+    document.getElementById('skill-detail-context').innerHTML = _mdParse(s.context);
+    ctxWrap.style.display = 'flex';
+  } else {
+    ctxWrap.style.display = 'none';
+  }
+
+  // Staking section
+  const STAKE_THRESHOLD = 10000 * 1e9;
+  const staked    = s.totalStaked || 0;
+  const myStake   = s.myStake || 0;
+  const pct       = Math.min(100, Math.round((staked / STAKE_THRESHOLD) * 100));
+  const stakedPoh = (staked / 1e9).toFixed(2);
+  const myPoh     = (myStake / 1e9).toFixed(2);
+
+  document.getElementById('skill-detail-stake-bar').style.width = `${pct}%`;
+  document.getElementById('skill-detail-stake-pct').textContent = pct > 0 ? `${pct}%` : '';
+  document.getElementById('skill-detail-stake-info').textContent =
+    `${stakedPoh} / 10,000 POH staked${myStake > 0 ? ` · yours: ${myPoh} POH` : ''}`;
+  document.getElementById('skill-stake-amount').value = '';
+  const resultEl = document.getElementById('skill-stake-result');
+  resultEl.style.display = 'none';
+  resultEl.textContent = '';
+
+  window._currentSkillId = id;
+  skillsView('detail');
+}
+
+async function stakeSkill() {
+  const port       = window._minerApiPort || 3456;
+  const skillId    = window._currentSkillId;
+  const amount     = parseFloat(document.getElementById('skill-stake-amount').value);
+  const resultEl   = document.getElementById('skill-stake-result');
+  resultEl.style.display = 'none';
+  if (!skillId || !amount || amount <= 0) { _stakeMsg('Enter a valid amount', '#ef4444'); return; }
+  if (!window._localWallet) { _stakeMsg('Wallet not loaded', '#ef4444'); return; }
+  try {
+    const res = await fetch(`http://localhost:${port}/api/skills/${encodeURIComponent(skillId)}/stake`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ amount, stakerAddress: window._localWallet }),
+    });
+    const data = await res.json();
+    if (!res.ok || data.error) { _stakeMsg(data.error || 'Stake failed', '#ef4444'); return; }
+    const totalPoh = (data.total / 1e9).toFixed(2);
+    const myPoh    = (data.myStake / 1e9).toFixed(2);
+    _stakeMsg(`Staked! Total: ${totalPoh} POH · yours: ${myPoh} POH${data.txHash ? ` · tx: ${data.txHash.slice(0,12)}…` : ''}`, '#22c55e');
+    // Refresh skill data
+    loadSkills().then(() => {
+      if (window._skillsData[skillId]) showSkillDetail(skillId);
+    });
+  } catch (e) { _stakeMsg(e.message, '#ef4444'); }
+}
+
+async function unstakeSkill() {
+  const port       = window._minerApiPort || 3456;
+  const skillId    = window._currentSkillId;
+  const amount     = parseFloat(document.getElementById('skill-stake-amount').value);
+  if (!skillId || !amount || amount <= 0) { _stakeMsg('Enter a valid amount', '#ef4444'); return; }
+  if (!window._localWallet) { _stakeMsg('Wallet not loaded', '#ef4444'); return; }
+  try {
+    const res = await fetch(`http://localhost:${port}/api/skills/${encodeURIComponent(skillId)}/unstake`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ amount, stakerAddress: window._localWallet }),
+    });
+    const data = await res.json();
+    if (!res.ok || data.error) { _stakeMsg(data.error || 'Unstake failed', '#ef4444'); return; }
+    const totalPoh = (data.total / 1e9).toFixed(2);
+    const myPoh    = ((data.myStake || 0) / 1e9).toFixed(2);
+    _stakeMsg(`Unstaked! Total: ${totalPoh} POH · yours: ${myPoh} POH${data.txHash ? ` · tx: ${data.txHash.slice(0,12)}…` : ''}`, '#22c55e');
+    loadSkills().then(() => {
+      if (window._skillsData[skillId]) showSkillDetail(skillId);
+    });
+  } catch (e) { _stakeMsg(e.message, '#ef4444'); }
+}
+
+function _stakeMsg(msg, color) {
+  const el = document.getElementById('skill-stake-result');
+  el.textContent = msg;
+  el.style.color = color || '#22c55e';
+  el.style.display = 'block';
+}
+
 async function loadSkills() {
   const port = window._minerApiPort || 3456;
   try {
-    const res = await fetch(`http://localhost:${port}/api/skills`);
+    const wallet = window._localWallet || '';
+    const res = await fetch(`http://localhost:${port}/api/skills?wallet=${encodeURIComponent(wallet)}`);
     if (!res.ok) return;
-    const { skills } = await res.json();
+    const { skills, stakeVault } = await res.json();
+    if (stakeVault) window._stakeVault = stakeVault;
     const activeEl   = document.getElementById('skills-active-list');
     const proposedEl = document.getElementById('skills-proposed-list');
     const emptyEl    = document.getElementById('skills-empty');
@@ -2735,15 +3395,34 @@ async function loadSkills() {
     if (!active.length && !proposed.length) { emptyEl.style.display = 'block'; return; }
     emptyEl.style.display = 'none';
 
-    const card = (s) => `
-      <div style="background:#0c0c0c;border:1px solid #1e1e1e;border-radius:6px;padding:10px 12px;">
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+    // Store for detail view
+    window._skillsData = {};
+    skills.forEach(s => { window._skillsData[s.id] = s; });
+
+    const STAKE_THRESHOLD = 10000 * 1e9; // 10,000 POH in μPOH
+    const card = (s) => {
+      const staked = s.totalStaked || 0;
+      const pct = Math.min(100, Math.round((staked / STAKE_THRESHOLD) * 100));
+      const enabled = s.enabled || false;
+      const toggleId = `skill-toggle-${s.id.replace(/[^a-z0-9]/gi, '_')}`;
+      return `
+      <div onclick="showSkillDetail('${s.id}')"
+           style="position:relative;overflow:hidden;background:#0c0c0c;border:1px solid ${enabled ? '#1a3a27' : '#1e1e1e'};border-radius:6px;padding:10px 12px;cursor:pointer;transition:border-color 0.15s;"
+           onmouseenter="this.style.borderColor='#333'" onmouseleave="this.style.borderColor='${enabled ? '#1a3a27' : '#1e1e1e'}'">
+        <div style="position:absolute;left:0;top:0;bottom:0;width:${pct}%;background:rgba(34,197,94,0.08);pointer-events:none;"></div>
+        <div style="position:relative;display:flex;align-items:center;gap:8px;margin-bottom:4px;">
           <span style="font-size:12px;font-weight:600;color:#fff;">${s.id}</span>
           <span style="font-size:10px;color:${s.status === 'active' ? '#22c55e' : '#666'};border:1px solid;border-color:${s.status === 'active' ? '#1a3a27' : '#252525'};border-radius:3px;padding:1px 6px;">${s.status || 'proposed'}</span>
+          ${pct > 0 ? `<span style="font-size:10px;color:#22c55e;font-family:monospace;">${pct}%</span>` : ''}
+          <label onclick="event.stopPropagation()" style="margin-left:auto;display:flex;align-items:center;gap:5px;cursor:pointer;user-select:none;">
+            <input id="${toggleId}" type="checkbox" ${enabled ? 'checked' : ''} onchange="toggleSkill('${s.id}', this.checked, event)" style="accent-color:#22c55e;cursor:pointer;">
+            <span style="font-size:10px;color:${enabled ? '#22c55e' : '#444'};">${enabled ? 'enabled' : 'disabled'}</span>
+          </label>
         </div>
-        <div style="font-size:11px;color:#555;">${s.description || ''}</div>
-        ${s.author ? `<div style="font-size:10px;color:#333;margin-top:4px;">by ${s.author.slice(0, 20)}…</div>` : ''}
+        <div style="position:relative;font-size:11px;color:#555;">${s.description || ''}</div>
+        ${s.author ? `<div style="position:relative;font-size:10px;color:#333;margin-top:4px;">by ${s.author.slice(0, 20)}…</div>` : ''}
       </div>`;
+    };
     active.forEach(s => { activeEl.innerHTML += card(s); });
     proposed.forEach(s => { proposedEl.innerHTML += card(s); });
   } catch (e) {
@@ -2752,37 +3431,100 @@ async function loadSkills() {
   }
 }
 
+async function toggleSkill(skillId, enable, event) {
+  if (event) event.stopPropagation();
+  const port = window._minerApiPort || 3456;
+  const action = enable ? 'enable' : 'disable';
+  try {
+    await fetch(`http://localhost:${port}/api/skills/${encodeURIComponent(skillId)}/${action}`, { method: 'POST' });
+    // Update cached skill state and refresh label/border in place
+    if (window._skillsData[skillId]) window._skillsData[skillId].enabled = enable;
+    const toggleId = `skill-toggle-${skillId.replace(/[^a-z0-9]/gi, '_')}`;
+    const label = document.getElementById(toggleId)?.nextElementSibling;
+    if (label) { label.textContent = enable ? 'enabled' : 'disabled'; label.style.color = enable ? '#22c55e' : '#444'; }
+    const card = document.getElementById(toggleId)?.closest('div[onclick]');
+    if (card) { card.style.borderColor = enable ? '#1a3a27' : '#1e1e1e'; }
+  } catch (e) {
+    console.error('toggleSkill failed:', e.message);
+  }
+}
+
+async function pollSkillAuditResult(jobId, skillId, resultEl, attempt = 0) {
+  const port = window._minerApiPort || 3456;
+  const MAX_ATTEMPTS = 60; // 2 min at 2s intervals
+  if (attempt >= MAX_ATTEMPTS) {
+    resultEl.style.color = '#ef4444';
+    resultEl.textContent = 'Audit timed out — job may still be processing on the network';
+    return;
+  }
+  await new Promise(r => setTimeout(r, 2000));
+  try {
+    const r = await fetch(`http://localhost:${port}/job/${jobId}/result`);
+    if (!r.ok) { pollSkillAuditResult(jobId, skillId, resultEl, attempt + 1); return; }
+    const data = await r.json();
+    const stillPending = !data || ['queued', 'running', 'computing', 'ignored'].includes(data.status);
+    if (stillPending) {
+      const dots = '.'.repeat((attempt % 3) + 1);
+      resultEl.textContent = `Auditing skill code on network${dots} (1,000 POH escrowed)`;
+      pollSkillAuditResult(jobId, skillId, resultEl, attempt + 1);
+      return;
+    }
+    if (data.rejected || data.verdict === 'REJECTED') {
+      showAuditRejectionModal(data.reason || 'Dangerous code detected', data.issues || []);
+      resultEl.style.color = '#ef4444';
+      resultEl.textContent = 'Skill rejected by network audit · 1,000 POH refunded';
+    } else if (data.status === 'done' || data.verdict === 'SKILL_RESULT') {
+      resultEl.style.color = '#22c55e';
+      resultEl.textContent = `Proposed: ${skillId} · audit passed · 1,000 POH paid to auditing miner`;
+      skillsView('browse');
+    } else {
+      // Error or unexpected state
+      resultEl.style.color = '#ef4444';
+      resultEl.textContent = `Audit ended with status: ${data.status || 'unknown'}`;
+    }
+  } catch { pollSkillAuditResult(jobId, skillId, resultEl, attempt + 1); }
+}
+
 async function submitSkill() {
   const port    = window._minerApiPort || 3456;
   const id      = document.getElementById('skill-id-input').value.trim();
   const desc    = document.getElementById('skill-desc-input').value.trim();
-  const ep      = document.getElementById('skill-endpoints-input').value.trim();
   const code    = document.getElementById('skill-code-input').value.trim();
   const context = document.getElementById('skill-context-input').value.trim();
   const resultEl = document.getElementById('skill-submit-result');
 
   if (!id) { resultEl.style.display = 'block'; resultEl.style.color = '#ef4444'; resultEl.textContent = 'Skill ID required'; return; }
+  if (!window._localWallet) { resultEl.style.display = 'block'; resultEl.style.color = '#ef4444'; resultEl.textContent = 'Wallet not loaded — wait for miner to start'; return; }
   resultEl.style.display = 'none';
 
-  const manifest = {
-    id,
-    version: '1.0.0',
-    description: desc,
-    allowedEndpoints: ep ? ep.split(',').map(s => s.trim()) : [],
-    stateId: null,
-  };
+  const manifest = { id, version: '1.0.0', description: desc };
 
   try {
     const res = await fetch(`http://localhost:${port}/api/skills/propose`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ manifest, code: code || null, context: context || null }),
+      body: JSON.stringify({ manifest, code: code || null, context: context || null, requesterAddress: window._localWallet }),
     });
     const data = await res.json();
     resultEl.style.display = 'block';
-    if (data.ok) {
+    if (res.status === 402) {
+      resultEl.style.color = '#ef4444';
+      const bal = data.balance != null ? ` (balance: ${(data.balance / 1_000_000_000).toFixed(2)} POH)` : '';
+      resultEl.textContent = (data.error || 'Insufficient balance') + bal;
+    } else if (res.status === 422 || data.rejected) {
+      // Synchronous rejection (context-only skills with no code aren't possible, but keep as fallback)
+      showAuditRejectionModal(data.reason || data.error || 'Dangerous code detected', data.issues || []);
+      resultEl.style.color = '#ef4444';
+      resultEl.textContent = 'Skill rejected by security audit';
+    } else if (data.pending && data.jobId) {
+      // Skill submitted for network audit — poll until the auditing miner returns a result
+      resultEl.style.color = '#f59e0b';
+      resultEl.textContent = 'Auditing skill code on network… 1,000 POH escrowed';
+      pollSkillAuditResult(data.jobId, id, resultEl);
+    } else if (data.ok) {
       resultEl.style.color = '#22c55e';
-      resultEl.textContent = `Proposed: ${id}`;
+      resultEl.textContent = `Proposed: ${id} · 1,000 POH deducted`;
+      skillsView('browse');
     } else {
       resultEl.style.color = '#ef4444';
       resultEl.textContent = data.error || 'Failed';
@@ -2794,3 +3536,400 @@ async function submitSkill() {
   }
 }
 
+
+// ── P2P Exchange ───────────────────────────────────────────────────────────────
+
+const QUOTE_CURRENCIES = ['USDT-ERC20','USDT-TRC20','USDT-TON','USDT-SOL','USDT-BEP20','BTC','ETH','SOL','USDC'];
+const POH_DECIMALS_P2P = 1_000_000_000;
+
+let _p2pCurrency = '';
+let _p2pOrders = [];
+let _p2pActivityTab = 'orders';
+let _p2pPollTimer = null;
+
+function _p2pPort() { return window._minerApiPort || 3456; }
+
+function _p2pFmt(uPOH) {
+  const n = uPOH / 1e9;
+  return n.toLocaleString(undefined, { maximumFractionDigits: n < 1 ? 6 : 4 });
+}
+
+function _p2pTimeAgo(ts) {
+  const d = Date.now() - ts;
+  if (d < 60000) return 'just now';
+  if (d < 3600000) return Math.floor(d / 60000) + 'm ago';
+  return Math.floor(d / 3600000) + 'h ago';
+}
+
+async function _p2pLocalAuth(action, extraFields = {}) {
+  const port = _p2pPort();
+  const r = await fetch(`http://localhost:${port}/api/p2p/local-auth`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action, ...extraFields }),
+  });
+  if (!r.ok) { const d = await r.json().catch(() => ({})); throw new Error(d.error || 'auth failed'); }
+  return r.json();
+}
+
+async function _p2pApiFetch(path, opts = {}) {
+  const port = _p2pPort();
+  const r = await fetch(`http://localhost:${port}${path}`, opts);
+  return r.json();
+}
+
+function p2pInit() {
+  p2pShowBook();
+  p2pLoadOrders();
+  if (_p2pPollTimer) clearInterval(_p2pPollTimer);
+  _p2pPollTimer = setInterval(() => {
+    if (document.getElementById('p2p-panel')?.classList.contains('active')) p2pLoadOrders(true);
+  }, 10000);
+}
+
+function p2pShowBook() {
+  document.getElementById('p2p-book-view').style.display = 'flex';
+  document.getElementById('p2p-detail-view').style.display = 'none';
+  document.getElementById('p2p-create-view').style.display = 'none';
+  document.getElementById('p2p-activity-view').style.display = 'none';
+}
+
+function p2pShowDetail() {
+  document.getElementById('p2p-book-view').style.display = 'none';
+  document.getElementById('p2p-detail-view').style.display = 'flex';
+  document.getElementById('p2p-create-view').style.display = 'none';
+  document.getElementById('p2p-activity-view').style.display = 'none';
+}
+
+function p2pShowCreateOrder() {
+  const currSel = document.getElementById('p2p-form-currency');
+  if (currSel && !currSel.options.length) {
+    QUOTE_CURRENCIES.forEach(c => { const o = document.createElement('option'); o.value = c; o.textContent = c; currSel.appendChild(o); });
+  }
+  document.getElementById('p2p-book-view').style.display = 'none';
+  document.getElementById('p2p-detail-view').style.display = 'none';
+  document.getElementById('p2p-create-view').style.display = 'flex';
+  document.getElementById('p2p-activity-view').style.display = 'none';
+  document.getElementById('p2p-create-result').style.display = 'none';
+}
+
+function p2pShowMyActivity() {
+  document.getElementById('p2p-book-view').style.display = 'none';
+  document.getElementById('p2p-detail-view').style.display = 'none';
+  document.getElementById('p2p-create-view').style.display = 'none';
+  document.getElementById('p2p-activity-view').style.display = 'flex';
+  p2pLoadActivity();
+}
+
+function p2pBuildCurrencyPills() {
+  const container = document.getElementById('p2p-currency-pills');
+  if (!container) return;
+  container.innerHTML = '';
+  const all = ['', ...QUOTE_CURRENCIES];
+  all.forEach(c => {
+    const btn = document.createElement('button');
+    btn.textContent = c || 'ALL';
+    const active = _p2pCurrency === c;
+    btn.style.cssText = `font-size:9px;padding:2px 7px;border-radius:10px;border:1px solid ${active ? '#22c55e' : '#2a2a2a'};background:${active ? '#052e16' : '#0a0a0a'};color:${active ? '#22c55e' : '#555'};cursor:pointer;font-family:monospace;`;
+    btn.onclick = () => { _p2pCurrency = c; p2pBuildCurrencyPills(); p2pRenderOrders(); };
+    container.appendChild(btn);
+  });
+}
+
+async function p2pLoadOrders(silent = false) {
+  if (!silent) {
+    const list = document.getElementById('p2p-order-list');
+    if (list) list.innerHTML = '<div style="color:#444;font-size:11px;text-align:center;padding:20px 0;font-family:monospace;">Loading…</div>';
+  }
+  try {
+    const data = await _p2pApiFetch('/api/p2p/orders');
+    _p2pOrders = data.orders || [];
+  } catch { _p2pOrders = []; }
+  p2pBuildCurrencyPills();
+  p2pRenderOrders();
+}
+
+function p2pRenderOrders() {
+  const list = document.getElementById('p2p-order-list');
+  if (!list) return;
+  let orders = _p2pOrders.filter(o => o.status === 'open' && o.side === 'sell');
+  if (_p2pCurrency) orders = orders.filter(o => o.quoteCurrency === _p2pCurrency);
+  list.innerHTML = '';
+  if (!orders.length) {
+    list.innerHTML = '<div style="color:#374151;font-size:11px;text-align:center;padding:24px 0;font-family:monospace;">No orders available</div>';
+    return;
+  }
+  orders.forEach(order => {
+    const card = document.createElement('div');
+    card.style.cssText = 'background:#111;border:1px solid #1e1e1e;border-radius:6px;padding:10px;cursor:pointer;';
+    card.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;">
+        <span style="font-size:12px;color:#fff;font-family:monospace;">${_p2pFmt(order.pohAmount)} POH</span>
+        <span style="font-size:9px;padding:2px 6px;border-radius:3px;background:#7f1d1d22;color:#fca5a5;font-family:monospace;">SELL</span>
+      </div>
+      <div style="font-size:11px;color:#22c55e;font-family:monospace;margin-bottom:3px;">${order.pricePerPOH} ${order.quoteCurrency}/POH</div>
+      <div style="font-size:10px;color:#555;font-family:monospace;">Limit ${order.minTrade}–${(order.maxTrade||0).toFixed(2)} ${order.quoteCurrency}</div>
+      ${order.paymentMethods?.length ? `<div style="font-size:10px;color:#444;font-family:monospace;margin-top:2px;">${order.paymentMethods.join(', ')}</div>` : ''}
+      <div style="font-size:9px;color:#374151;font-family:monospace;margin-top:4px;">${_p2pTimeAgo(order.createdAt)} · ${order.maker.slice(0,10)}…</div>
+    `;
+    card.onclick = () => p2pOpenOrder(order);
+    list.appendChild(card);
+  });
+}
+
+async function p2pOpenOrder(order) {
+  document.getElementById('p2p-detail-title').textContent = `ORDER ${order.id.slice(0,8)}`;
+  const body = document.getElementById('p2p-detail-body');
+  body.innerHTML = '<div style="color:#444;font-size:11px;font-family:monospace;">Loading…</div>';
+  p2pShowDetail();
+  try {
+    const data = await _p2pApiFetch(`/api/p2p/orders/${order.id}`);
+    if (!data.error) order = data.order;
+  } catch { /* use cached */ }
+
+  const isMine = order.maker === window._localWallet;
+  const isOpen = order.status === 'open';
+
+  body.innerHTML = `
+    <div style="background:#0a0a0a;border:1px solid #1e1e1e;border-radius:6px;padding:12px;display:flex;flex-direction:column;gap:6px;">
+      <div style="display:flex;justify-content:space-between;">
+        <span style="font-size:10px;color:#555;font-family:monospace;">AMOUNT</span>
+        <span style="font-size:12px;color:#fff;font-family:monospace;">${_p2pFmt(order.pohAmount)} POH</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;">
+        <span style="font-size:10px;color:#555;font-family:monospace;">PRICE</span>
+        <span style="font-size:12px;color:#22c55e;font-family:monospace;">${order.pricePerPOH} ${order.quoteCurrency}/POH</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;">
+        <span style="font-size:10px;color:#555;font-family:monospace;">LIMIT</span>
+        <span style="font-size:11px;color:#aaa;font-family:monospace;">${order.minTrade}–${(order.maxTrade||0).toFixed(2)} ${order.quoteCurrency}</span>
+      </div>
+      ${order.paymentMethods?.length ? `<div style="display:flex;justify-content:space-between;"><span style="font-size:10px;color:#555;font-family:monospace;">PAYMENT</span><span style="font-size:11px;color:#aaa;font-family:monospace;">${order.paymentMethods.join(', ')}</span></div>` : ''}
+      <div style="display:flex;justify-content:space-between;">
+        <span style="font-size:10px;color:#555;font-family:monospace;">STATUS</span>
+        <span style="font-size:11px;color:${order.status==='open'?'#22c55e':order.status==='locked'?'#f59e0b':'#888'};font-family:monospace;">${order.status.toUpperCase()}</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;">
+        <span style="font-size:10px;color:#555;font-family:monospace;">MAKER</span>
+        <span style="font-size:10px;color:#555;font-family:monospace;">${order.maker}</span>
+      </div>
+    </div>
+    ${isMine && isOpen ? `<button id="p2p-cancel-order-btn" onclick="p2pCancelOrder('${order.id}')" style="width:100%;padding:8px;border:1px solid #7f1d1d44;background:#7f1d1d11;color:#fca5a5;border-radius:4px;cursor:pointer;font-size:11px;font-family:monospace;">CANCEL ORDER</button>` : ''}
+    ${!isMine && isOpen ? `
+    <div>
+      <div style="font-size:10px;color:#444;margin-bottom:4px;letter-spacing:0.1em;">POH AMOUNT TO TRADE</div>
+      <input id="p2p-select-amount" type="number" min="0" step="any" value="${_p2pFmt(order.pohAmount)}"
+             style="width:100%;background:#111;border:1px solid #252525;border-radius:4px;color:#e5e7eb;font-size:12px;font-family:monospace;padding:8px 10px;outline:none;box-sizing:border-box;" />
+      <div id="p2p-select-quote" style="font-size:10px;color:#555;font-family:monospace;margin-top:3px;"></div>
+    </div>
+    <button onclick="p2pSelectOrder('${order.id}','${order.pricePerPOH}','${order.quoteCurrency}')"
+            style="width:100%;padding:10px;border:none;background:#22c55e;color:#000;border-radius:4px;font-weight:600;cursor:pointer;font-size:12px;font-family:monospace;">BUY POH</button>
+    <div id="p2p-select-result" style="font-size:11px;display:none;padding:8px;border-radius:4px;font-family:monospace;"></div>` : ''}
+    ${order.status === 'locked' && order.tradeId ? `<button onclick="p2pOpenTrade('${order.tradeId}','${order.id}')" style="width:100%;padding:8px;border:1px solid #1e3a5f;background:#0a1929;color:#60a5fa;border-radius:4px;cursor:pointer;font-size:11px;font-family:monospace;">VIEW ACTIVE TRADE →</button>` : ''}
+  `;
+
+  const amtInput = document.getElementById('p2p-select-amount');
+  const quoteEl  = document.getElementById('p2p-select-quote');
+  if (amtInput && quoteEl) {
+    const updateQuote = () => { const poh = parseFloat(amtInput.value)||0; quoteEl.textContent = `You pay ≈ ${(poh*order.pricePerPOH).toFixed(4)} ${order.quoteCurrency}`; };
+    amtInput.addEventListener('input', updateQuote);
+    updateQuote();
+  }
+}
+
+async function p2pCancelOrder(orderId) {
+  const btn = document.getElementById('p2p-cancel-order-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Cancelling…'; }
+  try {
+    const auth = await _p2pLocalAuth('cancel-order', { orderId });
+    const data = await _p2pApiFetch(`/api/p2p/orders/${orderId}/cancel`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...auth }),
+    });
+    if (data.error) throw new Error(data.error);
+    p2pShowBook(); p2pLoadOrders(true);
+  } catch (e) {
+    if (btn) { btn.disabled = false; btn.textContent = 'CANCEL ORDER'; }
+    alert('Cancel failed: ' + e.message);
+  }
+}
+
+async function p2pSelectOrder(orderId, pricePerPOH, quoteCurrency) {
+  const amtInput  = document.getElementById('p2p-select-amount');
+  const resultEl  = document.getElementById('p2p-select-result');
+  const pohAmount = Math.round(parseFloat(amtInput?.value||'0') * POH_DECIMALS_P2P);
+  const quoteAmount = parseFloat(amtInput?.value||'0') * parseFloat(pricePerPOH);
+  if (!pohAmount) { if (resultEl) { resultEl.style.display='block'; resultEl.style.color='#ef4444'; resultEl.textContent='Enter POH amount'; } return; }
+  if (resultEl) { resultEl.style.display='block'; resultEl.style.color='#888'; resultEl.textContent='Processing…'; }
+  try {
+    const auth = await _p2pLocalAuth('select-order', { orderId, pohAmount, quoteAmount });
+    const data = await _p2pApiFetch(`/api/p2p/orders/${orderId}/select`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...auth, pohAmount, quoteAmount }),
+    });
+    if (data.error) throw new Error(data.error);
+    const tradeId = data.trade?.id;
+    if (tradeId) p2pOpenTrade(tradeId, orderId);
+    else { if (resultEl) { resultEl.style.color='#22c55e'; resultEl.textContent='Order selected!'; } p2pLoadOrders(true); }
+  } catch (e) {
+    if (resultEl) { resultEl.style.display='block'; resultEl.style.color='#ef4444'; resultEl.textContent=e.message; }
+  }
+}
+
+async function p2pOpenTrade(tradeId, orderId) {
+  document.getElementById('p2p-detail-title').textContent = `TRADE ${tradeId.slice(0,8)}`;
+  const body = document.getElementById('p2p-detail-body');
+  body.innerHTML = '<div style="color:#444;font-size:11px;font-family:monospace;">Loading trade…</div>';
+  p2pShowDetail();
+  try {
+    const data = await _p2pApiFetch(`/api/p2p/trades/${tradeId}`);
+    if (data.error) { body.innerHTML = `<div style="color:#ef4444;font-size:11px;font-family:monospace;">${data.error}</div>`; return; }
+    p2pRenderTrade(body, data.trade, data.order);
+  } catch (e) { body.innerHTML = `<div style="color:#ef4444;font-size:11px;font-family:monospace;">${e.message}</div>`; }
+}
+
+function p2pRenderTrade(body, trade, order) {
+  const myAddr   = window._localWallet || '';
+  const isMaker  = order?.maker === myAddr;
+  const isSeller = isMaker;
+  const sColor = { selected:'#f59e0b', payment_sent:'#3b82f6', completed:'#22c55e', cancelled:'#6b7280', disputed:'#ef4444' };
+  const color = sColor[trade.status] || '#888';
+  const deadline = trade.paymentDeadline
+    ? `<div style="display:flex;justify-content:space-between;"><span style="font-size:10px;color:#555;font-family:monospace;">DEADLINE</span><span style="font-size:11px;color:#f59e0b;font-family:monospace;">${new Date(trade.paymentDeadline).toLocaleTimeString()}</span></div>`
+    : '';
+  body.innerHTML = `
+    <div style="background:#0a0a0a;border:1px solid #1e1e1e;border-radius:6px;padding:12px;display:flex;flex-direction:column;gap:6px;">
+      <div style="display:flex;justify-content:space-between;"><span style="font-size:10px;color:#555;font-family:monospace;">STATUS</span><span style="font-size:11px;color:${color};font-family:monospace;">${trade.status.replace('_',' ').toUpperCase()}</span></div>
+      <div style="display:flex;justify-content:space-between;"><span style="font-size:10px;color:#555;font-family:monospace;">AMOUNT</span><span style="font-size:12px;color:#fff;font-family:monospace;">${_p2pFmt(trade.pohAmount)} POH</span></div>
+      <div style="display:flex;justify-content:space-between;"><span style="font-size:10px;color:#555;font-family:monospace;">TOTAL</span><span style="font-size:12px;color:#22c55e;font-family:monospace;">${(trade.quoteAmount||0).toFixed(4)} ${order?.quoteCurrency||''}</span></div>
+      <div style="display:flex;justify-content:space-between;"><span style="font-size:10px;color:#555;font-family:monospace;">ROLE</span><span style="font-size:11px;color:#aaa;font-family:monospace;">${isMaker?'Maker':'Taker'} · ${isSeller?'Seller':'Buyer'}</span></div>
+      ${deadline}
+    </div>
+    <div id="p2p-trade-result" style="font-size:11px;display:none;padding:8px;border-radius:4px;font-family:monospace;"></div>
+    ${trade.status === 'selected' && !isSeller ? `
+    <div style="background:#0c1a0c;border:1px solid #1a3a1a;border-radius:6px;padding:10px;font-size:11px;color:#86efac;font-family:monospace;">
+      Send <strong>${(trade.quoteAmount||0).toFixed(4)} ${order?.quoteCurrency||''}</strong> via: ${order?.paymentMethods?.join(', ')||'—'}<br>Then click "Mark Payment Sent".
+    </div>
+    <button onclick="p2pMarkPaymentSent('${trade.id}')" style="width:100%;padding:10px;border:none;background:#3b82f6;color:#fff;border-radius:4px;font-weight:600;cursor:pointer;font-size:12px;font-family:monospace;">MARK PAYMENT SENT</button>` : ''}
+    ${trade.status === 'payment_sent' && isSeller ? `
+    <div style="background:#0c1a0c;border:1px solid #1a3a1a;border-radius:6px;padding:10px;font-size:11px;color:#86efac;font-family:monospace;">Buyer claims payment sent. Verify, then release POH.</div>
+    <button onclick="p2pReleaseTrade('${trade.id}')" style="width:100%;padding:10px;border:none;background:#22c55e;color:#000;border-radius:4px;font-weight:600;cursor:pointer;font-size:12px;font-family:monospace;">RELEASE POH TO BUYER</button>` : ''}
+    ${['selected','payment_sent'].includes(trade.status) ? `
+    <div style="display:flex;gap:6px;">
+      <button onclick="p2pCancelTrade('${trade.id}')" style="flex:1;padding:8px;border:1px solid #7f1d1d44;background:#7f1d1d11;color:#fca5a5;border-radius:4px;cursor:pointer;font-size:11px;font-family:monospace;">CANCEL</button>
+      <button onclick="p2pDisputeTrade('${trade.id}')" style="flex:1;padding:8px;border:1px solid #92400e44;background:#92400e11;color:#fcd34d;border-radius:4px;cursor:pointer;font-size:11px;font-family:monospace;">DISPUTE</button>
+    </div>` : ''}
+  `;
+}
+
+async function _p2pTradeAction(tradeId, action, extraFields = {}) {
+  const resultEl = document.getElementById('p2p-trade-result');
+  if (resultEl) { resultEl.style.display='block'; resultEl.style.color='#888'; resultEl.textContent='Processing…'; }
+  try {
+    const auth = await _p2pLocalAuth(action, { tradeId, ...extraFields });
+    const data = await _p2pApiFetch(`/api/p2p/trades/${tradeId}/${action}`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...auth, ...extraFields }),
+    });
+    if (data.error) throw new Error(data.error);
+    if (resultEl) { resultEl.style.color='#22c55e'; resultEl.textContent='Done!'; }
+    const orderId = data.trade?.orderId || '';
+    setTimeout(() => p2pOpenTrade(tradeId, orderId), 800);
+  } catch (e) {
+    if (resultEl) { resultEl.style.display='block'; resultEl.style.color='#ef4444'; resultEl.textContent=e.message; }
+  }
+}
+
+function p2pMarkPaymentSent(tradeId) { _p2pTradeAction(tradeId, 'payment_sent'); }
+function p2pReleaseTrade(tradeId)    { _p2pTradeAction(tradeId, 'release'); }
+function p2pCancelTrade(tradeId)     { _p2pTradeAction(tradeId, 'cancel'); }
+function p2pDisputeTrade(tradeId)    { const r = prompt('Dispute reason:'); if (r) _p2pTradeAction(tradeId, 'dispute', { reason: r }); }
+
+async function p2pSubmitCreateOrder() {
+  const resultEl = document.getElementById('p2p-create-result');
+  const pohAmt   = parseFloat(document.getElementById('p2p-form-amount')?.value || '0');
+  const currency = document.getElementById('p2p-form-currency')?.value;
+  const price    = parseFloat(document.getElementById('p2p-form-price')?.value || '0');
+  const minT     = parseFloat(document.getElementById('p2p-form-min')?.value || '0');
+  const maxT     = parseFloat(document.getElementById('p2p-form-max')?.value || '0');
+  const methods  = (document.getElementById('p2p-form-methods')?.value || '').split(',').map(s => s.trim()).filter(Boolean);
+  if (!pohAmt || !currency || !price) {
+    resultEl.style.display='block'; resultEl.style.color='#ef4444'; resultEl.textContent='Fill in amount, currency, and price.'; return;
+  }
+  resultEl.style.display='block'; resultEl.style.color='#888'; resultEl.textContent='Posting order…';
+  const pohAmountRaw = Math.round(pohAmt * POH_DECIMALS_P2P);
+  try {
+    const orderFields = { side: 'sell', pohAmount: pohAmountRaw, quoteCurrency: currency, pricePerPOH: price, minTrade: minT||0, maxTrade: maxT||pohAmt*price, paymentMethods: methods };
+    const auth = await _p2pLocalAuth('create-order', { side: 'sell', pohAmount: pohAmountRaw });
+    const data = await _p2pApiFetch('/api/p2p/orders', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...auth, ...orderFields }),
+    });
+    if (data.error) throw new Error(data.error);
+    resultEl.style.color='#22c55e'; resultEl.textContent='Order posted!';
+    ['p2p-form-amount','p2p-form-price','p2p-form-min','p2p-form-max','p2p-form-methods'].forEach(id => { const el = document.getElementById(id); if (el) el.value=''; });
+    setTimeout(() => { p2pShowBook(); p2pLoadOrders(true); }, 1200);
+  } catch (e) { resultEl.style.display='block'; resultEl.style.color='#ef4444'; resultEl.textContent=e.message; }
+}
+
+function p2pActivityTab(tab) {
+  _p2pActivityTab = tab;
+  const oBtn = document.getElementById('p2p-act-tab-orders');
+  const tBtn = document.getElementById('p2p-act-tab-trades');
+  if (!oBtn || !tBtn) return;
+  if (tab === 'orders') {
+    oBtn.style.background='#166534'; oBtn.style.color='#22c55e'; oBtn.style.fontWeight='600';
+    tBtn.style.background='#111';    tBtn.style.color='#888';    tBtn.style.fontWeight='normal';
+  } else {
+    tBtn.style.background='#1e3a5f'; tBtn.style.color='#60a5fa'; tBtn.style.fontWeight='600';
+    oBtn.style.background='#111';    oBtn.style.color='#888';    oBtn.style.fontWeight='normal';
+  }
+  p2pLoadActivity();
+}
+
+async function p2pLoadActivity() {
+  const list   = document.getElementById('p2p-activity-list');
+  const myAddr = window._localWallet;
+  if (!list) return;
+  list.innerHTML = '<div style="color:#444;font-size:11px;text-align:center;padding:20px 0;font-family:monospace;">Loading…</div>';
+  try {
+    if (_p2pActivityTab === 'orders') {
+      const data = await _p2pApiFetch(`/api/p2p/orders/my?address=${encodeURIComponent(myAddr||'')}`);
+      const orders = data.orders || [];
+      list.innerHTML = '';
+      if (!orders.length) { list.innerHTML = '<div style="color:#374151;font-size:11px;text-align:center;padding:24px 0;font-family:monospace;">No orders yet</div>'; return; }
+      orders.forEach(order => {
+        const sc = {open:'#22c55e',locked:'#f59e0b',completed:'#6b7280',cancelled:'#4b5563',disputed:'#dc2626'}[order.status]||'#888';
+        const card = document.createElement('div');
+        card.style.cssText = 'background:#111;border:1px solid #1e1e1e;border-radius:6px;padding:10px;cursor:pointer;';
+        card.innerHTML = `
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+            <span style="font-size:12px;color:#fff;font-family:monospace;">${_p2pFmt(order.pohAmount)} POH</span>
+            <span style="font-size:9px;padding:2px 6px;border-radius:3px;background:${sc}22;color:${sc};font-family:monospace;">${order.status.toUpperCase()}</span>
+          </div>
+          <div style="font-size:11px;color:#22c55e;font-family:monospace;">${order.pricePerPOH} ${order.quoteCurrency}/POH</div>
+          <div style="font-size:10px;color:#555;font-family:monospace;margin-top:2px;">${order.side.toUpperCase()} · ${_p2pTimeAgo(order.createdAt)}</div>
+        `;
+        card.onclick = () => p2pOpenOrder(order);
+        list.appendChild(card);
+      });
+    } else {
+      const data = await _p2pApiFetch(`/api/p2p/trades/my?address=${encodeURIComponent(myAddr||'')}`);
+      const trades = data.trades || [];
+      list.innerHTML = '';
+      if (!trades.length) { list.innerHTML = '<div style="color:#374151;font-size:11px;text-align:center;padding:24px 0;font-family:monospace;">No trades yet</div>'; return; }
+      trades.forEach(({ trade, order }) => {
+        if (!trade) return;
+        const sc = {selected:'#f59e0b',payment_sent:'#3b82f6',completed:'#22c55e',cancelled:'#6b7280',disputed:'#ef4444'}[trade.status]||'#888';
+        const card = document.createElement('div');
+        card.style.cssText = 'background:#111;border:1px solid #1e1e1e;border-radius:6px;padding:10px;cursor:pointer;';
+        card.innerHTML = `
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+            <span style="font-size:12px;color:#fff;font-family:monospace;">${_p2pFmt(trade.pohAmount)} POH</span>
+            <span style="font-size:9px;padding:2px 6px;border-radius:3px;background:${sc}22;color:${sc};font-family:monospace;">${trade.status.replace('_',' ').toUpperCase()}</span>
+          </div>
+          <div style="font-size:11px;color:#22c55e;font-family:monospace;">${(trade.quoteAmount||0).toFixed(4)} ${order?.quoteCurrency||''}</div>
+          <div style="font-size:10px;color:#555;font-family:monospace;margin-top:2px;">${order?.side?.toUpperCase()||'—'} · ${_p2pTimeAgo(trade.createdAt)}</div>
+        `;
+        card.onclick = () => p2pOpenTrade(trade.id, trade.orderId);
+        list.appendChild(card);
+      });
+    }
+  } catch (e) { list.innerHTML = `<div style="color:#ef4444;font-size:11px;text-align:center;padding:20px 0;font-family:monospace;">${e.message}</div>`; }
+}

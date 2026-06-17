@@ -28,6 +28,10 @@ contextBridge.exposeInMainWorld('pohMinerAPI', {
     start: () => ipcRenderer.invoke('miner:start'),
   },
 
+  app: {
+    restart: () => ipcRenderer.invoke('app:restart'),
+  },
+
   // QR code generation — delegated to main process (qrcode uses Node fs APIs, not safe in sandbox)
   generateQR: (text, size = 220) => ipcRenderer.invoke('generate-qr', text, size),
 
@@ -37,6 +41,9 @@ contextBridge.exposeInMainWorld('pohMinerAPI', {
   },
   onShowMainApp: (callback) => {
     ipcRenderer.on('show-main-app', () => callback());
+  },
+  onSkillRejected: (callback) => {
+    ipcRenderer.on('skill-rejected', (_event, data) => callback(data));
   },
 
   // Onboarding API (top-level)

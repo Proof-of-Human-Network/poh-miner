@@ -147,6 +147,13 @@ async function startMiner() {
 
     minerNode = new PohMinerNode(config);
 
+    // Forward skill rejection events to the renderer as a modal popup
+    minerNode.onSkillRejectedHook = ({ skillId, reason, issues }) => {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('skill-rejected', { skillId, reason, issues });
+      }
+    };
+
     // Capture logs
     const originalLog = console.log;
     const originalError = console.error;
@@ -513,6 +520,11 @@ ipcMain.handle('miner:start', async () => {
   // Always delegate to startMiner() — it has robust guards against duplicates and races
   startMiner();
   return { started: true };
+});
+
+ipcMain.handle('app:restart', async () => {
+  app.relaunch();
+  app.quit();
 });
 
 // ── Ollama / AI setup IPC ────────────────────────────────────────────────────

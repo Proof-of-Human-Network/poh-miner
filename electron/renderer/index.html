@@ -7,6 +7,7 @@
   <!-- Tailwind via CDN is used for the onboarding wizard only.
        It produces console warnings + a security notice in dev.
        We can replace this with a proper build or scoped styles later. -->
+  <script src="i18n.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- Markdown + Math rendering for chat -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
@@ -171,6 +172,12 @@
     }
     .scan-btn:hover { background: #16a34a; }
     .scan-btn:disabled { background: #1a3a2a; color: #2d6a3f; cursor: default; }
+    .budget-row { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
+    .budget-label { font-family: monospace; font-size: 11px; color: #6b7280; white-space: nowrap; min-width: 160px; }
+    .budget-label span { color: #22c55e; }
+    .budget-slider { flex: 1; -webkit-appearance: none; appearance: none; height: 3px; background: #252525; border-radius: 2px; outline: none; cursor: pointer; }
+    .budget-slider::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%; background: #22c55e; cursor: pointer; }
+    .budget-slider::-webkit-slider-runnable-track { background: linear-gradient(to right, #22c55e var(--fill, 0%), #252525 var(--fill, 0%)); border-radius: 2px; }
     .search-loading { display: flex; align-items: center; gap: 12px; padding: 20px 0; color: #6b7280; font-size: 12px; font-family: monospace; }
     .spinner { width: 14px; height: 14px; border: 2px solid #1c1c1c; border-top-color: #22c55e; border-radius: 50%; animation: spin 0.8s linear infinite; }
     @keyframes spin { to { transform: rotate(360deg); } }
@@ -324,10 +331,52 @@
     .chat-bubble .katex-display { margin: 12px 0; overflow-x: auto; text-align: center; }
     .chat-bubble > *:first-child { margin-top: 0; }
     .chat-bubble > *:last-child { margin-bottom: 0; }
+    #skill-detail-desc p { margin: 0 0 6px; }
+    #skill-detail-desc p:last-child { margin-bottom: 0; }
+    #skill-detail-desc h1, #skill-detail-desc h2, #skill-detail-desc h3 { color: #bbb; font-weight: 600; margin: 8px 0 4px; }
+    #skill-detail-desc h1 { font-size: 13px; }
+    #skill-detail-desc h2 { font-size: 12px; }
+    #skill-detail-desc h3 { font-size: 11px; }
+    #skill-detail-desc ul, #skill-detail-desc ol { margin: 4px 0; padding-left: 18px; }
+    #skill-detail-desc li { margin: 2px 0; }
+    #skill-detail-desc code { background: #111; border: 1px solid #222; border-radius: 3px; padding: 1px 4px; font-family: monospace; font-size: 10px; color: #22c55e; }
+    #skill-detail-desc strong { color: #ccc; font-weight: 600; }
+    #skill-detail-desc em { color: #888; }
+    #skill-detail-desc a { color: #22c55e; text-decoration: none; }
+    #skill-detail-desc hr { border: none; border-top: 1px solid #1a1a1a; margin: 6px 0; }
+    /* Brain context markdown body */
+    .md-body { font-size: 13px; color: #ccc; line-height: 1.65; word-break: break-word; overflow-wrap: break-word; }
+    .md-body p { margin: 0 0 10px; }
+    .md-body p:last-child { margin-bottom: 0; }
+    .md-body h1 { font-size: 17px; font-weight: 700; color: #f0f0f0; margin: 0 0 12px; padding-bottom: 8px; border-bottom: 1px solid #222; }
+    .md-body h2 { font-size: 15px; font-weight: 600; color: #e0e0e0; margin: 18px 0 8px; }
+    .md-body h3 { font-size: 13px; font-weight: 600; color: #d0d0d0; margin: 14px 0 6px; }
+    .md-body h4 { font-size: 12px; font-weight: 600; color: #bbb; margin: 10px 0 4px; }
+    .md-body ul, .md-body ol { margin: 6px 0 10px; padding-left: 22px; }
+    .md-body li { margin: 4px 0; }
+    .md-body li > ul, .md-body li > ol { margin: 2px 0; }
+    .md-body code { background: #161616; border: 1px solid #2a2a2a; border-radius: 4px; padding: 1px 6px; font-family: 'SF Mono', 'Fira Code', monospace; font-size: 12px; color: #86efac; }
+    .md-body pre { background: #0d0d0d; border: 1px solid #222; border-radius: 6px; padding: 14px 16px; margin: 10px 0; overflow-x: auto; }
+    .md-body pre code { background: none; border: none; padding: 0; font-size: 12px; color: #d4d4d4; line-height: 1.6; }
+    .md-body strong { color: #f0f0f0; font-weight: 600; }
+    .md-body em { color: #aaa; font-style: italic; }
+    .md-body a { color: #4ade80; text-decoration: none; }
+    .md-body a:hover { text-decoration: underline; }
+    .md-body hr { border: none; border-top: 1px solid #1e1e1e; margin: 14px 0; }
+    .md-body blockquote { border-left: 3px solid #333; margin: 10px 0; padding: 4px 14px; color: #888; }
+    .md-body table { border-collapse: collapse; width: 100%; margin: 10px 0; font-size: 12px; }
+    .md-body th { background: #111; color: #ccc; padding: 6px 10px; border: 1px solid #222; font-weight: 600; text-align: left; }
+    .md-body td { padding: 5px 10px; border: 1px solid #1e1e1e; color: #aaa; }
     .chat-msg.user   .chat-bubble { background: #1a3a2a; color: #d1fae5; border-bottom-right-radius: 3px; }
     .chat-msg.assistant .chat-bubble { background: #1a1a1a; color: #ddd; border-bottom-left-radius: 3px; border: 1px solid #2a2a2a; }
     .chat-meta { font-size: 10px; color: #444; padding: 0 4px; }
     .chat-cursor { display: inline-block; width: 7px; height: 13px; background: #22c55e; animation: blink 1s step-end infinite; vertical-align: text-bottom; margin-left: 2px; }
+    .chat-feedback { display: flex; align-items: center; gap: 6px; margin-top: 4px; padding-left: 2px; }
+    .chat-feedback-label { color: #4b5563; font-size: 11px; }
+    .chat-fb-btn { background: none; border: 1px solid #2a2a2a; border-radius: 6px; padding: 2px 8px; cursor: pointer; font-size: 14px; color: #9ca3af; transition: border-color 0.15s; }
+    .chat-fb-btn:hover { border-color: #4b5563; }
+    .chat-copy-btn { background: none; border: 1px solid #222; border-radius: 4px; color: #555; cursor: pointer; font-size: 12px; padding: 1px 6px; margin-left: 4px; transition: color 0.15s, border-color 0.15s; }
+    .chat-copy-btn:hover { color: #888; border-color: #444; }
     @keyframes blink { 50% { opacity: 0; } }
 
     .chat-toolbar {
@@ -741,6 +790,40 @@
     .send-summary-key { font-family: sans-serif; font-size: 11px; color: #9ca3af; }
     .send-summary-val { font-family: monospace; font-size: 11px; color: #e5e7eb; }
     .send-summary-val.dim { color: #374151; font-size: 10px; }
+
+    /* Model picker modal */
+    #model-picker-backdrop {
+      position: fixed; inset: 0; background: rgba(0,0,0,.75); z-index: 300;
+      display: flex; align-items: center; justify-content: center;
+    }
+    #model-picker-backdrop.hidden { display: none; }
+    #model-picker-panel {
+      background: #111; border: 1px solid #222; border-radius: 20px;
+      width: 380px; max-width: calc(100vw - 32px); max-height: 70vh;
+      display: flex; flex-direction: column; overflow: hidden;
+      box-shadow: 0 24px 64px rgba(0,0,0,.7);
+    }
+    .mp-header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 18px 20px 14px; border-bottom: 1px solid #1a1a1a; flex-shrink: 0;
+    }
+    .mp-title { font-size: 14px; font-weight: 600; letter-spacing: .5px; }
+    .mp-close { background: none; border: none; color: #555; font-size: 18px; cursor: pointer; line-height:1; padding:0; }
+    .mp-close:hover { color: #fff; }
+    .mp-list { overflow-y: auto; padding: 8px; flex: 1; }
+    .mp-item {
+      display: flex; align-items: center; gap: 12px;
+      padding: 10px 12px; border-radius: 10px; cursor: pointer;
+      transition: background .12s; border: 1px solid transparent;
+    }
+    .mp-item:hover { background: #1a1a1a; }
+    .mp-item.active { background: #0a1f12; border-color: #1a3a27; }
+    .mp-item-icon { width: 32px; height: 32px; border-radius: 8px; background: #1a1a1a; display:flex; align-items:center; justify-content:center; font-size:14px; flex-shrink:0; }
+    .mp-item.active .mp-item-icon { background: #0f2d1a; }
+    .mp-item-name { font-size: 12px; font-family: monospace; color: #e5e7eb; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .mp-item-badge { font-size: 9px; color: #22c55e; background: #0a1f12; border: 1px solid #1a3a27; border-radius: 4px; padding: 1px 6px; flex-shrink: 0; }
+    .mp-empty { padding: 28px 20px; text-align: center; color: #555; font-size: 12px; }
+    .mp-footer { padding: 12px 20px; border-top: 1px solid #1a1a1a; font-size: 10px; color: #374151; flex-shrink: 0; }
   </style>
 </head>
 <body>
@@ -824,11 +907,10 @@
         </div>
       </div>
 
-      <!-- Step 2: Create PoH Wallet -->
+      <!-- Step 1: Create PoH Wallet -->
       <div id="step-wallet" class="onboarding-step hidden">
         <div class="max-w-lg mx-auto">
           <div class="mb-8">
-            <div class="text-[#22c55e] text-sm font-medium tracking-widest mb-2">STEP 1 OF 6</div>
             <h2 class="font-display text-4xl tracking-tight">Create your PoH Wallet</h2>
             <p class="text-zinc-400 mt-2">This is your identity and reward wallet on the PoH blockchain.</p>
           </div>
@@ -881,46 +963,28 @@
                        oninput="checkBackupConfirmation()">
               </div>
 
-              <button id="wallet-continue-btn" onclick="goToStep('solana')" disabled
+              <button id="wallet-continue-btn" onclick="completeOnboarding()" disabled
                       class="mt-3 w-full py-3.5 bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-2xl transition">
-                Continue
+                Launch Miner
               </button>
             </div>
           </div>
         </div>
       </div>
 
-      <!-- Step 3: Solana Address for Identity -->
-      <div id="step-solana" class="onboarding-step hidden max-w-md mx-auto">
-        <div class="mb-8">
-          <div class="text-[#22c55e] text-sm font-medium tracking-widest mb-2">STEP 2 OF 6</div>
-          <h2 class="font-display text-4xl tracking-tight">Connect your Solana identity</h2>
-          <p class="text-zinc-400 mt-3">Your Solana address is used for reputation, future bridging, and cross-chain identity.</p>
-        </div>
 
-        <div class="space-y-4">
-          <div>
-            <label class="block text-sm text-zinc-400 mb-2">Your Solana Address</label>
-            <input id="solana-address-input" type="text" 
-                   class="w-full bg-zinc-950 border border-white/20 focus:border-[#22c55e] outline-none rounded-2xl px-5 py-3.5 font-mono text-sm"
-                   placeholder="YourSolanaAddressHere...">
-          </div>
+    </div>
+  </div>
 
-          <div class="flex gap-3 pt-2">
-            <button onclick="goToStep('wallet')" 
-                    class="flex-1 py-3 rounded-2xl border border-white/20 hover:bg-white/5">Back</button>
-            <button onclick="saveSolanaAndContinue()" 
-                    class="flex-1 py-3 bg-white text-black font-semibold rounded-2xl hover:bg-[#22c55e]">Continue</button>
-          </div>
-          <div class="text-center text-xs text-zinc-500">You can change this later in settings.</div>
-        </div>
-      </div>
+  <!-- ==================== RPC CONFIGURATION OVERLAY ==================== -->
+  <div id="rpc-config" class="hidden fixed inset-0 bg-black z-50 flex items-center justify-center p-6">
+    <div class="w-full max-w-[720px]">
 
-      <!-- Step 3: Etherscan API Key -->
-      <div id="step-etherscan" class="onboarding-step hidden">
+      <!-- RPC Step 1: Etherscan API Key -->
+      <div id="rpc-step-etherscan" class="rpc-step hidden">
         <div class="max-w-lg mx-auto">
           <div class="mb-6">
-            <div class="text-[#22c55e] text-sm font-medium tracking-widest mb-1">STEP 3 OF 6</div>
+            <div class="text-[#22c55e] text-sm font-medium tracking-widest mb-1">STEP 1 OF 4</div>
             <h2 class="font-display text-4xl tracking-tight">Etherscan API Key</h2>
             <p class="text-zinc-400 mt-2">Enables on-chain verification across Ethereum, Base, Arbitrum, and all EVM explorers.</p>
           </div>
@@ -939,7 +1003,7 @@
           </div>
 
           <div class="mt-6 flex gap-3">
-            <button onclick="goToStep('solana')"
+            <button onclick="closeRpcConfig()"
                     class="flex-1 py-3 rounded-2xl border border-white/20 hover:bg-white/5">Back</button>
             <button onclick="saveEtherscanAndContinue()"
                     class="flex-1 py-3 bg-white text-black font-semibold rounded-2xl hover:bg-[#22c55e]">Continue</button>
@@ -947,11 +1011,11 @@
         </div>
       </div>
 
-      <!-- Step 4: EVM RPC Provider -->
-      <div id="step-evm" class="onboarding-step hidden">
+      <!-- RPC Step 2: EVM RPC Provider -->
+      <div id="rpc-step-evm" class="rpc-step hidden">
         <div class="max-w-lg mx-auto">
           <div class="mb-6">
-            <div class="text-[#22c55e] text-sm font-medium tracking-widest mb-1">STEP 4 OF 6</div>
+            <div class="text-[#22c55e] text-sm font-medium tracking-widest mb-1">STEP 2 OF 4</div>
             <h2 class="font-display text-4xl tracking-tight">EVM RPC Provider</h2>
             <p class="text-zinc-400 mt-2">Choose a provider for Ethereum, Base, Arbitrum, and other EVM chains.</p>
           </div>
@@ -988,19 +1052,19 @@
           </div>
 
           <div class="mt-6 flex gap-3">
-            <button onclick="goToStep('etherscan')"
+            <button onclick="closeRpcConfig()"
                     class="flex-1 py-3 rounded-2xl border border-white/20 hover:bg-white/5">Back</button>
-            <button onclick="goToStep('solana-rpc')"
+            <button onclick="goToRpcStep('solana-rpc')"
                     class="flex-1 py-3 bg-white text-black font-semibold rounded-2xl hover:bg-[#22c55e]">Continue</button>
           </div>
         </div>
       </div>
 
-      <!-- Step 5: Solana RPC Provider -->
-      <div id="step-solana-rpc" class="onboarding-step hidden">
+      <!-- RPC Step 3: Solana RPC Provider -->
+      <div id="rpc-step-solana-rpc" class="rpc-step hidden">
         <div class="max-w-lg mx-auto">
           <div class="mb-6">
-            <div class="text-[#22c55e] text-sm font-medium tracking-widest mb-1">STEP 5 OF 6</div>
+            <div class="text-[#22c55e] text-sm font-medium tracking-widest mb-1">STEP 3 OF 4</div>
             <h2 class="font-display text-4xl tracking-tight">Solana RPC</h2>
             <p class="text-zinc-400 mt-2">Choose a Solana provider for on-chain signal verification.</p>
           </div>
@@ -1026,19 +1090,19 @@
           </div>
 
           <div class="mt-6 flex gap-3">
-            <button onclick="goToStep('evm')"
+            <button onclick="closeRpcConfig()"
                     class="flex-1 py-3 rounded-2xl border border-white/20 hover:bg-white/5">Back</button>
-            <button onclick="goToStep('other-chains')"
+            <button onclick="goToRpcStep('other-chains')"
                     class="flex-1 py-3 bg-white text-black font-semibold rounded-2xl hover:bg-[#22c55e]">Continue</button>
           </div>
         </div>
       </div>
 
-      <!-- Step 6: Other Chains (BTC, TON, TRON, XLM) -->
-      <div id="step-other-chains" class="onboarding-step hidden">
+      <!-- RPC Step 4: Other Chains -->
+      <div id="rpc-step-other-chains" class="rpc-step hidden">
         <div class="max-w-xl mx-auto">
           <div class="mb-5">
-            <div class="text-[#22c55e] text-sm font-medium tracking-widest mb-1">STEP 6 OF 6</div>
+            <div class="text-[#22c55e] text-sm font-medium tracking-widest mb-1">STEP 4 OF 4</div>
             <h2 class="font-display text-4xl tracking-tight">Other Chains</h2>
             <p class="text-zinc-400 mt-2">Optional — configure providers for BTC, TON, TRON, and Stellar.</p>
           </div>
@@ -1140,14 +1204,40 @@
           </div>
 
           <div class="mt-6 flex gap-3">
-            <button onclick="goToStep('solana-rpc')"
+            <button onclick="closeRpcConfig()"
                     class="flex-1 py-3 rounded-2xl border border-white/20 hover:bg-white/5">Back</button>
-            <button onclick="completeOnboarding()"
-                    class="flex-1 py-3 bg-[#22c55e] text-black font-semibold rounded-2xl hover:bg-[#16a34a]">Finish Setup &amp; Launch</button>
+            <button onclick="closeRpcConfig()"
+                    class="flex-1 py-3 bg-[#22c55e] text-black font-semibold rounded-2xl hover:bg-[#16a34a]">Done</button>
           </div>
         </div>
       </div>
 
+    </div>
+  </div>
+
+  <!-- ==================== SCANNER WELCOME OVERLAY ==================== -->
+  <div id="scanner-welcome" class="hidden fixed inset-0 bg-black/80 z-40 flex items-center justify-center p-6">
+    <div class="w-full max-w-md glass rounded-3xl p-8 border border-white/10 text-center">
+      <div class="inline-flex items-center justify-center w-14 h-14 rounded-full bg-[#22c55e]/10 border border-[#22c55e]/30 mb-6">
+        <span style="font-size:24px;">⊙</span>
+      </div>
+      <h2 class="font-display text-3xl tracking-tight mb-3">AI-powered Identities</h2>
+      <p class="text-zinc-300 mb-3 leading-relaxed">
+        Search by cryptocurrency wallet address, Web3 domain names, social accounts or names.
+      </p>
+      <p class="text-sm text-zinc-500 mb-8">
+        Scanner's results have better quality with RPC API Keys provided.
+      </p>
+      <div class="flex gap-3">
+        <button onclick="scannerWelcomeSkip()"
+                class="flex-1 py-3 rounded-2xl border border-white/20 hover:bg-white/5 text-zinc-300 font-medium transition">
+          Skip
+        </button>
+        <button onclick="scannerWelcomeSetup()"
+                class="flex-1 py-3 bg-white text-black font-semibold rounded-2xl hover:bg-[#22c55e] transition">
+          Setup
+        </button>
+      </div>
     </div>
   </div>
 
@@ -1159,54 +1249,51 @@
 
     <!-- ─── LEFT: Node Status ─── -->
     <div class="left-sidebar">
-      <div class="sidebar-section-label">NODE STATUS</div>
+      <div class="sidebar-section-label" data-i18n="sidebar.node_status">NODE STATUS</div>
 
       <div class="sb-field">
-        <div class="sb-label">POH WALLET</div>
+        <div class="sb-label" data-i18n="sidebar.poh_wallet">POH WALLET</div>
         <div class="sb-val" id="poh-wallet-address">Loading...</div>
       </div>
 
       <div class="sb-field">
-        <div class="sb-label">BALANCE</div>
+        <div class="sb-label" data-i18n="sidebar.balance">BALANCE</div>
         <div class="sb-val lg grn" id="poh-wallet-balance">0 POH</div>
       </div>
 
       <div class="sb-field">
-        <div class="sb-label">CHAIN HEIGHT</div>
+        <div class="sb-label" data-i18n="sidebar.chain_height">CHAIN HEIGHT</div>
         <div class="sb-val lg" id="chain-height">0</div>
       </div>
 
       <div class="sb-field">
-        <div class="sb-label">REPUTATION</div>
+        <div class="sb-label" data-i18n="sidebar.reputation">REPUTATION</div>
         <div class="sb-val lg grn" id="reputation">1.00</div>
       </div>
 
       <div class="sb-divider"></div>
 
       <div class="sb-field">
-        <div class="sb-label">VALID SCANS</div>
+        <div class="sb-label" data-i18n="sidebar.tasks">TASKS COMPLETED</div>
         <div class="sb-val lg" id="valid-submissions">0</div>
       </div>
 
-      <div class="sb-field">
-        <div class="sb-label">REJECTED</div>
-        <div class="sb-val lg dim" id="invalid-submissions">0</div>
+      <div class="sb-divider"></div>
+
+      <div class="sb-field" style="flex-direction:column;align-items:flex-start;gap:4px;">
+        <div class="sb-label" data-i18n="sidebar.recent_activity">RECENT ACTIVITY</div>
+        <div id="sidebar-tx-history" style="width:100%;font-size:9px;color:#6b7280;line-height:1.5;max-height:80px;overflow:hidden;">—</div>
       </div>
 
       <div class="sb-divider"></div>
 
       <div class="sb-field">
-        <div class="sb-label">INFERENCE</div>
-        <div class="sb-val dim" id="sidebar-inference">AUTO · qwen2.5:1.5b</div>
-      </div>
-
-      <div class="sb-field">
-        <div class="sb-label">SOLANA</div>
+        <div class="sb-label" data-i18n="sidebar.solana">SOLANA</div>
         <div class="sb-val dim" id="solana-address">Not set</div>
       </div>
 
       <div class="sb-field">
-        <div class="sb-label">PEERS</div>
+        <div class="sb-label" data-i18n="sidebar.peers">PEERS</div>
         <div class="sb-val lg grn" id="sidebar-peers">—</div>
       </div>
 
@@ -1216,29 +1303,28 @@
       </div>
 
       <div class="sb-field" style="margin-top:auto;">
-        <div class="sb-label">REGION</div>
+        <div class="sb-label" data-i18n="sidebar.region">REGION</div>
         <div class="sb-val dim" id="sidebar-region">auto-detected</div>
       </div>
-
-      <button class="sb-settings-btn" onclick="showSettings()">⚙ Settings</button>
     </div>
 
     <!-- ─── CENTER: Tabs ─── -->
     <div class="content-area">
       <div class="tab-nav">
-        <button class="tab-btn active" id="tab-home-btn"   onclick="switchTab('home')">HOME</button>
-        <button class="tab-btn"        id="tab-send-btn"   onclick="switchTab('send')">SEND</button>
-        <button class="tab-btn"        id="tab-chat-btn"   onclick="switchTab('chat')">CHAT</button>
-        <button class="tab-btn"        id="tab-search-btn" onclick="switchTab('search')">SCANNER</button>
-        <button class="tab-btn"        id="tab-skills-btn" onclick="switchTab('skills')">SKILLS</button>
-        <button class="tab-btn"        id="tab-logs-btn"   onclick="switchTab('logs')">LOGS</button>
+        <button class="tab-btn active" id="tab-home-btn"   onclick="switchTab('home')"   data-i18n="tab.home">HOME</button>
+        <button class="tab-btn"        id="tab-send-btn"   onclick="switchTab('send')"   data-i18n="tab.send">SEND</button>
+        <button class="tab-btn"        id="tab-chat-btn"   onclick="switchTab('chat')"   data-i18n="tab.chat">CHAT</button>
+        <button class="tab-btn"        id="tab-search-btn" onclick="switchTab('search')" data-i18n="tab.scanner">SCANNER</button>
+        <button class="tab-btn"        id="tab-skills-btn" onclick="switchTab('skills')" data-i18n="tab.skills">SKILLS</button>
+        <button class="tab-btn"        id="tab-p2p-btn"    onclick="switchTab('p2p')">P2P</button>
+        <button class="tab-btn"        id="tab-logs-btn"   onclick="switchTab('logs')"   data-i18n="tab.logs">LOGS</button>
       </div>
 
       <!-- HOME -->
       <div class="panel active" id="home-panel">
         <div class="home-content">
           <div class="home-balance-card">
-            <div class="home-balance-label">AVAILABLE BALANCE</div>
+            <div class="home-balance-label" data-i18n="home.balance">AVAILABLE BALANCE</div>
             <div class="home-balance-row">
               <span class="home-balance-num" id="home-balance-num">—</span>
               <span class="home-balance-poh">POH</span>
@@ -1249,20 +1335,20 @@
           <div class="home-actions">
             <button class="home-action-btn" onclick="switchTab('send');showSendView()">
               <span class="action-icon">↑</span>
-              <span class="action-label">SEND</span>
+              <span class="action-label" data-i18n="action.send">SEND</span>
             </button>
             <button class="home-action-btn" onclick="switchTab('send');showReceiveView()">
               <span class="action-icon">↓</span>
-              <span class="action-label">RECEIVE</span>
+              <span class="action-label" data-i18n="action.receive">RECEIVE</span>
             </button>
             <button class="home-action-btn" onclick="switchTab('search')">
               <span class="action-icon">⊙</span>
-              <span class="action-label">SCAN</span>
+              <span class="action-label" data-i18n="action.scan">SCAN</span>
             </button>
           </div>
-          <div class="home-section-label">RECENT ACTIVITY</div>
+          <div class="home-section-label" data-i18n="home.recent_activity">RECENT ACTIVITY</div>
           <div id="home-txs">
-            <div style="font-family:monospace;font-size:10px;color:#374151;padding:8px 0;">No transactions yet — rewards appear here as blocks are mined.</div>
+            <div style="font-family:monospace;font-size:10px;color:#374151;padding:8px 0;" data-i18n="home.no_tx">No transactions yet — rewards appear here as blocks are mined.</div>
           </div>
         </div>
       </div>
@@ -1270,51 +1356,64 @@
       <!-- LOGS -->
       <div class="panel" id="logs">
         <div class="log-header">
-          <span>LIVE LOGS</span>
-          <span style="cursor:pointer" onclick="clearLogs()">CLEAR</span>
+          <span data-i18n="logs.title">LIVE LOGS</span>
+          <span style="cursor:pointer" onclick="clearLogs()" data-i18n="logs.clear">CLEAR</span>
         </div>
         <div id="log-content"></div>
       </div>
 
       <!-- CHAT -->
       <div class="panel" id="chat-panel">
+        <!-- hidden select keeps model-loading logic intact; value is synced from global _activeModel -->
+        <select id="chat-model-select" style="display:none"></select>
         <div class="chat-toolbar">
-          <span class="chat-model-label">Model</span>
-          <select id="chat-model-select" title="Select model"></select>
           <span id="chat-brain-pill" title="Brain context — click to reload" onclick="loadChatBrainContext(true)" style="display:none; cursor:pointer;"></span>
           <span id="chat-context-pill" title="Social context active — LLM knows recent activity for this address" style="display:none;"></span>
-          <button class="chat-clear-btn" onclick="clearChat()">Clear</button>
-          <button class="chat-clear-btn" onclick="clearChatContext()" id="chat-ctx-clear-btn" title="Clear social context" style="display:none; color:#374151;">× context</button>
+          <button class="chat-clear-btn" onclick="clearChat()" data-i18n="chat.clear">Clear</button>
+          <button class="chat-clear-btn" onclick="clearChatContext()" id="chat-ctx-clear-btn" title="Clear social context" style="display:none; color:#374151;" data-i18n="chat.ctx">× context</button>
         </div>
         <div class="chat-messages" id="chat-messages">
           <div class="chat-empty" id="chat-empty">
             <div class="chat-empty-icon">◈</div>
-            <div>Chat with your local LLM</div>
-            <div style="font-size:11px;color:#2a2a2a">Powered by Ollama · running on this machine</div>
+            <div data-i18n="chat.empty_title">Chat with your Artificial Intelligence</div>
+            <div style="font-size:11px;color:#2a2a2a" data-i18n="chat.empty_sub">Powered by local, free to use inference and community skills.</div>
           </div>
+        </div>
+        <div class="budget-row" style="padding:0 4px 4px;">
+          <div class="budget-label"><span data-i18n="chat.budget">Request budget:</span> <span id="chat-budget-display">0</span></div>
+          <input type="range" class="budget-slider" id="chat-budget-slider"
+                 min="0" max="500" step="10" value="0"
+                 oninput="updateChatBudgetDisplay(this.value)" />
         </div>
         <div class="chat-input-row">
           <textarea id="chat-input" rows="1" placeholder="Message the AI…"
+                    data-i18n-placeholder="chat.placeholder"
                     onkeydown="chatKeydown(event)" oninput="autoResize(this)"></textarea>
-          <button id="chat-stop-btn" onclick="stopChatStream()" title="Stop generating">■ Stop</button>
-          <button id="chat-send-btn" onclick="sendChatMessage()">Send</button>
+          <button id="chat-stop-btn" onclick="stopChatStream()" title="Stop generating" data-i18n="chat.stop">■ Stop</button>
+          <button id="chat-send-btn" onclick="sendChatMessage()" data-i18n="chat.send">Send</button>
         </div>
       </div>
 
       <!-- SEARCH -->
       <div class="panel" id="search-panel">
         <div class="search-content">
-          <div class="panel-eyebrow">IDENTITY SCANNER</div>
-          <h2 class="panel-title">Scan any address.</h2>
+          <div class="panel-eyebrow" data-i18n="scanner.eye">IDENTITY SCANNER</div>
+          <h2 class="panel-title" data-i18n="scanner.title">Scan any address.</h2>
           <div class="search-row">
             <input id="search-input" type="text"
                    placeholder="0x… / Solana / BTC / TON / ENS domain / @username"
-                   onkeydown="if(event.key==='Enter') runSearch()" />
-            <button class="scan-btn" id="search-btn" onclick="runSearch()">SCAN</button>
+                   onkeydown="if(event.key==='Enter') handleScanClick()" />
+            <button class="scan-btn" id="search-btn" onclick="handleScanClick()" data-i18n="scanner.btn">SCAN</button>
+          </div>
+          <div class="budget-row">
+            <div class="budget-label"><span data-i18n="scanner.budget">Budget:</span> <span id="budget-display">0</span></div>
+            <input type="range" class="budget-slider" id="budget-slider"
+                   min="0" max="500" step="10" value="0"
+                   oninput="updateBudgetDisplay(this.value)" />
           </div>
           <div id="search-loading" class="search-loading" style="display:none;">
             <div class="spinner"></div>
-            <span id="search-status-text">Submitting job…</span>
+            <span id="search-status-text" data-i18n="scanner.submitting">Submitting job…</span>
           </div>
           <div id="search-result" style="display:none;"></div>
         </div>
@@ -1325,23 +1424,23 @@
         <div class="send-content">
           <!-- Toggle -->
           <div class="sr-toggle">
-            <button class="sr-toggle-btn active" id="sr-send-btn" onclick="showSendView()">SEND</button>
-            <button class="sr-toggle-btn"        id="sr-recv-btn" onclick="showReceiveView()">RECEIVE</button>
+            <button class="sr-toggle-btn active" id="sr-send-btn" onclick="showSendView()" data-i18n="action.send">SEND</button>
+            <button class="sr-toggle-btn"        id="sr-recv-btn" onclick="showReceiveView()" data-i18n="send.recv_toggle">RECEIVE</button>
           </div>
 
           <!-- SEND view -->
           <div class="send-view" id="send-view">
             <div class="send-field">
-              <label>FROM</label>
+              <label data-i18n="send.from">FROM</label>
               <div class="send-from-box" id="send-from-addr">Loading…</div>
-              <div class="send-balance-hint">Balance: <span id="send-balance">0 POH</span></div>
+              <div class="send-balance-hint"><span data-i18n="send.balance">Balance:</span> <span id="send-balance">0 POH</span></div>
             </div>
             <div class="send-field">
-              <label>TO</label>
-              <input id="send-to" type="text" placeholder="Recipient PoH address (poh…)" oninput="updateSendSummary()" />
+              <label data-i18n="send.to">TO</label>
+              <input id="send-to" type="text" placeholder="Recipient PoH address (poh…)" data-i18n-placeholder="send.placeholder_to" oninput="updateSendSummary()" />
             </div>
             <div class="send-field">
-              <label>AMOUNT</label>
+              <label data-i18n="send.amount">AMOUNT</label>
               <div class="amount-display-box">
                 <div class="amount-display-num" id="amount-display">0.00</div>
                 <div class="amount-display-unit">POH</div>
@@ -1353,25 +1452,25 @@
                 <button class="quick-btn" onclick="setSendAmount(1)">1 POH</button>
                 <button class="quick-btn" onclick="setSendAmount(5)">5 POH</button>
                 <button class="quick-btn" onclick="setSendAmount(10)">10 POH</button>
-                <button class="quick-btn" onclick="setSendMax()">MAX</button>
+                <button class="quick-btn" onclick="setSendMax()" data-i18n="send.max">MAX</button>
               </div>
             </div>
             <div class="send-summary-box">
-              <div class="send-summary-label">SUMMARY</div>
+              <div class="send-summary-label" data-i18n="send.summary">SUMMARY</div>
               <div class="send-summary-row">
-                <span class="send-summary-key">Sending</span>
+                <span class="send-summary-key" data-i18n="send.sending">Sending</span>
                 <span class="send-summary-val" id="summary-amount">—</span>
               </div>
               <div class="send-summary-row">
-                <span class="send-summary-key">To</span>
+                <span class="send-summary-key" data-i18n="send.to_lbl">To</span>
                 <span class="send-summary-val dim" id="summary-to">—</span>
               </div>
               <div class="send-summary-row">
-                <span class="send-summary-key">Fee</span>
+                <span class="send-summary-key" data-i18n="send.fee">Fee</span>
                 <span class="send-summary-val dim">0.001 POH</span>
               </div>
             </div>
-            <button id="send-btn" onclick="executeSend()">Confirm &amp; Send</button>
+            <button id="send-btn" onclick="executeSend()" data-i18n="send.confirm">Confirm &amp; Send</button>
             <div id="send-result" style="display:none;"></div>
           </div>
 
@@ -1381,7 +1480,7 @@
               <canvas id="receive-qr" width="220" height="220" style="image-rendering:pixelated;border:8px solid #fff;border-radius:4px;"></canvas>
             </div>
             <div class="receive-addr-box" id="receive-addr-text">Loading…</div>
-            <button class="receive-copy-btn" id="receive-copy-btn" onclick="copyReceiveAddr()">COPY ADDRESS</button>
+            <button class="receive-copy-btn" id="receive-copy-btn" onclick="copyReceiveAddr()" data-i18n="recv.copy">COPY ADDRESS</button>
           </div>
 
         </div>
@@ -1391,43 +1490,293 @@
       <div class="panel" id="skills-panel">
         <div style="display:flex;flex-direction:column;gap:1rem;padding:1rem;height:100%;overflow-y:auto;">
           <div style="display:flex;align-items:center;justify-content:space-between;">
-            <div class="panel-eyebrow">SKILLS</div>
+            <div class="panel-eyebrow" data-i18n="skills.title">SKILLS</div>
             <div style="display:flex;gap:0.5rem;">
               <button onclick="skillsView('browse')" id="skills-browse-btn"
-                      style="font-size:11px;padding:4px 10px;border-radius:4px;border:1px solid #333;background:#111;color:#aaa;cursor:pointer;">Browse</button>
+                      style="font-size:11px;padding:4px 10px;border-radius:4px;border:1px solid #333;background:#111;color:#aaa;cursor:pointer;" data-i18n="skills.browse">Browse</button>
               <button onclick="skillsView('submit')" id="skills-submit-btn"
-                      style="font-size:11px;padding:4px 10px;border-radius:4px;border:1px solid #333;background:#111;color:#aaa;cursor:pointer;">+ Submit</button>
+                      style="font-size:11px;padding:4px 10px;border-radius:4px;border:1px solid #333;background:#111;color:#aaa;cursor:pointer;" data-i18n="skills.submit_btn">+ Submit</button>
             </div>
           </div>
 
           <!-- Browse view -->
           <div id="skills-browse-view">
-            <div style="font-size:10px;color:#444;margin-bottom:0.5rem;letter-spacing:0.1em;">ACTIVE SKILLS</div>
+            <div style="font-size:10px;color:#444;margin-bottom:0.5rem;letter-spacing:0.1em;" data-i18n="skills.active">ACTIVE SKILLS</div>
             <div id="skills-active-list" style="display:flex;flex-direction:column;gap:0.5rem;"></div>
-            <div style="font-size:10px;color:#444;margin:1rem 0 0.5rem;letter-spacing:0.1em;">PROPOSED</div>
+            <div style="font-size:10px;color:#444;margin:1rem 0 0.5rem;letter-spacing:0.1em;" data-i18n="skills.proposed">PROPOSED</div>
             <div id="skills-proposed-list" style="display:flex;flex-direction:column;gap:0.5rem;"></div>
-            <div id="skills-empty" style="color:#333;font-size:11px;text-align:center;padding:2rem 0;display:none;">No skills found</div>
+            <div id="skills-empty" style="color:#333;font-size:11px;text-align:center;padding:2rem 0;display:none;" data-i18n="skills.none">No skills found</div>
+          </div>
+
+          <!-- Detail view -->
+          <div id="skills-detail-view" style="display:none;flex-direction:column;gap:0.75rem;">
+            <button onclick="skillsView('browse')" style="background:none;border:none;color:#555;font-size:11px;cursor:pointer;padding:0;text-align:left;width:fit-content;" data-i18n="skills.back">← Back</button>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <span id="skill-detail-id" style="font-size:14px;font-weight:600;color:#fff;font-family:monospace;"></span>
+              <span id="skill-detail-badge" style="font-size:10px;border-radius:3px;padding:1px 7px;border:1px solid #1a3a27;color:#22c55e;"></span>
+            </div>
+            <div id="skill-detail-desc" style="font-size:11px;color:#666;line-height:1.5;word-break:break-word;overflow-wrap:break-word;"></div>
+            <div style="display:flex;flex-direction:column;gap:4px;">
+              <div style="font-size:10px;color:#333;letter-spacing:0.1em;" data-i18n="skills.version">VERSION</div>
+              <div id="skill-detail-version" style="font-size:11px;color:#555;font-family:monospace;"></div>
+            </div>
+            <div id="skill-detail-endpoints-wrap" style="display:flex;flex-direction:column;gap:4px;">
+              <div style="font-size:10px;color:#333;letter-spacing:0.1em;" data-i18n="skills.endpoints">ALLOWED ENDPOINTS</div>
+              <div id="skill-detail-endpoints" style="font-size:11px;color:#555;font-family:monospace;"></div>
+            </div>
+            <div id="skill-detail-triggers-wrap" style="display:flex;flex-direction:column;gap:4px;">
+              <div style="font-size:10px;color:#333;letter-spacing:0.1em;" data-i18n="skills.triggers">TRIGGERS</div>
+              <div id="skill-detail-triggers" style="font-size:11px;color:#555;display:flex;flex-wrap:wrap;gap:4px;"></div>
+            </div>
+            <div id="skill-detail-context-wrap" style="display:flex;flex-direction:column;gap:10px;padding-top:4px;border-top:1px solid #1a1a1a;">
+              <div style="font-size:10px;color:#333;letter-spacing:0.1em;" data-i18n="skills.context">BRAIN CONTEXT</div>
+              <div id="skill-detail-context" class="md-body"></div>
+            </div>
+            <!-- Staking section -->
+            <div style="display:flex;flex-direction:column;gap:6px;padding-top:4px;border-top:1px solid #1a1a1a;">
+              <div style="display:flex;align-items:center;justify-content:space-between;">
+                <div style="font-size:10px;color:#333;letter-spacing:0.1em;" data-i18n="skills.stake">STAKE</div>
+                <div id="skill-detail-stake-pct" style="font-size:10px;color:#22c55e;font-family:monospace;"></div>
+              </div>
+              <!-- Progress bar -->
+              <div style="background:#0a0a0a;border:1px solid #1a1a1a;border-radius:3px;height:5px;overflow:hidden;">
+                <div id="skill-detail-stake-bar" style="height:100%;background:#22c55e;width:0%;transition:width 0.4s ease;"></div>
+              </div>
+              <div id="skill-detail-stake-info" style="font-size:11px;color:#555;"></div>
+              <div style="display:flex;gap:6px;align-items:center;">
+                <input id="skill-stake-amount" type="number" min="1" step="1" placeholder="POH amount"
+                       style="flex:1;background:#111;border:1px solid #252525;border-radius:4px;color:#e5e7eb;font-size:12px;padding:6px 8px;outline:none;min-width:0;" />
+                <button onclick="stakeSkill()" style="background:#22c55e;color:#000;border:none;padding:6px 14px;border-radius:4px;font-weight:600;cursor:pointer;font-size:12px;white-space:nowrap;" data-i18n="skills.stake_btn">Stake</button>
+                <button onclick="unstakeSkill()" style="background:#111;color:#888;border:1px solid #252525;padding:6px 10px;border-radius:4px;cursor:pointer;font-size:12px;white-space:nowrap;" data-i18n="skills.unstake_btn">Unstake</button>
+              </div>
+              <div id="skill-stake-result" style="font-size:11px;display:none;"></div>
+            </div>
           </div>
 
           <!-- Submit view -->
           <div id="skills-submit-view" style="display:none;flex-direction:column;gap:0.75rem;">
-            <div style="font-size:10px;color:#444;letter-spacing:0.1em;">SKILL ID</div>
+            <div style="font-size:11px;color:#d97706;background:#1a1206;border:1px solid #3a2a0a;border-radius:4px;padding:8px 10px;" data-i18n="skills.cost_warn">Proposing a public skill costs 1,000 POH deducted from your wallet.</div>
+            <div style="font-size:10px;color:#444;letter-spacing:0.1em;" data-i18n="skills.id_lbl">SKILL ID</div>
             <input id="skill-id-input" type="text" placeholder="e.g. arena_social_activity"
                    style="background:#111;border:1px solid #252525;border-radius:4px;color:#e5e7eb;font-size:12px;padding:8px 10px;outline:none;width:100%;box-sizing:border-box;" />
-            <div style="font-size:10px;color:#444;letter-spacing:0.1em;">DESCRIPTION</div>
-            <input id="skill-desc-input" type="text" placeholder="What this skill detects"
+            <div style="font-size:10px;color:#444;letter-spacing:0.1em;" data-i18n="skills.desc_lbl">DESCRIPTION</div>
+            <input id="skill-desc-input" type="text" placeholder="What this skill does"
                    style="background:#111;border:1px solid #252525;border-radius:4px;color:#e5e7eb;font-size:12px;padding:8px 10px;outline:none;width:100%;box-sizing:border-box;" />
-            <div style="font-size:10px;color:#444;letter-spacing:0.1em;">ALLOWED ENDPOINTS (comma-separated)</div>
-            <input id="skill-endpoints-input" type="text" placeholder="api.example.com"
-                   style="background:#111;border:1px solid #252525;border-radius:4px;color:#e5e7eb;font-size:12px;padding:8px 10px;outline:none;width:100%;box-sizing:border-box;" />
-            <div style="font-size:10px;color:#444;letter-spacing:0.1em;">run.js CODE</div>
-            <textarea id="skill-code-input" placeholder="export async function run(input, config) { ... }" rows="8"
+            <div style="font-size:10px;color:#444;letter-spacing:0.1em;" data-i18n="skills.code_lbl">run.js CODE</div>
+            <textarea id="skill-code-input" placeholder="exports.run = async function(input, config) { ... }" rows="8"
                       style="background:#111;border:1px solid #252525;border-radius:4px;color:#e5e7eb;font-size:11px;font-family:monospace;padding:8px 10px;outline:none;width:100%;box-sizing:border-box;resize:vertical;"></textarea>
-            <div style="font-size:10px;color:#444;letter-spacing:0.1em;">SKILL.md CONTEXT</div>
+            <div style="font-size:10px;color:#444;letter-spacing:0.1em;" data-i18n="skills.ctx_lbl">SKILL.md CONTEXT</div>
             <textarea id="skill-context-input" placeholder="# Skill context for the brain..." rows="5"
                       style="background:#111;border:1px solid #252525;border-radius:4px;color:#e5e7eb;font-size:11px;font-family:monospace;padding:8px 10px;outline:none;width:100%;box-sizing:border-box;resize:vertical;"></textarea>
-            <button onclick="submitSkill()" style="background:#22c55e;color:#000;border:none;padding:10px;border-radius:4px;font-weight:600;cursor:pointer;font-size:12px;">Submit Transaction</button>
+            <button onclick="submitSkill()" style="background:#22c55e;color:#000;border:none;padding:10px;border-radius:4px;font-weight:600;cursor:pointer;font-size:12px;" data-i18n="skills.submit_cost">Submit (1,000 POH)</button>
             <div id="skill-submit-result" style="font-size:11px;color:#22c55e;display:none;"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- P2P EXCHANGE -->
+      <div class="panel" id="p2p-panel" style="flex-direction:column;height:100%;overflow:hidden;">
+
+        <!-- ── Order Book view ── -->
+        <div id="p2p-book-view" style="display:flex;flex-direction:column;height:100%;">
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px 6px;">
+            <span style="font-size:10px;color:#444;letter-spacing:0.12em;">P2P EXCHANGE</span>
+            <div style="display:flex;gap:6px;">
+              <button onclick="p2pShowMyActivity()" style="font-size:10px;padding:3px 8px;border-radius:4px;border:1px solid #333;background:#111;color:#888;cursor:pointer;">My Activity</button>
+              <button onclick="p2pShowCreateOrder(null)" style="font-size:10px;padding:3px 8px;border-radius:4px;border:none;background:#22c55e;color:#000;font-weight:600;cursor:pointer;">+ Post Order</button>
+            </div>
+          </div>
+
+          <!-- Order book label -->
+          <div style="margin:0 12px 6px;padding:7px;font-size:11px;font-family:monospace;background:#166534;color:#22c55e;font-weight:600;border-radius:6px;text-align:center;">BUY POH — Select a seller below</div>
+
+          <!-- Currency filter -->
+          <div id="p2p-currency-pills" style="display:flex;gap:4px;padding:0 12px 6px;flex-wrap:wrap;"></div>
+
+          <!-- Order list -->
+          <div id="p2p-order-list" style="flex:1;overflow-y:auto;padding:0 12px 12px;display:flex;flex-direction:column;gap:6px;">
+            <div id="p2p-orders-loading" style="color:#444;font-size:11px;text-align:center;padding:20px 0;">Loading…</div>
+          </div>
+        </div>
+
+        <!-- ── Order Detail / Trade view ── -->
+        <div id="p2p-detail-view" style="display:none;flex-direction:column;height:100%;overflow-y:auto;">
+          <div style="display:flex;align-items:center;gap:8px;padding:10px 12px 6px;">
+            <button onclick="p2pShowBook()" style="background:none;border:none;color:#22c55e;font-size:11px;cursor:pointer;padding:0;">← Back</button>
+            <span id="p2p-detail-title" style="font-size:11px;color:#888;font-family:monospace;"></span>
+          </div>
+          <div id="p2p-detail-body" style="padding:0 12px 12px;display:flex;flex-direction:column;gap:10px;"></div>
+        </div>
+
+        <!-- ── Create Order form ── -->
+        <div id="p2p-create-view" style="display:none;flex-direction:column;height:100%;overflow-y:auto;">
+          <div style="display:flex;align-items:center;gap:8px;padding:10px 12px 6px;">
+            <button onclick="p2pShowBook()" style="background:none;border:none;color:#22c55e;font-size:11px;cursor:pointer;padding:0;">← Back</button>
+            <span style="font-size:11px;color:#888;font-family:monospace;">POST ORDER</span>
+          </div>
+          <div style="padding:0 12px 12px;display:flex;flex-direction:column;gap:10px;">
+            <!-- Side: sell only -->
+            <div style="padding:7px 10px;font-size:11px;font-family:monospace;background:#7f1d1d22;color:#fca5a5;border-radius:6px;border:1px solid #7f1d1d44;">
+              You offer POH for sale — POH is locked in escrow until the buyer pays off-chain, then you release.
+            </div>
+            <!-- POH Amount -->
+            <div>
+              <div style="font-size:10px;color:#444;margin-bottom:4px;letter-spacing:0.1em;">POH AMOUNT</div>
+              <input id="p2p-form-amount" type="number" min="0.001" step="0.001" placeholder="e.g. 10"
+                     style="width:100%;background:#111;border:1px solid #252525;border-radius:4px;color:#e5e7eb;font-size:12px;font-family:monospace;padding:8px 10px;outline:none;box-sizing:border-box;" />
+            </div>
+            <!-- Quote Currency -->
+            <div>
+              <div style="font-size:10px;color:#444;margin-bottom:4px;letter-spacing:0.1em;">PAYMENT CURRENCY</div>
+              <select id="p2p-form-currency"
+                      style="width:100%;background:#111;border:1px solid #252525;border-radius:4px;color:#e5e7eb;font-size:12px;font-family:monospace;padding:8px 10px;outline:none;box-sizing:border-box;">
+              </select>
+            </div>
+            <!-- Price per POH -->
+            <div>
+              <div style="font-size:10px;color:#444;margin-bottom:4px;letter-spacing:0.1em;">PRICE PER POH</div>
+              <input id="p2p-form-price" type="number" min="0" step="any" placeholder="e.g. 0.01"
+                     style="width:100%;background:#111;border:1px solid #252525;border-radius:4px;color:#e5e7eb;font-size:12px;font-family:monospace;padding:8px 10px;outline:none;box-sizing:border-box;" />
+            </div>
+            <!-- Min / Max trade -->
+            <div style="display:flex;gap:8px;">
+              <div style="flex:1;">
+                <div style="font-size:10px;color:#444;margin-bottom:4px;letter-spacing:0.1em;">MIN TRADE</div>
+                <input id="p2p-form-min" type="number" min="0" step="any" placeholder="min"
+                       style="width:100%;background:#111;border:1px solid #252525;border-radius:4px;color:#e5e7eb;font-size:12px;font-family:monospace;padding:8px 10px;outline:none;box-sizing:border-box;" />
+              </div>
+              <div style="flex:1;">
+                <div style="font-size:10px;color:#444;margin-bottom:4px;letter-spacing:0.1em;">MAX TRADE</div>
+                <input id="p2p-form-max" type="number" min="0" step="any" placeholder="max"
+                       style="width:100%;background:#111;border:1px solid #252525;border-radius:4px;color:#e5e7eb;font-size:12px;font-family:monospace;padding:8px 10px;outline:none;box-sizing:border-box;" />
+              </div>
+            </div>
+            <!-- Payment methods -->
+            <div>
+              <div style="font-size:10px;color:#444;margin-bottom:4px;letter-spacing:0.1em;">PAYMENT METHODS</div>
+              <input id="p2p-form-methods" type="text" placeholder="e.g. Bank Transfer, PayPal"
+                     style="width:100%;background:#111;border:1px solid #252525;border-radius:4px;color:#e5e7eb;font-size:12px;font-family:monospace;padding:8px 10px;outline:none;box-sizing:border-box;" />
+              <div style="font-size:9px;color:#374151;margin-top:3px;">Comma-separated list</div>
+            </div>
+            <button onclick="p2pSubmitCreateOrder()"
+                    style="width:100%;padding:10px;background:#22c55e;color:#000;border:none;border-radius:4px;font-weight:600;cursor:pointer;font-size:12px;font-family:monospace;">
+              POST ORDER
+            </button>
+            <div id="p2p-create-result" style="font-size:11px;display:none;padding:8px;border-radius:4px;font-family:monospace;"></div>
+          </div>
+        </div>
+
+        <!-- ── My Activity view ── -->
+        <div id="p2p-activity-view" style="display:none;flex-direction:column;height:100%;overflow:hidden;">
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px 6px;">
+            <div style="display:flex;align-items:center;gap:8px;">
+              <button onclick="p2pShowBook()" style="background:none;border:none;color:#22c55e;font-size:11px;cursor:pointer;padding:0;">← Back</button>
+              <span style="font-size:11px;color:#888;font-family:monospace;">MY ACTIVITY</span>
+            </div>
+            <button onclick="p2pShowCreateOrder(null)" style="font-size:10px;padding:3px 8px;border-radius:4px;border:none;background:#22c55e;color:#000;font-weight:600;cursor:pointer;">+ New</button>
+          </div>
+          <div style="display:flex;margin:0 12px 6px;border-radius:6px;overflow:hidden;border:1px solid #1e1e1e;">
+            <button id="p2p-act-tab-orders" onclick="p2pActivityTab('orders')"
+                    style="flex:1;padding:6px;font-size:10px;font-family:monospace;border:none;background:#166534;color:#22c55e;font-weight:600;cursor:pointer;">ORDERS</button>
+            <button id="p2p-act-tab-trades" onclick="p2pActivityTab('trades')"
+                    style="flex:1;padding:6px;font-size:10px;font-family:monospace;border:none;background:#111;color:#888;cursor:pointer;">TRADES</button>
+          </div>
+          <div id="p2p-activity-list" style="flex:1;overflow-y:auto;padding:0 12px 12px;display:flex;flex-direction:column;gap:6px;"></div>
+        </div>
+      </div>
+
+      <!-- SETTINGS PAGE -->
+      <div class="panel" id="settings-panel">
+        <div style="display:flex;flex-direction:column;gap:1rem;padding:1rem;height:100%;overflow-y:auto;">
+          <div class="panel-eyebrow" data-i18n="settings.title">SETTINGS</div>
+
+          <!-- PoH Address -->
+          <div>
+            <div style="font-size:10px;color:#666;letter-spacing:0.1em;margin-bottom:4px;text-transform:uppercase;" data-i18n="settings.poh_addr">PoH Address</div>
+            <div id="settings-poh-address" style="font-family:monospace;font-size:11px;word-break:break-all;background:#0a0a0a;border:1px solid #1a1a1a;border-radius:6px;padding:10px;color:#9ca3af;min-height:32px;"></div>
+          </div>
+
+          <!-- Solana Identity -->
+          <div>
+            <div style="font-size:10px;color:#666;letter-spacing:0.1em;margin-bottom:4px;text-transform:uppercase;" data-i18n="settings.solana">Solana Identity</div>
+            <input id="settings-solana" style="width:100%;background:#0a0a0a;border:1px solid #1a1a1a;border-radius:6px;padding:8px 10px;font-family:monospace;font-size:11px;color:#e5e7eb;box-sizing:border-box;outline:none;" />
+          </div>
+
+          <!-- Mining Model -->
+          <div>
+            <div style="font-size:10px;color:#666;letter-spacing:0.1em;margin-bottom:4px;text-transform:uppercase;" data-i18n="settings.model">Mining Model</div>
+            <select id="settings-mining-model" style="width:100%;background:#0a0a0a;border:1px solid #1a1a1a;border-radius:6px;padding:8px 10px;font-family:monospace;font-size:11px;color:#e5e7eb;box-sizing:border-box;">
+              <option value="">Loading models…</option>
+            </select>
+            <div style="font-size:10px;color:#444;margin-top:3px;" data-i18n="settings.model_hint">Select from locally installed Ollama models</div>
+          </div>
+
+          <!-- Language -->
+          <div>
+            <div style="font-size:10px;color:#666;letter-spacing:0.1em;margin-bottom:4px;text-transform:uppercase;" data-i18n="settings.language">Language</div>
+            <select id="settings-language" style="width:100%;background:#0a0a0a;border:1px solid #1a1a1a;border-radius:6px;padding:8px 10px;font-family:monospace;font-size:11px;color:#e5e7eb;box-sizing:border-box;"></select>
+            <div style="font-size:10px;color:#444;margin-top:3px;" data-i18n="settings.lang_desc">Choose your preferred language. Changes apply instantly.</div>
+          </div>
+
+          <!-- RPC Providers -->
+          <div style="border-top:1px solid #1a1a1a;padding-top:12px;">
+            <div style="font-size:10px;color:#666;letter-spacing:0.1em;margin-bottom:8px;font-weight:600;" data-i18n="settings.rpc">RPC Providers</div>
+            <div style="background:#0a0a0a;border:1px solid #1a1a1a;border-radius:6px;padding:10px;display:flex;flex-direction:column;gap:6px;">
+              <div>
+                <label style="font-size:10px;color:#555;display:block;margin-bottom:2px;">Network</label>
+                <select id="rpc-network" style="width:100%;padding:5px;background:#111;color:#ddd;border:1px solid #2a2a2a;border-radius:4px;font-size:11px;">
+                  <option value="">Select network...</option>
+                </select>
+              </div>
+              <div>
+                <label style="font-size:10px;color:#555;display:block;margin-bottom:2px;">Provider</label>
+                <select id="rpc-provider" style="width:100%;padding:5px;background:#111;color:#ddd;border:1px solid #2a2a2a;border-radius:4px;font-size:11px;" disabled>
+                  <option value="">Select network first</option>
+                </select>
+              </div>
+              <div>
+                <label style="font-size:10px;color:#555;display:block;margin-bottom:2px;">API Key</label>
+                <input id="rpc-apikey" type="password" placeholder="Enter API key"
+                       style="width:100%;padding:5px;background:#111;color:#ddd;border:1px solid #2a2a2a;border-radius:4px;font-family:monospace;font-size:11px;box-sizing:border-box;">
+              </div>
+              <div id="rpc-preview" style="font-size:10px;color:#555;word-break:break-all;min-height:12px;"></div>
+              <div style="display:flex;gap:4px;">
+                <button id="rpc-save-btn" style="flex:1;padding:5px;background:#166534;color:white;border:none;border-radius:4px;cursor:pointer;font-size:11px;">Save</button>
+                <button id="rpc-bulk-evm-btn" disabled style="flex:1;padding:5px;background:#1a2a3a;color:#888;border:none;border-radius:4px;cursor:pointer;font-size:10px;opacity:0.5;">Apply to all EVM</button>
+              </div>
+              <div id="rpc-status" style="font-size:10px;color:#22c55e;min-height:12px;"></div>
+            </div>
+          </div>
+
+          <!-- Etherscan API Key -->
+          <div>
+            <div style="font-size:10px;color:#666;letter-spacing:0.1em;margin-bottom:8px;font-weight:600;" data-i18n="settings.etherscan">Etherscan API Key</div>
+            <div style="background:#0a0a0a;border:1px solid #1a1a1a;border-radius:6px;padding:10px;display:flex;flex-direction:column;gap:6px;">
+              <input id="etherscan-key" type="password" placeholder="Etherscan / Basescan / Arbiscan key"
+                     style="width:100%;padding:5px;background:#111;color:#ddd;border:1px solid #2a2a2a;border-radius:4px;font-family:monospace;font-size:11px;box-sizing:border-box;">
+              <div style="display:flex;gap:4px;">
+                <button id="etherscan-save-btn" style="flex:1;padding:5px;background:#166534;color:white;border:none;border-radius:4px;cursor:pointer;font-size:11px;">Save Key</button>
+              </div>
+              <div id="etherscan-status" style="font-size:10px;color:#22c55e;min-height:12px;"></div>
+            </div>
+          </div>
+
+          <!-- Danger Zone -->
+          <div style="border-top:1px solid #1a1a1a;padding-top:12px;display:flex;gap:6px;">
+            <button onclick="showPrivateKeyWarning()"
+                    style="flex:1;padding:8px;color:#f87171;border:1px solid rgba(185,28,28,0.3);background:rgba(185,28,28,0.05);border-radius:6px;cursor:pointer;font-size:11px;"
+                    data-i18n="settings.pk">View Private Key (Dangerous)</button>
+            <button onclick="restartApp()"
+                    style="flex:1;padding:8px;color:#9ca3af;border:1px solid #1a1a1a;background:#0a0a0a;border-radius:6px;cursor:pointer;font-size:11px;"
+                    data-i18n="settings.restart">Restart App</button>
+          </div>
+
+          <!-- Save -->
+          <div style="padding-top:4px;padding-bottom:1rem;">
+            <button onclick="saveSettings()"
+                    style="width:100%;padding:10px;background:#22c55e;color:#000;border:none;border-radius:6px;font-weight:600;cursor:pointer;font-size:12px;"
+                    data-i18n="settings.save">Save</button>
+            <div id="settings-save-status" style="font-size:11px;text-align:center;margin-top:6px;min-height:16px;"></div>
           </div>
         </div>
       </div>
@@ -1435,39 +1784,21 @@
 
     <!-- ─── RIGHT: AI Brain ─── -->
     <div class="right-sidebar">
-      <div class="sidebar-section-label">AI BRAIN</div>
+      <div class="sidebar-section-label" data-i18n="brain.title">AI BRAIN</div>
 
       <div class="sb-field">
-        <div class="sb-label">MODEL</div>
-        <div class="sb-val" id="brain-model">qwen2.5:1.5b</div>
+        <div class="sb-label" data-i18n="brain.model">MODEL</div>
+        <button id="brain-model" onclick="openModelPicker()"
+                style="background:none;border:1px solid #222;border-radius:6px;padding:3px 8px;font-size:11px;font-family:monospace;color:#9ca3af;cursor:pointer;text-align:left;width:100%;transition:border-color .15s;"
+                onmouseenter="this.style.borderColor='#444'" onmouseleave="this.style.borderColor='#222'">
+          qwen2.5:1.5b
+        </button>
       </div>
 
-      <div class="sb-field">
-        <div class="sb-label">ACTIVE SIGNALS</div>
-        <div class="sb-val xl grn" id="brain-signals">—</div>
-      </div>
+      <button class="sb-settings-btn" onclick="switchTab('settings')" data-i18n="sidebar.settings">⚙ Settings</button>
 
       <div class="sb-field">
-        <div class="sb-label">CORRECTIONS LOGGED</div>
-        <div class="sb-val lg" id="brain-corrections">—</div>
-      </div>
-
-      <div class="sb-divider"></div>
-
-      <div class="sb-field">
-        <div class="sb-label" style="margin-bottom:6px;">TOP SIGNALS (WEIGHT)</div>
-        <div id="brain-top-signals"></div>
-      </div>
-
-      <div class="sb-divider"></div>
-
-      <div class="sb-field">
-        <div class="sb-label">BRAIN STATE</div>
-        <div class="sb-val dim" id="brain-state-summary" style="font-size:10px;line-height:1.5;white-space:pre-wrap;">Loading…</div>
-      </div>
-
-      <div class="sb-field">
-        <div class="sb-label">NEXT CONSOLIDATION</div>
+        <div class="sb-label" data-i18n="brain.consolidation">NEXT CONSOLIDATION</div>
         <div class="sb-val lg" id="brain-consolidation">—</div>
       </div>
 
@@ -1478,7 +1809,7 @@
         </div>
         <div class="brain-status-row">
           <span class="bdot" id="brain-sync-dot"></span>
-          <span class="bstatus">Syncing brain events</span>
+          <span class="bstatus" data-i18n="brain.syncing">Syncing brain events</span>
         </div>
       </div>
     </div>
@@ -1486,90 +1817,56 @@
   </div>
   </div>
 
-  <!-- Settings Modal -->
-  <div id="settings-modal" onclick="if (event.target.id === 'settings-modal') hideSettings()" 
-       class="hidden fixed inset-0 bg-black/80 z-[100] flex items-center justify-center">
-    <div onclick="event.stopImmediatePropagation()"
-         class="glass w-full max-w-lg rounded-3xl p-6 border border-white/10 max-h-[90vh] overflow-y-auto">
-      <div class="flex justify-between items-center mb-6">
-        <h3 class="font-display text-2xl">Settings</h3>
-        <button onclick="hideSettings()" class="text-zinc-500 hover:text-white text-xl">×</button>
+  <!-- settings-modal stub; settings are now a page panel -->
+  <div id="settings-modal" class="hidden"></div>
+
+  <!-- Skill-not-enabled modal -->
+  <div id="skill-disabled-modal" class="hidden fixed inset-0 bg-black/80 z-[200] flex items-center justify-center">
+    <div class="glass w-full max-w-sm rounded-3xl p-6 border border-white/10 text-center">
+      <div class="text-3xl mb-3">⚡</div>
+      <h3 class="font-display text-lg mb-2" data-i18n="skill_modal.title">Skill Not Enabled</h3>
+      <p class="text-sm text-zinc-400 mb-1" id="skill-disabled-name"></p>
+      <p class="text-xs text-zinc-500 mb-5" data-i18n="skill_modal.desc">This skill is not active on your node. Enable it in the Skills tab, or let the community process the request.</p>
+      <div class="flex flex-col gap-2">
+        <button onclick="skillDisabledGoEnable()"
+                class="w-full py-2.5 bg-[#22c55e] text-black font-semibold rounded-2xl text-sm" data-i18n="skill_modal.enable">Enable Skill</button>
+        <button onclick="skillDisabledProceedCommunity()"
+                class="w-full py-2.5 border border-white/20 rounded-2xl text-sm" data-i18n="skill_modal.community">Proceed via Community</button>
+        <button onclick="hideSkillDisabledModal()"
+                class="w-full py-2 text-zinc-500 text-xs" data-i18n="skill_modal.cancel">Cancel</button>
       </div>
+    </div>
+  </div>
 
-      <div class="space-y-5 text-sm">
-        <div>
-          <div class="text-xs text-zinc-400 mb-1">PoH Address</div>
-          <div id="settings-poh-address" class="font-mono text-xs break-all bg-black/50 p-3 rounded-xl"></div>
-        </div>
+  <!-- Skill fee required modal -->
+  <div id="skill-fee-modal" class="hidden fixed inset-0 bg-black/80 z-[200] flex items-center justify-center">
+    <div class="glass w-full max-w-sm rounded-3xl p-6 border border-white/10 text-center">
+      <div class="text-3xl mb-3">💡</div>
+      <h3 class="font-display text-lg mb-2">Skills Require a Fee</h3>
+      <p class="text-sm text-zinc-400 mb-3">The default LLM chat is free, but skills (real-time data fetching) require a small tip to the skill developer and the miner who runs it.</p>
+      <p class="text-xs text-zinc-500 mb-5">Set a budget using the slider above the chat input, then try again.</p>
+      <button onclick="document.getElementById('skill-fee-modal').classList.add('hidden')"
+              class="w-full py-2.5 bg-[#22c55e] text-black font-semibold rounded-2xl text-sm">Got it</button>
+    </div>
+  </div>
 
-        <div>
-          <div class="text-xs text-zinc-400 mb-1">Solana Identity</div>
-          <input id="settings-solana" class="w-full bg-black border border-white/20 rounded-xl px-3 py-2 text-xs font-mono" />
-        </div>
-
-        <div>
-          <div class="text-xs text-zinc-400 mb-1">Mining Model</div>
-          <select id="settings-mining-model" class="w-full bg-black border border-white/20 rounded-xl px-3 py-2 text-xs font-mono">
-            <option value="">Loading models…</option>
-          </select>
-          <div class="text-xs text-zinc-600 mt-1">Select from locally installed Ollama models</div>
-        </div>
-
-        <div class="pt-3 border-t border-white/10">
-          <button onclick="showPrivateKeyWarning()" 
-                  class="w-full py-2.5 text-red-400 hover:text-red-300 border border-red-900/40 hover:border-red-900 rounded-xl text-xs">
-            View Private Key (Dangerous)
-          </button>
-        </div>
-
-        <!-- Moved RPC Providers and Etherscan sections into Settings (opened from navbar) -->
-        <div class="pt-3 border-t border-white/10">
-          <div style="font-size:11px; color:#888; margin-bottom:4px; font-weight:600;">RPC Providers</div>
-          <div style="background: #1a1a1a; padding: 8px; border-radius: 4px; font-size: 12px;">
-            <div style="margin-bottom: 6px;">
-              <label style="display:block; font-size:10px; color:#888; margin-bottom:2px;">Network</label>
-              <select id="rpc-network" style="width:100%; padding:4px; background:#111; color:#ddd; border:1px solid #333; border-radius:3px; font-size:11px;">
-                <option value="">Select network...</option>
-              </select>
-            </div>
-            <div style="margin-bottom: 6px;">
-              <label style="display:block; font-size:10px; color:#888; margin-bottom:2px;">Provider</label>
-              <select id="rpc-provider" style="width:100%; padding:4px; background:#111; color:#ddd; border:1px solid #333; border-radius:3px; font-size:11px;" disabled>
-                <option value="">Select network first</option>
-              </select>
-            </div>
-            <div style="margin-bottom: 6px;">
-              <label style="display:block; font-size:10px; color:#888; margin-bottom:2px;">API Key</label>
-              <input id="rpc-apikey" type="password" placeholder="Enter API key" 
-                     style="width:100%; padding:4px; background:#111; color:#ddd; border:1px solid #333; border-radius:3px; font-family:monospace; font-size:11px;">
-            </div>
-            <div id="rpc-preview" style="font-size:10px; color:#666; margin-bottom:4px; word-break:break-all; min-height:12px;"></div>
-            <div style="display:flex; gap:4px;">
-              <button id="rpc-save-btn" style="flex:1; padding:4px; background:#166534; color:white; border:none; border-radius:3px; cursor:pointer; font-size:11px;">Save</button>
-              <button id="rpc-bulk-evm-btn" disabled style="flex:1; padding:4px; background:#334155; color:#ddd; border:none; border-radius:3px; cursor:pointer; font-size:10px; opacity:0.5;">Apply to all EVM</button>
-            </div>
-            <div id="rpc-status" style="margin-top:4px; font-size:10px; color:#22c55e; min-height:12px;"></div>
-          </div>
-        </div>
-
-        <div class="pt-2">
-          <div style="font-size:10px; color:#888; margin-bottom:3px; font-weight:600;">Etherscan API Key</div>
-          <div style="background: #1a1a1a; padding: 6px; border-radius: 3px; font-size: 12px;">
-            <input id="etherscan-key" type="password" placeholder="Etherscan / Basescan / Arbiscan key"
-                   style="width:100%; padding:4px; background:#111; color:#ddd; border:1px solid #333; border-radius:3px; font-family:monospace; font-size:11px; margin-bottom:4px;">
-            <div style="display:flex; gap:4px;">
-              <button id="etherscan-save-btn" style="flex:1; padding:4px; background:#166534; color:white; border:none; border-radius:3px; cursor:pointer; font-size:11px;">Save Key</button>
-            </div>
-            <div id="etherscan-status" style="margin-top:4px; font-size:10px; color:#22c55e; min-height:12px;"></div>
-          </div>
-        </div>
+  <!-- Model picker modal -->
+  <div id="model-picker-backdrop" class="hidden" onclick="if(event.target.id==='model-picker-backdrop')closeModelPicker()">
+    <div id="model-picker-panel">
+      <div class="mp-header">
+        <span class="mp-title" data-i18n="picker.title">Select Model</span>
+        <button class="mp-close" onclick="closeModelPicker()">×</button>
       </div>
-
-      <div class="mt-6 flex gap-3">
-        <button onclick="saveSettings()" 
-                class="flex-1 py-2.5 bg-[#22c55e] text-black font-semibold rounded-2xl">Save</button>
-        <button onclick="hideSettings()" 
-                class="flex-1 py-2.5 border border-white/20 rounded-2xl">Close</button>
+      <div class="mp-list" id="mp-list">
+        <div class="mp-empty" data-i18n="picker.loading">Loading models…</div>
+      </div>
+      <div class="mp-footer">
+        <div style="margin-bottom:6px;">Locally installed Ollama models · used for scan, chat &amp; skills</div>
+        <div style="color:#4b5563;line-height:1.6;">
+          To add a model, run in terminal:<br>
+          <code style="background:#1a1a1a;border:1px solid #252525;border-radius:4px;padding:2px 6px;font-size:10px;color:#9ca3af;user-select:all;">ollama pull &lt;model-name&gt;</code><br>
+          <span style="font-size:9px;color:#374151;">e.g. <code style="background:none;color:#4b5563;">ollama pull llama3.2:3b</code> · then reopen this picker</span>
+        </div>
       </div>
     </div>
   </div>
