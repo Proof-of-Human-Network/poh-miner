@@ -8,7 +8,7 @@ Decentralized compute layer for the Proof of Humanity network. Miners race to ev
 
 ### GUI (recommended for non-technical users)
 
-Download the latest `.deb` / `.AppImage` / `.dmg` from the releases page. On install, Ollama and the `qwen2.5:1.5b` model are downloaded automatically.
+Download the latest `.deb` / `.AppImage` / Windows installer from [miner.proofofhuman.ge](https://miner.proofofhuman.ge). On first install, Ollama and the `qwen2.5:1.5b` model are downloaded automatically.
 
 ### CLI
 
@@ -45,9 +45,8 @@ Minimal example:
 
 ```json
 {
-  "wallet": "pohYourAddressHere",
+  "wallet": "YourSolanaAddressHere",
   "bootnodes": ["https://bootnode.proofofhuman.ge"],
-  "solanaAddress": "YourSolanaAddress",
   "inferenceMode": "auto",
   "model": "qwen2.5:1.5b",
   "walletApiPort": 3456
@@ -60,8 +59,11 @@ Minimal example:
 | `bootnodes` | production bootnode | Peer discovery + chain sync entry points |
 | `inferenceMode` | `auto` | `cpu` / `gpu` / `auto` |
 | `model` | `qwen2.5:1.5b` | Ollama model used by the brain |
+| `ollamaUrl` | `http://localhost:11434` | Ollama API base URL |
 | `walletApiPort` | `3456` | Port for the local API server |
 | `computeEnabled` | `true` | Set `false` to run as relay-only |
+| `region` | `auto` | Geographic region tag for job routing |
+| `autoStart` | `true` | Start mining immediately on launch |
 
 RPC endpoints can be configured per-chain under the `rpc` key — see `config.example.json`.
 
@@ -83,6 +85,8 @@ RPC endpoints can be configured per-chain under the `rpc` key — see `config.ex
 │   │              │                                              │
 │   │ • PoW mining │  ← race to compute first valid verdict →    │
 │   │ • LLM brain  │                                              │
+│   │ • Skills     │  ← publish/run on-demand agent logic →      │
+│   │ • P2P market │  ← peer-to-peer POH/fiat exchange →         │
 │   │ • Chain sync │  ← bootnode for peer discovery / catch-up → │
 │   │ • Wallet API │                                              │
 │   └──────────────┘                                              │
@@ -136,17 +140,21 @@ Each block contains:
 
 ## Wallet API (port 3456 by default)
 
-Every miner exposes an HTTP API for the mobile wallet and external tools.
+Every miner exposes an HTTP API for the mobile wallet and external tools. Amounts are in **μPOH** (1 POH = 1 000 000 000 μPOH).
 
 ### Chain & Wallet
 
 | Endpoint | Description |
 |---|---|
 | `GET /status` | Node status, chain height, reputation |
+| `GET /api/miner/info` | Detailed miner info (version, uptime, peers) |
 | `GET /api/wallet/balance?address=<addr>` | Balance in μPOH |
+| `GET /api/wallet/nonce?address=<addr>` | Current nonce for transaction signing |
 | `GET /api/wallet/transactions?address=<addr>` | Transaction history |
-| `POST /api/wallet/send` | Transfer POH (`{from,to,amount,privateKey}`) |
-| `POST /api/tx/submit` | Submit a signed `PoHTransaction` |
+| `GET /api/wallet/history?address=<addr>` | Full history with block confirmations |
+| `POST /api/wallet/send` | Transfer POH (`{from, to, amount, privateKey}`) |
+| `POST /api/wallet/register-key` | Register an ed25519 signing key for an address |
+| `POST /api/tx/submit` | Submit a pre-signed `PoHTransaction` |
 | `GET /api/tx/pending` | Inspect mempool |
 
 ### Jobs (scan requests)
@@ -158,6 +166,23 @@ Every miner exposes an HTTP API for the mobile wallet and external tools.
 | `GET /job/:id/result` | Full verdict + profile + evidence when done |
 | `GET /jobs` | List active jobs |
 | `POST /gossip` | Receive P2P gossip envelopes from peers |
+
+### Skills
+
+Skills are on-demand agent modules that extend what miners can compute. Builtin skills include `poh_identity`, `read_farcaster`, `read_zora`, `read_paragraph`, and `code_audit`.
+
+| Endpoint | Description |
+|---|---|
+| `GET /api/skills` | List available skills with context summaries |
+| `GET /api/skills/prefs` | Skill staking preferences for an address |
+| `POST /api/skills/propose` | Propose a new skill `{manifest, code, private}` |
+
+### Chat & Skill Routing
+
+| Endpoint | Description |
+|---|---|
+| `POST /chat/route` | Route a message to the best matching skill `{message, budget, wallet}` |
+| `POST /chat/ask` | Full AI reply — routes to a skill or falls back to free chat `{message, wallet}` |
 
 ### LLM & Brain
 
@@ -171,6 +196,32 @@ Every miner exposes an HTTP API for the mobile wallet and external tools.
 | `POST /api/brain/feedback` | Submit human correction `{address, aiVerdict, correction, comment, signals}` |
 | `POST /api/brain/vote` | Submit signal weight vote `{method, voteType, vote, stakeWeight}` |
 | `POST /api/brain/sync/event` | Receive brain event pushed by a peer |
+
+### P2P Exchange
+
+Peer-to-peer POH trading with on-chain escrow. Orders are matched locally; escrow is settled on the PoH chain.
+
+| Endpoint | Description |
+|---|---|
+| `GET /api/p2p/currencies` | List supported quote currencies |
+| `GET /api/p2p/orders` | Open order book (filters: `side`, `quoteCurrency`) |
+| `GET /api/p2p/orders/my?address=<addr>` | Orders created by this address |
+| `GET /api/p2p/orders/:id` | Single order detail |
+| `POST /api/p2p/orders` | Create a new order `{side, baseCurrency, quoteCurrency, amount, price, address}` |
+| `POST /api/p2p/orders/:id/cancel` | Cancel an open order |
+| `POST /api/p2p/orders/:id/select` | Taker selects an order to trade |
+| `GET /api/p2p/trades/my?address=<addr>` | Active and past trades for an address |
+| `GET /api/p2p/trades/:id` | Single trade detail |
+| `POST /api/p2p/trades/:id/:action` | Advance trade state (`confirm`, `release`, `dispute`) |
+| `POST /api/p2p/local-auth` | Sign a P2P auth payload with the node's local wallet |
+
+### Push Notifications
+
+| Endpoint | Description |
+|---|---|
+| `POST /api/push/register` | Register an Expo push token `{address, token}` |
+| `POST /api/push/send` | Send a push notification to a registered address |
+| `GET /api/push/tokens` | List registered tokens (admin) |
 
 ---
 
@@ -224,7 +275,7 @@ node src/bootnode.js --port 8080 --data-dir ~/.poh-bootnode
 ## Running Tests
 
 ```bash
-npm test                  # 49 unit tests (vitest)
+npm test                  # unit tests (vitest)
 npm run test:watch        # watch mode
 npm run test:integration  # end-to-end (requires dev/ checker)
 ```
@@ -236,10 +287,13 @@ Tests cover: P2P gossip, block/result signatures, chainWork fork resolution, tra
 ## Building
 
 ```bash
-npm run build:bin          # standalone binaries (pkg)
-npm run build:deb          # .deb package (requires fpm)
-npm run build:electron     # Electron desktop app
-npm run build:electron:all # all platforms
+npm run build:bin              # standalone binaries (pkg)
+npm run build:deb              # .deb package (requires fpm)
+npm run build:electron         # Electron desktop app (current platform)
+npm run build:electron:linux   # Linux: AppImage + .deb (x64 + arm64)
+npm run build:electron:win     # Windows: NSIS installer + portable
+npm run build:electron:mac     # macOS: .dmg (x64 + arm64)
+npm run build:electron:all     # all platforms
 ```
 
 The `.deb` postinst script installs Ollama and pulls `qwen2.5:1.5b` automatically on first install.
@@ -256,20 +310,35 @@ src/
   signals/        methods-manager.js (canonical signal set sync)
   compute/        poh-adapter.js → delegates to dev/src checker + brain
   brain/          brain-sync.js (network-wide brain state sync)
-  storage/        chain-store.js, balance-journal.js, ipfs-store.js, ipfs-sync.js
+  storage/        chain-store.js, balance-journal.js, ipfs-store.js,
+                  ipfs-sync.js, dataset-sync.js
   wallet/         wallet.js (ed25519 keys, nonces, balances)
   rewards/        reward.js (1 POH/block, 60/40 split)
-  jobs/           job-queue.js, geo.js
+  jobs/           job-queue.js, geo.js, gas-estimator.js
   validation/     result-validator.js
   rpc/            resolver.js, networks.js
+  p2p/            order-store.js, escrow.js  ← P2P exchange
+  skills/
+    manager.js       skill lifecycle (install, stake, run)
+    loader.js        load builtin + user skills at startup
+    sandbox/         skill-runner.js (sandboxed execution)
+    builtin/         poh_identity.md, read_farcaster.md, read_zora.md,
+                     read_paragraph.md, code_audit.md
   miner-node.js   main orchestrator
   bootnode.js     peer discovery + chain relay + IPFS registry
   cli.js
 
-electron/         GUI app (Electron)
-  renderer/       index.html, renderer.js (Logs tab + Chat tab)
-  main.cjs        IPC + Ollama auto-install
+electron/         GUI desktop app (Electron 31)
+  renderer/
+    index.html    main UI (Dashboard, Logs, Chat, P2P tabs)
+    renderer.js   frontend logic
+    i18n.js       internationalization strings
+  main.cjs        IPC + Ollama auto-install + window management
+  preload.js      context bridge
 
-landing/          Promotional landing page
+landing/          Promotional landing page + binary downloads
+  binaries/       poh-miner-linux-x64.deb / .AppImage / windows-x64.exe
+
 test/             vitest unit tests
+scripts/          build and dev helper scripts
 ```
