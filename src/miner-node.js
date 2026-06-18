@@ -2131,7 +2131,7 @@ export class PohMinerNode {
         height: 0,
         previousHash: '0'.repeat(64),
         timestamp: 1780700000000,
-        minerWallet: 'genesis',
+        minerWallet: 'bootnode-genesis',
         difficulty: this.currentDifficulty,
       });
       this.chain.push(genesis);
@@ -2294,34 +2294,63 @@ export class PohMinerNode {
     if (!bestBase) return;
 
     // 5. Download blocks in chunks of 500
+    // On a fresh start (only genesis locally) download from 0 and replace the whole
+    // chain — this handles any genesis-hash divergence from previous runs cleanly.
     const CHUNK = 500;
-    let localHeight = this.chain.length - 1;
-    console.log(`[PoH-Miner] Syncing from ${bestLabel} (height ${bestHeight}, we are at ${localHeight})`);
+    const isFreshStart = this.chain.length <= 1;
+    let localHeight = isFreshStart ? -1 : this.chain.length - 1;
+    console.log(`[PoH-Miner] Syncing from ${bestLabel} (peer height ${bestHeight}, local ${this.chain.length - 1})${isFreshStart ? ' [fresh start — replacing chain from 0]' : ''}`);
 
+    const downloadedBlocks = [];
     while (localHeight < bestHeight) {
       const from = localHeight + 1;
-      const to   = Math.min(localHeight + CHUNK, bestHeight);
+      const to   = Math.min(from + CHUNK - 1, bestHeight);
       try {
         const r = await fetch(`${bestBase}/chain/blocks?from=${from}&to=${to}`, { signal: AbortSignal.timeout(30000) });
         if (!r.ok) break;
         const blocks = await r.json();
-        let added = 0;
-        for (const bd of blocks) {
-          const block = PohBlock.fromJSON ? PohBlock.fromJSON(bd) : new PohBlock(bd);
-          const prev  = this.chain[this.chain.length - 1];
-          const prevHash = prev.getHashSync();
-          if (block.previousHash === prevHash && block.height === this.chain.length) {
-            this._applyBlockState(block);
-            this.chain.push(block);
-            this.currentDifficulty = getNextDifficulty(this.chain);
-            added++;
+        if (!Array.isArray(blocks) || blocks.length === 0) break;
+        if (isFreshStart) {
+          downloadedBlocks.push(...blocks);
+        } else {
+          let added = 0;
+          for (const bd of blocks) {
+            const block = PohBlock.fromJSON ? PohBlock.fromJSON(bd) : new PohBlock(bd);
+            const prev  = this.chain[this.chain.length - 1];
+            if (block.previousHash === prev.getHashSync() && block.height === this.chain.length) {
+              this._applyBlockState(block);
+              this.chain.push(block);
+              this.currentDifficulty = getNextDifficulty(this.chain);
+              added++;
+            }
           }
+          if (!added) break;
         }
-        if (!added) break; // no progress — stop
-        localHeight = this.chain.length - 1;
+        localHeight = to;
       } catch (e) {
         console.warn(`[PoH-Miner] Chunk fetch failed:`, e.message);
         break;
+      }
+    }
+
+    if (isFreshStart && downloadedBlocks.length > 0) {
+      // Replace local chain entirely with peer's chain
+      const parsed = downloadedBlocks.map(b => PohBlock.fromJSON ? PohBlock.fromJSON(b) : new PohBlock(b));
+      // Verify linkage before committing
+      let valid = true;
+      for (let i = 1; i < parsed.length; i++) {
+        if (parsed[i].previousHash !== parsed[i - 1].getHashSync()) { valid = false; break; }
+      }
+      if (valid) {
+        this.chain = parsed;
+        for (const b of this.chain) {
+          for (const r of (b.scanResults || [])) {
+            if (r.requestId) this.minedRequestIds.add(r.requestId);
+          }
+        }
+        this.currentDifficulty = getNextDifficulty(this.chain);
+      } else {
+        console.warn('[PoH-Miner] Downloaded chain failed linkage check — keeping local genesis');
       }
     }
 

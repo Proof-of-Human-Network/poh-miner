@@ -23,6 +23,7 @@ const ipfsStore = new IPFSStore();
 const argv = process.argv.slice(2);
 const PORT = parseInt(argv.find(a => a.startsWith('--port='))?.split('=')[1] || '8080');
 const DATA_DIR = argv.find(a => a.startsWith('--data-dir='))?.split('=')[1] || path.join(process.env.HOME || '.', '.poh-bootnode');
+const PEER_SYNC_URL = argv.find(a => a.startsWith('--peer='))?.split('=').slice(1).join('=') || null;
 
 const chainStore = new ChainStore(DATA_DIR);
 let chain = chainStore.loadChain().map(b => PohBlock.fromJSON ? PohBlock.fromJSON(b) : new PohBlock(b));
@@ -144,6 +145,40 @@ if (chain.length === 0) {
   chain.push(genesis);
   chainStore.saveChain(chain);
 }
+
+async function syncFromPeer(peerUrl) {
+  try {
+    const tipRes = await fetch(`${peerUrl}/chain/tip`, { signal: AbortSignal.timeout(10000) });
+    if (!tipRes.ok) throw new Error(`tip fetch failed: ${tipRes.status}`);
+    const tip = await tipRes.json();
+    const peerHeight = tip.height ?? tip.block?.height ?? 0;
+    if (peerHeight <= chain.length - 1) {
+      console.log(`[Bootnode] Peer at height ${peerHeight}, we have ${chain.length - 1} — nothing to sync`);
+      return;
+    }
+    console.log(`[Bootnode] Syncing chain from ${peerUrl} (peer height ${peerHeight}, local ${chain.length - 1})…`);
+    const BATCH = 200;
+    let from = chain.length;
+    while (from <= peerHeight) {
+      const to = Math.min(from + BATCH - 1, peerHeight);
+      const r = await fetch(`${peerUrl}/chain/blocks?from=${from}&to=${to}`, { signal: AbortSignal.timeout(30000) });
+      if (!r.ok) throw new Error(`blocks fetch failed: ${r.status}`);
+      const blocks = await r.json();
+      if (!Array.isArray(blocks) || blocks.length === 0) break;
+      for (const b of blocks) {
+        const block = PohBlock.fromJSON ? PohBlock.fromJSON(b) : new PohBlock(b);
+        chain.push(block);
+      }
+      from = to + 1;
+    }
+    chainStore.saveChain(chain);
+    console.log(`[Bootnode] Sync complete — chain height now ${chain.length - 1}`);
+  } catch (e) {
+    console.warn(`[Bootnode] Peer sync failed: ${e.message}`);
+  }
+}
+
+if (PEER_SYNC_URL) syncFromPeer(PEER_SYNC_URL);
 
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
