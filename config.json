@@ -1,7 +1,7 @@
 {
   "_comment": "This is a local development config. The GUI (electron) will usually write to ~/.poh-miner/config.json instead.",
 
-  "wallet": "YOUR_SOLANA_ADDRESS_HERE",
+  "wallet": "G8bFssuQsNxmMopW9bjYgA4iuUZ7z8uELiNL6UKvSjyy",
 
   "ollamaUrl": "http://localhost:11434",
   "model": "qwen2.5:1.5b",
@@ -11,39 +11,43 @@
   "region": "auto",
 
   "bootnodes": [
-    "http://localhost:8080"
+    "https://poh.assetux.com",
+    "https://bootnode.proofofhuman.ge",
+    "https://miner.proofofhuman.ge"
   ],
 
   "pohWallet": "",
-  "solanaAddress": "",
+  "solanaAddress": "G8bFssuQsNxmMopW9bjYgA4iuUZ7z8uELiNL6UKvSjyy",
 
   "rpc": {
     "solana": {
       "provider": "helius",
-      "apiKey": ""
+      "apiKey": "c863127e-aa7f-4308-b1a0-9748215b32c6"
     },
-    "1": {
-      "provider": "alchemy",
-      "apiKey": ""
-    },
-    "8453": {
-      "provider": "alchemy",
-      "apiKey": ""
-    },
-    "42161": {
-      "provider": "alchemy",
-      "apiKey": ""
-    }
+    "1": { "provider": "alchemy", "apiKey": "AG7k40zCqOp_DTsQL1m7P" },
+    "8453": { "provider": "alchemy", "apiKey": "AG7k40zCqOp_DTsQL1m7P" },
+    "42161": { "provider": "alchemy", "apiKey": "AG7k40zCqOp_DTsQL1m7P" },
+    "56": { "provider": "alchemy", "apiKey": "AG7k40zCqOp_DTsQL1m7P" },
+    "137": { "provider": "alchemy", "apiKey": "AG7k40zCqOp_DTsQL1m7P" },
+    "10": { "provider": "alchemy", "apiKey": "AG7k40zCqOp_DTsQL1m7P" },
+    "5000": { "provider": "alchemy", "apiKey": "AG7k40zCqOp_DTsQL1m7P" },
+    "43114": { "provider": "alchemy", "apiKey": "AG7k40zCqOp_DTsQL1m7P" },
+    "324": { "provider": "alchemy", "apiKey": "AG7k40zCqOp_DTsQL1m7P" },
+    "59144": { "provider": "alchemy", "apiKey": "AG7k40zCqOp_DTsQL1m7P" },
+    "143": { "provider": "alchemy", "apiKey": "AG7k40zCqOp_DTsQL1m7P" },
+    "534352": { "provider": "alchemy", "apiKey": "AG7k40zCqOp_DTsQL1m7P" },
+    "25": { "provider": "alchemy", "apiKey": "AG7k40zCqOp_DTsQL1m7P" },
+    "480": { "provider": "alchemy", "apiKey": "AG7k40zCqOp_DTsQL1m7P" }
   },
 
   "rpcOverrides": {
     "btc": "https://mempool.space/api",
-    "tron": "",
-    "ton": "",
+    "tron": "https://api.trongrid.io/jsonrpc?api_key=YOUR_TRONGRID_KEY",
+    "ton": "https://toncenter.com/api/v2/jsonRPC?api_key=YOUR_TONCENTER_KEY",
     "xlm": "https://horizon.stellar.org"
   },
 
-  "etherscanApiKey": "",
+  "etherscanApiKey": "XH772R3IPVXWCJKCSN2F9P2HFC5KB7K8EH",
 
   "onboarded": false
 }

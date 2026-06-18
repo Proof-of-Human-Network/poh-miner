@@ -1,10 +1,10 @@
 {
   "name": "poh-miner",
-  "version": "0.1.0",
+  "version": "0.3.0",
   "description": "Run the PoH Miner Network. Earn POH by contributing compute (great on Mac Mini, PCs, servers).",
   "author": {
-    "name": "Proof of Human Network",
-    "email": "support@assetux.com"
+    "name": "Bogdan Sizov",
+    "email": "sizov.workingbox@gmail.com"
   },
   "type": "module",
   "main": "electron/main.cjs",
@@ -84,6 +84,7 @@
       "package.json",
       "node_modules/**/*",
       "!config.json",
+      "!landing/binaries/**/*",
       "!.poh-miner/**/*",
       "!dist/**/*"
     ],

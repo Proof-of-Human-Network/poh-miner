@@ -149,22 +149,18 @@
 
   <!-- Stats (real data where possible) -->
   <div class="border-y border-white/10 py-6">
-    <div class="max-w-6xl mx-auto px-8 grid grid-cols-2 md:grid-cols-4 gap-8 text-center">
+    <div class="max-w-6xl mx-auto px-8 grid grid-cols-2 md:grid-cols-3 gap-8 text-center">
       <div>
         <div class="text-[36px] md:text-[60px] font-display tracking-tighter" id="node-count">—</div>
         <div class="text-xs text-white/50 tracking-widest mt-1">ACTIVE COMPUTE NODES</div>
       </div>
       <div>
-        <div class="text-[36px] md:text-[60px] font-display tracking-tighter" id="methods-count">—</div>
-        <div class="text-xs text-white/50 tracking-widest mt-1">VERIFIED SIGNALS</div>
+        <div class="text-[36px] md:text-[60px] font-display tracking-tighter text-[#22c55e]" id="network-speed">—</div>
+        <div class="text-xs text-white/50 tracking-widest mt-1">NETWORK SPEED</div>
       </div>
       <div>
         <div class="text-[36px] md:text-[60px] font-display tracking-tighter" id="jobs-count">—</div>
         <div class="text-xs text-white/50 tracking-widest mt-1">AI TASKS PROCESSED</div>
-      </div>
-      <div>
-        <div class="text-[36px] md:text-[60px] font-display tracking-tighter text-[#22c55e]" id="poh-paid">—</div>
-        <div class="text-xs text-white/50 tracking-widest mt-1">POH DISTRIBUTED TO NODES</div>
       </div>
     </div>
   </div>
@@ -980,48 +976,72 @@
     }
 
     function fmtNum(n) {
-      if (n >= 1_000_000) return (n / 1_000_000).toFixed(1).replace(/\.0$/, '') + 'M';
+      if (n >= 1_000_000_000) return (n / 1_000_000_000).toFixed(1).replace(/\.0$/, '') + 'M';
       if (n >= 1_000)     return (n / 1_000).toFixed(1).replace(/\.0$/, '') + 'k';
       return n.toLocaleString();
     }
 
     async function loadRealStats() {
-      const BOOTNODE = 'https://bootnode.proofofhuman.ge';
+      const BOOTNODES = [
+        'https://poh.assetux.com',
+        'https://proofofhuman.ge',
+        'https://bootnode.proofofhuman.ge',
+      ];
 
-      // Run all three fetches in parallel
-      const [signalsRes, peersRes, chainRes] = await Promise.allSettled([
-        fetch('https://proofofhuman.ge/methods/verifyer', { cache: 'no-store' }),
-        fetch(`${BOOTNODE}/peers`,      { cache: 'no-store' }),
-        fetch(`${BOOTNODE}/chain/tip`,  { cache: 'no-store' }),
+      async function fetchFromAnyBootnode(path) {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 6000);
+        try {
+          const results = await Promise.any(
+            BOOTNODES.map(b => fetch(b + path, { cache: 'no-store', signal: controller.signal }).then(r => {
+              if (!r.ok) throw new Error(r.status);
+              return r;
+            }))
+          );
+          clearTimeout(timer);
+          return results;
+        } catch {
+          clearTimeout(timer);
+          return null;
+        }
+      }
+
+      // Run all fetches in parallel
+      const [peersRes, statusRes] = await Promise.allSettled([
+        fetchFromAnyBootnode('/peers'),
+        fetch('https://miner.proofofhuman.ge/status', { cache: 'no-store' }),
       ]);
 
-      // VERIFIED SIGNALS
+      // ACTIVE COMPUTE NODES + NETWORK SPEED (from bootnode /peers)
       try {
-        if (signalsRes.status === 'fulfilled' && signalsRes.value.ok) {
-          const signals = await signalsRes.value.json();
-          if (Array.isArray(signals))
-            document.getElementById('methods-count').textContent = fmtNum(signals.length);
-        }
-      } catch { document.getElementById('methods-count').textContent = '—'; }
-
-      // ACTIVE COMPUTE NODES
-      try {
-        if (peersRes.status === 'fulfilled' && peersRes.value.ok) {
-          const data = await peersRes.value.json();
+        const res = peersRes.status === 'fulfilled' ? peersRes.value : null;
+        if (res) {
+          const data = await res.json();
           const count = data.count ?? (Array.isArray(data.peers) ? data.peers.length : null);
           if (count !== null)
             document.getElementById('node-count').textContent = fmtNum(count);
+
+          // Aggregate TFLOPS across all peers
+          let totalTflops = data.totalTflops;
+          if (totalTflops == null && Array.isArray(data.peers)) {
+            totalTflops = data.peers.reduce((s, p) => s + (p.tflops || 0), 0);
+            totalTflops = Math.round(totalTflops * 10) / 10;
+          }
+          if (totalTflops != null && totalTflops > 0) {
+            const speedEl = document.getElementById('network-speed');
+            speedEl.textContent = totalTflops >= 1000
+              ? (totalTflops / 1000).toFixed(1) + 'k TFLOPS'
+              : totalTflops + ' TFLOPS';
+          }
         }
       } catch { document.getElementById('node-count').textContent = '—'; }
 
-      // VERDICTS DELIVERED + POH DISTRIBUTED (derived from chain height)
-      // Each block = 1 verified scan, 1 POH distributed to miners
+      // AI TASKS PROCESSED (from live miner status)
       try {
-        if (chainRes.status === 'fulfilled' && chainRes.value.ok) {
-          const tip = await chainRes.value.json();
-          const height = tip.height ?? tip.block?.height ?? 0;
-          document.getElementById('jobs-count').textContent = fmtNum(height);
-          document.getElementById('poh-paid').textContent   = fmtNum(height);
+        if (statusRes.status === 'fulfilled' && statusRes.value.ok) {
+          const s = await statusRes.value.json();
+          const height = s.chainHeight ?? 0;
+          if (height > 0) document.getElementById('jobs-count').textContent = fmtNum(height);
         }
       } catch { /* leave as — */ }
     }
