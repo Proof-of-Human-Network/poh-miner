@@ -495,7 +495,7 @@ ipcMain.handle('onboarding:complete', async (_event, data) => {
     pohWallet: pohWallet || null,
     solanaAddress: solanaAddress || null,
     onboarded: true,
-    wallet: solanaAddress || pohWallet, // keep backward compat for now
+    wallet: pohWallet || null, // solanaAddress is never the mining wallet
     ...rest,
   });
 

@@ -158,38 +158,36 @@ export class PohMinerNode {
     // Load persisted quality/reputation + history if available
     this._loadQualityState();
 
-    // Use dedicated PoH wallet if available (new onboarding flow)
-    const pohWallet = this.config.pohWallet || this.config.wallet;
+    // Resolve mining wallet — must be a PoH-native wallet (poh... address with a local private key).
+    // solanaAddress in config is for future bridge/withdrawal only, never used as rewards recipient.
+    const isNativePoH = addr => addr && addr.startsWith('poh');
+    const candidateAddr = isNativePoH(this.config.pohWallet) ? this.config.pohWallet
+                        : isNativePoH(this.config.wallet)    ? this.config.wallet
+                        : null;
 
-    if (!pohWallet) {
-      const existing = this.walletManager.listWallets();
-      if (existing.length === 0) {
-        const newWallet = this.walletManager.createWallet();
-        this.config.pohWallet = newWallet.address;
-        this.config.wallet = newWallet.address; // backward compat
-        console.log(`[PoH-Miner] First run — created PoH wallet: ${newWallet.address}`);
-      } else {
-        this.config.pohWallet = existing[0];
-        this.config.wallet = existing[0];
+    // Try to load an existing native wallet; fall through to create if missing or stub (no privateKey).
+    let resolvedWallet = candidateAddr ? this.walletManager.loadWallet(candidateAddr) : null;
+    if (resolvedWallet && !resolvedWallet.privateKey) resolvedWallet = null; // stub wallet — no signing power
+
+    if (!resolvedWallet) {
+      // Look for any existing native wallet on disk
+      const existing = this.walletManager.listWallets().filter(a => a.startsWith('poh'));
+      if (existing.length > 0) {
+        resolvedWallet = this.walletManager.loadWallet(existing[0]);
+        if (resolvedWallet && !resolvedWallet.privateKey) resolvedWallet = null;
       }
-    } else {
-      this.config.pohWallet = pohWallet;
-      this.config.wallet = pohWallet; // keep both in sync for now
     }
 
-    // Ensure we have a local wallet with signing keys (for protected bootnode registration)
-    const identityAddr = this.config.pohWallet || this.config.wallet;
-    this.identityWallet = this.walletManager.loadWallet(identityAddr);
-    if (!this.identityWallet) {
-      this.identityWallet = this.walletManager.createWallet();
-      // If no prior identity, adopt the created one (keeps old solana-as-wallet cases using separate signer)
-      if (!this.config.pohWallet) {
-        this.config.pohWallet = this.identityWallet.address;
-      }
-      if (!this.config.wallet) {
-        this.config.wallet = this.identityWallet.address;
-      }
+    if (!resolvedWallet) {
+      resolvedWallet = this.walletManager.createWallet();
+      console.log(`[PoH-Miner] Created new PoH wallet: ${resolvedWallet.address}`);
     }
+
+    this.config.pohWallet = resolvedWallet.address;
+    this.config.wallet    = resolvedWallet.address;
+    this.identityWallet   = resolvedWallet;
+
+    console.log(`[PoH-Miner] Mining wallet: ${resolvedWallet.address}`);
 
     // BrainSync initialized lazily after brain data dir is set (happens on first compute)
     this.brainSync = null; // populated in _initBrainSync()
