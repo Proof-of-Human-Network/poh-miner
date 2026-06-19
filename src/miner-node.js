@@ -3604,17 +3604,8 @@ export class PohMinerNode {
       // Broadcast the new block to the network
       this.gossip.publish('new-block', newBlock.toJSON());
 
-      // Submit to bootnodes so they accumulate chain history (fire-and-forget)
-      const blockPayload = JSON.stringify(newBlock.toJSON ? newBlock.toJSON() : newBlock);
-      for (const bootnode of (this.config.bootnodes || [])) {
-        const base = bootnode.endsWith('/') ? bootnode : bootnode + '/';
-        fetch(`${base}submit-block`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: blockPayload,
-          signal: AbortSignal.timeout(5000),
-        }).catch(() => {});
-      }
+      // Submit to bootnodes — send a batch if the bootnode fell behind (crash/restart recovery)
+      this._pushBlocksToBootnodes(newBlock).catch(() => {});
 
       // Process any signals updates in this block
       if (newBlock.stateTransitions?.length) {
@@ -3628,6 +3619,46 @@ export class PohMinerNode {
   // For testing / external control
   injectScanRequest(request) {
     if (this.onScanRequest) this.onScanRequest(request);
+  }
+
+  // Push a newly produced block to all bootnodes.
+  // If a bootnode is behind (returned lower height or rejected), send it the missing batch.
+  async _pushBlocksToBootnodes(newBlock) {
+    const bootnodes = this.config.bootnodes || [];
+    if (!bootnodes.length) return;
+
+    const newBlockJson = newBlock.toJSON ? newBlock.toJSON() : newBlock;
+
+    await Promise.allSettled(bootnodes.map(async (bootnode) => {
+      const base = bootnode.endsWith('/') ? bootnode : bootnode + '/';
+      try {
+        // First, check what height the bootnode is at
+        const tipRes = await fetch(`${base}chain/tip`, { signal: AbortSignal.timeout(5000) });
+        if (!tipRes.ok) return;
+        const tip = await tipRes.json();
+        const bootnodeHeight = tip.height ?? 0;
+        const localHeight = newBlock.height;
+
+        let payload;
+        if (bootnodeHeight < localHeight - 1 && localHeight - bootnodeHeight <= 200) {
+          // Bootnode is behind — send the full missing range as a batch
+          const missing = this.chain
+            .filter(b => b.height > bootnodeHeight && b.height <= localHeight)
+            .map(b => b.toJSON ? b.toJSON() : b);
+          payload = JSON.stringify(missing);
+          console.log(`[PoH-Miner] Bootnode ${bootnode} is behind (${bootnodeHeight} vs ${localHeight}), sending ${missing.length} missing blocks`);
+        } else {
+          payload = JSON.stringify(newBlockJson);
+        }
+
+        await fetch(`${base}submit-block`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: payload,
+          signal: AbortSignal.timeout(10000),
+        });
+      } catch { /* unreachable bootnode — silently skip */ }
+    }));
   }
 
   /**

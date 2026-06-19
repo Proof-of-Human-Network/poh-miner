@@ -181,7 +181,7 @@ async function syncFromPeer(peerUrl) {
 if (PEER_SYNC_URL) syncFromPeer(PEER_SYNC_URL);
 
 const server = http.createServer(async (req, res) => {
-  const url = new URL(req.url, `http://${req.headers.host}`);
+  const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
 
   // CORS support (for frontend calls to /peers, /chain/* etc. from different origin)
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -224,28 +224,34 @@ const server = http.createServer(async (req, res) => {
       req.on('data', chunk => body += chunk);
       req.on('end', async () => {
         try {
-          const blockData = JSON.parse(body);
-          const block = PohBlock.fromJSON ? PohBlock.fromJSON(blockData) : new PohBlock(blockData);
+          const payload = JSON.parse(body);
+          // Accept either a single block or an array (batch catch-up)
+          const blocks = Array.isArray(payload) ? payload : [payload];
+          let accepted = 0;
 
-          // Reject blocks with invalid proposer signatures
-          if (block.minerSignature && !block.verifySignature()) {
-            res.statusCode = 400;
-            return res.end(JSON.stringify({ error: 'invalid block signature' }));
+          for (const blockData of blocks) {
+            const block = PohBlock.fromJSON ? PohBlock.fromJSON(blockData) : new PohBlock(blockData);
+
+            if (block.minerSignature && !block.verifySignature()) continue;
+
+            const tip = chain[chain.length - 1];
+            const tipHash = await tip.getHash();
+
+            if (block.height === chain.length && block.previousHash === tipHash) {
+              chain.push(block);
+              accepted++;
+              console.log(`[Bootnode] Accepted block #${block.height} from miner`);
+            } else if (block.height <= chain.length - 1) {
+              // Already have this block — skip silently
+            } else {
+              // Gap or fork — stop processing this batch
+              break;
+            }
           }
 
-          const tip = chain[chain.length - 1];
-          const tipHash = await tip.getHash();
-
-          if (block.height === chain.length && block.previousHash === tipHash) {
-            chain.push(block);
-            chainStore.saveChain(chain);
-            console.log(`[Bootnode] Accepted block #${block.height} from miner`);
-            res.statusCode = 200;
-            res.end(JSON.stringify({ accepted: true }));
-          } else {
-            res.statusCode = 400;
-            res.end(JSON.stringify({ accepted: false, reason: 'Invalid height or previous hash' }));
-          }
+          if (accepted > 0) chainStore.saveChain(chain);
+          res.statusCode = 200;
+          res.end(JSON.stringify({ accepted, height: chain.length - 1 }));
         } catch (e) {
           res.statusCode = 400;
           res.end(JSON.stringify({ error: e.message }));
