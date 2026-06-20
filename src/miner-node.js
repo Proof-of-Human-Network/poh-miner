@@ -2586,12 +2586,12 @@ export class PohMinerNode {
       }, 5 * 60 * 1000);
 
       // Periodic chain re-sync: catch forks and missing blocks that accumulate at runtime
-      let _syncInProgress = false;
+      this._syncInProgress = false;
       setInterval(async () => {
-        if (_syncInProgress) return;
-        _syncInProgress = true;
+        if (this._syncInProgress) return;
+        this._syncInProgress = true;
         try { await this.syncFromBootnodes(); } catch { /* ignore */ }
-        _syncInProgress = false;
+        this._syncInProgress = false;
       }, 10 * 60 * 1000);
     } else {
       console.log('[PoH-Miner] No bootnodes configured — running in local/dev mode only');
@@ -3681,8 +3681,11 @@ export class PohMinerNode {
 
         if (bootnodeHeight >= localHeight) {
           // Bootnode is ahead of us — our new block is orphaned. Trigger a catch-up sync.
-          console.log(`[PoH-Miner] Bootnode ${bootnode} is ahead (${bootnodeHeight} vs ${localHeight}) — triggering sync`);
-          this.syncFromBootnodes().catch(() => {});
+          if (!this._syncInProgress) {
+            console.log(`[PoH-Miner] Bootnode ${bootnode} is ahead (${bootnodeHeight} vs ${localHeight}) — triggering sync`);
+            this._syncInProgress = true;
+            this.syncFromBootnodes().catch(() => {}).finally(() => { this._syncInProgress = false; });
+          }
           return;
         }
 
