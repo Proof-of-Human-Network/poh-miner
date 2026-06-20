@@ -2266,21 +2266,24 @@ export class PohMinerNode {
       } catch { /* unreachable */ }
     }));
 
-    // 3b. Fork detection: compare block 1 hash with the network's best peer.
-    // If local chain is LONGER but diverges at block 1 we are on a stale fork and must reset.
+    // 3b. Fork detection: if local chain is at least as tall as the peer's canonical tip,
+    // compare our block at that height against the peer's. A hash mismatch means we're
+    // on a stale fork and must reset to the canonical chain.
     let isFork = false;
-    if (bestBase && this.chain.length > 1 && bestHeight >= 1) {
+    const localChainHeight = this.chain.length - 1;
+    if (bestBase && bestHeight >= 1 && localChainHeight >= bestHeight) {
       try {
-        const r = await fetch(`${bestBase}/chain/blocks?from=1&to=1`, { signal: AbortSignal.timeout(5000) });
+        const r = await fetch(`${bestBase}/chain/blocks?from=${bestHeight}&to=${bestHeight}`, { signal: AbortSignal.timeout(5000) });
         if (r.ok) {
           const blocks = await r.json();
           if (Array.isArray(blocks) && blocks.length > 0) {
-            const peerBlock1 = PohBlock.fromJSON ? PohBlock.fromJSON(blocks[0]) : new PohBlock(blocks[0]);
-            const peerHash1  = peerBlock1.getHashSync();
-            const localHash1 = this.chain[1]?.getHashSync();
-            if (localHash1 && peerHash1 !== localHash1) {
+            const peerBlock  = PohBlock.fromJSON ? PohBlock.fromJSON(blocks[0]) : new PohBlock(blocks[0]);
+            const peerHash   = peerBlock.getHashSync();
+            const localBlock = this.chain[bestHeight];
+            const localHash  = localBlock?.getHashSync();
+            if (localHash && peerHash !== localHash) {
               isFork = true;
-              console.warn(`[PoH-Miner] Fork detected at block 1 (local: ${localHash1.slice(0, 8)}… vs peer: ${peerHash1.slice(0, 8)}…) — wiping local chain and resyncing`);
+              console.warn(`[PoH-Miner] Fork detected at block ${bestHeight} (local: ${localHash.slice(0, 8)}… vs peer: ${peerHash.slice(0, 8)}…) — wiping local chain and resyncing`);
             }
           }
         }
