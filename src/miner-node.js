@@ -1628,15 +1628,17 @@ export class PohMinerNode {
         req.on('end', () => {
           try {
             const skillId = decodeURIComponent(skillStakeMatch[1]);
-            const { amount, stakerAddress } = JSON.parse(body);
+            const { amount } = JSON.parse(body || '{}');
             if (!amount || amount <= 0) { res.statusCode = 400; return res.end(JSON.stringify({ error: 'amount must be positive' })); }
-            if (!stakerAddress) { res.statusCode = 400; return res.end(JSON.stringify({ error: 'stakerAddress required' })); }
+
+            // Staker is always this node's own wallet — staking is a local-node action
+            const stakerAddress = this.config.pohWallet || this.config.wallet;
+            if (!stakerAddress) { res.statusCode = 400; return res.end(JSON.stringify({ error: 'node wallet not initialized' })); }
 
             const amountRaw = Math.round(parseFloat(amount) * POH_DECIMALS);
 
-            // Apply immediately (mirrors _applyEscrow pattern): debit staker, credit vault.
-            // Balance updates are visible at once; the on-chain record is the skill-staked
-            // stateTransition included in the next mined block.
+            // Debit node wallet → credit stake vault. Balance change is immediate;
+            // the on-chain record is the skill-staked stateTransition in the next block.
             if (!this.walletManager.debit(stakerAddress, amountRaw)) {
               res.statusCode = 400; return res.end(JSON.stringify({ error: 'insufficient balance' }));
             }
@@ -1647,8 +1649,7 @@ export class PohMinerNode {
 
             if (!this._skillStakes.has(skillId)) this._skillStakes.set(skillId, { total: 0, stakers: new Map() });
             const entry = this._skillStakes.get(skillId);
-            const prev = entry.stakers.get(stakerAddress) || 0;
-            entry.stakers.set(stakerAddress, prev + amountRaw);
+            entry.stakers.set(stakerAddress, (entry.stakers.get(stakerAddress) || 0) + amountRaw);
             entry.total = (entry.total || 0) + amountRaw;
 
             const GRADUATION_THRESHOLD = 10000 * POH_DECIMALS;
@@ -1662,11 +1663,11 @@ export class PohMinerNode {
             }
 
             this._saveSkillStakes();
-            // Queue as on-chain stateTransition so any node can replay from chain history
-            const stakeTransition = { type: 'skill-staked', skillId, staker: stakerAddress, amount: amountRaw, txHash: txHash || null, ts: Date.now() };
+            const stakeTransition = { type: 'skill-staked', skillId, staker: stakerAddress, amount: amountRaw, txHash, ts: Date.now() };
             this.pendingBrainTransitions.push(stakeTransition);
-            if (txHash) this._appliedStakeTxs.add(txHash); // mark applied so block replay skips it
+            this._appliedStakeTxs.add(txHash);
             this.gossip.publish('skill-staked', { skillId, stakerAddress, amount: amountRaw, total: entry.total, txHash }).catch(() => {});
+            console.log(`[PoH-Miner] Skill stake: ${(amountRaw / POH_DECIMALS).toFixed(2)} POH → ${skillId} (staker=${stakerAddress.slice(0,10)}…)`);
             return res.end(JSON.stringify({ ok: true, total: entry.total, myStake: entry.stakers.get(stakerAddress), txHash }));
           } catch (e) { res.statusCode = 400; res.end(JSON.stringify({ error: e.message })); }
         });
@@ -1681,31 +1682,33 @@ export class PohMinerNode {
         req.on('end', () => {
           try {
             const skillId = decodeURIComponent(skillUnstakeMatch[1]);
-            const { amount, stakerAddress } = JSON.parse(body);
+            const { amount } = JSON.parse(body || '{}');
             if (!amount || amount <= 0) { res.statusCode = 400; return res.end(JSON.stringify({ error: 'amount must be positive' })); }
-            if (!stakerAddress) { res.statusCode = 400; return res.end(JSON.stringify({ error: 'stakerAddress required' })); }
+
+            const stakerAddress = this.config.pohWallet || this.config.wallet;
+            if (!stakerAddress) { res.statusCode = 400; return res.end(JSON.stringify({ error: 'node wallet not initialized' })); }
 
             const amountRaw = Math.round(parseFloat(amount) * POH_DECIMALS);
             const entry = this._skillStakes.get(skillId);
             const currentStake = entry?.stakers?.get(stakerAddress) || 0;
             if (currentStake < amountRaw) { res.statusCode = 400; return res.end(JSON.stringify({ error: 'insufficient stake' })); }
 
-            // Apply immediately: debit vault, credit staker.
+            // Debit vault → credit node wallet back
             if (this.SKILL_STAKE_VAULT) this.walletManager.debit(this.SKILL_STAKE_VAULT, amountRaw);
             this.walletManager.credit(stakerAddress, amountRaw);
             const txHash = crypto.createHash('sha256')
               .update(`unstake:${skillId}:${stakerAddress}:${amountRaw}:${Date.now()}`)
               .digest('hex');
-            console.log(`[PoH-Miner] Skill unstake: ${(amountRaw / POH_DECIMALS).toFixed(2)} POH returned to ${stakerAddress.slice(0,8)} from ${skillId}`);
 
             entry.stakers.set(stakerAddress, currentStake - amountRaw);
             entry.total = Math.max(0, (entry.total || 0) - amountRaw);
 
             this._saveSkillStakes();
-            const unstakeTransition = { type: 'skill-unstaked', skillId, staker: stakerAddress, amount: amountRaw, txHash: txHash || null, ts: Date.now() };
+            const unstakeTransition = { type: 'skill-unstaked', skillId, staker: stakerAddress, amount: amountRaw, txHash, ts: Date.now() };
             this.pendingBrainTransitions.push(unstakeTransition);
-            if (txHash) this._appliedStakeTxs.add(txHash);
+            this._appliedStakeTxs.add(txHash);
             this.gossip.publish('skill-unstaked', { skillId, stakerAddress, amount: amountRaw, total: entry.total, txHash }).catch(() => {});
+            console.log(`[PoH-Miner] Skill unstake: ${(amountRaw / POH_DECIMALS).toFixed(2)} POH returned from ${skillId} (staker=${stakerAddress.slice(0,10)}…)`);
             return res.end(JSON.stringify({ ok: true, total: entry.total, myStake: entry.stakers.get(stakerAddress), txHash }));
           } catch (e) { res.statusCode = 400; res.end(JSON.stringify({ error: e.message })); }
         });
