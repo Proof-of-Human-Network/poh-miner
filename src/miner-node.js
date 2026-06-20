@@ -2248,8 +2248,8 @@ export class PohMinerNode {
       return;
     }
 
-    // 3. Find the candidate with the best (longest) chain
-    let bestHeight = this.chain.length - 1;
+    // 3. Find the candidate with the best (longest) chain across the whole network
+    let bestHeight = -1;
     let bestBase   = null;
     let bestLabel  = null;
 
@@ -2265,6 +2265,27 @@ export class PohMinerNode {
         }
       } catch { /* unreachable */ }
     }));
+
+    // 3b. Fork detection: compare block 1 hash with the network's best peer.
+    // If local chain is LONGER but diverges at block 1 we are on a stale fork and must reset.
+    let isFork = false;
+    if (bestBase && this.chain.length > 1 && bestHeight >= 1) {
+      try {
+        const r = await fetch(`${bestBase}/chain/blocks?from=1&to=1`, { signal: AbortSignal.timeout(5000) });
+        if (r.ok) {
+          const blocks = await r.json();
+          if (Array.isArray(blocks) && blocks.length > 0) {
+            const peerBlock1 = PohBlock.fromJSON ? PohBlock.fromJSON(blocks[0]) : new PohBlock(blocks[0]);
+            const peerHash1  = peerBlock1.getHashSync();
+            const localHash1 = this.chain[1]?.getHashSync();
+            if (localHash1 && peerHash1 !== localHash1) {
+              isFork = true;
+              console.warn(`[PoH-Miner] Fork detected at block 1 (local: ${localHash1.slice(0, 8)}… vs peer: ${peerHash1.slice(0, 8)}…) — wiping local chain and resyncing`);
+            }
+          }
+        }
+      } catch { /* ignore — proceed without fork flag */ }
+    }
 
     // 4. IPFS fallback if no live peer has a longer chain
     if (!bestBase && this.ipfsSync) {
@@ -2298,8 +2319,12 @@ export class PohMinerNode {
     // On a fresh start (only genesis locally) download from 0 and replace the whole
     // chain — this handles any genesis-hash divergence from previous runs cleanly.
     const CHUNK = 500;
-    const isFreshStart = this.chain.length <= 1;
+    const isFreshStart = this.chain.length <= 1 || isFork;
     let localHeight = isFreshStart ? -1 : this.chain.length - 1;
+
+    // Nothing to do: peer not taller and not a fork (also covers !bestBase → bestHeight = -1)
+    if (bestHeight <= this.chain.length - 1 && !isFork) return;
+
     console.log(`[PoH-Miner] Syncing from ${bestLabel} (peer height ${bestHeight}, local ${this.chain.length - 1})${isFreshStart ? ' [fresh start — replacing chain from 0]' : ''}`);
 
     const downloadedBlocks = [];
@@ -2556,6 +2581,15 @@ export class PohMinerNode {
           await this.brainSync.pullFromBootnodes(this.config.bootnodes, brain);
         }
       }, 5 * 60 * 1000);
+
+      // Periodic chain re-sync: catch forks and missing blocks that accumulate at runtime
+      let _syncInProgress = false;
+      setInterval(async () => {
+        if (_syncInProgress) return;
+        _syncInProgress = true;
+        try { await this.syncFromBootnodes(); } catch { /* ignore */ }
+        _syncInProgress = false;
+      }, 10 * 60 * 1000);
     } else {
       console.log('[PoH-Miner] No bootnodes configured — running in local/dev mode only');
     }
