@@ -3679,6 +3679,13 @@ export class PohMinerNode {
         const bootnodeHeight = tip.height ?? 0;
         const localHeight = newBlock.height;
 
+        if (bootnodeHeight >= localHeight) {
+          // Bootnode is ahead of us — our new block is orphaned. Trigger a catch-up sync.
+          console.log(`[PoH-Miner] Bootnode ${bootnode} is ahead (${bootnodeHeight} vs ${localHeight}) — triggering sync`);
+          this.syncFromBootnodes().catch(() => {});
+          return;
+        }
+
         let payload;
         if (bootnodeHeight < localHeight - 1 && localHeight - bootnodeHeight <= 200) {
           // Bootnode is behind — send the full missing range as a batch
