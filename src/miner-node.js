@@ -2266,24 +2266,27 @@ export class PohMinerNode {
       } catch { /* unreachable */ }
     }));
 
-    // 3b. Fork detection: if local chain is at least as tall as the peer's canonical tip,
-    // compare our block at that height against the peer's. A hash mismatch means we're
-    // on a stale fork and must reset to the canonical chain.
+    // 3b. Fork detection: compare our block at min(local, peer) height against the peer's.
+    // Covers two cases:
+    //   - local LONGER than peer: compare peer's tip against our block at same height
+    //   - local SHORTER than peer: compare our current tip against peer's block at same height
+    // A hash mismatch in either case means we're on a stale fork and must reset.
     let isFork = false;
     const localChainHeight = this.chain.length - 1;
-    if (bestBase && bestHeight >= 1 && localChainHeight >= bestHeight) {
+    if (bestBase && bestHeight >= 1 && localChainHeight >= 1) {
+      const checkHeight = Math.min(localChainHeight, bestHeight);
       try {
-        const r = await fetch(`${bestBase}/chain/blocks?from=${bestHeight}&to=${bestHeight}`, { signal: AbortSignal.timeout(5000) });
+        const r = await fetch(`${bestBase}/chain/blocks?from=${checkHeight}&to=${checkHeight}`, { signal: AbortSignal.timeout(5000) });
         if (r.ok) {
           const blocks = await r.json();
           if (Array.isArray(blocks) && blocks.length > 0) {
             const peerBlock  = PohBlock.fromJSON ? PohBlock.fromJSON(blocks[0]) : new PohBlock(blocks[0]);
             const peerHash   = peerBlock.getHashSync();
-            const localBlock = this.chain[bestHeight];
+            const localBlock = this.chain[checkHeight];
             const localHash  = localBlock?.getHashSync();
             if (localHash && peerHash !== localHash) {
               isFork = true;
-              console.warn(`[PoH-Miner] Fork detected at block ${bestHeight} (local: ${localHash.slice(0, 8)}… vs peer: ${peerHash.slice(0, 8)}…) — wiping local chain and resyncing`);
+              console.warn(`[PoH-Miner] Fork detected at block ${checkHeight} (local: ${localHash.slice(0, 8)}… vs peer: ${peerHash.slice(0, 8)}…) — wiping local chain and resyncing`);
             }
           }
         }
