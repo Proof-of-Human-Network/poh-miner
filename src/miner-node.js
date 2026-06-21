@@ -2381,6 +2381,7 @@ export class PohMinerNode {
           }
         }
         this.currentDifficulty = getNextDifficulty(this.chain);
+        this._rebuildBalancesFromChain();
       } else {
         console.warn('[PoH-Miner] Downloaded chain failed linkage check — keeping local genesis');
       }
@@ -2836,11 +2837,79 @@ export class PohMinerNode {
 
     this.processIncomingBlockRewards(block);
 
+    // Credit coinbase rewards globally so every node tracks every wallet's balance.
+    // processIncomingBlockRewards only credits this node's own wallet; this block
+    // credits ALL miners/workers using the claim store to prevent double-crediting.
+    const coinbase = block.coinbaseReward;
+    if (coinbase && block.minerWallet) {
+      if (coinbase.proposerReward > 0) {
+        const key = `proposer-${block.height}`;
+        if (this.rewardClaimStore.claimIfNotAlready(key)) {
+          this.walletManager.credit(block.minerWallet, coinbase.proposerReward);
+        }
+      }
+      for (const worker of (coinbase.workerRewards || [])) {
+        if (worker.workerId && worker.amount > 0) {
+          const key = RewardClaimStore.makeClaimKey(block.height, worker.workProofHash);
+          if (this.rewardClaimStore.claimIfNotAlready(key)) {
+            this.walletManager.credit(worker.workerId, worker.amount);
+          }
+        }
+      }
+    }
+
     if (block.stateTransitions?.length) {
       for (const tx of block.stateTransitions) {
         this.processStateTransition(tx).catch(() => {});
       }
     }
+  }
+
+  // Rebuild all wallet balances from scratch by replaying the current chain.
+  // Called after fork recovery (fresh-start sync) to discard stale-fork balances.
+  _rebuildBalancesFromChain() {
+    console.log(`[PoH-Miner] Rebuilding wallet balances from ${this.chain.length} canonical blocks…`);
+    // Zero all known wallet balances (preserve private keys / addresses)
+    for (const addr of this.walletManager.listWallets()) {
+      const w = this.walletManager.loadWallet(addr);
+      if (w) { w.balance = 0; this.walletManager.saveWallet(w); }
+    }
+    // Clear claim store so replayed rewards aren't skipped
+    this.rewardClaimStore.reset();
+
+    for (const block of this.chain) {
+      const coinbase = block.coinbaseReward;
+      if (coinbase && block.minerWallet) {
+        if (coinbase.proposerReward > 0) {
+          this.walletManager.credit(block.minerWallet, coinbase.proposerReward);
+          this.rewardClaimStore.markClaimed(`proposer-${block.height}`);
+        }
+        for (const worker of (coinbase.workerRewards || [])) {
+          if (worker.workerId && worker.amount > 0) {
+            this.walletManager.credit(worker.workerId, worker.amount);
+            this.rewardClaimStore.markClaimed(
+              RewardClaimStore.makeClaimKey(block.height, worker.workProofHash)
+            );
+          }
+        }
+      }
+      // Apply transactions (raw debit/credit — blocks are already validated)
+      for (const txData of (block.transactions || [])) {
+        try {
+          const tx = PoHTransaction.fromJSON(txData);
+          const sender = this.walletManager.loadWallet(tx.from);
+          if (sender) {
+            sender.balance = Math.max(0, (sender.balance || 0) - tx.amount - (tx.fee || 0));
+            this.walletManager.saveWallet(sender);
+          }
+          this.walletManager.credit(tx.to, tx.amount);
+          if (tx.fee > 0 && block.minerWallet) {
+            this.walletManager.credit(block.minerWallet, tx.fee);
+          }
+        } catch { /* skip malformed tx */ }
+      }
+    }
+    console.log(`[PoH-Miner] Balance rebuild complete — processed ${this.chain.length} blocks`);
   }
 
   _appendBlock(block, from) {

@@ -103,6 +103,14 @@ export class RewardClaimStore {
   }
 
   /**
+   * Wipe all claims (used when rebuilding balance state from scratch after fork recovery).
+   */
+  reset() {
+    this.claimed = new Set();
+    this._save();
+  }
+
+  /**
    * Generate a consistent claim key for a worker reward.
    */
   static makeClaimKey(blockHeight, workProofHash) {
