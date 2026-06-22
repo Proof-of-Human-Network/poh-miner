@@ -1742,7 +1742,7 @@ export class PohMinerNode {
       if (req.method === 'GET' && url.pathname === '/chain/tip') {
         const tip = this.chain[this.chain.length - 1];
         if (!tip) { res.statusCode = 404; res.end(JSON.stringify({ error: 'no chain' })); return; }
-        res.end(JSON.stringify({ height: tip.height, hash: tip.getHashSync(), timestamp: tip.timestamp }));
+        res.end(JSON.stringify({ height: tip.height, hash: tip.getHashSync(), timestamp: tip.timestamp, chainWork: tip.chainWork || '0' }));
         return;
       }
 
@@ -2249,25 +2249,29 @@ export class PohMinerNode {
     }
     console.log(`[PoH-Miner] [Sync] ${candidates.length} candidates — querying tips…`);
 
-    // 3. Find the candidate with the best (longest) chain across the whole network
+    // 3. Find the candidate with the most chainWork (heaviest chain) across the whole network
     let bestHeight = -1;
     let bestBase   = null;
     let bestLabel  = null;
+    let bestWork   = '0';
 
     await Promise.allSettled(candidates.map(async c => {
       try {
         const r = await fetch(`${c.base}/chain/tip`, { signal: AbortSignal.timeout(5000) });
         if (!r.ok) { console.log(`[PoH-Miner] [Sync] ${c.base} tip → non-ok ${r.status}`); return; }
         const tip = await r.json();
-        console.log(`[PoH-Miner] [Sync] ${c.label ?? c.base} height=${tip.height}`);
-        if ((tip.height ?? -1) > bestHeight) {
-          bestHeight = tip.height;
+        const work = tip.chainWork || '0';
+        console.log(`[PoH-Miner] [Sync] ${c.label ?? c.base} height=${tip.height} work=${work}`);
+        if (compareChainWork(work, bestWork) > 0) {
+          bestHeight = tip.height ?? -1;
           bestBase   = c.base;
           bestLabel  = c.label;
+          bestWork   = work;
         }
       } catch (e) { console.log(`[PoH-Miner] [Sync] ${c.base} tip fail: ${e.message}`); }
     }));
-    console.log(`[PoH-Miner] [Sync] best=${bestLabel} height=${bestHeight}`);
+    const localWork = getTipChainWork(this.chain);
+    console.log(`[PoH-Miner] [Sync] best=${bestLabel} height=${bestHeight} work=${bestWork} | local work=${localWork}`);
 
     // 3b. Fork detection: compare our block at min(local, peer) height against the peer's.
     // Covers two cases:
@@ -2328,15 +2332,18 @@ export class PohMinerNode {
     // On a fresh start (only genesis locally) download from 0 and replace the whole
     // chain — this handles any genesis-hash divergence from previous runs cleanly.
     const CHUNK = 500;
-    // If local chain is already longer than the best peer, longest-chain rule says keep ours.
-    // A fork detected at min(local,peer) height still means the peer is behind — no point wiping.
-    if (bestHeight < this.chain.length - 1) { console.log(`[PoH-Miner] [Sync] local (${this.chain.length - 1}) already longer than best peer (${bestHeight}) — keeping`); return; }
+    // Heaviest-chain rule: only sync if the best peer has strictly more chainWork.
+    // Height alone is misleading — a fork with lower difficulty can have more blocks but less work.
+    if (compareChainWork(bestWork, localWork) <= 0 && !isFork) {
+      console.log(`[PoH-Miner] [Sync] local chain has equal or more chainWork — keeping`);
+      return;
+    }
 
-    const isFreshStart = this.chain.length <= 1 || isFork;
+    const isFreshStart = this.chain.length <= 1 || isFork || compareChainWork(bestWork, localWork) > 0;
     let localHeight = isFreshStart ? -1 : this.chain.length - 1;
 
-    // Nothing to do: peer not taller and not a fork (also covers !bestBase → bestHeight = -1)
-    if (bestHeight <= this.chain.length - 1 && !isFork) return;
+    // Nothing to do: peer not taller and not a fork
+    if (bestHeight <= this.chain.length - 1 && !isFork && compareChainWork(bestWork, localWork) <= 0) return;
 
     console.log(`[PoH-Miner] Syncing from ${bestLabel} (peer height ${bestHeight}, local ${this.chain.length - 1})${isFreshStart ? ' [fresh start — replacing chain from 0]' : ''}`);
 
