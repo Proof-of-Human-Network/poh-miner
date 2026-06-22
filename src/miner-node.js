@@ -2325,6 +2325,10 @@ export class PohMinerNode {
     // On a fresh start (only genesis locally) download from 0 and replace the whole
     // chain — this handles any genesis-hash divergence from previous runs cleanly.
     const CHUNK = 500;
+    // If local chain is already longer than the best peer, longest-chain rule says keep ours.
+    // A fork detected at min(local,peer) height still means the peer is behind — no point wiping.
+    if (bestHeight < this.chain.length - 1) return;
+
     const isFreshStart = this.chain.length <= 1 || isFork;
     let localHeight = isFreshStart ? -1 : this.chain.length - 1;
 
