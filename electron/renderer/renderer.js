@@ -1782,18 +1782,18 @@ function finalizeLastBubble() {
 // ── Send + stream ──────────────────────────────────────────────────────────────
 
 function getChatBudget() {
-  const slider = document.getElementById('chat-budget-slider');
-  const n = parseInt(slider?.value || '0', 10);
-  return n > 0 ? n * BUDGET_DECIMALS : 0;
+  const step = parseInt(document.getElementById('chat-budget-slider')?.value || '0', 10);
+  if (step <= 0) return 0;
+  return Math.round(_sliderStepToPoh(step) * BUDGET_DECIMALS);
 }
 
 window.updateChatBudgetDisplay = function(val) {
-  const n = parseInt(val, 10);
+  const step = parseInt(val, 10);
   const el = document.getElementById('chat-budget-display');
   if (!el) return;
-  el.textContent = n <= 0 ? 'No limit' : `${n} POH`;
+  el.textContent = step <= 0 ? 'No limit' : _formatPoh(_sliderStepToPoh(step));
   const slider = document.getElementById('chat-budget-slider');
-  if (slider) slider.style.setProperty('--fill', `${(n / 500) * 100}%`);
+  if (slider) slider.style.setProperty('--fill', `${(step / _BLOG_STEPS) * 100}%`);
 };
 
 async function sendChatMessage() {
@@ -2286,29 +2286,35 @@ window.scannerWelcomeSetup = function() {
 
 // POH token has 9 decimals; slider value is in whole POH
 const BUDGET_DECIMALS = 1_000_000_000;
+const _BLOG_MIN = 0.01, _BLOG_MAX = 200, _BLOG_STEPS = 200;
+
+function _sliderStepToPoh(step) {
+  if (step <= 0) return 0;
+  return _BLOG_MIN * Math.pow(_BLOG_MAX / _BLOG_MIN, (step - 1) / (_BLOG_STEPS - 1));
+}
+
+function _formatPoh(poh) {
+  if (poh < 0.1)  return poh.toFixed(3) + ' POH';
+  if (poh < 10)   return poh.toFixed(2)  + ' POH';
+  if (poh < 100)  return poh.toFixed(1)  + ' POH';
+  return Math.round(poh) + ' POH';
+}
 
 window.updateBudgetDisplay = function(val) {
-  const n = parseInt(val, 10);
+  const step = parseInt(val, 10);
   const display = document.getElementById('budget-display');
   if (!display) return;
-  if (n <= 0) {
-    display.textContent = 'No limit';
-  } else {
-    display.textContent = `${n} POH`;
-  }
-  // Update slider fill colour via CSS custom property
+  display.textContent = step <= 0 ? 'No limit' : _formatPoh(_sliderStepToPoh(step));
   const slider = document.getElementById('budget-slider');
-  if (slider) {
-    const pct = (n / parseInt(slider.max, 10)) * 100;
-    slider.style.setProperty('--fill', pct + '%');
-  }
+  if (slider) slider.style.setProperty('--fill', `${(step / _BLOG_STEPS) * 100}%`);
 };
 
 function getBudgetValue() {
   const slider = document.getElementById('budget-slider');
   if (!slider) return 0;
-  const n = parseInt(slider.value, 10);
-  return n > 0 ? n * BUDGET_DECIMALS : 0;
+  const step = parseInt(slider.value, 10);
+  if (step <= 0) return 0;
+  return Math.round(_sliderStepToPoh(step) * BUDGET_DECIMALS);
 }
 
 // ── Search (identity scanner) ──────────────────────────────────────────────────
