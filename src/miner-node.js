@@ -574,15 +574,15 @@ export class PohMinerNode {
     const skillBlock = allSkills.map(s => `[${s.id}] ${s.description || s.id}\nTriggers: ${(s.triggers || []).join(', ')}`).join('\n\n');
     const routePrompt = `You are a routing agent. Decide which skill to invoke for this message.\n\nSKILLS:\n${skillBlock}\n\nUSER MESSAGE: "${message.slice(0, 500)}"\n\nIf a skill applies, respond with JSON:\n{"skillId":"<id>","input":{"address":"<wallet address if present, else null>"},"reason":"<one sentence>"}\n\nIf no skill applies, respond with:\n{"skillId":null,"reason":"<why not>"}\n\nOutput ONLY valid JSON.`;
 
-    const ollamaRes = await fetch(`${ollamaBase}/api/chat`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: selModel, messages: [{ role: 'user', content: routePrompt }], stream: false, format: 'json', options: { temperature: 0 } }),
-      signal: AbortSignal.timeout(15_000),
-    });
-    const ollamaData = await ollamaRes.json();
     let route = null;
     try {
+      const ollamaRes = await fetch(`${ollamaBase}/api/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model: selModel, messages: [{ role: 'user', content: routePrompt }], stream: false, format: 'json', options: { temperature: 0 } }),
+        signal: AbortSignal.timeout(45_000),
+      });
+      const ollamaData = await ollamaRes.json();
       const raw = ollamaData.message?.content || ollamaData.response || '';
       route = JSON.parse(raw.match(/\{[\s\S]*\}/)?.[0] || raw);
     } catch { route = { skillId: null }; }
