@@ -2286,21 +2286,22 @@ export class PohMinerNode {
     //   - local SHORTER than peer: compare our current tip against peer's block at same height
     // A hash mismatch in either case means we're on a stale fork and must reset.
     let isFork = false;
+    let forkCheckHeight = -1;
     const localChainHeight = this.chain.length - 1;
     if (bestBase && bestHeight >= 1 && localChainHeight >= 1) {
-      const checkHeight = Math.min(localChainHeight, bestHeight);
+      forkCheckHeight = Math.min(localChainHeight, bestHeight);
       try {
-        const r = await fetch(`${bestBase}/chain/blocks?from=${checkHeight}&to=${checkHeight}`, { signal: AbortSignal.timeout(5000) });
+        const r = await fetch(`${bestBase}/chain/blocks?from=${forkCheckHeight}&to=${forkCheckHeight}`, { signal: AbortSignal.timeout(5000) });
         if (r.ok) {
           const blocks = await r.json();
           if (Array.isArray(blocks) && blocks.length > 0) {
             const peerBlock  = PohBlock.fromJSON ? PohBlock.fromJSON(blocks[0]) : new PohBlock(blocks[0]);
             const peerHash   = peerBlock.getHashSync();
-            const localBlock = this.chain[checkHeight];
+            const localBlock = this.chain[forkCheckHeight];
             const localHash  = localBlock?.getHashSync();
             if (localHash && peerHash !== localHash) {
               isFork = true;
-              console.warn(`[PoH-Miner] Fork detected at block ${checkHeight} (local: ${localHash.slice(0, 8)}… vs peer: ${peerHash.slice(0, 8)}…) — wiping local chain and resyncing`);
+              console.warn(`[PoH-Miner] Fork detected at block ${forkCheckHeight} (local: ${localHash.slice(0, 8)}… vs peer: ${peerHash.slice(0, 8)}…) — wiping local chain and resyncing`);
             }
           }
         }
@@ -2346,13 +2347,25 @@ export class PohMinerNode {
       return;
     }
 
+    // Determine sync mode:
+    //   - incremental: peer is simply ahead, append new blocks
+    //   - partial reorg: competing tip (fork at local tip only), keep common prefix and download tail
+    //   - full fresh start: deep fork or genesis-only local chain
     const isFreshStart = this.chain.length <= 1 || isFork;
-    let localHeight = isFreshStart ? -1 : this.chain.length - 1;
+    let localHeight = -1;
+    if (!isFreshStart) {
+      localHeight = this.chain.length - 1;  // incremental
+    } else if (isFork && forkCheckHeight >= localChainHeight && localChainHeight > 0) {
+      // Competing tip: partial reorg — keep common prefix, download only the divergent tail
+      localHeight = forkCheckHeight - 1;
+    }
+    // else: full fresh start (localHeight stays -1, downloads from genesis)
 
     // Nothing to do: peer not taller and not a fork
     if (bestHeight <= this.chain.length - 1 && !isFork && compareChainWork(bestWork, localWork) <= 0) return;
 
-    console.log(`[PoH-Miner] Syncing from ${bestLabel} (peer height ${bestHeight}, local ${this.chain.length - 1})${isFreshStart ? ' [fresh start — replacing chain from 0]' : ''}`);
+    const syncModeLabel = !isFreshStart ? '' : localHeight >= 0 ? ` [fork reorg from ${localHeight + 1}]` : ' [fresh start — replacing chain from 0]';
+    console.log(`[PoH-Miner] Syncing from ${bestLabel} (peer height ${bestHeight}, local ${this.chain.length - 1})${syncModeLabel}`);
 
     const downloadedBlocks = [];
     while (localHeight < bestHeight) {
@@ -2387,16 +2400,26 @@ export class PohMinerNode {
     }
 
     if (isFreshStart && downloadedBlocks.length > 0) {
-      // Replace local chain entirely with peer's chain
       const parsed = downloadedBlocks.map(b => PohBlock.fromJSON ? PohBlock.fromJSON(b) : new PohBlock(b));
-      // Verify linkage before committing
+      // Verify internal linkage of downloaded segment
       let valid = true;
       for (let i = 1; i < parsed.length; i++) {
         if (parsed[i].previousHash !== parsed[i - 1].getHashSync()) { valid = false; break; }
       }
+      // For partial reorg: also verify the first downloaded block links to our anchor
+      if (valid && localHeight >= 0) {
+        const anchor = this.chain[localHeight];
+        if (!anchor || parsed[0].previousHash !== anchor.getHashSync()) {
+          console.warn(`[PoH-Miner] Partial reorg anchor mismatch at ${localHeight} — next sync will do full resync`);
+          valid = false;
+        }
+      }
       if (valid) {
-        this.chain = parsed;
-        for (const b of this.chain) {
+        // Splice downloaded tail onto the common prefix (or replace entirely for full fresh start)
+        this.chain = localHeight >= 0
+          ? [...this.chain.slice(0, localHeight + 1), ...parsed]
+          : parsed;
+        for (const b of parsed) {
           for (const r of (b.scanResults || [])) {
             if (r.requestId) this.minedRequestIds.add(r.requestId);
           }
@@ -2404,7 +2427,7 @@ export class PohMinerNode {
         this.currentDifficulty = getNextDifficulty(this.chain);
         this._rebuildBalancesFromChain();
       } else {
-        console.warn('[PoH-Miner] Downloaded chain failed linkage check — keeping local genesis');
+        console.warn('[PoH-Miner] Downloaded chain failed linkage check — keeping local chain');
       }
     }
 
