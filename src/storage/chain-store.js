@@ -57,7 +57,7 @@ export class ChainStore {
   // Full rewrite — used for reorgs, batch sync saves, and genesis init
   saveChain(chain) {
     try {
-      const toSave = chain.slice(-10000);
+      const toSave = chain;
       // Rewrite ndjson (canonical source)
       const lines = toSave.map(b => JSON.stringify(b.toJSON ? b.toJSON() : b)).join('\n');
       fs.writeFileSync(this.appendFile, lines + (lines ? '\n' : ''));

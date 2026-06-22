@@ -2287,7 +2287,9 @@ export class PohMinerNode {
     // A hash mismatch in either case means we're on a stale fork and must reset.
     let isFork = false;
     let forkCheckHeight = -1;
-    const localChainHeight = this.chain.length - 1;
+    // Use actual block height, not array index — chain may be truncated to last N blocks on disk
+    const chainOffset    = this.chain[0]?.height ?? 0;
+    const localChainHeight = this.chain.length > 0 ? this.chain[this.chain.length - 1].height : -1;
     if (bestBase && bestHeight >= 1 && localChainHeight >= 1) {
       forkCheckHeight = Math.min(localChainHeight, bestHeight);
       try {
@@ -2297,7 +2299,7 @@ export class PohMinerNode {
           if (Array.isArray(blocks) && blocks.length > 0) {
             const peerBlock  = PohBlock.fromJSON ? PohBlock.fromJSON(blocks[0]) : new PohBlock(blocks[0]);
             const peerHash   = peerBlock.getHashSync();
-            const localBlock = this.chain[forkCheckHeight];
+            const localBlock = this.chain[forkCheckHeight - chainOffset];
             const localHash  = localBlock?.getHashSync();
             if (localHash && peerHash !== localHash) {
               isFork = true;
@@ -2311,7 +2313,7 @@ export class PohMinerNode {
     // 4. IPFS fallback if no live peer has a longer chain
     if (!bestBase && this.ipfsSync) {
       const snap = await this.ipfsSync.fetchChainSnapshot();
-      if (snap?.blocks?.length && snap.height > this.chain.length - 1) {
+      if (snap?.blocks?.length && snap.height > localChainHeight) {
         console.log(`[PoH-Miner] Applying IPFS chain snapshot (height ${snap.height})`);
         try {
           let valid = true;
@@ -2354,7 +2356,7 @@ export class PohMinerNode {
     const isFreshStart = this.chain.length <= 1 || isFork;
     let localHeight = -1;
     if (!isFreshStart) {
-      localHeight = this.chain.length - 1;  // incremental
+      localHeight = localChainHeight;  // incremental from actual tip height
     } else if (isFork && forkCheckHeight >= localChainHeight && localChainHeight > 0) {
       // Competing tip: partial reorg — keep common prefix, download only the divergent tail
       localHeight = forkCheckHeight - 1;
@@ -2362,10 +2364,10 @@ export class PohMinerNode {
     // else: full fresh start (localHeight stays -1, downloads from genesis)
 
     // Nothing to do: peer not taller and not a fork
-    if (bestHeight <= this.chain.length - 1 && !isFork && compareChainWork(bestWork, localWork) <= 0) return;
+    if (bestHeight <= localChainHeight && !isFork && compareChainWork(bestWork, localWork) <= 0) return;
 
     const syncModeLabel = !isFreshStart ? '' : localHeight >= 0 ? ` [fork reorg from ${localHeight + 1}]` : ' [fresh start — replacing chain from 0]';
-    console.log(`[PoH-Miner] Syncing from ${bestLabel} (peer height ${bestHeight}, local ${this.chain.length - 1})${syncModeLabel}`);
+    console.log(`[PoH-Miner] Syncing from ${bestLabel} (peer height ${bestHeight}, local ${localChainHeight})${syncModeLabel}`);
 
     const downloadedBlocks = [];
     while (localHeight < bestHeight) {
@@ -2383,7 +2385,8 @@ export class PohMinerNode {
           for (const bd of blocks) {
             const block = PohBlock.fromJSON ? PohBlock.fromJSON(bd) : new PohBlock(bd);
             const prev  = this.chain[this.chain.length - 1];
-            if (block.previousHash === prev.getHashSync() && block.height === this.chain.length) {
+            // Use block.height (not array index) so truncated chains work correctly
+            if (block.previousHash === prev.getHashSync() && block.height === prev.height + 1) {
               this._applyBlockState(block);
               this.chain.push(block);
               this.currentDifficulty = getNextDifficulty(this.chain);
@@ -2408,7 +2411,8 @@ export class PohMinerNode {
       }
       // For partial reorg: also verify the first downloaded block links to our anchor
       if (valid && localHeight >= 0) {
-        const anchor = this.chain[localHeight];
+        const anchorIdx = localHeight - chainOffset;
+        const anchor = this.chain[anchorIdx];
         if (!anchor || parsed[0].previousHash !== anchor.getHashSync()) {
           console.warn(`[PoH-Miner] Partial reorg anchor mismatch at ${localHeight} — next sync will do full resync`);
           valid = false;
@@ -2416,8 +2420,9 @@ export class PohMinerNode {
       }
       if (valid) {
         // Splice downloaded tail onto the common prefix (or replace entirely for full fresh start)
+        const anchorIdx = localHeight >= 0 ? localHeight - chainOffset : -1;
         this.chain = localHeight >= 0
-          ? [...this.chain.slice(0, localHeight + 1), ...parsed]
+          ? [...this.chain.slice(0, anchorIdx + 1), ...parsed]
           : parsed;
         for (const b of parsed) {
           for (const r of (b.scanResults || [])) {
