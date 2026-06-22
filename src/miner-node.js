@@ -2357,8 +2357,9 @@ export class PohMinerNode {
     let localHeight = -1;
     if (!isFreshStart) {
       localHeight = localChainHeight;  // incremental from actual tip height
-    } else if (isFork && forkCheckHeight >= localChainHeight && localChainHeight > 0) {
-      // Competing tip: partial reorg — keep common prefix, download only the divergent tail
+    } else if (isFork && bestHeight === localChainHeight && localChainHeight > 0) {
+      // Competing tip (both at same height, different hashes): partial reorg
+      // Only valid when peer isn't further ahead — otherwise fork is deep, need full resync
       localHeight = forkCheckHeight - 1;
     }
     // else: full fresh start (localHeight stays -1, downloads from genesis)
@@ -2409,13 +2410,38 @@ export class PohMinerNode {
       for (let i = 1; i < parsed.length; i++) {
         if (parsed[i].previousHash !== parsed[i - 1].getHashSync()) { valid = false; break; }
       }
-      // For partial reorg: also verify the first downloaded block links to our anchor
+      // For partial reorg: also verify the first downloaded block links to our anchor.
+      // If it doesn't, the fork is deeper than expected — fall back to full fresh start.
       if (valid && localHeight >= 0) {
         const anchorIdx = localHeight - chainOffset;
         const anchor = this.chain[anchorIdx];
         if (!anchor || parsed[0].previousHash !== anchor.getHashSync()) {
-          console.warn(`[PoH-Miner] Partial reorg anchor mismatch at ${localHeight} — next sync will do full resync`);
-          valid = false;
+          console.warn(`[PoH-Miner] Partial reorg anchor mismatch at ${localHeight} — falling back to full resync`);
+          // Re-download the full chain from genesis
+          downloadedBlocks.length = 0;
+          let h = -1;
+          while (h < bestHeight) {
+            const from = h + 1;
+            const to   = Math.min(from + CHUNK - 1, bestHeight);
+            try {
+              const r2 = await fetch(`${bestBase}/chain/blocks?from=${from}&to=${to}`, { signal: AbortSignal.timeout(30000) });
+              if (!r2.ok) break;
+              const bs = await r2.json();
+              if (!Array.isArray(bs) || bs.length === 0) break;
+              downloadedBlocks.push(...bs);
+              h = to;
+            } catch (e) { console.warn('[PoH-Miner] Full resync chunk failed:', e.message); break; }
+          }
+          // Re-parse for the outer apply block below
+          parsed.length = 0;
+          parsed.push(...downloadedBlocks.map(b => PohBlock.fromJSON ? PohBlock.fromJSON(b) : new PohBlock(b)));
+          // Re-verify linkage on the freshly downloaded full chain
+          valid = true;
+          for (let i = 1; i < parsed.length; i++) {
+            if (parsed[i].previousHash !== parsed[i - 1].getHashSync()) { valid = false; break; }
+          }
+          // Force full replacement (no anchor)
+          localHeight = -1;
         }
       }
       if (valid) {
@@ -2437,7 +2463,7 @@ export class PohMinerNode {
     }
 
     this.chainStore.saveChain(this.chain);
-    console.log(`[PoH-Miner] Chain sync complete — height ${this.chain.length - 1}`);
+    console.log(`[PoH-Miner] Chain sync complete — height ${this.chain[this.chain.length - 1]?.height ?? this.chain.length - 1}`);
   }
 
   /**
