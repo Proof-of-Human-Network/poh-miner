@@ -203,6 +203,7 @@ const server = http.createServer(async (req, res) => {
         height: tip.height,
         hash: await tip.getHash(),
         timestamp: tip.timestamp,
+        chainWork: tip.chainWork || '0',
       }));
       return;
     }
