@@ -1509,7 +1509,7 @@ export class PohMinerNode {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ model: selModel, messages, stream: false, options: { temperature: 0.7 } }),
-              signal: AbortSignal.timeout(20_000),
+              signal: AbortSignal.timeout(40_000),
             });
             const data  = await ollamaRes.json();
             const reply = data.message?.content || '';
@@ -2643,6 +2643,7 @@ export class PohMinerNode {
       setInterval(async () => {
         if (this._syncInProgress) return;
         this._syncInProgress = true;
+        this._abortMining();
         try { await this.syncFromBootnodes(); } catch { /* ignore */ }
         this._syncInProgress = false;
       }, 10 * 60 * 1000);
@@ -3660,6 +3661,10 @@ export class PohMinerNode {
     this._miningActive = true;
     try {
       while (true) {
+        // Wait for any in-progress sync to complete before mining on a new tip
+        while (this._syncInProgress) {
+          await new Promise(r => setTimeout(r, 200));
+        }
         this._miningController = new AbortController();
         const result = await this.proposeBlock(this._miningController.signal);
         if (!result) {
@@ -3832,6 +3837,7 @@ export class PohMinerNode {
           if (!this._syncInProgress) {
             console.log(`[PoH-Miner] Bootnode ${bootnode} is ahead (${bootnodeHeight} vs ${localHeight}) — triggering sync`);
             this._syncInProgress = true;
+            this._abortMining();
             this.syncFromBootnodes().catch(() => {}).finally(() => { this._syncInProgress = false; });
           }
           return;
