@@ -3075,44 +3075,52 @@ export class PohMinerNode {
       return;
     }
 
-    const currentHeight = this.chain.length - 1;
-    console.log(`[PoH-Miner] [Sync] Requesting blocks ${currentHeight + 1} → ${targetHeight} from bootnodes...`);
+    if (this._syncInProgress) return;
+    this._syncInProgress = true;
+    this._abortMining();
 
-    for (const bootnode of this.config.bootnodes) {
-      try {
-        const url = bootnode.endsWith('/') ? bootnode : bootnode + '/';
-        const res = await fetch(`${url}chain/blocks?from=${currentHeight + 1}&to=${targetHeight}`);
+    try {
+      const currentHeight = this.chain[this.chain.length - 1]?.height ?? this.chain.length - 1;
+      console.log(`[PoH-Miner] [Sync] Requesting blocks ${currentHeight + 1} → ${targetHeight} from bootnodes...`);
 
-        if (!res.ok) continue;
+      for (const bootnode of this.config.bootnodes) {
+        try {
+          const url = bootnode.endsWith('/') ? bootnode : bootnode + '/';
+          const res = await fetch(`${url}chain/blocks?from=${currentHeight + 1}&to=${targetHeight}`);
 
-        const blocksData = await res.json();
-        const incoming = blocksData.map(b => PohBlock.fromJSON(b));
+          if (!res.ok) continue;
 
-        // Check if incoming blocks represent a heavier chain (reorg needed)
-        const incomingTip = incoming[incoming.length - 1];
-        const ourWork = getTipChainWork(this.chain);
-        if (incomingTip && compareChainWork(incomingTip.chainWork, ourWork) > 0) {
-          await this.reorgTo(incoming);
-          return;
-        }
+          const blocksData = await res.json();
+          const incoming = blocksData.map(b => PohBlock.fromJSON(b));
 
-        // No reorg needed — append sequential blocks normally
-        let added = 0;
-        for (const block of incoming) {
-          const prev = this.chain[this.chain.length - 1];
-          if (block.height === this.chain.length && block.previousHash === prev.getHashSync()) {
-            this._appendBlock(block, bootnode);
-            added++;
+          // Check if incoming blocks represent a heavier chain (reorg needed)
+          const incomingTip = incoming[incoming.length - 1];
+          const ourWork = getTipChainWork(this.chain);
+          if (incomingTip && compareChainWork(incomingTip.chainWork, ourWork) > 0) {
+            await this.reorgTo(incoming);
+            return;
           }
-        }
 
-        if (added > 0) {
-          console.log(`[PoH-Miner] [Sync] Synced ${added} blocks from ${bootnode}`);
-          return;
+          // No reorg needed — append sequential blocks normally
+          let added = 0;
+          for (const block of incoming) {
+            const prev = this.chain[this.chain.length - 1];
+            if (block.height === prev.height + 1 && block.previousHash === prev.getHashSync()) {
+              this._appendBlock(block, bootnode);
+              added++;
+            }
+          }
+
+          if (added > 0) {
+            console.log(`[PoH-Miner] [Sync] Synced ${added} blocks from ${bootnode}`);
+            return;
+          }
+        } catch (err) {
+          console.warn(`[PoH-Miner] [Sync] Failed to fetch from ${bootnode}:`, err.message);
         }
-      } catch (err) {
-        console.warn(`[PoH-Miner] [Sync] Failed to fetch from ${bootnode}:`, err.message);
       }
+    } finally {
+      this._syncInProgress = false;
     }
   }
 
