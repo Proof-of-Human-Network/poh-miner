@@ -2346,7 +2346,7 @@ export class PohMinerNode {
       return;
     }
 
-    const isFreshStart = this.chain.length <= 1 || isFork || compareChainWork(bestWork, localWork) > 0;
+    const isFreshStart = this.chain.length <= 1 || isFork;
     let localHeight = isFreshStart ? -1 : this.chain.length - 1;
 
     // Nothing to do: peer not taller and not a fork
