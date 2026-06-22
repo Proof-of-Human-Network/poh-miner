@@ -2357,9 +2357,10 @@ export class PohMinerNode {
     let localHeight = -1;
     if (!isFreshStart) {
       localHeight = localChainHeight;  // incremental from actual tip height
-    } else if (isFork && bestHeight === localChainHeight && localChainHeight > 0) {
-      // Competing tip (both at same height, different hashes): partial reorg
-      // Only valid when peer isn't further ahead — otherwise fork is deep, need full resync
+    } else if (isFork && (bestHeight - localChainHeight) <= 50 && localChainHeight > 0) {
+      // Short fork (peer at most 50 blocks ahead): try partial reorg from the fork point.
+      // If the anchor check fails (fork is deeper than expected), the mismatch handler
+      // re-downloads the full chain from genesis as a fallback.
       localHeight = forkCheckHeight - 1;
     }
     // else: full fresh start (localHeight stays -1, downloads from genesis)
