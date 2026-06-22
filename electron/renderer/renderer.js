@@ -56,6 +56,7 @@ function updateStatus(status) {
   if (poh !== null) {
     const numEl = document.getElementById('home-balance-num');
     if (numEl) numEl.textContent = poh.toFixed(poh < 1 ? 4 : 2);
+    _updateUsdBalanceDisplay();
   }
   if (addr) {
     const addrEl = document.getElementById('home-balance-addr');
@@ -3109,6 +3110,7 @@ function syncHomeBalance() {
   const addrEl = document.getElementById('home-balance-addr');
   if (numEl && bal) numEl.textContent = bal.replace(' POH', '');
   if (addrEl && addr) addrEl.textContent = addr.length > 16 ? addr.slice(0, 8) + '…' + addr.slice(-6) : addr;
+  _updateUsdBalanceDisplay();
 }
 
 async function executeSend() {
@@ -3539,13 +3541,15 @@ async function submitSkill() {
 
 // ── P2P Exchange ───────────────────────────────────────────────────────────────
 
-const QUOTE_CURRENCIES = ['USDT-ERC20','USDT-TRC20','USDT-TON','USDT-SOL','USDT-BEP20','BTC','ETH','SOL','USDC'];
+const QUOTE_CURRENCIES = ['USDT-ERC20','USDT-TRC20','USDT-TON','USDT-SOL','USDT-BEP20','USDC-ERC20','BTC','ETH','SOL'];
 const POH_DECIMALS_P2P = 1_000_000_000;
 
 let _p2pCurrency = '';
 let _p2pOrders = [];
 let _p2pActivityTab = 'orders';
 let _p2pPollTimer = null;
+let _p2pPaymentMethods = [];
+let _p2pBestUsdRate = null;
 
 function _p2pPort() { return window._minerApiPort || 3456; }
 
@@ -3578,6 +3582,54 @@ async function _p2pApiFetch(path, opts = {}) {
   return r.json();
 }
 
+function _p2pFmtMethod(m) {
+  if (!m) return '—';
+  if (typeof m === 'string') return m;
+  return m.address ? `${m.network}: ${m.address}` : m.network || '—';
+}
+
+function _updateUsdBalanceDisplay() {
+  const el = document.getElementById('home-balance-usd');
+  if (!el) return;
+  const poh = parseFloat(document.getElementById('home-balance-num')?.textContent || '0') || 0;
+  if (_p2pBestUsdRate != null && poh > 0) {
+    el.textContent = `≈ $${(poh * _p2pBestUsdRate).toFixed(2)} USD`;
+  } else {
+    el.textContent = '≈ — USD';
+  }
+}
+
+function p2pAddPaymentMethod() {
+  const network = document.getElementById('p2p-pm-network')?.value;
+  const address = (document.getElementById('p2p-pm-address')?.value || '').trim();
+  if (!network || !address) return;
+  _p2pPaymentMethods.push({ network, address });
+  _p2pRenderPaymentMethodList();
+  document.getElementById('p2p-pm-network').value = '';
+  document.getElementById('p2p-pm-address').value = '';
+}
+
+function p2pRemovePaymentMethod(idx) {
+  _p2pPaymentMethods.splice(idx, 1);
+  _p2pRenderPaymentMethodList();
+}
+
+function _p2pRenderPaymentMethodList() {
+  const list = document.getElementById('p2p-pm-list');
+  if (!list) return;
+  list.innerHTML = '';
+  _p2pPaymentMethods.forEach((pm, i) => {
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;align-items:center;gap:6px;background:#0a0a0a;border:1px solid #1e1e1e;border-radius:4px;padding:4px 8px;';
+    row.innerHTML = `
+      <span style="font-size:10px;color:#22c55e;font-family:monospace;white-space:nowrap;">${pm.network}</span>
+      <span style="font-size:10px;color:#888;font-family:monospace;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${pm.address}</span>
+      <button onclick="p2pRemovePaymentMethod(${i})" style="background:none;border:none;color:#555;cursor:pointer;font-size:12px;padding:0;line-height:1;">✕</button>
+    `;
+    list.appendChild(row);
+  });
+}
+
 function p2pInit() {
   p2pShowBook();
   p2pLoadOrders();
@@ -3606,6 +3658,8 @@ function p2pShowCreateOrder() {
   if (currSel && !currSel.options.length) {
     QUOTE_CURRENCIES.forEach(c => { const o = document.createElement('option'); o.value = c; o.textContent = c; currSel.appendChild(o); });
   }
+  _p2pPaymentMethods = [];
+  _p2pRenderPaymentMethodList();
   document.getElementById('p2p-book-view').style.display = 'none';
   document.getElementById('p2p-detail-view').style.display = 'none';
   document.getElementById('p2p-create-view').style.display = 'flex';
@@ -3645,6 +3699,15 @@ async function p2pLoadOrders(silent = false) {
     const data = await _p2pApiFetch('/api/p2p/orders');
     _p2pOrders = data.orders || [];
   } catch { _p2pOrders = []; }
+  // Compute best USD rate from open USDT/USDC sell orders
+  const stableOrders = _p2pOrders.filter(o =>
+    o.status === 'open' && o.side === 'sell' &&
+    ['USDT-ERC20','USDT-TRC20','USDT-TON','USDT-SOL','USDT-BEP20','USDC-ERC20'].includes(o.quoteCurrency)
+  );
+  _p2pBestUsdRate = stableOrders.length
+    ? Math.max(...stableOrders.map(o => parseFloat(o.pricePerPOH) || 0))
+    : null;
+  _updateUsdBalanceDisplay();
   p2pBuildCurrencyPills();
   p2pRenderOrders();
 }
@@ -3669,7 +3732,7 @@ function p2pRenderOrders() {
       </div>
       <div style="font-size:11px;color:#22c55e;font-family:monospace;margin-bottom:3px;">${order.pricePerPOH} ${order.quoteCurrency}/POH</div>
       <div style="font-size:10px;color:#555;font-family:monospace;">Limit ${order.minTrade}–${(order.maxTrade||0).toFixed(2)} ${order.quoteCurrency}</div>
-      ${order.paymentMethods?.length ? `<div style="font-size:10px;color:#444;font-family:monospace;margin-top:2px;">${order.paymentMethods.join(', ')}</div>` : ''}
+      ${order.paymentMethods?.length ? `<div style="font-size:10px;color:#444;font-family:monospace;margin-top:2px;">${order.paymentMethods.map(m=>typeof m==='string'?m:(m.network||'?')).join(', ')}</div>` : ''}
       <div style="font-size:9px;color:#374151;font-family:monospace;margin-top:4px;">${_p2pTimeAgo(order.createdAt)} · ${order.maker.slice(0,10)}…</div>
     `;
     card.onclick = () => p2pOpenOrder(order);
@@ -3704,7 +3767,7 @@ async function p2pOpenOrder(order) {
         <span style="font-size:10px;color:#555;font-family:monospace;">LIMIT</span>
         <span style="font-size:11px;color:#aaa;font-family:monospace;">${order.minTrade}–${(order.maxTrade||0).toFixed(2)} ${order.quoteCurrency}</span>
       </div>
-      ${order.paymentMethods?.length ? `<div style="display:flex;justify-content:space-between;"><span style="font-size:10px;color:#555;font-family:monospace;">PAYMENT</span><span style="font-size:11px;color:#aaa;font-family:monospace;">${order.paymentMethods.join(', ')}</span></div>` : ''}
+      ${order.paymentMethods?.length ? `<div style="display:flex;flex-direction:column;gap:3px;"><span style="font-size:10px;color:#555;font-family:monospace;margin-bottom:1px;">PAYMENT TO</span>${order.paymentMethods.map(m=>`<div style="background:#0a0a0a;border:1px solid #1a1a1a;border-radius:3px;padding:4px 7px;"><span style="font-size:10px;color:#22c55e;font-family:monospace;">${typeof m==='string'?m:(m.network||'?')}</span>${(typeof m==='object'&&m.address)?`<span style="font-size:10px;color:#9ca3af;font-family:monospace;display:block;word-break:break-all;">${m.address}</span>`:''}</div>`).join('')}</div>` : ''}
       <div style="display:flex;justify-content:space-between;">
         <span style="font-size:10px;color:#555;font-family:monospace;">STATUS</span>
         <span style="font-size:11px;color:${order.status==='open'?'#22c55e':order.status==='locked'?'#f59e0b':'#888'};font-family:monospace;">${order.status.toUpperCase()}</span>
@@ -3806,7 +3869,9 @@ function p2pRenderTrade(body, trade, order) {
     <div id="p2p-trade-result" style="font-size:11px;display:none;padding:8px;border-radius:4px;font-family:monospace;"></div>
     ${trade.status === 'selected' && !isSeller ? `
     <div style="background:#0c1a0c;border:1px solid #1a3a1a;border-radius:6px;padding:10px;font-size:11px;color:#86efac;font-family:monospace;">
-      Send <strong>${(trade.quoteAmount||0).toFixed(4)} ${order?.quoteCurrency||''}</strong> via: ${order?.paymentMethods?.join(', ')||'—'}<br>Then click "Mark Payment Sent".
+      Send <strong>${(trade.quoteAmount||0).toFixed(4)} ${order?.quoteCurrency||''}</strong> to seller's payment method:<br>
+      ${(order?.paymentMethods?.length ? order.paymentMethods.map(m=>`<div style="margin-top:5px;padding:5px 8px;background:#071a07;border:1px solid #1a3a1a;border-radius:3px;"><span style="color:#22c55e;">${typeof m==='string'?m:(m.network||'?')}</span>${(typeof m==='object'&&m.address)?`<br><span style="color:#d1fae5;word-break:break-all;">${m.address}</span>`:''}</div>`).join('') : '<em>—</em>')}
+      <br>Then click "Mark Payment Sent".
     </div>
     <button onclick="p2pMarkPaymentSent('${trade.id}')" style="width:100%;padding:10px;border:none;background:#3b82f6;color:#fff;border-radius:4px;font-weight:600;cursor:pointer;font-size:12px;font-family:monospace;">MARK PAYMENT SENT</button>` : ''}
     ${trade.status === 'payment_sent' && isSeller ? `
@@ -3849,9 +3914,12 @@ async function p2pSubmitCreateOrder() {
   const price    = parseFloat(document.getElementById('p2p-form-price')?.value || '0');
   const minT     = parseFloat(document.getElementById('p2p-form-min')?.value || '0');
   const maxT     = parseFloat(document.getElementById('p2p-form-max')?.value || '0');
-  const methods  = (document.getElementById('p2p-form-methods')?.value || '').split(',').map(s => s.trim()).filter(Boolean);
+  const methods  = _p2pPaymentMethods;
   if (!pohAmt || !currency || !price) {
     resultEl.style.display='block'; resultEl.style.color='#ef4444'; resultEl.textContent='Fill in amount, currency, and price.'; return;
+  }
+  if (!methods.length) {
+    resultEl.style.display='block'; resultEl.style.color='#ef4444'; resultEl.textContent='Add at least one payment method.'; return;
   }
   resultEl.style.display='block'; resultEl.style.color='#888'; resultEl.textContent='Posting order…';
   const pohAmountRaw = Math.round(pohAmt * POH_DECIMALS_P2P);
@@ -3863,7 +3931,8 @@ async function p2pSubmitCreateOrder() {
     });
     if (data.error) throw new Error(data.error);
     resultEl.style.color='#22c55e'; resultEl.textContent='Order posted!';
-    ['p2p-form-amount','p2p-form-price','p2p-form-min','p2p-form-max','p2p-form-methods'].forEach(id => { const el = document.getElementById(id); if (el) el.value=''; });
+    ['p2p-form-amount','p2p-form-price','p2p-form-min','p2p-form-max'].forEach(id => { const el = document.getElementById(id); if (el) el.value=''; });
+    _p2pPaymentMethods = []; _p2pRenderPaymentMethodList();
     setTimeout(() => { p2pShowBook(); p2pLoadOrders(true); }, 1200);
   } catch (e) { resultEl.style.display='block'; resultEl.style.color='#ef4444'; resultEl.textContent=e.message; }
 }

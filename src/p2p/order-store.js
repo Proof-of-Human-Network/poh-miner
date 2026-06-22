@@ -4,7 +4,7 @@ import crypto from 'crypto';
 
 export const QUOTE_CURRENCIES = [
   'USDT-ERC20', 'USDT-TRC20', 'USDT-TON', 'USDT-SOL', 'USDT-BEP20',
-  'BTC', 'ETH', 'SOL', 'USDC',
+  'USDC-ERC20', 'BTC', 'ETH', 'SOL',
 ];
 
 const ORDER_EXPIRY_MS    = 24 * 60 * 60 * 1000;  // 24 h

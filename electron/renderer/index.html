@@ -1382,7 +1382,7 @@
         <div class="budget-row" style="padding:0 4px 4px;">
           <div class="budget-label"><span data-i18n="chat.budget">Request budget:</span> <span id="chat-budget-display">0</span></div>
           <input type="range" class="budget-slider" id="chat-budget-slider"
-                 min="0" max="500" step="10" value="0"
+                 min="0" max="500" step="1" value="0"
                  oninput="updateChatBudgetDisplay(this.value)" />
         </div>
         <div class="chat-input-row">
@@ -1408,7 +1408,7 @@
           <div class="budget-row">
             <div class="budget-label"><span data-i18n="scanner.budget">Budget:</span> <span id="budget-display">0</span></div>
             <input type="range" class="budget-slider" id="budget-slider"
-                   min="0" max="500" step="10" value="0"
+                   min="0" max="500" step="1" value="0"
                    oninput="updateBudgetDisplay(this.value)" />
           </div>
           <div id="search-loading" class="search-loading" style="display:none;">
@@ -1654,9 +1654,26 @@
             <!-- Payment methods -->
             <div>
               <div style="font-size:10px;color:#444;margin-bottom:4px;letter-spacing:0.1em;">PAYMENT METHODS</div>
-              <input id="p2p-form-methods" type="text" placeholder="e.g. Bank Transfer, PayPal"
-                     style="width:100%;background:#111;border:1px solid #252525;border-radius:4px;color:#e5e7eb;font-size:12px;font-family:monospace;padding:8px 10px;outline:none;box-sizing:border-box;" />
-              <div style="font-size:9px;color:#374151;margin-top:3px;">Comma-separated list</div>
+              <div id="p2p-pm-list" style="display:flex;flex-direction:column;gap:4px;margin-bottom:6px;"></div>
+              <div style="display:flex;gap:5px;align-items:stretch;">
+                <select id="p2p-pm-network" style="flex:1;min-width:0;background:#111;border:1px solid #252525;border-radius:4px;color:#e5e7eb;font-size:11px;font-family:monospace;padding:7px 8px;outline:none;">
+                  <option value="">Network / Type</option>
+                  <option>USDT-ERC20</option>
+                  <option>USDT-TRC20</option>
+                  <option>USDT-TON</option>
+                  <option>USDT-SOL</option>
+                  <option>USDT-BEP20</option>
+                  <option>USDC-ERC20</option>
+                  <option>BTC</option>
+                  <option>ETH</option>
+                  <option>SOL</option>
+                  <option>Bank Transfer</option>
+                  <option>PayPal</option>
+                </select>
+                <input id="p2p-pm-address" type="text" placeholder="Address / Account"
+                       style="flex:2;min-width:0;background:#111;border:1px solid #252525;border-radius:4px;color:#e5e7eb;font-size:11px;font-family:monospace;padding:7px 8px;outline:none;" />
+                <button onclick="p2pAddPaymentMethod()" style="padding:7px 11px;border:1px solid #22c55e44;background:#052e16;color:#22c55e;border-radius:4px;cursor:pointer;font-size:14px;font-family:monospace;flex-shrink:0;">+</button>
+              </div>
             </div>
             <button onclick="p2pSubmitCreateOrder()"
                     style="width:100%;padding:10px;background:#22c55e;color:#000;border:none;border-radius:4px;font-weight:600;cursor:pointer;font-size:12px;font-family:monospace;">
