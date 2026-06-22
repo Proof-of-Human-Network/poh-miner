@@ -1509,13 +1509,20 @@ export class PohMinerNode {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ model: selModel, messages, stream: false, options: { temperature: 0.7 } }),
-              signal: AbortSignal.timeout(60_000),
+              signal: AbortSignal.timeout(20_000),
             });
             const data  = await ollamaRes.json();
             const reply = data.message?.content || '';
             return res.end(JSON.stringify({ type: 'chat', message: reply }));
           } catch (err) {
-            res.end(JSON.stringify({ type: 'chat', error: err.message, message: 'An error occurred. Please try again.' }));
+            const isUnavailable = err.name === 'AbortError' || err.name === 'TimeoutError'
+              || (err.message || '').toLowerCase().includes('timeout')
+              || (err.message || '').toLowerCase().includes('abort')
+              || (err.message || '').toLowerCase().includes('connect');
+            const fallback = isUnavailable
+              ? 'My local LLM is busy or unavailable right now. You can ask me about a wallet address (e.g. "analyze poh1abc…") and I\'ll use on-chain data skills that don\'t require the LLM.'
+              : 'Something went wrong. Please try again.';
+            res.end(JSON.stringify({ type: 'chat', message: fallback }));
           }
         });
         return;
