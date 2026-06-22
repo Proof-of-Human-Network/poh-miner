@@ -2247,6 +2247,7 @@ export class PohMinerNode {
       console.log('[PoH-Miner] No sync candidates found');
       return;
     }
+    console.log(`[PoH-Miner] [Sync] ${candidates.length} candidates — querying tips…`);
 
     // 3. Find the candidate with the best (longest) chain across the whole network
     let bestHeight = -1;
@@ -2256,15 +2257,17 @@ export class PohMinerNode {
     await Promise.allSettled(candidates.map(async c => {
       try {
         const r = await fetch(`${c.base}/chain/tip`, { signal: AbortSignal.timeout(5000) });
-        if (!r.ok) return;
+        if (!r.ok) { console.log(`[PoH-Miner] [Sync] ${c.base} tip → non-ok ${r.status}`); return; }
         const tip = await r.json();
+        console.log(`[PoH-Miner] [Sync] ${c.label ?? c.base} height=${tip.height}`);
         if ((tip.height ?? -1) > bestHeight) {
           bestHeight = tip.height;
           bestBase   = c.base;
           bestLabel  = c.label;
         }
-      } catch { /* unreachable */ }
+      } catch (e) { console.log(`[PoH-Miner] [Sync] ${c.base} tip fail: ${e.message}`); }
     }));
+    console.log(`[PoH-Miner] [Sync] best=${bestLabel} height=${bestHeight}`);
 
     // 3b. Fork detection: compare our block at min(local, peer) height against the peer's.
     // Covers two cases:
@@ -2319,7 +2322,7 @@ export class PohMinerNode {
       return;
     }
 
-    if (!bestBase) return;
+    if (!bestBase) { console.log('[PoH-Miner] [Sync] no reachable peer found — aborting'); return; }
 
     // 5. Download blocks in chunks of 500
     // On a fresh start (only genesis locally) download from 0 and replace the whole
@@ -2327,7 +2330,7 @@ export class PohMinerNode {
     const CHUNK = 500;
     // If local chain is already longer than the best peer, longest-chain rule says keep ours.
     // A fork detected at min(local,peer) height still means the peer is behind — no point wiping.
-    if (bestHeight < this.chain.length - 1) return;
+    if (bestHeight < this.chain.length - 1) { console.log(`[PoH-Miner] [Sync] local (${this.chain.length - 1}) already longer than best peer (${bestHeight}) — keeping`); return; }
 
     const isFreshStart = this.chain.length <= 1 || isFork;
     let localHeight = isFreshStart ? -1 : this.chain.length - 1;
