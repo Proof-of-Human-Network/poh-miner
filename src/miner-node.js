@@ -2790,14 +2790,18 @@ export class PohMinerNode {
       } else {
         // ── We're behind (gap) — add to orphan pool and sync via peers + bootnodes
         this._storeOrphan(newBlock);
-        console.log(`[PoH-Miner] Behind (peer at ${newBlock.height}, we at ${currentHeight}) — syncing`);
-        // Ask peers first (faster than bootnode HTTP), then fall back to bootnodes
-        this.gossip.publish('block-request', {
-          fromHeight: currentHeight + 1,
-          toHeight: newBlock.height - 1,
-          requesterId: this.config.wallet,
-        }).catch(() => {});
-        this.requestBlockSync(newBlock.height);
+        // Debounce: don't spam sync requests for the same gap (e.g. fast miner flooding blocks)
+        const now = Date.now();
+        if (!this._lastBlockSyncAt || now - this._lastBlockSyncAt > 30_000) {
+          this._lastBlockSyncAt = now;
+          console.log(`[PoH-Miner] Behind (peer at ${newBlock.height}, we at ${currentHeight}) — syncing`);
+          this.gossip.publish('block-request', {
+            fromHeight: currentHeight + 1,
+            toHeight: newBlock.height - 1,
+            requesterId: this.config.wallet,
+          }).catch(() => {});
+          this.requestBlockSync(newBlock.height);
+        }
       }
     } catch (err) {
       console.warn(`[PoH-Miner] Failed to process incoming block from ${from}:`, err.message);
