@@ -81,6 +81,13 @@ export class RewardClaimStore {
     }
   }
 
+  /** Add many claim keys at once and save exactly once. Used by balance rebuild. */
+  markClaimedMany(keys) {
+    let added = 0;
+    for (const k of keys) { if (k && !this.claimed.has(k)) { this.claimed.add(k); added++; } }
+    if (added > 0) this._save();
+  }
+
   /**
    * Atomically check and claim in one step. Returns true if newly claimed.
    */

@@ -2892,20 +2892,19 @@ export class PohMinerNode {
 
     // Clear claim store so replayed rewards aren't skipped
     this.rewardClaimStore.reset();
+    const claimKeys = [];
 
     for (const block of this.chain) {
       const coinbase = block.coinbaseReward;
       if (coinbase && block.minerWallet) {
         if (coinbase.proposerReward > 0) {
           addBalance(block.minerWallet, coinbase.proposerReward);
-          this.rewardClaimStore.markClaimed(`proposer-${block.height}`);
+          claimKeys.push(`proposer-${block.height}`);
         }
         for (const worker of (coinbase.workerRewards || [])) {
           if (worker.workerId && worker.amount > 0) {
             addBalance(worker.workerId, worker.amount);
-            this.rewardClaimStore.markClaimed(
-              RewardClaimStore.makeClaimKey(block.height, worker.workProofHash)
-            );
+            claimKeys.push(RewardClaimStore.makeClaimKey(block.height, worker.workProofHash));
           }
         }
       }
@@ -2919,6 +2918,8 @@ export class PohMinerNode {
         } catch { /* skip malformed tx */ }
       }
     }
+    // Persist all claim keys in one write
+    this.rewardClaimStore.markClaimedMany(claimKeys);
 
     // Flush accumulated balances to disk in one pass (one file read+write per address)
     for (const [addr, balance] of balances) {
