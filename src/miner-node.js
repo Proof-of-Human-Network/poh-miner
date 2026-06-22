@@ -2814,8 +2814,8 @@ export class PohMinerNode {
   async handleIncomingBlock(blockData, from) {
     try {
       const newBlock = PohBlock.fromJSON(blockData);
-      const currentHeight = this.chain.length - 1;
-      const tipHash = this.chain[currentHeight].getHashSync();
+      const currentHeight = this.chain[this.chain.length - 1]?.height ?? this.chain.length - 1;
+      const tipHash = this.chain[this.chain.length - 1].getHashSync();
 
       // Always reject invalid signatures
       if (newBlock.minerSignature && !newBlock.verifySignature()) {
