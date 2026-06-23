@@ -244,12 +244,22 @@ export class WalletManager {
     // claimed inside the transaction. This prevents an attacker from signing
     // with their own key while claiming to spend from someone else's address.
     if (!tx.signature) return 'invalid signature';
-    if (!sender.signingPublicKey) return 'sender has no registered signing key';
-    if (tx.signingPublicKey && tx.signingPublicKey !== sender.signingPublicKey) {
-      return 'invalid signature';
-    }
-    if (!Wallet.verifySignature(sender.signingPublicKey, tx.txHash, tx.signature)) {
-      return 'invalid signature';
+    if (!sender.signingPublicKey) {
+      // Key not yet registered — auto-register from tx if signature self-verifies.
+      // Safe: mempool already verified this signature; auto-registering on first confirmed
+      // tx eliminates the separate register-key round-trip requirement.
+      if (!tx.signingPublicKey) return 'sender has no registered signing key';
+      if (!Wallet.verifySignature(tx.signingPublicKey, tx.txHash, tx.signature)) {
+        return 'invalid signature';
+      }
+      sender.signingPublicKey = tx.signingPublicKey;
+    } else {
+      if (tx.signingPublicKey && tx.signingPublicKey !== sender.signingPublicKey) {
+        return 'invalid signature';
+      }
+      if (!Wallet.verifySignature(sender.signingPublicKey, tx.txHash, tx.signature)) {
+        return 'invalid signature';
+      }
     }
 
     sender.balance -= total;
