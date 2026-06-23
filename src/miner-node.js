@@ -112,6 +112,7 @@ const DEFAULT_ENABLED_SKILLS = new Set([
   'read_paragraph',
   'read_zora',
   'code_audit',
+  'web_search',
 ]);
 
 // Well-known production bootnodes. Used when no bootnodes are configured
@@ -449,7 +450,39 @@ export class PohMinerNode {
       if (name) { console.log(`[PoH-Miner] TFLOPS: AMD GPU "${name}" (unknown model) → ~10 TFLOPS`); return 10; }
     } catch {}
 
-    // 5. CPU FP benchmark fallback
+    // 5. Linux Intel GPU via lspci (Iris Xe integrated + Arc discrete)
+    if (process.platform === 'linux') {
+      try {
+        const INTEL_TFLOPS = {
+          // Intel Arc discrete (longer keys first)
+          'arc a770': 17.2, 'arc a750': 14.7, 'arc a580': 11.8, 'arc a380': 7.0, 'arc a310': 3.5,
+          // Intel Iris Xe integrated (Alder Lake / Tiger Lake / Raptor Lake)
+          'iris xe': 2.1,
+          // Older Intel integrated
+          'iris plus': 0.8, 'uhd 770': 0.9, 'uhd 750': 0.8, 'uhd 730': 0.7,
+          'uhd 720': 0.6, 'uhd 710': 0.5, 'uhd graphics': 0.5,
+        };
+        const lspciOut = _execSync('lspci', { timeout: 4000, encoding: 'utf8' });
+        const gpuLine = lspciOut.split('\n').find(l =>
+          (l.includes('VGA') || l.includes('3D controller') || l.includes('Display controller')) &&
+          l.toLowerCase().includes('intel')
+        );
+        if (gpuLine) {
+          const gpuName = gpuLine.toLowerCase();
+          for (const [key, tflops] of Object.entries(INTEL_TFLOPS)) {
+            if (gpuName.includes(key)) {
+              console.log(`[PoH-Miner] TFLOPS: Intel GPU "${gpuLine.trim()}" → ${tflops} TFLOPS`);
+              return tflops;
+            }
+          }
+          // Unknown Intel GPU — report minimal compute
+          console.log(`[PoH-Miner] TFLOPS: Intel GPU detected (unknown model) → ~0.5 TFLOPS`);
+          return 0.5;
+        }
+      } catch {}
+    }
+
+    // 6. CPU FP benchmark fallback
     const N = 512;
     const a = new Float64Array(N * N).fill(1.5);
     const b = new Float64Array(N * N).fill(0.7);
@@ -491,6 +524,22 @@ export class PohMinerNode {
       _execSync('rocm-smi --showproductname', { stdio: 'ignore', timeout: 5000 });
       return { available: true, type: 'AMD ROCm' };
     } catch {}
+
+    // Linux Intel GPU via lspci
+    if (process.platform === 'linux') {
+      try {
+        const lspciOut = _execSync('lspci', { timeout: 4000, encoding: 'utf8' });
+        const gpuLine = lspciOut.split('\n').find(l =>
+          (l.includes('VGA') || l.includes('3D controller') || l.includes('Display controller')) &&
+          l.toLowerCase().includes('intel')
+        );
+        if (gpuLine) {
+          const match = gpuLine.match(/\[([^\]]+)\]$/) || gpuLine.match(/Intel[^:]*:(.*)/i);
+          const gpuName = match ? match[1].trim() : 'Intel GPU';
+          return { available: true, type: gpuName };
+        }
+      } catch {}
+    }
 
     return { available: false, type: null };
   }
@@ -571,87 +620,72 @@ export class PohMinerNode {
    */
 
   // ── Shared routing logic used by /chat/route and /chat/ask ───────────────
-  async _routeMessage(message) {
+  //
+  // Segment-based routing: split message at conjunctions ("and", "also", etc.),
+  // match each segment to skills independently, cascade when multiple skills found.
+  // web_search is the catch-all for informational segments with no specific skill match.
+  // No LLM call needed — O(segments × skills) trigger matching scales to hundreds of skills.
+  _routeMessage(message) {
     const allSkills = skillsManager.getAllSkills().filter(s => s.context && (s.status === 'active' || s.status === 'proposed'));
-    if (!allSkills.length) return { type: 'chat' };
+    if (!allSkills.length) return Promise.resolve({ type: 'chat' });
 
-    const msgLower = message.toLowerCase();
+    // Extract global inputs (address / username present anywhere in the full message)
     const ADDR_RE   = /0x[0-9a-fA-F]{40}|[1-9A-HJ-NP-Za-km-z]{32,44}/;
     const ENS_RE    = /\b([\w-]+\.eth)\b/i;
     const HANDLE_RE = /@([\w.-]+)/;
     const addrMatch   = message.match(ADDR_RE);
     const ensMatch    = message.match(ENS_RE);
     const handleMatch = message.match(HANDLE_RE);
-    const extractedInput = { message }; // skills can use the raw message as fallback
-    if (addrMatch)   extractedInput.address  = addrMatch[0];
-    if (ensMatch)    extractedInput.username  = ensMatch[1].replace(/\.eth$/i, '');
-    else if (handleMatch) extractedInput.username = handleMatch[1].replace(/\.eth$/i, '');
+    const globalInput = { message };
+    if (addrMatch)   globalInput.address  = addrMatch[0];
+    if (ensMatch)    globalInput.username  = ensMatch[1].replace(/\.eth$/i, '');
+    else if (handleMatch) globalInput.username = handleMatch[1].replace(/\.eth$/i, '');
 
-    const queryMatch = message.match(/(?:about|search(?:ing)?(?: for)?|topic|regarding|mentioning|posts?(?:\s+about)?|casts?(?:\s+about)?|look(?:ing)?(?: up)?|find(?:ing)?|explain|define|what(?:'s| is)|who(?:'s| is)|tell me about)\s+[""']?([a-zA-Z0-9 ]{2,50})[""']?/i);
-    if (queryMatch) {
-      const q = queryMatch[1].trim();
-      if (q.toLowerCase() !== (extractedInput.username || '').toLowerCase()) extractedInput.query = q;
-    }
-    if (!extractedInput.query && !extractedInput.address && !extractedInput.username) {
-      extractedInput.query = message.slice(0, 200);
-    }
+    // Split at conjunctions so each clause can be routed independently
+    const SPLIT_RE = /\s*\b(?:and also|as well as|as well|and|also|plus|additionally)\b\s*[,;]?\s*/i;
+    const segments = message.split(SPLIT_RE).map(s => s.trim()).filter(Boolean);
 
-    const triggerHits = allSkills
-      .map(s => {
-        let score = 0;
-        for (const t of (s.triggers || [])) if (msgLower.includes(t.toLowerCase())) score++;
-        return { skill: s, score };
-      })
-      .filter(h => h.score > 0)
-      .sort((a, b) => b.score - a.score);
+    // Short conversational filler — don't web-search these
+    const CONVERSATIONAL_RE = /^(hi|hello|hey|thanks|thank you|ok|okay|yes|no|sure|great|cool|got it|makes sense|sounds good|nice|perfect|good|bye|see you|lol|haha|awesome|interesting|are you|what is your|what's your|how are you)\b/i;
 
-    // When exactly one skill matches triggers, fast-path to it.
-    // When multiple match, fall through to LLM so it can choose or cascade correctly.
-    if (triggerHits.length === 1) {
-      const matched = triggerHits[0].skill;
-      if (!extractedInput.address && !extractedInput.username) {
-        const bareMatch = message.match(/\b(?:of|for|from|does|did|by|check|lookup)\s+([\w-]{2,30})\b/i);
-        if (bareMatch) {
-          const candidate = bareMatch[1].toLowerCase();
-          const triggerWords = new Set((matched.triggers || []).map(t => t.toLowerCase()));
-          const BARE_STOP = new Set(['what','who','how','the','this','that','here','there','some','any','all',
-            'user','profile','account','farcaster','warpcast','cast','casts','posts','topic','search']);
-          if (!triggerWords.has(candidate) && !BARE_STOP.has(candidate) && candidate.length >= 2) {
-            extractedInput.username = candidate;
-          }
+    const webSearchSkill = allSkills.find(s => s.id === 'web_search');
+    const usedSkillIds   = new Set();
+    const jobs           = [];
+
+    for (const segment of segments) {
+      const segLower = segment.toLowerCase();
+
+      // Score every skill against this segment
+      const hits = allSkills
+        .map(s => {
+          let score = 0;
+          for (const t of (s.triggers || [])) if (segLower.includes(t.toLowerCase())) score++;
+          return { skill: s, score };
+        })
+        .filter(h => h.score > 0)
+        .sort((a, b) => b.score - a.score);
+
+      // Per-segment input — each segment gets its own query string
+      const segInput = { ...globalInput, query: segment, message: segment };
+
+      if (hits.length > 0) {
+        const best = hits[0].skill;
+        if (!usedSkillIds.has(best.id)) {
+          usedSkillIds.add(best.id);
+          jobs.push({ skillId: best.id, input: segInput, skillContext: best.context || null });
         }
+      } else if (webSearchSkill && !usedSkillIds.has('web_search')
+                 && !CONVERSATIONAL_RE.test(segment)
+                 && segment.trim().split(/\s+/).length >= 2) {
+        // Any substantive multi-word segment that no skill claimed → web_search catch-all
+        usedSkillIds.add('web_search');
+        jobs.push({ skillId: 'web_search', input: segInput, skillContext: webSearchSkill.context || null });
       }
-      return { type: 'skill', skillId: matched.id, input: extractedInput, skillContext: matched.context || null, reason: `trigger match (score ${triggerHits[0].score})` };
     }
 
-    const ollamaBase = this.config.ollamaUrl || 'http://localhost:11434';
-    const selModel   = this.config.model || 'qwen2.5:1.5b';
-    const skillBlock = allSkills.map(s => `[${s.id}] ${s.description || s.id}\nTriggers: ${(s.triggers || []).join(', ')}`).join('\n\n');
-    const routePrompt = `You are a routing agent. Decide which skill(s) to invoke for this message.\n\nSKILLS:\n${skillBlock}\n\nUSER MESSAGE: "${message.slice(0, 500)}"\n\nIf the message needs MULTIPLE independent skills at once (e.g. look up two different things), respond with:\n{"cascade":[{"skillId":"<id>","input":{"query":"<relevant query>"}},{"skillId":"<id>","input":{"address":"<addr>"}}],"reason":"<why cascade>"}\n\nIf a single skill applies:\n{"skillId":"<id>","input":{"address":"<wallet if present>","query":"<search query if relevant>"},"reason":"<one sentence>"}\n\nIf no skill applies:\n{"skillId":null,"reason":"<why not>"}\n\nOutput ONLY valid JSON.`;
-
-    let route = null;
-    try {
-      const ollamaRes = await fetch(`${ollamaBase}/api/chat`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model: selModel, messages: [{ role: 'user', content: routePrompt }], stream: false, format: 'json', options: { temperature: 0 } }),
-        signal: AbortSignal.timeout(45_000),
-      });
-      const ollamaData = await ollamaRes.json();
-      const raw = ollamaData.message?.content || ollamaData.response || '';
-      route = JSON.parse(raw.match(/\{[\s\S]*\}/)?.[0] || raw);
-    } catch { route = { skillId: null }; }
-
-    if (route?.cascade?.length > 1) {
-      const jobs = route.cascade
-        .map(j => ({ skillId: j.skillId, input: { ...extractedInput, ...j.input } }))
-        .filter(j => allSkills.find(s => s.id === j.skillId));
-      if (jobs.length > 1) return { type: 'cascade', jobs, reason: route.reason };
-    }
-
-    if (!route?.skillId) return { type: 'chat', reason: route?.reason };
-    const llmSkill = allSkills.find(s => s.id === route.skillId);
-    return { type: 'skill', skillId: route.skillId, input: { ...extractedInput, ...route.input }, skillContext: llmSkill?.context || null, reason: route.reason };
+    if (jobs.length === 0)  return Promise.resolve({ type: 'chat' });
+    if (jobs.length === 1)  return Promise.resolve({ type: 'skill', skillId: jobs[0].skillId, input: jobs[0].input, skillContext: jobs[0].skillContext, reason: 'segment match' });
+    return Promise.resolve({ type: 'cascade', jobs, reason: `segment cascade: ${jobs.map(j => j.skillId).join(', ')}` });
   }
 
   _openFirewallPort(port) {
@@ -3898,11 +3932,15 @@ export class PohMinerNode {
       // Do not slash for simulation fallbacks, local API jobs, or dev/testing
       const isSim    = result.methodsHash && String(result.methodsHash).startsWith('sim-');
       const isApiJob = request.source === 'api'; // submitted via local /job endpoint
-      if (!isSim && !isApiJob) {
+      // Skip slash when the input was fundamentally unresolvable (e.g. @handle not in IdentityHub):
+      // signalsEvaluated ≤ 1 with universal-chain detection means nothing could be fetched — not lazy mining.
+      const isUnresolvable = workValidation.signalsEvaluated <= 1 && workValidation.liveCount > 10;
+      if (!isSim && !isApiJob && !isUnresolvable) {
         // Only slash for network-originated work (gossip jobs) — not local UI searches
         this.applySlashing(0.15);
       } else {
-        console.log(`[PoH-Miner] Skipping self-slash — ${isApiJob ? 'local API job' : 'simulation fallback'}`);
+        const reason = isApiJob ? 'local API job' : isSim ? 'simulation fallback' : 'unresolvable input';
+        console.log(`[PoH-Miner] Skipping self-slash — ${reason}`);
       }
       return; // Do not propagate bad work
     }
