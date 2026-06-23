@@ -646,7 +646,8 @@ export class PohMinerNode {
           return res.end(JSON.stringify({ error: 'address required' }));
         }
         const nonce = this.walletManager.getNonce(address);
-        return res.end(JSON.stringify({ address, nonce }));
+        const pendingNonce = this.txMempool.accountPendingNonce.get(address) ?? nonce;
+        return res.end(JSON.stringify({ address, nonce, pendingNonce }));
       }
 
       // Register an ed25519 signing public key for a wallet address.
