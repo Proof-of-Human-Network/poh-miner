@@ -64,6 +64,46 @@ function computeBrainStateRoot(brainDir) {
   } catch { return null; }
 }
 
+// Markdown fallback renderer for skill output when LLM is unavailable or returns nothing.
+function _formatSkillOutputFallback(skillId, output) {
+  if (!output) return '_No data returned by skill._';
+  if (output.error) return `**Error:** ${output.error}`;
+
+  if (skillId === 'web_search') {
+    const lines = [`## Search results: ${output.query || ''}`];
+    if (output.summary) lines.push(`\n${output.summary}`);
+    if (output.results?.length) {
+      lines.push('\n### Results');
+      for (const r of output.results) {
+        const src = r.url ? ` ([source](${r.url}))` : '';
+        lines.push(`- **${r.title || 'Result'}** — ${r.snippet || ''}${src}`);
+      }
+    } else {
+      lines.push('\n_No results found. Try a different search query._');
+    }
+    lines.push(`\n*Source: ${output.source || 'DuckDuckGo'}*`);
+    return lines.join('\n');
+  }
+
+  if (skillId === 'read_farcaster') {
+    if (!output.fid) return '_No Farcaster account found for this address._';
+    const lines = [
+      `## ${output.displayName || output.username}`,
+      `**@${output.username}** · ${output.followerCount?.toLocaleString() || 0} followers`,
+    ];
+    if (output.bio) lines.push(`\n> ${output.bio}`);
+    if (output.analysis?.summary) lines.push(`\n${output.analysis.summary}`);
+    return lines.join('\n');
+  }
+
+  // Generic: convert top-level string/number fields to a readable list
+  const lines = [];
+  for (const [k, v] of Object.entries(output)) {
+    if (typeof v === 'string' || typeof v === 'number') lines.push(`- **${k}:** ${v}`);
+  }
+  return lines.length ? lines.join('\n') : '_Skill returned data with no displayable summary._';
+}
+
 // Builtin skills that are ON by default for every node.
 // All other skills (community-proposed) start disabled until the node operator enables them.
 const DEFAULT_ENABLED_SKILLS = new Set([
@@ -1556,10 +1596,19 @@ export class PohMinerNode {
                   const { output } = await skillsManager.runSkill(route.skillId, route.input, this.config);
                   const ollamaBase = this.config.ollamaUrl || 'http://localhost:11434';
                   const selModel   = reqModel || this.config.model || 'qwen2.5:1.5b';
-                  const systemContent = ['You are an AI assistant with access to real-time data fetched by a skill.',
-                    'Answer the user\'s question using the provided data. Be specific and concise.',
-                    skillEntry.context ? `\nSkill context:\n${skillEntry.context}` : ''].join('');
-                  const userContent = `Data:\n\`\`\`json\n${JSON.stringify(output, null, 2).slice(0, 8000)}\n\`\`\`\n\nQuestion: ${message}`;
+                  const systemContent = [
+                    'You are a helpful assistant. Answer the user\'s question using the real-time data provided.',
+                    'Rules:',
+                    '- Write in clear, human-readable Markdown (use ## headings, **bold**, bullet points).',
+                    '- NEVER output raw JSON, code blocks, or data structures in your answer.',
+                    '- For search results: write a short summary paragraph, then list the top results as "- **Title** — snippet" bullets.',
+                    '- For social/profile data: write a short natural-language summary.',
+                    '- Be specific — mention names, numbers, sources from the data.',
+                    '- If the data is empty or has no results, say so clearly and suggest rephrasing.',
+                    skillEntry.context ? `\nSkill context (how to interpret the data):\n${skillEntry.context}` : '',
+                  ].filter(Boolean).join('\n');
+                  const dataStr = JSON.stringify(output, null, 2).slice(0, 6000);
+                  const userContent = `Fetched data:\n${dataStr}\n\nUser question: ${message}`;
                   const llmRes = await fetch(`${ollamaBase}/api/chat`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -1567,7 +1616,8 @@ export class PohMinerNode {
                     signal: AbortSignal.timeout(40_000),
                   });
                   const llmData = await llmRes.json();
-                  const reply = llmData.message?.content || JSON.stringify(output, null, 2);
+                  const llmReply = llmData.message?.content || '';
+                  const reply = llmReply.trim() || _formatSkillOutputFallback(route.skillId, output);
                   return res.end(JSON.stringify({ type: 'chat', message: reply, skill: route.skillId }));
                 } catch (e) {
                   console.warn('[chat/ask] inline skill error:', e.message);
