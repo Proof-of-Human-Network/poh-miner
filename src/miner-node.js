@@ -70,6 +70,7 @@ const DEFAULT_ENABLED_SKILLS = new Set([
 // Well-known production bootnodes. Used when no bootnodes are configured
 // (e.g. fresh GUI onboarding). Individual users can override via config.bootnodes.
 const DEFAULT_BOOTNODES = [
+  "https://miner.proofofhuman.ge",
   "https://poh.assetux.com",
   "https://bootnode.proofofhuman.ge",
   "https://proofofhuman.ge"
@@ -751,6 +752,19 @@ export class PohMinerNode {
 
             // Gossip to peers so all miners can include it
             this.gossip.publish('new-tx', tx.toJSON()).catch(() => {});
+
+            // Also relay directly to bootnodes — gossip peer records use "localhost"
+            // (no POH_PUBLIC_HOST set), so P2P gossip stays local. Direct bootnode
+            // relay ensures active miners on the public network see the tx.
+            const txJSON = tx.toJSON();
+            for (const bootnode of (this.config.bootnodes || [])) {
+              fetch(`${bootnode}/api/tx/submit`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(txJSON),
+                signal: AbortSignal.timeout(5000),
+              }).catch(() => {});
+            }
 
             return res.end(JSON.stringify({ success: true, txHash: tx.txHash, status: 'pending', message: 'Transaction submitted to mempool' }));
           } catch (e) {
