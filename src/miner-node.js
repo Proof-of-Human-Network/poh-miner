@@ -48,12 +48,19 @@ import { EscrowManager, ESCROW_ADDRESS } from './p2p/escrow.js';
 function computeBrainStateRoot(brainDir) {
   if (!brainDir) return null;
   try {
-    const weightsPath = path.join(brainDir, 'weights.json');
-    const poolsPath   = path.join(brainDir, 'pools.json');
     const h = crypto.createHash('sha256');
-    if (fs.existsSync(weightsPath)) h.update(fs.readFileSync(weightsPath));
-    if (fs.existsSync(poolsPath))   h.update(fs.readFileSync(poolsPath));
-    return h.digest('hex');
+    let hasAny = false;
+    for (const f of ['weights.json', 'pools.json', 'skill_prefs.json', 'skill_stake_vault.json']) {
+      const p = path.join(brainDir, f);
+      if (fs.existsSync(p)) { h.update(fs.readFileSync(p)); hasAny = true; }
+    }
+    const labeledDir = path.join(brainDir, 'labeled');
+    if (fs.existsSync(labeledDir)) {
+      for (const f of fs.readdirSync(labeledDir).sort()) {
+        try { h.update(f); h.update(fs.readFileSync(path.join(labeledDir, f))); hasAny = true; } catch {}
+      }
+    }
+    return hasAny ? h.digest('hex') : null;
   } catch { return null; }
 }
 
@@ -145,6 +152,7 @@ export class PohMinerNode {
     this._appliedEscrowJobIds = new Set(); // prevents double-debit when block replay re-runs job-escrow
     this._appliedP2PIds = new Set(); // prevents double-apply of p2p-order/trade transitions during block replay
     this._appliedStateTransitionHeights = new Set(); // prevents double-apply of brain/skill transitions on self-mined blocks
+    this._gossipedJobTransitions = new Set(); // jobId:type keys — prevents duplicate pendingBrainTransitions from gossip
     this._pendingProposals = new Map(); // auditJobId → { manifest, code, context, proposerAddress }
 
     // Future: TEE attestation could further strengthen these guarantees
@@ -904,7 +912,7 @@ export class PohMinerNode {
             this._recordJob(job);
 
             // Commit job submission to chain so all nodes have the full job history
-            this.pendingBrainTransitions.push({
+            const jobSubmittedTransition = {
               type: 'job-submitted',
               jobId: job.id,
               jobType: job.type,
@@ -913,7 +921,11 @@ export class PohMinerNode {
               requesterAddress: job.requesterAddress || null,
               maxBudget: job.maxBudget || 0,
               timestamp: Date.now(),
-            });
+            };
+            this.pendingBrainTransitions.push(jobSubmittedTransition);
+            this._gossipedJobTransitions.add(`${job.id}:job-submitted`);
+            // Gossip the transition so any node that wins the next block can include it
+            this.gossip.publish('job-transition', jobSubmittedTransition).catch(() => {});
 
             // Emit escrow transition if this is a paid job
             if (job.requesterAddress && job.maxBudget > 0) {
@@ -947,12 +959,8 @@ export class PohMinerNode {
               message: 'Job accepted. Poll status or result URL.',
             };
 
-            // Broadcast to network so other miners can compete.
-            // code_audit is a builtin that runs on all nodes — gossip it so miners race.
-            // Other skill jobs stay local (private sandbox execution).
-            if (job.type !== 'skill' || job.skillId === 'code_audit') {
-              this.gossip.publish('new-job', job).catch(() => {});
-            }
+            // Broadcast all jobs to the network so miners can compete for compute.
+            this.gossip.publish('new-job', job).catch(() => {});
 
             // Fire background compute (do not block the HTTP response)
             setImmediate(() => {
@@ -2832,6 +2840,24 @@ export class PohMinerNode {
       this._applySkillAuditResult(verdict, null);
     });
 
+    // Job lifecycle transitions gossiped by the node that ran the job — any winner includes them
+    this.gossip.subscribe('job-transition', (t) => {
+      if (!t?.type || !t?.jobId) return;
+      const key = `${t.jobId}:${t.type}`;
+      if (this._gossipedJobTransitions.has(key)) return;
+      this._gossipedJobTransitions.add(key);
+      this.pendingBrainTransitions.push(t);
+    });
+
+    // Skill result hash from any miner — include in chain for audit trail
+    this.gossip.subscribe('skill-result-hash', (t) => {
+      if (!t?.jobId) return;
+      const key = `${t.jobId}:skill-result-hash`;
+      if (this._gossipedJobTransitions.has(key)) return;
+      this._gossipedJobTransitions.add(key);
+      this.pendingBrainTransitions.push({ type: 'skill-result-hash', ...t });
+    });
+
     // Peer feedback — sync reputation across all nodes; slash if this node was the miner
     this.gossip.subscribe('job-feedback', (transition) => {
       if (!transition?.jobId || !transition?.rating) return;
@@ -3354,6 +3380,11 @@ export class PohMinerNode {
     console.log('[PoH-Miner] Listening for jobs (with geo awareness)...');
 
     this.onNewJob = (rawJob) => {
+      // Skip if we already completed or are computing this job (prevents duplicate runs
+      // when our own gossip echoes back through bootnodes)
+      const existing = this.jobResults?.get(rawJob.id);
+      if (existing && (existing.status === 'done' || existing.status === 'computing')) return;
+
       const job = this.jobQueue.addJob(rawJob);
       this._recordJob(job); // make status/result queryable even for network-originated jobs
 
@@ -3497,7 +3528,7 @@ export class PohMinerNode {
 
         if (!this.jobQueue.completed.has(job.id)) this.jobQueue.markCompleted(job.id);
 
-        if (job.requesterAddress && job.maxBudget > 0) {
+        if (job.requesterAddress && job.maxBudget > 0 && this.escrow.has(job.id)) {
           const gasPrice = this.config.gasPrice || GAS.DEFAULT_GAS_PRICE;
           // For proposal audits pay the full fee flat (not per-token) — it's a governance fee
           const fee   = job.payload?._isProposalAudit ? job.maxBudget : settleFee(tokensUsed, gasPrice, job.maxBudget).fee;
@@ -3509,6 +3540,8 @@ export class PohMinerNode {
           const minerFee    = fee - proposerFee;
           const settled = { type: 'job-settled', jobId: job.id, requesterAddress: job.requesterAddress, minerAddress: this.config.wallet, actualTokens: tokensUsed, actualFee: minerFee, proposerAddress, proposerFee, refund, gasPrice, completedAt: Date.now() };
           this.pendingBrainTransitions.push(settled);
+          this._gossipedJobTransitions.add(`${job.id}:job-settled`);
+          this.gossip.publish('job-transition', settled).catch(() => {});
           this._applySettlement(settled);
         }
         return result;
