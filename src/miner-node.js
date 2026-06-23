@@ -71,9 +71,7 @@ const DEFAULT_ENABLED_SKILLS = new Set([
 // (e.g. fresh GUI onboarding). Individual users can override via config.bootnodes.
 const DEFAULT_BOOTNODES = [
   "https://miner.proofofhuman.ge",
-  "https://poh.assetux.com",
   "https://bootnode.proofofhuman.ge",
-  "https://proofofhuman.ge"
 ];
 
 export class PohMinerNode {
