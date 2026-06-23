@@ -326,7 +326,7 @@ async function scanWallet(rawInput, { allMethods, chainFilter }) {
 // ── Full check (signals + brain + profile + vibe) ────────────────────────────
 
 async function runFullCheck(input, options = {}) {
-  const allMethods = getMethods();
+  const allMethods = (options.methods && options.methods.length > 0) ? options.methods : getMethods();
   const scanCtx    = { allMethods, chainFilter: options.chainFilter };
 
   let results = await scanWallet(input, scanCtx);

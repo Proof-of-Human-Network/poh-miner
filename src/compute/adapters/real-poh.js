@@ -329,6 +329,7 @@ export async function computeWithRealPoh(job, config) {
   try {
     const fullResult = await checker.runFullCheck(scanAddress, {
       chainFilter: job.payload?.chainFilter,
+      methods: activeMethods.length > 0 ? activeMethods : undefined,
     });
 
     // Always guarantee a profile object (enrichProfile can fail in the checker try/catch)

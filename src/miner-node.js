@@ -672,7 +672,21 @@ export class PohMinerNode {
         const best = hits[0].skill;
         if (!usedSkillIds.has(best.id)) {
           usedSkillIds.add(best.id);
-          jobs.push({ skillId: best.id, input: segInput, skillContext: best.context || null });
+          // For social skills (farcaster, paragraph, zora, poh_identity): if no username
+          // was extracted from the full message (no @handle), try the last bare word in
+          // this segment as a username — covers "blog posts assetux" → username: "assetux"
+          const SOCIAL_SKILLS = new Set(['read_farcaster','read_paragraph','read_zora','poh_identity']);
+          const segJob = { skillId: best.id, input: { ...segInput }, skillContext: best.context || null };
+          if (SOCIAL_SKILLS.has(best.id) && !segJob.input.username && !segJob.input.address) {
+            const triggerWords = new Set((best.triggers || []).map(t => t.toLowerCase().split(/\s+/)).flat());
+            const words = segment.split(/\s+/).filter(w => w.length >= 2 && !triggerWords.has(w.toLowerCase()));
+            const candidate = words[words.length - 1]?.replace(/[^a-zA-Z0-9_.-]/g, '');
+            if (candidate && candidate.length >= 2) {
+              segJob.input.username = candidate.replace(/^@/, '');
+              segJob.input.query    = candidate;
+            }
+          }
+          jobs.push(segJob);
         }
       } else if (webSearchSkill && !usedSkillIds.has('web_search')
                  && !CONVERSATIONAL_RE.test(segment)
