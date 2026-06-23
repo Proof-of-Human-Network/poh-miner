@@ -15,7 +15,7 @@ const COMPILER_MODEL   = process.env.COMPILER_MODEL    || BASE_MODEL; // Small r
 // Cascade evaluator models (for brain verdicts)
 // Use smaller/faster model by default, escalate to heavy reasoning model when needed.
 const EVALUATOR_FAST_MODEL  = process.env.EVALUATOR_FAST_MODEL  || EVALUATOR_MODEL;
-const EVALUATOR_HEAVY_MODEL = process.env.EVALUATOR_HEAVY_MODEL || 'deepseek-r1:32b'; // or qwen3:32b etc.
+const EVALUATOR_HEAVY_MODEL = process.env.EVALUATOR_HEAVY_MODEL || EVALUATOR_MODEL; // set EVALUATOR_HEAVY_MODEL=deepseek-r1:32b if you have it
 
 // ── QVAC SDK config ────────────────────────────────────────────────────────────
 // Uses @qvac/sdk directly — no separate `qvac serve` process needed.
