@@ -546,18 +546,19 @@ export class PohMinerNode {
       extractedInput.query = message.slice(0, 200);
     }
 
-    let matched = null;
-    let matchedScore = 0;
-    for (const skill of allSkills) {
-      const triggers = skill.triggers || [];
-      let score = 0;
-      for (const trigger of triggers) {
-        if (msgLower.includes(trigger.toLowerCase())) score++;
-      }
-      if (score > matchedScore) { matchedScore = score; matched = skill; }
-    }
+    const triggerHits = allSkills
+      .map(s => {
+        let score = 0;
+        for (const t of (s.triggers || [])) if (msgLower.includes(t.toLowerCase())) score++;
+        return { skill: s, score };
+      })
+      .filter(h => h.score > 0)
+      .sort((a, b) => b.score - a.score);
 
-    if (matched && matchedScore > 0) {
+    // When exactly one skill matches triggers, fast-path to it.
+    // When multiple match, fall through to LLM so it can choose or cascade correctly.
+    if (triggerHits.length === 1) {
+      const matched = triggerHits[0].skill;
       if (!extractedInput.address && !extractedInput.username) {
         const bareMatch = message.match(/\b(?:of|for|from|does|did|by|check|lookup)\s+([\w-]{2,30})\b/i);
         if (bareMatch) {
@@ -570,7 +571,7 @@ export class PohMinerNode {
           }
         }
       }
-      return { type: 'skill', skillId: matched.id, input: extractedInput, skillContext: matched.context || null, reason: `trigger match (score ${matchedScore})` };
+      return { type: 'skill', skillId: matched.id, input: extractedInput, skillContext: matched.context || null, reason: `trigger match (score ${triggerHits[0].score})` };
     }
 
     const ollamaBase = this.config.ollamaUrl || 'http://localhost:11434';
@@ -1540,6 +1541,31 @@ export class PohMinerNode {
             const route = await this._routeMessage(message);
 
             if (route.type === 'skill') {
+              const skillEntry = skillsManager.getSkill(route.skillId);
+              // Builtin (private) skills run inline — no job queue, no fee required
+              if (skillEntry?.private === true && skillEntry?.code) {
+                try {
+                  const { output } = await skillsManager.runSkill(route.skillId, route.input, this.config);
+                  const ollamaBase = this.config.ollamaUrl || 'http://localhost:11434';
+                  const selModel   = reqModel || this.config.model || 'qwen2.5:1.5b';
+                  const systemContent = ['You are an AI assistant with access to real-time data fetched by a skill.',
+                    'Answer the user\'s question using the provided data. Be specific and concise.',
+                    skillEntry.context ? `\nSkill context:\n${skillEntry.context}` : ''].join('');
+                  const userContent = `Data:\n\`\`\`json\n${JSON.stringify(output, null, 2).slice(0, 8000)}\n\`\`\`\n\nQuestion: ${message}`;
+                  const llmRes = await fetch(`${ollamaBase}/api/chat`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ model: selModel, messages: [{ role: 'system', content: systemContent }, { role: 'user', content: userContent }], stream: false, options: { temperature: 0.7 } }),
+                    signal: AbortSignal.timeout(40_000),
+                  });
+                  const llmData = await llmRes.json();
+                  const reply = llmData.message?.content || JSON.stringify(output, null, 2);
+                  return res.end(JSON.stringify({ type: 'chat', message: reply, skill: route.skillId }));
+                } catch (e) {
+                  console.warn('[chat/ask] inline skill error:', e.message);
+                  // fall through to job routing
+                }
+              }
               return res.end(JSON.stringify({ type: 'skill', skillId: route.skillId, input: route.input, skillContext: route.skillContext }));
             }
 
