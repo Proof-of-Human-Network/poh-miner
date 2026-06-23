@@ -3736,6 +3736,7 @@ export class PohMinerNode {
   }
 
   async proposeBlock(abortSignal) {
+    if (this._syncInProgress) return null;
     const previous = this.chain[this.chain.length - 1];
 
     // === Fixed 1 POH per block + Strict Work Quality Filter ===
