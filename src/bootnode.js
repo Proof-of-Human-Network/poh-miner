@@ -178,7 +178,10 @@ async function syncFromPeer(peerUrl) {
   }
 }
 
-if (PEER_SYNC_URL) syncFromPeer(PEER_SYNC_URL);
+if (PEER_SYNC_URL) {
+  syncFromPeer(PEER_SYNC_URL);
+  setInterval(() => syncFromPeer(PEER_SYNC_URL), 30_000);
+}
 
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
