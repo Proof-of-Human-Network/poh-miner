@@ -153,6 +153,8 @@ export class PohMinerNode {
     this._appliedP2PIds = new Set(); // prevents double-apply of p2p-order/trade transitions during block replay
     this._appliedStateTransitionHeights = new Set(); // prevents double-apply of brain/skill transitions on self-mined blocks
     this._gossipedJobTransitions = new Set(); // jobId:type keys — prevents duplicate pendingBrainTransitions from gossip
+    this._activeJobId    = null; // job currently being computed (null = idle)
+    this._pendingJobQueue = [];  // jobs waiting for the active slot, sorted by priority
     this._pendingProposals = new Map(); // auditJobId → { manifest, code, context, proposerAddress }
 
     // Future: TEE attestation could further strengthen these guarantees
@@ -962,10 +964,8 @@ export class PohMinerNode {
             // Broadcast all jobs to the network so miners can compete for compute.
             this.gossip.publish('new-job', job).catch(() => {});
 
-            // Fire background compute (do not block the HTTP response)
-            setImmediate(() => {
-              this._processJobInBackground(job).catch(e => console.error('[job bg]', e));
-            });
+            // Enqueue — runs immediately if idle, queues otherwise
+            this._enqueueJob(job);
 
             // Also support legacy /test/job callers by including the old fields
             if (url.pathname === '/test/job') {
@@ -2840,6 +2840,18 @@ export class PohMinerNode {
       this._applySkillAuditResult(verdict, null);
     });
 
+    // A peer completed this job — drop it from our pending queue and move on
+    this.gossip.subscribe('job-claimed', ({ jobId }) => {
+      if (!jobId) return;
+      this.jobQueue.completed.add(jobId);
+      this.jobQueue.removeJob(jobId);
+      const idx = this._pendingJobQueue.findIndex(j => j.id === jobId);
+      if (idx !== -1) {
+        this._pendingJobQueue.splice(idx, 1);
+        console.log(`[PoH-Miner] Job ${jobId} claimed by peer — removed from pending queue (${this._pendingJobQueue.length} remaining)`);
+      }
+    });
+
     // Job lifecycle transitions gossiped by the node that ran the job — any winner includes them
     this.gossip.subscribe('job-transition', (t) => {
       if (!t?.type || !t?.jobId) return;
@@ -3390,7 +3402,7 @@ export class PohMinerNode {
 
       const minerInfo = {
         country: this.myLocation?.country,
-        currentLoad: 0.25,
+        currentLoad: this._activeJobId ? 1.0 : 0.0, // real load based on active slot
         reputation: this.reputation,
       };
 
@@ -3399,8 +3411,7 @@ export class PohMinerNode {
       if (score > 0 && this.config.computeEnabled) {
         const geoNote = job.originCountry ? ` [from: ${job.originCountry}]` : '';
         console.log(`[PoH-Miner] New job ${job.id} (${job.type})${geoNote} → score: ${score}`);
-        // compute will update the jobResults rec
-        this.computeAndSubmitJob(job);
+        this._enqueueJob(job);
       } else {
         const reason = score === 0 ? 'different continent / low priority' : 'compute disabled';
         console.log(`[PoH-Miner] Ignoring job ${job.id} (${reason})`);
@@ -3409,6 +3420,45 @@ export class PohMinerNode {
     };
 
     this.gossip.subscribe('new-job', this.onNewJob);
+  }
+
+  _enqueueJob(job) {
+    if (this._activeJobId) {
+      if (!this._pendingJobQueue.some(j => j.id === job.id)) {
+        this._pendingJobQueue.push(job);
+        this._pendingJobQueue.sort((a, b) =>
+          ((b.maxBudget || 0) - (a.maxBudget || 0)) || ((b.fee || 0) - (a.fee || 0))
+        );
+        console.log(`[PoH-Miner] Job ${job.id} queued (slot busy with ${this._activeJobId}, queue depth: ${this._pendingJobQueue.length})`);
+      }
+    } else {
+      this._startJob(job);
+    }
+  }
+
+  _startJob(job) {
+    this._activeJobId = job.id;
+    this._processJobInBackground(job).catch(e => {
+      console.error('[job bg]', e.message);
+    });
+  }
+
+  _drainJobQueue() {
+    while (this._pendingJobQueue.length > 0) {
+      const next = this._pendingJobQueue.shift();
+      if (this.jobQueue.completed.has(next.id)) {
+        console.log(`[PoH-Miner] Skipping ${next.id} — already claimed by a peer`);
+        continue;
+      }
+      const existing = this.jobResults?.get(next.id);
+      if (existing && (existing.status === 'done' || existing.status === 'computing')) {
+        console.log(`[PoH-Miner] Skipping ${next.id} — already processed`);
+        continue;
+      }
+      this._startJob(next);
+      return;
+    }
+    console.log('[PoH-Miner] Job queue drained — idle');
   }
 
   async computeAndSubmitJob(job) {
@@ -3747,9 +3797,16 @@ export class PohMinerNode {
     this._updateJob(jobId, { status: 'computing' });
     try {
       await this.computeAndSubmitJob(job);
-      // computeAndSubmitJob updates the rec to 'done' + result when successful
+      // Notify peers that this job is claimed so they drop it from their pending queues
+      const rec = this.jobResults?.get(jobId);
+      if (rec?.status === 'done') {
+        this.gossip.publish('job-claimed', { jobId, miner: this.config.wallet, ts: Date.now() }).catch(() => {});
+      }
     } catch (e) {
       this._updateJob(jobId, { status: 'error', error: e.message });
+    } finally {
+      this._activeJobId = null;
+      this._drainJobQueue();
     }
   }
 
