@@ -1791,7 +1791,7 @@ window.updateChatBudgetDisplay = function(val) {
   const step = parseInt(val, 10);
   const el = document.getElementById('chat-budget-display');
   if (!el) return;
-  el.textContent = step <= 0 ? 'No limit' : _formatPoh(_sliderStepToPoh(step));
+  el.textContent = step <= 0 ? 'no fee' : _formatPoh(_sliderStepToPoh(step));
   const slider = document.getElementById('chat-budget-slider');
   if (slider) slider.style.setProperty('--fill', `${(step / _BLOG_STEPS) * 100}%`);
 };
@@ -2304,7 +2304,7 @@ window.updateBudgetDisplay = function(val) {
   const step = parseInt(val, 10);
   const display = document.getElementById('budget-display');
   if (!display) return;
-  display.textContent = step <= 0 ? 'No limit' : _formatPoh(_sliderStepToPoh(step));
+  display.textContent = step <= 0 ? 'no fee' : _formatPoh(_sliderStepToPoh(step));
   const slider = document.getElementById('budget-slider');
   if (slider) slider.style.setProperty('--fill', `${(step / _BLOG_STEPS) * 100}%`);
 };

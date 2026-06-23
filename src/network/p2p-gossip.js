@@ -27,9 +27,10 @@ const DEFAULT_TTL = 4;                 // max hops
 const BROADCAST_TIMEOUT_MS = 4000;
 
 export class P2PGossip {
-  constructor(nodeId, getPeers) {
+  constructor(nodeId, getPeers, getBootnodes) {
     this.nodeId = nodeId;
     this.getPeers = getPeers;          // () => [{ host, walletApiPort, wallet }]
+    this.getBootnodes = getBootnodes;  // () => string[]  e.g. ['https://miner.proofofhuman.ge']
     this.listeners = new Map();        // topic → [handler]
     this.seen = new Map();             // envId → timestamp
     this._evictInterval = setInterval(() => this._evictSeen(), 60_000);
@@ -88,16 +89,25 @@ export class P2PGossip {
       p.wallet !== skipWallet &&
       !(envelope.path || []).includes(p.wallet)
     );
-    if (!peers.length) return;
 
-    await Promise.allSettled(peers.map(peer =>
+    // Always include bootnodes as seed peers — ensures gossip reaches the
+    // network even when peer host records are broken (e.g. all show 'localhost').
+    const boodnodeUrls = (this.getBootnodes?.() || []);
+    const seedPeers = boodnodeUrls.map(url => ({ url }));
+
+    const targets = [...peers, ...seedPeers];
+    if (!targets.length) return;
+
+    await Promise.allSettled(targets.map(peer =>
       this._sendToPeer(peer, envelope)
     ));
   }
 
   async _sendToPeer(peer, envelope) {
     try {
-      const url = `http://${peer.host}:${peer.walletApiPort}/gossip`;
+      const url = peer.url
+        ? `${peer.url.replace(/\/$/, '')}/gossip`
+        : `http://${peer.host}:${peer.walletApiPort}/gossip`;
       const ctrl = new AbortController();
       const timer = setTimeout(() => ctrl.abort(), BROADCAST_TIMEOUT_MS);
       await fetch(url, {

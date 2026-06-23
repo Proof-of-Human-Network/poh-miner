@@ -118,7 +118,8 @@ export class PohMinerNode {
     this.currentDifficulty = 5; // matches MIN_DIFFICULTY in pow.js
     this.gossip = new P2PGossip(
       this.config.wallet || 'unknown-miner',
-      () => this.peers || []   // live peer list — updated by discoverAndRegisterWithBootnodes
+      () => this.peers || [],   // live peer list — updated by discoverAndRegisterWithBootnodes
+      () => this.config.bootnodes || DEFAULT_BOOTNODES,
     );
     this.chainStore = new ChainStore();
     this.walletManager = new WalletManager();
@@ -145,6 +146,7 @@ export class PohMinerNode {
     this.escrow = new Map(); // jobId → { amount, requesterAddress, minerAddress }
     this._appliedEscrowJobIds = new Set(); // prevents double-debit when block replay re-runs job-escrow
     this._appliedP2PIds = new Set(); // prevents double-apply of p2p-order/trade transitions during block replay
+    this._appliedStateTransitionHeights = new Set(); // prevents double-apply of brain/skill transitions on self-mined blocks
     this._pendingProposals = new Map(); // auditJobId → { manifest, code, context, proposerAddress }
 
     // Future: TEE attestation could further strengthen these guarantees
@@ -591,6 +593,23 @@ export class PohMinerNode {
     if (!route?.skillId) return { type: 'chat', reason: route?.reason };
     const llmSkill = allSkills.find(s => s.id === route.skillId);
     return { type: 'skill', skillId: route.skillId, input: { ...extractedInput, ...route.input }, skillContext: llmSkill?.context || null, reason: route.reason };
+  }
+
+  _openFirewallPort(port) {
+    const p = process.platform;
+    const bin = process.execPath;
+    try {
+      if (p === 'darwin') {
+        const fw = '/usr/libexec/ApplicationFirewall/socketfilterfw';
+        _execSync(`"${fw}" --add "${bin}"`, { stdio: 'ignore', timeout: 5000 });
+        _execSync(`"${fw}" --unblockapp "${bin}"`, { stdio: 'ignore', timeout: 5000 });
+      } else if (p === 'linux') {
+        try { _execSync(`ufw allow ${port}/tcp comment poh-miner`, { stdio: 'ignore', timeout: 5000 }); } catch {}
+        try { _execSync(`iptables -C INPUT -p tcp --dport ${port} -j ACCEPT 2>/dev/null || iptables -I INPUT -p tcp --dport ${port} -j ACCEPT`, { stdio: 'ignore', timeout: 5000 }); } catch {}
+      } else if (p === 'win32') {
+        _execSync(`netsh advfirewall firewall add rule name="PoH Miner API" dir=in action=allow protocol=TCP localport=${port}`, { stdio: 'ignore', timeout: 5000 });
+      }
+    } catch { /* no firewall access — OS may still allow it */ }
   }
 
   startWalletApiServer(port = 3456) {
@@ -1817,7 +1836,8 @@ export class PohMinerNode {
         const payloadStr = JSON.stringify(payloadObj);
         if (!Wallet.verifySignature(signingPublicKey, payloadStr, signature)) return { error: 'invalid signature' };
         const stored = this.walletManager.loadWallet(address);
-        if (stored?.signingPublicKey && stored.signingPublicKey !== signingPublicKey) {
+        if (!stored) return { error: 'wallet not found on this node; connect your wallet first' };
+        if (stored.signingPublicKey && stored.signingPublicKey !== signingPublicKey) {
           return { error: 'signing key mismatch' };
         }
         return true;
@@ -2022,16 +2042,19 @@ export class PohMinerNode {
             const canCancel = address === trade.taker || (order && address === order.maker);
             if (!canCancel) { res.statusCode = 403; return res.end(JSON.stringify({ error: 'not a trade participant' })); }
 
-            // Refund escrow to the party who locked
-            const locker  = order?.side === 'sell' ? order?.maker : trade.taker;
-            const lockAmt  = trade.pohAmount;
-            if (order?.escrowLocked) {
+            // Refund escrow to the party who locked.
+            // Sell orders: maker locked at order creation (escrowLocked flag).
+            // Buy orders: taker locked at selectOrder time (no flag on order).
+            const locker = order?.side === 'sell' ? order?.maker : trade.taker;
+            const lockAmt = trade.pohAmount;
+            const hadEscrow = order?.side === 'sell' ? !!order?.escrowLocked : true;
+            if (hadEscrow) {
               this.p2pEscrow.release(this.walletManager, locker, lockAmt);
             }
             const result = this.p2pOrderStore.cancelTrade(tradeId);
             if (result.error) { res.statusCode = 400; return res.end(JSON.stringify(result)); }
             this._appliedP2PIds.add(`trade-${tradeId}-cancel`);
-            this.pendingBrainTransitions.push({ type: 'p2p-trade-cancel', tradeId, locker, pohAmount: lockAmt, escrowLocked: !!order?.escrowLocked, updatedAt: Date.now() });
+            this.pendingBrainTransitions.push({ type: 'p2p-trade-cancel', tradeId, locker, pohAmount: lockAmt, escrowLocked: hadEscrow, updatedAt: Date.now() });
             this.gossip.publish('p2p-trade', result.trade).catch(() => {});
             this.gossip.publish('p2p-order', this.p2pOrderStore.getOrder(trade.orderId)).catch(() => {});
             return res.end(JSON.stringify(result));
@@ -2096,6 +2119,7 @@ export class PohMinerNode {
     });
 
     server.listen(port, () => {
+      this._openFirewallPort(port);
       console.log(`[PoH-Miner] Wallet API listening on http://localhost:${port}`);
       console.log(`   Wallet: curl "http://localhost:${port}/api/wallet/balance?address=${this.config.wallet}"`);
       console.log(`   Submit job: curl -X POST http://localhost:${port}/job -d '{"payload":{"address":"bc1q..."}}'`);
@@ -2863,9 +2887,7 @@ export class PohMinerNode {
         const ourWork  = getTipChainWork(this.chain);
         if (compareChainWork(newBlock.chainWork, ourWork) > 0) {
           console.log(`[PoH-Miner] Fork: incoming block #${newBlock.height} has more chainWork — switching`);
-          // Roll back our tip and replace with the heavier block
-          this.chain.pop();
-          this._appendBlock(newBlock, from);
+          await this.reorgTo([newBlock]);
         } else {
           // Put in orphan pool; may become canonical if a longer chain follows
           this._storeOrphan(newBlock);
@@ -2942,6 +2964,7 @@ export class PohMinerNode {
         const key = `proposer-${block.height}`;
         if (this.rewardClaimStore.claimIfNotAlready(key)) {
           this.walletManager.credit(block.minerWallet, coinbase.proposerReward);
+          this.balanceJournal.record(block.height, block.minerWallet, coinbase.proposerReward, 0, key);
         }
       }
       for (const worker of (coinbase.workerRewards || [])) {
@@ -2949,12 +2972,14 @@ export class PohMinerNode {
           const key = RewardClaimStore.makeClaimKey(block.height, worker.workProofHash);
           if (this.rewardClaimStore.claimIfNotAlready(key)) {
             this.walletManager.credit(worker.workerId, worker.amount);
+            this.balanceJournal.record(block.height, worker.workerId, worker.amount, 0, key);
           }
         }
       }
     }
 
-    if (block.stateTransitions?.length) {
+    if (block.stateTransitions?.length && !this._appliedStateTransitionHeights.has(block.height)) {
+      this._appliedStateTransitionHeights.add(block.height);
       for (const tx of block.stateTransitions) {
         this.processStateTransition(tx).catch(() => {});
       }
@@ -3005,6 +3030,26 @@ export class PohMinerNode {
           if (tx.fee > 0 && block.minerWallet) addBalance(block.minerWallet, tx.fee);
         } catch { /* skip malformed tx */ }
       }
+      // Apply P2P escrow movements from stateTransitions so poh_p2p_escrow
+      // balance survives a fresh-start rebuild (escrow is off-chain state).
+      for (const t of (block.stateTransitions || [])) {
+        if (t.type === 'p2p-order-created' && t.side === 'sell' && t.escrowLocked) {
+          subBalance(t.maker, t.pohAmount);
+          addBalance(ESCROW_ADDRESS, t.pohAmount);
+        } else if (t.type === 'p2p-order-cancelled' && t.side === 'sell' && t.escrowLocked) {
+          subBalance(ESCROW_ADDRESS, t.pohAmount);
+          addBalance(t.maker, t.pohAmount);
+        } else if (t.type === 'p2p-trade-created' && t.orderSide === 'buy') {
+          subBalance(t.taker, t.pohAmount);
+          addBalance(ESCROW_ADDRESS, t.pohAmount);
+        } else if (t.type === 'p2p-trade-release') {
+          subBalance(ESCROW_ADDRESS, t.pohAmount);
+          addBalance(t.recipient, t.pohAmount);
+        } else if (t.type === 'p2p-trade-cancel' && t.escrowLocked) {
+          subBalance(ESCROW_ADDRESS, t.pohAmount);
+          addBalance(t.locker, t.pohAmount);
+        }
+      }
     }
     // Persist all claim keys in one write
     this.rewardClaimStore.markClaimedMany(claimKeys);
@@ -3027,6 +3072,12 @@ export class PohMinerNode {
         if (w && (w.balance || 0) !== 0) { w.balance = 0; this.walletManager.saveWallet(w); }
       }
     }
+
+    // Clear dedup sets so gossip/stateTransitions for pre-existing orders
+    // are re-applied correctly on the new canonical chain.
+    this._appliedP2PIds.clear();
+    this._appliedEscrowJobIds.clear();
+    this._appliedStateTransitionHeights.clear();
 
     console.log(`[PoH-Miner] Balance rebuild complete — processed ${this.chain.length} blocks`);
   }
@@ -3204,6 +3255,11 @@ export class PohMinerNode {
 
     // Undo balance changes for rolled-back blocks
     const undone = this.balanceJournal.rollbackTo(commonHeight);
+
+    // Clear mempool nonce tracking so senders whose txs were in rolled-back
+    // blocks can resubmit with the correct (reverted) nonces.
+    this.txMempool.accountPendingNonce.clear();
+    if (this.txMempool.pendingOut) this.txMempool.pendingOut.clear();
     console.log(`[PoH-Miner] Reorg: reversed ${undone} journal entries`);
 
     // Unclaim reward claims so they can be re-earned on the new chain
@@ -3778,7 +3834,8 @@ export class PohMinerNode {
 
     const stateRoot      = this.walletManager.getStateRoot();
     const brainStateRoot = computeBrainStateRoot(getBrainDataDir());
-    const brainTransitions = this.pendingBrainTransitions.splice(0);
+    // Snapshot transitions now but only consume them if PoW succeeds.
+    const brainTransitions = [...this.pendingBrainTransitions];
     if (brainStateRoot) brainTransitions.push({ type: 'brain-state-root', hash: brainStateRoot });
 
     const newBlock = new PohBlock({
@@ -3801,6 +3858,9 @@ export class PohMinerNode {
     if (attempts === null) return null; // aborted by incoming block
 
     if (newBlock.meetsDifficultySync()) {
+      // PoW succeeded — now safe to consume the transitions we snapshotted above.
+      this.pendingBrainTransitions.splice(0, brainTransitions.filter(t => t.type !== 'brain-state-root').length);
+
       // Sign the block with our identity key after PoW is solved
       if (this.identityWallet) newBlock.sign(this.identityWallet);
 
@@ -3836,10 +3896,14 @@ export class PohMinerNode {
       }
       if (appliedTxHashes.length) this.txMempool.onBlockApplied(appliedTxHashes);
 
-      // Credit the proposer reward (only the producer claims this)
+      // Credit the proposer reward via claim store so gossip echo doesn't double-credit.
       if (this.config.wallet && coinbase.proposerReward > 0) {
-        this.walletManager.credit(this.config.wallet, coinbase.proposerReward);
-        console.log(`[PoH-Miner] Credited ${(coinbase.proposerReward / POH_DECIMALS).toFixed(4)} POH (proposer) to ${this.config.wallet}`);
+        const proposerKey = `proposer-${newBlock.height}`;
+        if (this.rewardClaimStore.claimIfNotAlready(proposerKey)) {
+          this.walletManager.credit(this.config.wallet, coinbase.proposerReward);
+          this.balanceJournal.record(newBlock.height, this.config.wallet, coinbase.proposerReward, 0, proposerKey);
+          console.log(`[PoH-Miner] Credited ${(coinbase.proposerReward / POH_DECIMALS).toFixed(4)} POH (proposer) to ${this.config.wallet}`);
+        }
       }
 
       // Credit any worker rewards this node earned (works for both produced and received blocks)
@@ -3851,8 +3915,10 @@ export class PohMinerNode {
       // Submit to bootnodes — send a batch if the bootnode fell behind (crash/restart recovery)
       this._pushBlocksToBootnodes(newBlock).catch(() => {});
 
-      // Process any signals updates in this block
+      // Process stateTransitions for this self-mined block and mark the height so
+      // _applyBlockState skips them when the block echoes back via gossip.
       if (newBlock.stateTransitions?.length) {
+        this._appliedStateTransitionHeights.add(newBlock.height);
         for (const tx of newBlock.stateTransitions) {
           await this.processStateTransition(tx);
         }

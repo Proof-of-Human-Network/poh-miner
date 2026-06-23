@@ -26,15 +26,19 @@ export class OrderStore {
   }
 
   _saveOrders() {
-    try { fs.writeFileSync(this.ordersFile, JSON.stringify(this.orders, null, 2)); } catch (e) {
-      console.error('[P2P] Failed to save orders:', e.message);
-    }
+    try {
+      const tmp = this.ordersFile + '.tmp';
+      fs.writeFileSync(tmp, JSON.stringify(this.orders, null, 2));
+      fs.renameSync(tmp, this.ordersFile);
+    } catch (e) { console.error('[P2P] Failed to save orders:', e.message); }
   }
 
   _saveTrades() {
-    try { fs.writeFileSync(this.tradesFile, JSON.stringify(this.trades, null, 2)); } catch (e) {
-      console.error('[P2P] Failed to save trades:', e.message);
-    }
+    try {
+      const tmp = this.tradesFile + '.tmp';
+      fs.writeFileSync(tmp, JSON.stringify(this.trades, null, 2));
+      fs.renameSync(tmp, this.tradesFile);
+    } catch (e) { console.error('[P2P] Failed to save trades:', e.message); }
   }
 
   // ─── Orders ──────────────────────────────────────────────────────────────
@@ -172,6 +176,7 @@ export class OrderStore {
     const t = this.trades[tradeId];
     if (!t) return { error: 'trade not found' };
     if (t.status === 'completed') return { error: 'trade already completed' };
+    if (t.status === 'payment_sent') return { error: 'cannot cancel after payment sent; open a dispute instead' };
     this._patchTrade(tradeId, { status: 'cancelled' });
     this._patchOrder(t.orderId, { status: 'open', tradeId: null, escrowLocked: false });
     return { trade: this.trades[tradeId] };

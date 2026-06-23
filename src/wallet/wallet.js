@@ -98,7 +98,8 @@ export class Wallet {
   }
 
   /**
-   * Verify a signature produced by a Wallet.sign using the provided public PEM.
+   * Verify a signature produced by a Wallet.sign.
+   * Accepts a PEM string OR a raw 32-byte ed25519 public key in base64.
    */
   static verifySignature(publicKeyPem, data, signatureBase64) {
     try {
@@ -106,7 +107,16 @@ export class Wallet {
         typeof data === 'string' ? data : JSON.stringify(data)
       );
       const sig = Buffer.from(signatureBase64, 'base64');
-      return crypto.verify(null, msg, publicKeyPem, sig);
+      let key = publicKeyPem;
+      // If it's a raw base64 public key (32 bytes = 44 base64 chars, no PEM header)
+      if (typeof publicKeyPem === 'string' && !publicKeyPem.startsWith('-----')) {
+        const rawBytes = Buffer.from(publicKeyPem, 'base64');
+        // Wrap in ed25519 SPKI DER and import as KeyObject
+        const SPKI_PREFIX = Buffer.from('302a300506032b6570032100', 'hex');
+        const der = Buffer.concat([SPKI_PREFIX, rawBytes]);
+        key = crypto.createPublicKey({ key: der, format: 'der', type: 'spki' });
+      }
+      return crypto.verify(null, msg, key, sig);
     } catch (e) {
       return false;
     }
@@ -117,6 +127,15 @@ export class WalletManager {
   constructor(walletsDir) {
     this.walletsDir = walletsDir || WALLETS_DIR;
     ensureDir(this.walletsDir);
+    this._locks = new Map(); // address → Promise chain (per-address mutex)
+  }
+
+  // Serialize all read-modify-write ops per address to prevent concurrent double-spend.
+  _withLock(address, fn) {
+    const prev = this._locks.get(address) || Promise.resolve();
+    const next = prev.then(fn).catch(() => {});
+    this._locks.set(address, next);
+    return next;
   }
 
   createWallet() {
@@ -127,7 +146,9 @@ export class WalletManager {
 
   saveWallet(wallet) {
     const file = path.join(this.walletsDir, `${wallet.address}.json`);
-    fs.writeFileSync(file, JSON.stringify(wallet.toJSON(), null, 2));
+    const tmp  = file + '.tmp';
+    fs.writeFileSync(tmp, JSON.stringify(wallet.toJSON(), null, 2));
+    fs.renameSync(tmp, file);
     return file;
   }
 
@@ -160,30 +181,26 @@ export class WalletManager {
   // Auto-creates a stub wallet file for the address if none exists (so remote workerIds or
   // alternate identity addresses like solana addrs used as pohWallet still get balances recorded).
   credit(address, amount) {
-    let wallet = this.loadWallet(address);
-    if (!wallet) {
-      // Create a minimal stub so this address can hold balance/rewards.
-      // (Real signing keys etc. not needed for pure balance accounting.)
-      wallet = new Wallet({
-        address: address,
-        privateKey: null,
-        publicKey: null,
-        createdAt: Date.now(),
-      });
-      // Note: this will be saved below after balance update.
-    }
-    wallet.balance = (wallet.balance || 0) + amount;
-    this.saveWallet(wallet);
-    return true;
+    return this._withLock(address, () => {
+      let wallet = this.loadWallet(address);
+      if (!wallet) {
+        wallet = new Wallet({ address, privateKey: null, publicKey: null, createdAt: Date.now() });
+      }
+      wallet.balance = (wallet.balance || 0) + amount;
+      this.saveWallet(wallet);
+      return true;
+    });
   }
 
   // Debit balance (for sending)
   debit(address, amount) {
-    const wallet = this.loadWallet(address);
-    if (!wallet || (wallet.balance || 0) < amount) return false;
-    wallet.balance = (wallet.balance || 0) - amount;
-    this.saveWallet(wallet);
-    return true;
+    return this._withLock(address, () => {
+      const wallet = this.loadWallet(address);
+      if (!wallet || (wallet.balance || 0) < amount) return false;
+      wallet.balance = (wallet.balance || 0) - amount;
+      this.saveWallet(wallet);
+      return true;
+    });
   }
 
   // Transfer between two local wallets (for testing / future full tx system)
