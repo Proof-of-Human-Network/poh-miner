@@ -532,15 +532,18 @@ export class PohMinerNode {
     const addrMatch   = message.match(ADDR_RE);
     const ensMatch    = message.match(ENS_RE);
     const handleMatch = message.match(HANDLE_RE);
-    const extractedInput = {};
+    const extractedInput = { message }; // skills can use the raw message as fallback
     if (addrMatch)   extractedInput.address  = addrMatch[0];
     if (ensMatch)    extractedInput.username  = ensMatch[1].replace(/\.eth$/i, '');
     else if (handleMatch) extractedInput.username = handleMatch[1].replace(/\.eth$/i, '');
 
-    const queryMatch = message.match(/(?:about|search(?:ing)?(?: for)?|topic|regarding|mentioning|posts?(?:\s+about)?|casts?(?:\s+about)?)\s+[""']?([a-zA-Z0-9 ]{2,30})[""']?/i);
+    const queryMatch = message.match(/(?:about|search(?:ing)?(?: for)?|topic|regarding|mentioning|posts?(?:\s+about)?|casts?(?:\s+about)?|look(?:ing)?(?: up)?|find(?:ing)?|explain|define|what(?:'s| is)|who(?:'s| is)|tell me about)\s+[""']?([a-zA-Z0-9 ]{2,50})[""']?/i);
     if (queryMatch) {
-      const q = queryMatch[1].trim().toLowerCase();
-      if (q !== (extractedInput.username || '').toLowerCase()) extractedInput.query = q;
+      const q = queryMatch[1].trim();
+      if (q.toLowerCase() !== (extractedInput.username || '').toLowerCase()) extractedInput.query = q;
+    }
+    if (!extractedInput.query && !extractedInput.address && !extractedInput.username) {
+      extractedInput.query = message.slice(0, 200);
     }
 
     let matched = null;
@@ -573,7 +576,7 @@ export class PohMinerNode {
     const ollamaBase = this.config.ollamaUrl || 'http://localhost:11434';
     const selModel   = this.config.model || 'qwen2.5:1.5b';
     const skillBlock = allSkills.map(s => `[${s.id}] ${s.description || s.id}\nTriggers: ${(s.triggers || []).join(', ')}`).join('\n\n');
-    const routePrompt = `You are a routing agent. Decide which skill to invoke for this message.\n\nSKILLS:\n${skillBlock}\n\nUSER MESSAGE: "${message.slice(0, 500)}"\n\nIf a skill applies, respond with JSON:\n{"skillId":"<id>","input":{"address":"<wallet address if present, else null>"},"reason":"<one sentence>"}\n\nIf no skill applies, respond with:\n{"skillId":null,"reason":"<why not>"}\n\nOutput ONLY valid JSON.`;
+    const routePrompt = `You are a routing agent. Decide which skill(s) to invoke for this message.\n\nSKILLS:\n${skillBlock}\n\nUSER MESSAGE: "${message.slice(0, 500)}"\n\nIf the message needs MULTIPLE independent skills at once (e.g. look up two different things), respond with:\n{"cascade":[{"skillId":"<id>","input":{"query":"<relevant query>"}},{"skillId":"<id>","input":{"address":"<addr>"}}],"reason":"<why cascade>"}\n\nIf a single skill applies:\n{"skillId":"<id>","input":{"address":"<wallet if present>","query":"<search query if relevant>"},"reason":"<one sentence>"}\n\nIf no skill applies:\n{"skillId":null,"reason":"<why not>"}\n\nOutput ONLY valid JSON.`;
 
     let route = null;
     try {
@@ -587,6 +590,13 @@ export class PohMinerNode {
       const raw = ollamaData.message?.content || ollamaData.response || '';
       route = JSON.parse(raw.match(/\{[\s\S]*\}/)?.[0] || raw);
     } catch { route = { skillId: null }; }
+
+    if (route?.cascade?.length > 1) {
+      const jobs = route.cascade
+        .map(j => ({ skillId: j.skillId, input: { ...extractedInput, ...j.input } }))
+        .filter(j => allSkills.find(s => s.id === j.skillId));
+      if (jobs.length > 1) return { type: 'cascade', jobs, reason: route.reason };
+    }
 
     if (!route?.skillId) return { type: 'chat', reason: route?.reason };
     const llmSkill = allSkills.find(s => s.id === route.skillId);
@@ -1531,6 +1541,40 @@ export class PohMinerNode {
 
             if (route.type === 'skill') {
               return res.end(JSON.stringify({ type: 'skill', skillId: route.skillId, input: route.input, skillContext: route.skillContext }));
+            }
+
+            if (route.type === 'cascade') {
+              // Run all cascade skills in parallel, then synthesize with LLM
+              const jobResults = await Promise.allSettled(
+                route.jobs.map(async job => {
+                  const { output } = await skillsManager.runSkill(job.skillId, job.input, this.config);
+                  return { skillId: job.skillId, output };
+                })
+              );
+              const results = jobResults.map((r, i) => ({
+                skillId: route.jobs[i].skillId,
+                output: r.status === 'fulfilled' ? r.value.output : { error: r.reason?.message || 'skill failed' },
+              }));
+
+              const ollamaBase = this.config.ollamaUrl || 'http://localhost:11434';
+              const selModel   = reqModel || this.config.model || 'qwen2.5:1.5b';
+              const resultsBlock = results.map(r =>
+                `[${r.skillId}]:\n${JSON.stringify(r.output, null, 2).slice(0, 1500)}`
+              ).join('\n\n---\n\n');
+              const synthPrompt = `The user asked: "${message.slice(0, 400)}"\n\nYou ran ${results.length} parallel skill lookups. Results:\n\n${resultsBlock}\n\nSynthesize all results into a clear, complete answer. Be concise and direct.`;
+              try {
+                const synthRes = await fetch(`${ollamaBase}/api/chat`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ model: selModel, messages: [{ role: 'user', content: synthPrompt }], stream: false, options: { temperature: 0.7 } }),
+                  signal: AbortSignal.timeout(40_000),
+                });
+                const synthData = await synthRes.json();
+                const reply = synthData.message?.content || results.map(r => JSON.stringify(r.output)).join('\n\n');
+                return res.end(JSON.stringify({ type: 'chat', message: reply, cascade: true, jobs: results }));
+              } catch {
+                return res.end(JSON.stringify({ type: 'chat', message: results.map(r => JSON.stringify(r.output, null, 2)).join('\n\n'), cascade: true, jobs: results }));
+              }
             }
 
             // Free LLM answer (non-streaming so any client can use it)
