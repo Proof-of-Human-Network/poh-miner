@@ -49,5 +49,10 @@
   "pohWallet": "",
   "solanaAddress": "",
 
-  "onboarded": false
+  "onboarded": false,
+
+  "_comment_genesisAlloc": "Optional: pre-fund addresses at block 0 on a clean network start. Amounts in raw POH (1 POH = 1000000000 raw). Only applied once when chain is empty.",
+  "genesisAlloc": {
+    "poh_YOUR_WALLET_HERE": 1000000000000
+  }
 }

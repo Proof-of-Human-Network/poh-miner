@@ -2357,6 +2357,19 @@ export class PohMinerNode {
       });
       this.chain.push(genesis);
       this.chainStore.saveChain(this.chain);
+
+      // Apply genesis allocations from config: { genesisAlloc: { "poh123...": 1000000000 } }
+      // Amounts are in raw POH units (1 POH = 1e9 raw).
+      const alloc = this.config.genesisAlloc;
+      if (alloc && typeof alloc === 'object') {
+        for (const [address, amount] of Object.entries(alloc)) {
+          const raw = Number(amount);
+          if (raw > 0) {
+            this.walletManager.credit(address, raw);
+            console.log(`[PoH-Miner] Genesis alloc: ${address} +${raw} (${(raw / 1e9).toFixed(4)} POH)`);
+          }
+        }
+      }
     }
 
     // 3. Apply IPFS chain snapshot if it extends our local chain
@@ -2521,6 +2534,35 @@ export class PohMinerNode {
           }
         }
       } catch { /* ignore — proceed without fork flag */ }
+    }
+
+    // 3c. Genesis check: if the peer's block 0 hash differs from ours, it's a completely
+    // different network — never sync from it, regardless of chainWork.
+    if (bestBase && this.chain.length > 0) {
+      const localGenesis     = this.chain.find(b => b.height === 0) ?? this.chain[0];
+      const localGenesisHash = localGenesis?.getHashSync();
+      if (localGenesisHash) {
+        try {
+          const r = await fetch(`${bestBase}/chain/blocks?from=0&to=0`, { signal: AbortSignal.timeout(5000) });
+          if (r.ok) {
+            const blocks = await r.json();
+            if (Array.isArray(blocks) && blocks.length > 0) {
+              const peerGenesis     = PohBlock.fromJSON ? PohBlock.fromJSON(blocks[0]) : new PohBlock(blocks[0]);
+              const peerGenesisHash = peerGenesis.getHashSync();
+              if (peerGenesisHash !== localGenesisHash) {
+                console.error(`[PoH-Miner] ⛔ GENESIS MISMATCH — peer ${bestLabel} is on a different network!`);
+                console.error(`[PoH-Miner]    local genesis: ${localGenesisHash}`);
+                console.error(`[PoH-Miner]    peer  genesis: ${peerGenesisHash}`);
+                console.error(`[PoH-Miner]    Refusing to sync. Wipe ~/.poh-miner/chain if you intend to join a new network.`);
+                return;
+              }
+              console.log(`[PoH-Miner] [Sync] Genesis hash verified ✓ (${localGenesisHash.slice(0, 12)}…)`);
+            }
+          }
+        } catch (e) {
+          console.warn(`[PoH-Miner] [Sync] Could not verify genesis hash against ${bestLabel}: ${e.message}`);
+        }
+      }
     }
 
     // 4. IPFS fallback if no live peer has a longer chain
@@ -3060,6 +3102,16 @@ export class PohMinerNode {
       const newBlock = PohBlock.fromJSON(blockData);
       const currentHeight = this.chain[this.chain.length - 1]?.height ?? this.chain.length - 1;
       const tipHash = this.chain[this.chain.length - 1].getHashSync();
+
+      // Reject blocks whose genesis ancestor can't possibly match ours.
+      // A block at height 0 from a peer is only valid if its hash matches our genesis.
+      if (newBlock.height === 0) {
+        const localGenesis = this.chain.find(b => b.height === 0);
+        if (localGenesis && newBlock.getHashSync() !== localGenesis.getHashSync()) {
+          console.warn(`[PoH-Miner] Rejected genesis block from ${from} — different network (hash mismatch)`);
+          return;
+        }
+      }
 
       // Always reject invalid signatures
       if (newBlock.minerSignature && !newBlock.verifySignature()) {
