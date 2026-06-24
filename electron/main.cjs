@@ -56,6 +56,22 @@ function createWindow() {
     menu.popup({ window: mainWindow });
   });
 
+  // Intercept in-page navigation away from the local app (markdown links without target="_blank")
+  mainWindow.webContents.on('will-navigate', (event, url) => {
+    if (!url.startsWith('file://')) {
+      event.preventDefault();
+      openInAppBrowser(url);
+    }
+  });
+
+  // Intercept target="_blank" links — open in the same in-app browser instead of a bare BrowserWindow
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (!url.startsWith('file://')) {
+      openInAppBrowser(url);
+    }
+    return { action: 'deny' };
+  });
+
   mainWindow.webContents.once('did-finish-load', async () => {
     try {
       const config = loadConfig();
@@ -260,6 +276,48 @@ app.on('window-all-closed', () => {
     app.quit();
   }
 });
+
+// Open external URLs in a popup browser window with an injected "← PoH Miner" back button
+function openInAppBrowser(url) {
+  const popup = new BrowserWindow({
+    width: 1100,
+    height: 720,
+    parent: mainWindow,
+    webPreferences: {
+      nodeIntegration: false,
+      contextIsolation: true,
+    },
+    title: url,
+  });
+
+  popup.loadURL(url);
+
+  const injectBackButton = () => {
+    popup.webContents.executeJavaScript(`
+      (function() {
+        if (document.getElementById('__poh_back__')) return;
+        const btn = document.createElement('div');
+        btn.id = '__poh_back__';
+        btn.textContent = '← PoH Miner';
+        btn.style.cssText = [
+          'position:fixed', 'top:12px', 'left:12px', 'z-index:2147483647',
+          'background:#0f172a', 'color:#e2e8f0', 'padding:6px 14px',
+          'border-radius:8px', 'font-family:system-ui,sans-serif',
+          'font-size:13px', 'font-weight:600', 'cursor:pointer',
+          'box-shadow:0 2px 12px rgba(0,0,0,.5)', 'user-select:none',
+          'letter-spacing:.01em',
+        ].join(';');
+        btn.onmouseenter = () => { btn.style.background = '#1e293b'; };
+        btn.onmouseleave = () => { btn.style.background = '#0f172a'; };
+        btn.onclick = () => window.close();
+        document.body.appendChild(btn);
+      })();
+    `).catch(() => {});
+  };
+
+  popup.webContents.on('did-finish-load', injectBackButton);
+  popup.webContents.on('did-navigate-in-page', injectBackButton);
+}
 
 // Clean up shortcuts when quitting
 app.on('will-quit', () => {
