@@ -4,7 +4,10 @@ const axios = require('axios');
 const fs    = require('fs');
 const path  = require('path');
 
-const CACHE_PATH = path.join(__dirname, '../../data/ofac_cache.json');
+const DATA_DIR = process.env.OFAC_DATA_DIR
+  || (process.env.POH_DATA_DIR)
+  || path.join(process.env.HOME || process.env.USERPROFILE || '', '.poh-miner', 'data');
+const CACHE_PATH = path.join(DATA_DIR, 'ofac_cache.json');
 const SDN_URL    = 'https://www.treasury.gov/ofac/downloads/sdn.csv';
 const REFRESH_MS = 24 * 60 * 60 * 1000; // 24 hours
 

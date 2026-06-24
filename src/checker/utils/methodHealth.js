@@ -3,8 +3,10 @@
 const fs   = require('fs');
 const path = require('path');
 
-const HEALTH_PATH   = path.join(__dirname, '../../data/method_health.json');
-const METHODS_PATH  = path.join(__dirname, '../../data/methods.json');
+const _pohHome     = path.join(process.env.HOME || process.env.USERPROFILE || '', '.poh-miner');
+const _brainDir    = process.env.BRAIN_DATA_DIR || path.join(_pohHome, 'brain');
+const HEALTH_PATH  = path.join(_brainDir, 'method_health.json');
+const METHODS_PATH = path.join(_pohHome, 'methods.json');
 const DELIST_DAYS   = 30;
 const DELIST_MS     = DELIST_DAYS * 24 * 60 * 60 * 1000;
 

@@ -25,8 +25,10 @@ const { recordMethodResult }                      = require('./utils/methodHealt
 const brain             = require('./utils/brain');
 const { enrichProfile } = require('./utils/profileEnrich');
 
-const METHODS_PATH = path.join(__dirname, '../../data/methods.json');
-const DATASET_PATH = path.join(__dirname, '../../data/dataset.json');
+const _pohHome    = path.join(process.env.HOME || process.env.USERPROFILE || '', '.poh-miner');
+const _brainDir   = process.env.BRAIN_DATA_DIR || path.join(_pohHome, 'brain');
+const METHODS_PATH = path.join(_pohHome, 'methods.json');
+const DATASET_PATH = path.join(_brainDir, 'dataset.json');
 
 // ── Simple in-memory scan cache (30-min TTL) ──────────────────────────────────
 const _cache = new Map(); // key → { value, expiresAt }
@@ -56,6 +58,7 @@ function getMethods() {
 }
 
 function appendToDataset(record) {
+  fs.mkdirSync(path.dirname(DATASET_PATH), { recursive: true });
   let dataset = [];
   if (fs.existsSync(DATASET_PATH)) {
     try { dataset = JSON.parse(fs.readFileSync(DATASET_PATH, 'utf-8')); } catch {}

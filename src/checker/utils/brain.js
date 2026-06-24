@@ -29,7 +29,7 @@ console.log(`[brain] QVAC SDK: ${QVAC_ENABLED ? `enabled (model=${QVAC_SDK_MODEL
 // Set process.env.BRAIN_DATA_DIR before requiring this module to override.
 const BRAIN_DATA_DIR   = process.env.BRAIN_DATA_DIR
   ? path.resolve(process.env.BRAIN_DATA_DIR)
-  : path.join(__dirname, '../../data');
+  : path.join(process.env.HOME || process.env.USERPROFILE || '', '.poh-miner', 'brain');
 
 const BRAIN_STATE_PATH = path.join(BRAIN_DATA_DIR, 'brain_state.md');
 const DATASET_PATH     = path.join(BRAIN_DATA_DIR, 'dataset.json');
