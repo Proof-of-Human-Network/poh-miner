@@ -655,11 +655,15 @@ export class PohMinerNode {
     for (const segment of segments) {
       const segLower = segment.toLowerCase();
 
-      // Score every skill against this segment
+      // Score every skill against this segment.
+      // Multi-word triggers score proportional to their word count so
+      // "blog posts" (2) beats "posts" (1) when both appear in the segment.
       const hits = allSkills
         .map(s => {
           let score = 0;
-          for (const t of (s.triggers || [])) if (segLower.includes(t.toLowerCase())) score++;
+          for (const t of (s.triggers || [])) {
+            if (segLower.includes(t.toLowerCase())) score += t.trim().split(/\s+/).length;
+          }
           return { skill: s, score };
         })
         .filter(h => h.score > 0)
@@ -669,8 +673,9 @@ export class PohMinerNode {
       const segInput = { ...globalInput, query: segment, message: segment };
 
       if (hits.length > 0) {
-        const best = hits[0].skill;
-        if (!usedSkillIds.has(best.id)) {
+        // Pick the highest-scoring skill not already in this cascade
+        const best = hits.find(h => !usedSkillIds.has(h.skill.id))?.skill;
+        if (best) {
           usedSkillIds.add(best.id);
           // For social skills (farcaster, paragraph, zora, poh_identity): if no username
           // was extracted from the full message (no @handle), try the last bare word in
@@ -3420,7 +3425,12 @@ export class PohMinerNode {
           const incomingTip = incoming[incoming.length - 1];
           const ourWork = getTipChainWork(this.chain);
           if (incomingTip && compareChainWork(incomingTip.chainWork, ourWork) > 0) {
-            await this.reorgTo(incoming);
+            const reorgDone = await this.reorgTo(incoming);
+            if (reorgDone) return;
+            // Common ancestor not in the fetched segment — deep fork, need full resync.
+            // Release the lock first so syncFromBootnodes can run.
+            this._syncInProgress = false;
+            this.syncFromBootnodes().catch(() => {});
             return;
           }
 
@@ -3444,6 +3454,29 @@ export class PohMinerNode {
       }
     } finally {
       this._syncInProgress = false;
+    }
+  }
+
+  // Pull any pending transactions from bootnodes that this node missed via gossip
+  // (e.g. submitted while this node was down). Called once before each block proposal
+  // so that every tx eventually gets included even without a live gossip connection.
+  async _syncMempoolFromBootnodes() {
+    if (!this.config.bootnodes?.length) return;
+    for (const bootnode of this.config.bootnodes) {
+      try {
+        const base = bootnode.endsWith('/') ? bootnode : bootnode + '/';
+        const res = await fetch(`${base}api/tx/pending`, { signal: AbortSignal.timeout(3000) });
+        if (!res.ok) continue;
+        const { txs } = await res.json();
+        if (!Array.isArray(txs)) continue;
+        for (const txData of txs) {
+          try {
+            const tx = PoHTransaction.fromJSON(txData);
+            this.txMempool.submit(tx); // silently ignores duplicates / invalid nonce / insufficient balance
+          } catch { /* malformed */ }
+        }
+        return; // one bootnode is enough
+      } catch { /* bootnode unreachable */ }
     }
   }
 
@@ -3502,8 +3535,8 @@ export class PohMinerNode {
       }
     }
     if (commonHeight < 0) {
-      console.warn('[PoH-Miner] Reorg: no common ancestor found — ignoring');
-      return;
+      console.warn('[PoH-Miner] Reorg: no common ancestor in fetched segment — triggering full resync');
+      return false;
     }
 
     const rolledBack = this.chain.splice(commonHeight + 1);
@@ -3536,6 +3569,7 @@ export class PohMinerNode {
     }
     this.chainStore.saveChain(this.chain);
     console.log(`[PoH-Miner] Reorg complete. New tip: #${this.chain[this.chain.length - 1].height}`);
+    return true;
   }
 
   startJobListener() {
@@ -4140,6 +4174,9 @@ export class PohMinerNode {
     if (dedupedResults.length < validResultsForBlock.length) {
       console.log(`[PoH-Miner] Filtered ${validResultsForBlock.length - dedupedResults.length} duplicate result(s) before block inclusion`);
     }
+
+    // Pull any pending txs from bootnodes that we missed via gossip (e.g. after a restart)
+    await this._syncMempoolFromBootnodes();
 
     // Include pending transactions (fee-ordered, up to 100 per block)
     const pendingTxs = this.txMempool.getPending(100);
