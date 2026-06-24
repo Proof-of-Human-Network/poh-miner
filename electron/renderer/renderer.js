@@ -1939,7 +1939,34 @@ async function sendChatMessage() {
     });
     if (routeRes.ok) {
       const route = await routeRes.json();
-      if (route.type === 'skill' && route.skillId) {
+      if (route.type === 'cascade' && route.jobs?.length) {
+        // Multi-skill cascade: delegate entirely to /chat/ask which runs all skills
+        // inline and synthesizes the results with LLM — no paid job queue needed.
+        const skillNames = route.jobs.map(j => j.skillId).join(' + ');
+        renderMessage('assistant', `Fetching data via \`${skillNames}\`…`, true);
+        chatAbortController = new AbortController();
+        try {
+          const cascadeRes = await fetch(`http://localhost:${port}/chat/ask`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message: text, history: chatHistory }),
+            signal: AbortSignal.timeout(60000),
+          });
+          if (cascadeRes.ok) {
+            const cascadeData = await cascadeRes.json();
+            finalizeLastBubble();
+            const reply = cascadeData.message || route.jobs.map(j => j.skillId).join(' + ') + ' returned no data.';
+            renderMessage('assistant', reply);
+            chatHistory.push({ role: 'assistant', content: reply });
+            _skillDone = true;
+          }
+        } catch (e) {
+          finalizeLastBubble();
+          console.warn('[cascade] /chat/ask failed:', e.message);
+        }
+      }
+
+      if (!_skillDone && route.type === 'skill' && route.skillId) {
         // Skills are not free — require a budget tip to the developer and miner
         if (getChatBudget() === 0) {
           document.getElementById('skill-fee-modal')?.classList.remove('hidden');
