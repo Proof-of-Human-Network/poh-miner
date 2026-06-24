@@ -80,19 +80,10 @@ function createWindow() {
       sendLog(`[Startup] onboarded=${!!config.onboarded}, hasPohWallet=${hasPohWallet} → isOnboarded=${isOnboarded}`);
 
       if (isOnboarded) {
-        // Silently ensure Ollama is running before starting the miner
-        isOllamaRunning().then(async (running) => {
-          if (!running) {
-            sendLog('[Setup] Ollama not running — attempting to start...');
-            const inPath = await ollamaInPath();
-            if (inPath) {
-              await startOllamaService();
-              sendLog('[Setup] Ollama service started.');
-            } else {
-              sendLog('[Setup] WARNING: Ollama not installed. Brain inference will fail. Run: curl -fsSL https://ollama.com/install.sh | sh');
-            }
-          }
-        }).catch(() => {});
+        // Ensure Ollama is installed, running, and has the required model BEFORE starting the miner.
+        // We block on this — there's no point launching the miner without a working LLM.
+        const model = config.model || 'qwen2.5:1.5b';
+        await ensureOllamaAndModel(model);
 
         startMiner();
         // Tell the renderer to show the main miner UI (authoritative from main process)
@@ -588,6 +579,90 @@ function installOllama() {
       reject(new Error('Auto-install not supported on this OS. Download from https://ollama.com'));
     }
   });
+}
+
+// Ensure Ollama is installed, running, and has the required model — called at startup.
+async function ensureOllamaAndModel(model = 'qwen2.5:1.5b') {
+  sendLog(`[Setup] Checking Ollama + model (${model})...`);
+
+  // 1. Install if missing (Linux/macOS only — Windows users must install manually)
+  const inPath = await ollamaInPath();
+  if (!inPath) {
+    const platform = process.platform;
+    if (platform === 'linux' || platform === 'darwin') {
+      sendLog('[Setup] Ollama not found — installing...');
+      try { await installOllama(); } catch (e) {
+        sendLog(`[Setup] ✗ Ollama install failed: ${e.message}. Please install from https://ollama.com`);
+        return;
+      }
+    } else {
+      sendLog('[Setup] ✗ Ollama not installed. Download from https://ollama.com and restart the miner.');
+      return;
+    }
+  }
+
+  // 2. Start service if not running
+  let running = await isOllamaRunning();
+  if (!running) {
+    sendLog('[Setup] Ollama not running — starting service...');
+    await startOllamaService();
+    running = await isOllamaRunning();
+    if (!running) {
+      sendLog('[Setup] ✗ Ollama did not start. Run "ollama serve" manually and restart.');
+      return;
+    }
+    sendLog('[Setup] ✓ Ollama service started.');
+  } else {
+    sendLog('[Setup] ✓ Ollama running.');
+  }
+
+  // 3. Pull model if not present
+  let models = [];
+  try {
+    const res = await fetch('http://localhost:11434/api/tags');
+    const data = await res.json();
+    models = (data.models || []).map(m => m.name || m.model || '').filter(Boolean);
+  } catch {}
+
+  const base = model.split(':')[0];
+  const hasModel = models.some(m => m === model || m.startsWith(base + ':'));
+  if (!hasModel) {
+    sendLog(`[Setup] Model ${model} not found — pulling now...`);
+    sendSetupProgress({ status: 'pulling', message: `Pulling ${model}...`, model });
+    // Reuse the existing pull handler logic
+    await new Promise((resolve) => {
+      const req = require('http').request(
+        { hostname: 'localhost', port: 11434, path: '/api/pull', method: 'POST', headers: { 'Content-Type': 'application/json' } },
+        (res) => {
+          let buf = '';
+          res.on('data', chunk => {
+            buf += chunk.toString();
+            const lines = buf.split('\n');
+            buf = lines.pop();
+            for (const line of lines) {
+              if (!line.trim()) continue;
+              try {
+                const evt = JSON.parse(line);
+                const pct = evt.total ? Math.round((evt.completed / evt.total) * 100) : null;
+                sendSetupProgress({ status: 'pulling', message: evt.status, model, pct });
+                sendLog(`[Setup] ${model}: ${evt.status}${pct != null ? ` ${pct}%` : ''}`);
+              } catch {}
+            }
+          });
+          res.on('end', () => {
+            sendSetupProgress({ status: 'ready', message: `${model} ready.`, model });
+            sendLog(`[Setup] ✓ ${model} ready.`);
+            resolve();
+          });
+        }
+      );
+      req.on('error', (e) => { sendLog(`[Setup] ✗ Pull failed: ${e.message}`); resolve(); });
+      req.write(JSON.stringify({ name: model, stream: true }));
+      req.end();
+    });
+  } else {
+    sendLog(`[Setup] ✓ Model ${model} available.`);
+  }
 }
 
 // Check Ollama + model status without installing anything
