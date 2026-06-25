@@ -1057,6 +1057,13 @@ export class PohMinerNode {
             // Broadcast all jobs to the network so miners can compete for compute.
             this.gossip.publish('new-job', job).catch(() => {});
 
+            // Relay to peer miners via HTTP (gossip is in-process only, not P2P).
+            // Skip when this job was already forwarded from a peer (_relayed flag)
+            // to prevent relay loops.
+            if (!job._relayed) {
+              this._relayJobToPeers(job).catch(() => {});
+            }
+
             // Enqueue — runs immediately if idle, queues otherwise
             this._enqueueJob(job);
 
@@ -1123,6 +1130,15 @@ export class PohMinerNode {
             }));
           }
           if (rec.status !== 'done' || !rec.result) {
+            // Check if a peer miner has already computed this job
+            const peerResult = await this._fetchJobResultFromPeers(jobId);
+            if (peerResult) {
+              // Cache the peer result locally so subsequent polls are instant
+              rec.result = peerResult;
+              rec.status = 'done';
+              rec.updatedAt = Date.now();
+              return res.end(JSON.stringify({ jobId, ...peerResult, _fromPeer: true }));
+            }
             res.statusCode = 202; // Accepted, still processing
             return res.end(JSON.stringify({
               jobId: rec.id,
@@ -1732,8 +1748,17 @@ export class PohMinerNode {
               || (err.message || '').toLowerCase().includes('timeout')
               || (err.message || '').toLowerCase().includes('abort')
               || (err.message || '').toLowerCase().includes('connect');
+            if (isUnavailable) {
+              // Local Ollama unavailable — try a peer miner that has one
+              try {
+                const peerReply = await this._relayToPeerChat(message, history);
+                if (peerReply) {
+                  return res.end(JSON.stringify({ type: 'chat', message: peerReply, _fromPeer: true }));
+                }
+              } catch { /* ignore */ }
+            }
             const fallback = isUnavailable
-              ? 'My local LLM is busy or unavailable right now. You can ask me about a wallet address (e.g. "analyze poh1abc…") and I\'ll use on-chain data skills that don\'t require the LLM.'
+              ? 'Local LLM is unavailable and no peer miner could be reached. Try again shortly.'
               : 'Something went wrong. Please try again.';
             res.end(JSON.stringify({ type: 'chat', message: fallback }));
           }
@@ -3455,6 +3480,85 @@ export class PohMinerNode {
     } finally {
       this._syncInProgress = false;
     }
+  }
+
+  // ── Peer compute relay ──────────────────────────────────────────────────────
+
+  // Fetch the list of reachable miner peers (from bootnode /peers).
+  // Returns array of base URLs like ['http://1.2.3.4:3456', ...]
+  async _getComputePeers() {
+    const peers = [];
+    for (const bootnode of (this.config.bootnodes || [])) {
+      try {
+        const base = bootnode.endsWith('/') ? bootnode : bootnode + '/';
+        const r = await fetch(`${base}peers`, { signal: AbortSignal.timeout(5000) });
+        if (!r.ok) continue;
+        const { peers: list } = await r.json();
+        for (const p of (list || [])) {
+          if (p.host && p.walletApiPort && p.host !== 'localhost' && p.host !== '127.0.0.1') {
+            peers.push(`http://${p.host}:${p.walletApiPort}`);
+          }
+        }
+        if (peers.length) break;
+      } catch { /* bootnode unreachable */ }
+    }
+    return peers;
+  }
+
+  // Relay a job to all known peer miners (non-blocking best-effort).
+  // Peers receiving it will compute and store the result under the same jobId.
+  async _relayJobToPeers(job) {
+    try {
+      const peers = await this._getComputePeers();
+      const jobJson = JSON.stringify({ ...job, _relayed: true });
+      await Promise.allSettled(peers.map(base =>
+        fetch(`${base}/job`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: jobJson,
+          signal: AbortSignal.timeout(8000),
+        }).catch(() => {})
+      ));
+    } catch { /* ignore — best effort */ }
+  }
+
+  // Poll peer miners for a job result (used when local compute is unavailable).
+  async _fetchJobResultFromPeers(jobId) {
+    try {
+      const peers = await this._getComputePeers();
+      for (const base of peers) {
+        try {
+          const r = await fetch(`${base}/job/${jobId}/result`, { signal: AbortSignal.timeout(6000) });
+          if (r.status === 200) {
+            const data = await r.json();
+            if (data.verdict || data.profile) return data;
+          }
+        } catch { /* try next peer */ }
+      }
+    } catch { /* ignore */ }
+    return null;
+  }
+
+  // Send a chat message to the best available peer and return the reply text.
+  async _relayToPeerChat(message, history = []) {
+    try {
+      const peers = await this._getComputePeers();
+      for (const base of peers) {
+        try {
+          const r = await fetch(`${base}/chat/ask`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message, history }),
+            signal: AbortSignal.timeout(45000),
+          });
+          if (r.ok) {
+            const data = await r.json();
+            if (data.message) return data.message;
+          }
+        } catch { /* try next peer */ }
+      }
+    } catch { /* ignore */ }
+    return null;
   }
 
   // Pull any pending transactions from bootnodes that this node missed via gossip
