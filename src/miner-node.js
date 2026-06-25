@@ -1131,21 +1131,26 @@ export class PohMinerNode {
           }
           if (rec.status !== 'done' || !rec.result) {
             // Check if a peer miner has already computed this job
-            const peerResult = await this._fetchJobResultFromPeers(jobId);
-            if (peerResult) {
-              // Cache the peer result locally so subsequent polls are instant
-              rec.result = peerResult;
-              rec.status = 'done';
-              rec.updatedAt = Date.now();
-              return res.end(JSON.stringify({ jobId, ...peerResult, _fromPeer: true }));
-            }
-            res.statusCode = 202; // Accepted, still processing
-            return res.end(JSON.stringify({
-              jobId: rec.id,
-              status: rec.status,
-              message: 'not ready yet',
-              poll: `/job/${jobId}/status`,
-            }));
+            this._fetchJobResultFromPeers(jobId).then(peerResult => {
+              if (peerResult) {
+                rec.result = peerResult;
+                rec.status = 'done';
+                rec.updatedAt = Date.now();
+                res.end(JSON.stringify({ jobId, ...peerResult, _fromPeer: true }));
+              } else {
+                res.statusCode = 202;
+                res.end(JSON.stringify({
+                  jobId: rec.id,
+                  status: rec.status,
+                  message: 'not ready yet',
+                  poll: `/job/${jobId}/status`,
+                }));
+              }
+            }).catch(() => {
+              res.statusCode = 202;
+              res.end(JSON.stringify({ jobId: rec.id, status: rec.status, message: 'not ready yet' }));
+            });
+            return;
           }
           const r = rec.result; // ScanResult
           // Return shape friendly for frontends: verdict + profile + evidence (signals etc)
