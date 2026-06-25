@@ -8,7 +8,15 @@ Decentralized compute layer for the Proof of Humanity network. Miners race to ev
 
 ### GUI (recommended for non-technical users)
 
-Download the latest `.deb` / `.AppImage` / Windows installer from [miner.proofofhuman.ge](https://miner.proofofhuman.ge). On first install, Ollama and the `qwen2.5:1.5b` model are downloaded automatically.
+Download the latest `.deb` / `.AppImage` / Windows installer from [miner.proofofhuman.ge](https://miner.proofofhuman.ge).
+
+- **Linux / macOS**: Ollama and the `qwen2.5:1.5b` model are downloaded and started automatically on first launch.
+- **Windows**: Install [Ollama for Windows](https://ollama.com/download) first, then launch the miner. The miner will pull the model and start automatically. Alternatively, use the PowerShell installer which handles Ollama setup:
+  ```powershell
+  irm https://miner.proofofhuman.ge/installers/install-windows.ps1 | iex
+  ```
+
+> **No Ollama?** The miner still works — chat and skill queries fall back to peer miners on the network that have Ollama running.
 
 ### CLI
 

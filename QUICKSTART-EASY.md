@@ -2,30 +2,30 @@
 
 We are making this as easy as possible so that **anyone** with spare compute can join.
 
-## For Mac Users (Mac Mini M-series is excellent)
+## Windows (GUI — easiest)
 
-1. Install Ollama (one command):
-   ```bash
-   curl -fsSL https://ollama.com/install.sh | sh
-   ```
+1. Download **[PoH-Miner.exe](https://miner.proofofhuman.ge/binaries/poh-miner-windows-x64.exe)** and run it.
+2. Install **[Ollama for Windows](https://ollama.com/download)** (one-click, ~100 MB).
+3. Restart the miner — it pulls the model and starts mining automatically.
 
-2. Pull a fast model:
-   ```bash
-   ollama pull qwen2.5:1.5b
-   ```
+No Ollama yet? You can still use the miner — chat and skill queries fall back to peer miners on the network.
 
-3. Download the PoH Miner app (coming soon as native .app or via Homebrew).
+## Mac (Mac Mini M-series is excellent)
 
-For now you can run from source or Docker.
+Download the **[PoH-Miner.app](https://miner.proofofhuman.ge)** — Ollama installs automatically on first launch.
 
-## For Everyone Else (Simplest Path)
-
+Or from terminal:
 ```bash
-# One line (Linux / macOS)
-curl -fsSL https://raw.githubusercontent.com/poh/poh-miner-network/main/installers/install.sh | bash
+curl -fsSL https://miner.proofofhuman.ge/scripts/easy-start.sh | bash
 ```
 
-Then follow the prompts.
+## Linux / Raspberry Pi / VPS
+
+```bash
+curl -fsSL https://miner.proofofhuman.ge/scripts/easy-start.sh | bash
+```
+
+Ollama installs automatically. On ARM (Pi) or no-GPU machines it runs in CPU mode.
 
 ## Geographic Advantage
 
