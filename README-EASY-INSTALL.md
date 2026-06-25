@@ -37,14 +37,11 @@ You can change this anytime in `config.json`. This gives you full control:
 - Very low power draw while idle.
 
 ### Windows
-- Download and install [Ollama for Windows](https://ollama.com/download) first (one-click installer).
-- Then run the PowerShell installer — it pulls the model and sets up config automatically:
-  ```powershell
-  irm https://miner.proofofhuman.ge/installers/install-windows.ps1 | iex
-  ```
+- Download the PoH Miner `.exe` from [miner.proofofhuman.ge](https://miner.proofofhuman.ge) and run it.
+- Ollama installs automatically on first launch — no manual steps needed.
 - Works great on gaming PCs (will detect NVIDIA GPU automatically).
 - For VPS or no-GPU machines, manually set `"inferenceMode": "cpu"` in config.
-- **No Ollama / can't install?** The miner still works — chat and skills are relayed to peer miners on the network that have Ollama.
+- **Install fails?** The miner still works — chat and skills are relayed to peer miners on the network that have Ollama.
 
 ### Linux / Raspberry Pi / VPS
 - The bash installer works perfectly.

@@ -5,10 +5,10 @@ We are making this as easy as possible so that **anyone** with spare compute can
 ## Windows (GUI — easiest)
 
 1. Download **[PoH-Miner.exe](https://miner.proofofhuman.ge/binaries/poh-miner-windows-x64.exe)** and run it.
-2. Install **[Ollama for Windows](https://ollama.com/download)** (one-click, ~100 MB).
-3. Restart the miner — it pulls the model and starts mining automatically.
+2. Ollama installs automatically on first launch — just wait ~1 minute while it downloads.
+3. Done — the miner pulls the model and starts mining.
 
-No Ollama yet? You can still use the miner — chat and skill queries fall back to peer miners on the network.
+No internet / install fails? You can still use the miner — chat and skills fall back to peer miners on the network.
 
 ## Mac (Mac Mini M-series is excellent)
 

@@ -623,7 +623,6 @@ function installOllama() {
     sendSetupProgress({ status: 'installing', message: 'Downloading Ollama...' });
     const platform = process.platform;
     if (platform === 'linux' || platform === 'darwin') {
-      // Official one-liner installer
       const proc = spawnProc('sh', ['-c', 'curl -fsSL https://ollama.com/install.sh | sh'], {
         stdio: ['ignore', 'pipe', 'pipe'],
       });
@@ -633,6 +632,25 @@ function installOllama() {
         if (code === 0) resolve();
         else reject(new Error(`Ollama install exited ${code}`));
       });
+    } else if (platform === 'win32') {
+      const os = require('os');
+      const fs = require('fs');
+      const https = require('https');
+      const setupPath = path.join(os.tmpdir(), 'OllamaSetup.exe');
+      sendSetupProgress({ status: 'installing', message: 'Downloading OllamaSetup.exe...' });
+      const file = fs.createWriteStream(setupPath);
+      https.get('https://ollama.com/download/OllamaSetup.exe', (res) => {
+        res.pipe(file);
+        file.on('finish', () => {
+          file.close();
+          sendSetupProgress({ status: 'installing', message: 'Running Ollama installer...' });
+          const proc = spawnProc(setupPath, ['/SILENT'], { stdio: 'ignore' });
+          proc.on('close', (code) => {
+            if (code === 0) resolve();
+            else reject(new Error(`OllamaSetup.exe exited ${code}`));
+          });
+        });
+      }).on('error', (e) => { fs.unlink(setupPath, () => {}); reject(e); });
     } else {
       reject(new Error('Auto-install not supported on this OS. Download from https://ollama.com'));
     }
