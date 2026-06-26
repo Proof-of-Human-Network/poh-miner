@@ -106,10 +106,13 @@ Each block contains:
 
 - `height`, `previousHash`, `timestamp`, `minerWallet`
 - `scanResults[]` — verified wallet verdicts (requestId, address, verdict, confidence, reasoning, signalsUsed, minerWallet, signature)
+- `stateTransitions[]` — balance/state changes applied by this block
 - `transactions[]` — signed POH token transfers with nonces
-- `coinbaseReward` — 1 POH per block: 60% to proposer, 40% split among workers
-- `nonce`, `difficulty`, `chainWork` — PoW fields (cumulative)
-- `minerSignature`, `minerSigningPublicKey` — ed25519 block authentication
+- `coinbaseReward` — 1 POH per block; if compute work exists: 60% to proposer, 40% split among workers; if no work but peers are active: 60% to proposer, 40% split among active peers; if no peers: 100% to proposer
+- `nonce`, `difficulty`, `chainWork` — PoW fields (chainWork is cumulative hex bigint)
+- `stateRoot` — SHA-256 of sorted `{address, balance, nonce}` at this height
+- `brainStateRoot` — SHA-256 of `weights.json` + `pools.json` at this height
+- `minerSignature`, `minerSigningPublicKey` — ed25519 signature over block hash
 
 ---
 
