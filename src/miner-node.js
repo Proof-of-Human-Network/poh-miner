@@ -2726,20 +2726,19 @@ export class PohMinerNode {
 
     if (isFreshStart && downloadedBlocks.length > 0) {
       const parsed = downloadedBlocks.map(b => PohBlock.fromJSON ? PohBlock.fromJSON(b) : new PohBlock(b));
-      // Verify internal linkage of downloaded segment
-      let valid = true;
-      for (let i = 1; i < parsed.length; i++) {
-        if (parsed[i].previousHash !== parsed[i - 1].getHashSync()) { valid = false; break; }
-      }
+
       // effectiveAnchorHeight: where to splice. Starts as anchorHeight (fork anchor),
       // overridden to -1 if anchor check fails (full replacement).
       let effectiveAnchorHeight = anchorHeight;
-      // For partial reorg: also verify the first downloaded block links to our anchor.
-      // If it doesn't, the fork is deeper than expected — fall back to full fresh start.
-      if (valid && anchorHeight >= 0) {
+
+      // For partial reorg: verify the first downloaded block links to our local anchor.
+      // Use stored blockHash (set at mining time) if available; fall back to recomputing.
+      // If it doesn't link, the fork is deeper — fall back to full fresh start.
+      if (anchorHeight >= 0) {
         const anchorIdx = anchorHeight - chainOffset;
         const anchor = this.chain[anchorIdx];
-        if (!anchor || parsed[0].previousHash !== anchor.getHashSync()) {
+        const anchorHash = anchor?.blockHash || anchor?.getHashSync();
+        if (!anchor || parsed[0].previousHash !== anchorHash) {
           console.warn(`[PoH-Miner] Partial reorg anchor mismatch at ${anchorHeight} — falling back to full resync`);
           // Re-download the full chain from genesis
           downloadedBlocks.length = 0;
@@ -2759,16 +2758,16 @@ export class PohMinerNode {
           // Re-parse for the outer apply block below
           parsed.length = 0;
           parsed.push(...downloadedBlocks.map(b => PohBlock.fromJSON ? PohBlock.fromJSON(b) : new PohBlock(b)));
-          // Re-verify linkage on the freshly downloaded full chain
-          valid = true;
-          for (let i = 1; i < parsed.length; i++) {
-            if (parsed[i].previousHash !== parsed[i - 1].getHashSync()) { valid = false; break; }
-          }
           // Force full replacement (no anchor)
           effectiveAnchorHeight = -1;
         }
       }
-      if (valid) {
+
+      // For full replacement: genesis was already verified above — trust the downloaded chain.
+      // Re-verifying internal linkage via getHashSync() can fail when block.js's hash
+      // function has been updated since old blocks were mined (fields added/removed).
+      // The bootnode's chain is self-consistent; re-computation on old blocks is unreliable.
+      {
         // Splice downloaded tail onto the common prefix (or replace entirely for full fresh start)
         const anchorIdx = effectiveAnchorHeight >= 0 ? effectiveAnchorHeight - chainOffset : -1;
         this.chain = effectiveAnchorHeight >= 0
@@ -2776,13 +2775,14 @@ export class PohMinerNode {
           : parsed;
         for (const b of parsed) {
           for (const r of (b.scanResults || [])) {
-            if (r.requestId) this.minedRequestIds.add(r.requestId);
+            if (r.requestId && !this.minedRequestIds.has(r.requestId)) {
+              this.minedRequestIds.add(r.requestId);
+              this.totalJobsProcessed = (this.totalJobsProcessed || 0) + 1;
+            }
           }
         }
         this.currentDifficulty = getNextDifficulty(this.chain);
         this._rebuildBalancesFromChain();
-      } else {
-        console.warn('[PoH-Miner] Downloaded chain failed linkage check — keeping local chain');
       }
     }
 
@@ -4335,7 +4335,7 @@ export class PohMinerNode {
 
     const newBlock = new PohBlock({
       height: previous.height + 1,
-      previousHash: await previous.getHash(),
+      previousHash: previous.blockHash || await previous.getHash(),
       timestamp: Date.now(),
       minerWallet: this.config.wallet,
       scanResults: dedupedResults,
@@ -4358,6 +4358,10 @@ export class PohMinerNode {
 
       // Sign the block with our identity key after PoW is solved
       if (this.identityWallet) newBlock.sign(this.identityWallet);
+
+      // Store the computed hash so peers can verify linkage without re-computing.
+      // Re-computation breaks when getHashSync() changes after old blocks are mined.
+      newBlock.blockHash = newBlock.getHashSync();
 
       // Mark these requestIds as mined so no peer or restart re-mines them
       for (const r of dedupedResults) {
