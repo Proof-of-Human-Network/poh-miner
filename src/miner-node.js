@@ -1413,7 +1413,7 @@ export class PohMinerNode {
       }
 
       if (req.method === 'GET' && url.pathname === '/api/tx/pending') {
-        const txs = this.txMempool.getPending(200).map(t => ({ txHash: t.txHash, from: t.from, to: t.to, amount: t.amount, fee: t.fee, nonce: t.nonce }));
+        const txs = this.txMempool.getPending(200).map(t => t.toJSON());
         return res.end(JSON.stringify({ txs, count: txs.length }));
       }
 
@@ -2707,8 +2707,10 @@ export class PohMinerNode {
           for (const bd of blocks) {
             const block = PohBlock.fromJSON ? PohBlock.fromJSON(bd) : new PohBlock(bd);
             const prev  = this.chain[this.chain.length - 1];
-            // Use block.height (not array index) so truncated chains work correctly
-            if (block.previousHash === prev.getHashSync() && block.height === prev.height + 1) {
+            // Use block.height (not array index) so truncated chains work correctly.
+            // Prefer stored blockHash over re-computation: getHashSync() changes when block.js fields change.
+            const prevHash = prev.blockHash || prev.getHashSync();
+            if (block.previousHash === prevHash && block.height === prev.height + 1) {
               this._applyBlockState(block);
               this.chain.push(block);
               this.currentDifficulty = getNextDifficulty(this.chain);
@@ -3199,8 +3201,9 @@ export class PohMinerNode {
         if (newBlock.stateRoot) {
           const localRoot = this.walletManager.getStateRoot();
           if (localRoot !== newBlock.stateRoot) {
-            console.warn(`[PoH-Miner] Block #${newBlock.height} stateRoot mismatch — peer=${newBlock.stateRoot.slice(0,12)} local=${localRoot.slice(0,12)} — rejected`);
-            return;
+            // Soft warning only — hard rejection caused self-reinforcing divergence when nodes
+            // had different canonical chains. Log for monitoring; still accept the block.
+            console.warn(`[PoH-Miner] Block #${newBlock.height} stateRoot mismatch — peer=${newBlock.stateRoot.slice(0,12)} local=${localRoot.slice(0,12)} (warning only)`);
           }
         }
         this._appendBlock(newBlock, from);
@@ -3322,6 +3325,7 @@ export class PohMinerNode {
 
     // Accumulate all balance deltas in memory: address → total amount
     const balances = new Map(); // address → accumulated balance (number)
+    const nonces   = new Map(); // address → confirmed tx count (= final nonce)
     const addBalance = (addr, amount) => {
       if (!addr || amount <= 0) return;
       balances.set(addr, (balances.get(addr) || 0) + amount);
@@ -3356,6 +3360,7 @@ export class PohMinerNode {
           subBalance(tx.from, tx.amount + (tx.fee || 0));
           addBalance(tx.to, tx.amount);
           if (tx.fee > 0 && block.minerWallet) addBalance(block.minerWallet, tx.fee);
+          nonces.set(tx.from, (nonces.get(tx.from) || 0) + 1);
         } catch { /* skip malformed tx */ }
       }
       // Apply P2P escrow movements from stateTransitions so poh_p2p_escrow
@@ -3382,20 +3387,27 @@ export class PohMinerNode {
     // Persist all claim keys in one write
     this.rewardClaimStore.markClaimedMany(claimKeys);
 
-    // Flush accumulated balances to disk in one pass (one file read+write per address)
-    for (const [addr, balance] of balances) {
+    // Flush accumulated balances + nonces to disk in one pass
+    const allAddrs = new Set([...balances.keys(), ...nonces.keys()]);
+    for (const addr of allAddrs) {
+      const balance = balances.get(addr) ?? 0;
+      const nonce   = nonces.get(addr) ?? 0;
       const existing = this.walletManager.loadWallet(addr);
       if (existing) {
         existing.balance = balance;
+        existing.nonce   = nonce;
         this.walletManager.saveWallet(existing);
       } else {
-        // New address — use credit() which creates a stub wallet
         this.walletManager.credit(addr, balance);
+        if (nonce > 0) {
+          const w = this.walletManager.loadWallet(addr);
+          if (w) { w.nonce = nonce; this.walletManager.saveWallet(w); }
+        }
       }
     }
     // Zero wallets that earned nothing (so stale balances from old forks are cleared)
     for (const addr of this.walletManager.listWallets()) {
-      if (!balances.has(addr)) {
+      if (!allAddrs.has(addr)) {
         const w = this.walletManager.loadWallet(addr);
         if (w && (w.balance || 0) !== 0) { w.balance = 0; this.walletManager.saveWallet(w); }
       }

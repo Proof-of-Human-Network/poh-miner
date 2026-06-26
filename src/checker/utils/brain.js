@@ -8,7 +8,7 @@ const path = require('path');
 // Override per-role via env. All default to OLLAMA_MODEL so it works out-of-box.
 const OLLAMA_URL       = process.env.OLLAMA_URL        || 'http://localhost:11434';
 const BASE_MODEL       = process.env.OLLAMA_MODEL      || 'qwen2.5:1.5b';
-const EVALUATOR_MODEL  = process.env.EVALUATOR_MODEL   || 'deepseek-r1:1.5b';
+const EVALUATOR_MODEL  = process.env.EVALUATOR_MODEL   || BASE_MODEL;
 const LEARNER_MODEL    = process.env.LEARNER_MODEL     || 'qwen2.5:1.5b';
 const COMPILER_MODEL   = process.env.COMPILER_MODEL    || BASE_MODEL; // Small reliable default (matches your main Ollama model) to avoid 500s. Set COMPILER_MODEL if you want something bigger for summarization.
 
