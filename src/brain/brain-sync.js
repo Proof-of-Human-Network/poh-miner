@@ -44,6 +44,7 @@ export class BrainSync {
 
   _saveState() {
     try {
+      fs.mkdirSync(path.dirname(this.syncStateFile), { recursive: true });
       const arr = Array.from(this.seenHashes);
       fs.writeFileSync(this.syncStateFile, JSON.stringify({
         lastSyncTs: this.lastSyncTs,
@@ -179,6 +180,7 @@ export class BrainSync {
   // ── Bootstrap pull ────────────────────────────────────────────────────────────
 
   async pullFromBootnodes(bootnodes, brain) {
+    let totalApplied = 0;
     for (const bootnode of (bootnodes || [])) {
       const base = bootnode.endsWith('/') ? bootnode : bootnode + '/';
       try {
@@ -188,12 +190,13 @@ export class BrainSync {
         if (!res.ok) continue;
 
         const { events = [] } = await res.json();
-        if (!events.length) break;
+        if (!events.length) continue; // try next bootnode — another may have more
 
         let applied = 0;
         for (const event of events) {
           if (await this.applyEvent(event, brain)) applied++;
         }
+        totalApplied += applied;
 
         const maxTs = Math.max(...events.map(e => e.ts || 0));
         if (maxTs > this.lastSyncTs) {
@@ -202,9 +205,9 @@ export class BrainSync {
         }
 
         console.log(`[BrainSync] Pulled ${events.length} events from ${bootnode} — applied ${applied} new`);
-        break;
       } catch { /* try next bootnode */ }
     }
+    if (totalApplied > 0) console.log(`[BrainSync] Total new brain events applied: ${totalApplied}`);
   }
 
   // ── Helper: publish a feedback event ─────────────────────────────────────────

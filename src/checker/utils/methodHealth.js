@@ -17,6 +17,7 @@ function getHealth() {
 }
 
 function saveHealth(h) {
+  fs.mkdirSync(path.dirname(HEALTH_PATH), { recursive: true });
   const tmp = HEALTH_PATH + '.tmp';
   fs.writeFileSync(tmp, JSON.stringify(h, null, 2));
   fs.renameSync(tmp, HEALTH_PATH);

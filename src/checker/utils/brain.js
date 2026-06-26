@@ -112,7 +112,10 @@ function getBrainState() {
 }
 
 function saveBrainState(content) {
-  fs.writeFileSync(BRAIN_STATE_PATH, content, 'utf-8');
+  fs.mkdirSync(BRAIN_DATA_DIR, { recursive: true });
+  const tmp = BRAIN_STATE_PATH + '.tmp';
+  fs.writeFileSync(tmp, content, 'utf-8');
+  fs.renameSync(tmp, BRAIN_STATE_PATH);
 }
 
 function getWeights() {
@@ -122,6 +125,7 @@ function getWeights() {
 }
 
 function saveWeights(w) {
+  fs.mkdirSync(BRAIN_DATA_DIR, { recursive: true });
   const tmp = WEIGHTS_PATH + '.tmp';
   fs.writeFileSync(tmp, JSON.stringify(w, null, 2));
   fs.renameSync(tmp, WEIGHTS_PATH);
@@ -134,6 +138,7 @@ function getFeedback() {
 }
 
 function saveFeedback(list) {
+  fs.mkdirSync(BRAIN_DATA_DIR, { recursive: true });
   const tmp = FEEDBACK_PATH + '.tmp';
   fs.writeFileSync(tmp, JSON.stringify(list, null, 2));
   fs.renameSync(tmp, FEEDBACK_PATH);

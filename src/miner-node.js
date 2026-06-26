@@ -2898,6 +2898,7 @@ export class PohMinerNode {
     if (this.brainSync) return;
     const brainDataDir = getBrainDataDir();
     if (!brainDataDir) return;
+    fs.mkdirSync(brainDataDir, { recursive: true });
     this.brainSync = new BrainSync({
       brainDataDir,
       identityWallet: this.identityWallet,
