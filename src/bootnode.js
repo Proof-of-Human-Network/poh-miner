@@ -60,6 +60,36 @@ function saveBrainEvents() {
 
 loadBrainEvents();
 
+// ── Network history (nodes + tflops over time) ────────────────────────────
+const NETWORK_HISTORY_FILE = path.join(DATA_DIR, 'network_history.json');
+const HISTORY_MAX = 2880; // 48 hours at 1-minute snapshots
+
+let networkHistory = []; // { t, nodes, tflops }
+
+function loadNetworkHistory() {
+  try {
+    if (fs.existsSync(NETWORK_HISTORY_FILE))
+      networkHistory = JSON.parse(fs.readFileSync(NETWORK_HISTORY_FILE, 'utf8'));
+  } catch { networkHistory = []; }
+}
+
+function saveNetworkHistory() {
+  try { fs.writeFileSync(NETWORK_HISTORY_FILE, JSON.stringify(networkHistory)); } catch {}
+}
+
+function snapshotNetwork() {
+  pruneStalePeers();
+  const peerList = Array.from(peers.values());
+  const nodes  = peerList.length;
+  const tflops = Math.round(peerList.reduce((s, p) => s + (p.tflops || 0), 0) * 10) / 10;
+  networkHistory.push({ t: Date.now(), nodes, tflops });
+  if (networkHistory.length > HISTORY_MAX) networkHistory.splice(0, networkHistory.length - HISTORY_MAX);
+  saveNetworkHistory();
+}
+
+loadNetworkHistory();
+setInterval(snapshotNetwork, 60_000); // snapshot every minute
+
 // ── IPFS CID registry ──────────────────────────────────────────────────────
 // Miners push their latest pinned CIDs here; other miners and the wallet app
 // pull them as a bootstrap / fallback source when the P2P network is sparse.
@@ -439,6 +469,16 @@ const server = http.createServer(async (req, res) => {
       }));
       const totalTflops = peerList.reduce((s, p) => s + (p.tflops || 0), 0);
       res.end(JSON.stringify({ peers: peerList, count: peerList.length, totalTflops: Math.round(totalTflops * 10) / 10 }));
+      return;
+    }
+
+    if (url.pathname === '/network/history') {
+      const since = parseInt(url.searchParams.get('since') || '0');
+      const limit = Math.min(parseInt(url.searchParams.get('limit') || '1440'), HISTORY_MAX);
+      const slice = since
+        ? networkHistory.filter(p => p.t > since).slice(-limit)
+        : networkHistory.slice(-limit);
+      res.end(JSON.stringify({ history: slice }));
       return;
     }
 

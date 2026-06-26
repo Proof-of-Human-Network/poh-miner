@@ -165,6 +165,26 @@
     </div>
   </div>
 
+  <!-- Live Network Chart -->
+  <div class="border-t border-white/10 py-14 md:py-20">
+    <div class="max-w-5xl mx-auto px-4 sm:px-8">
+      <div class="flex items-end justify-between mb-6 gap-4 flex-wrap">
+        <div>
+          <div class="uppercase tracking-[3px] text-xs text-white/40 mb-1">LIVE NETWORK</div>
+          <h2 class="font-display text-[32px] sm:text-[42px] leading-none">Compute &amp; nodes over time</h2>
+        </div>
+        <div class="flex items-center gap-6 text-sm">
+          <span class="flex items-center gap-2"><span class="inline-block w-3 h-3 rounded-full bg-[#22c55e]"></span><span class="text-white/60">TFLOPS</span></span>
+          <span class="flex items-center gap-2"><span class="inline-block w-3 h-3 rounded-full bg-[#f97316]"></span><span class="text-white/60">Nodes</span></span>
+          <span id="chart-last-updated" class="text-white/30 tabular-nums text-xs"></span>
+        </div>
+      </div>
+      <div class="relative" style="height:220px">
+        <canvas id="net-chart" class="absolute inset-0 w-full h-full"></canvas>
+      </div>
+    </div>
+  </div>
+
   <!-- The Network -->
   <div id="network" class="max-w-7xl mx-auto px-4 sm:px-8 py-16 md:py-40">
     <div class="flex flex-col md:flex-row gap-12 items-center">
@@ -984,31 +1004,30 @@
       return n.toLocaleString();
     }
 
-    async function loadRealStats() {
-      const BOOTNODES = [
-        'https://poh.assetux.com',
-        'https://miner.proofofhuman.ge',
-        'https://bootnode.proofofhuman.ge',
-      ];
+    const BOOTNODES = [
+      'https://miner.proofofhuman.ge',
+      'https://bootnode.proofofhuman.ge',
+    ];
 
-      async function fetchFromAnyBootnode(path) {
-        const controller = new AbortController();
-        const timer = setTimeout(() => controller.abort(), 6000);
-        try {
-          const results = await Promise.any(
-            BOOTNODES.map(b => fetch(b + path, { cache: 'no-store', signal: controller.signal }).then(r => {
-              if (!r.ok) throw new Error(r.status);
-              return r;
-            }))
-          );
-          clearTimeout(timer);
-          return results;
-        } catch {
-          clearTimeout(timer);
-          return null;
-        }
+    async function fetchFromAnyBootnode(path) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 6000);
+      try {
+        const results = await Promise.any(
+          BOOTNODES.map(b => fetch(b + path, { cache: 'no-store', signal: controller.signal }).then(r => {
+            if (!r.ok) throw new Error(r.status);
+            return r;
+          }))
+        );
+        clearTimeout(timer);
+        return results;
+      } catch {
+        clearTimeout(timer);
+        return null;
       }
+    }
 
+    async function loadRealStats() {
       // Run all fetches in parallel
       const [peersRes, statusRes] = await Promise.allSettled([
         fetchFromAnyBootnode('/peers'),
@@ -1113,9 +1132,180 @@
       return 0.65;
     }
 
+    // ── Live network chart ────────────────────────────────────────────
+    const CHART_MAX_POINTS = 1440;
+    const chartData = { tflops: [], nodes: [] }; // { t, v }
+
+    // Smooth Catmull-Rom spline through canvas points
+    function splinePath(ctx, pts, toX, toY) {
+      if (pts.length < 2) return;
+      ctx.moveTo(toX(0), toY(pts[0].v));
+      for (let i = 0; i < pts.length - 1; i++) {
+        const p0 = pts[Math.max(0, i - 1)];
+        const p1 = pts[i];
+        const p2 = pts[i + 1];
+        const p3 = pts[Math.min(pts.length - 1, i + 2)];
+        const cp1x = toX(i)     + (toX(i + 1) - toX(Math.max(0, i - 1))) / 6;
+        const cp1y = toY(p1.v)  + (toY(p2.v)  - toY(p0.v))  / 6;
+        const cp2x = toX(i + 1) - (toX(Math.min(pts.length - 1, i + 2)) - toX(i)) / 6;
+        const cp2y = toY(p2.v)  - (toY(p3.v)  - toY(p1.v))  / 6;
+        ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, toX(i + 1), toY(p2.v));
+      }
+    }
+
+    function fmtV(v) {
+      return v >= 1000 ? (v / 1000).toFixed(1) + 'k' : v % 1 === 0 ? String(v) : v.toFixed(1);
+    }
+
+    function drawNetChart() {
+      const canvas = document.getElementById('net-chart');
+      if (!canvas) return;
+      const dpr = window.devicePixelRatio || 1;
+      const W = canvas.offsetWidth, H = canvas.offsetHeight;
+      if (!W || !H) return;
+      canvas.width = W * dpr; canvas.height = H * dpr;
+      const ctx = canvas.getContext('2d');
+      ctx.scale(dpr, dpr);
+
+      ctx.fillStyle = '#0b0b0b';
+      ctx.fillRect(0, 0, W, H);
+
+      const PAD = { top: 18, right: 52, bottom: 30, left: 52 };
+      const cW = W - PAD.left - PAD.right;
+      const cH = H - PAD.top - PAD.bottom;
+
+      // Subtle horizontal grid
+      for (let i = 0; i <= 4; i++) {
+        const y = PAD.top + (cH / 4) * i;
+        ctx.strokeStyle = 'rgba(255,255,255,0.04)';
+        ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(PAD.left, y); ctx.lineTo(PAD.left + cW, y); ctx.stroke();
+      }
+
+      const refSeries = chartData.tflops.length >= chartData.nodes.length ? chartData.tflops : chartData.nodes;
+      if (refSeries.length < 2) {
+        ctx.fillStyle = 'rgba(255,255,255,0.15)';
+        ctx.font = '13px system-ui,sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('Collecting data…', PAD.left + cW / 2, PAD.top + cH / 2 + 5);
+        return;
+      }
+
+      // X axis time labels
+      ctx.fillStyle = 'rgba(255,255,255,0.2)';
+      ctx.font = '10px monospace';
+      ctx.textAlign = 'center';
+      const n = refSeries.length;
+      const ticks = Math.min(6, n);
+      for (let k = 0; k < ticks; k++) {
+        const i  = Math.round(k / (ticks - 1) * (n - 1));
+        const x  = PAD.left + (i / (n - 1)) * cW;
+        const d  = new Date(refSeries[i].t);
+        ctx.fillText(d.getHours().toString().padStart(2,'0') + ':' + d.getMinutes().toString().padStart(2,'0'), x, H - 8);
+      }
+
+      function drawSeries(series, color, side, unit) {
+        if (series.length < 2) return;
+        const sn   = series.length;
+        const vals = series.map(p => p.v);
+        let mn = Math.min(...vals), mx = Math.max(...vals);
+        const pad = (mx - mn) * 0.15 || 1;
+        mn = Math.max(0, mn - pad); mx = mx + pad;
+        const range = mx - mn || 1;
+        const toX = i => PAD.left + (i / (sn - 1)) * cW;
+        const toY = v => PAD.top  + cH - ((v - mn) / range) * cH;
+
+        // Y axis tick labels
+        ctx.fillStyle = color + 'cc';
+        ctx.font = '10px monospace';
+        ctx.textAlign = side === 'left' ? 'right' : 'left';
+        const xLbl = side === 'left' ? PAD.left - 6 : PAD.left + cW + 6;
+        [mn + pad * 0.5, (mn + mx) / 2, mx - pad * 0.5].forEach(v => {
+          ctx.fillText(fmtV(v), xLbl, toY(v) + 3);
+        });
+        ctx.font = '9px monospace';
+        ctx.fillStyle = color + '88';
+        ctx.fillText(unit, xLbl, PAD.top - 5);
+
+        const rgb = color === '#22c55e' ? '34,197,94' : '249,115,22';
+
+        // Gradient fill under curve
+        const grad = ctx.createLinearGradient(0, PAD.top, 0, PAD.top + cH);
+        grad.addColorStop(0,   `rgba(${rgb},0.25)`);
+        grad.addColorStop(0.55,`rgba(${rgb},0.07)`);
+        grad.addColorStop(1,   `rgba(${rgb},0.0)`);
+        ctx.beginPath();
+        splinePath(ctx, series, toX, toY);
+        ctx.lineTo(toX(sn - 1), PAD.top + cH);
+        ctx.lineTo(toX(0),      PAD.top + cH);
+        ctx.closePath();
+        ctx.fillStyle = grad;
+        ctx.fill();
+
+        // Glowing line
+        ctx.beginPath();
+        splinePath(ctx, series, toX, toY);
+        ctx.strokeStyle  = color;
+        ctx.lineWidth    = 2;
+        ctx.lineJoin     = 'round';
+        ctx.shadowColor  = color;
+        ctx.shadowBlur   = 8;
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+
+        // Live dot with glow
+        const lx = toX(sn - 1), ly = toY(series[sn - 1].v);
+        ctx.shadowColor = color; ctx.shadowBlur = 14;
+        ctx.beginPath(); ctx.arc(lx, ly, 4, 0, Math.PI * 2);
+        ctx.fillStyle = color; ctx.fill();
+        ctx.shadowBlur = 0;
+      }
+
+      drawSeries(chartData.tflops, '#22c55e', 'left',  'TFLOPS');
+      drawSeries(chartData.nodes,  '#f97316', 'right', 'nodes');
+    }
+
+    async function loadChartHistory() {
+      try {
+        const res = await fetchFromAnyBootnode('/network/history?limit=1440');
+        if (!res) return;
+        const { history } = await res.json();
+        if (!Array.isArray(history) || !history.length) return;
+        chartData.tflops = history.map(p => ({ t: p.t, v: p.tflops }));
+        chartData.nodes  = history.map(p => ({ t: p.t, v: p.nodes  }));
+        drawNetChart();
+      } catch {}
+    }
+
+    async function tickChart() {
+      try {
+        const res = await fetchFromAnyBootnode('/peers');
+        if (!res) return;
+        const data = await res.json();
+        const count = data.count ?? (Array.isArray(data.peers) ? data.peers.length : null);
+        let tflops = data.totalTflops;
+        if (tflops == null && Array.isArray(data.peers))
+          tflops = Math.round(data.peers.reduce((s, p) => s + (p.tflops || 0), 0) * 10) / 10;
+
+        const t = Date.now();
+        if (count  != null) { chartData.nodes.push({ t, v: count  }); if (chartData.nodes.length  > CHART_MAX_POINTS) chartData.nodes.shift(); }
+        if (tflops != null) { chartData.tflops.push({ t, v: tflops }); if (chartData.tflops.length > CHART_MAX_POINTS) chartData.tflops.shift(); }
+
+        drawNetChart();
+        const el = document.getElementById('chart-last-updated');
+        if (el) {
+          const d = new Date();
+          el.textContent = 'updated ' + d.getHours().toString().padStart(2,'0') + ':' + d.getMinutes().toString().padStart(2,'0') + ':' + d.getSeconds().toString().padStart(2,'0');
+        }
+      } catch {}
+    }
+
     window.onload = () => {
       initLiveMesh();
       loadRealStats();
+      loadChartHistory().then(() => tickChart());
+      setInterval(tickChart, 15000);
+      window.addEventListener('resize', drawNetChart);
     };
 
     // Mobile hamburger nav
