@@ -41,9 +41,10 @@ docker run -v ~/.poh-miner:/root/.poh-miner ghcr.io/poh/miner:latest
 Config file is loaded from the first location that exists (in order):
 
 1. `POH_CONFIG` env var (full path)
-2. `./.poh-miner/config.json`
-3. `./config.json`
-4. `~/.poh-miner/config.json`
+2. `./config.json` (project root — convenient after `git clone`)
+3. `./.poh-miner/config.json`
+4. `<script-dir>/.poh-miner/config.json`
+5. `~/.poh-miner/config.json`
 
 Minimal example:
 
@@ -177,7 +178,7 @@ Every miner exposes an HTTP API for the mobile wallet and external tools. Amount
 
 ### Skills
 
-Skills are on-demand agent modules that extend what miners can compute. Builtin skills include `poh_identity`, `read_farcaster`, `read_zora`, `read_paragraph`, and `code_audit`.
+Skills are on-demand agent modules that extend what miners can compute. Builtin skills include `poh_identity`, `read_farcaster`, `read_zora`, `read_paragraph`, `code_audit`, and `web_search`.
 
 | Endpoint | Description |
 |---|---|
@@ -220,7 +221,7 @@ Peer-to-peer POH trading with on-chain escrow. Orders are matched locally; escro
 | `POST /api/p2p/orders/:id/select` | Taker selects an order to trade |
 | `GET /api/p2p/trades/my?address=<addr>` | Active and past trades for an address |
 | `GET /api/p2p/trades/:id` | Single trade detail |
-| `POST /api/p2p/trades/:id/:action` | Advance trade state (`confirm`, `release`, `dispute`) |
+| `POST /api/p2p/trades/:id/:action` | Advance trade state (`payment-sent`, `release`, `cancel`, `dispute`) |
 | `POST /api/p2p/local-auth` | Sign a P2P auth payload with the node's local wallet |
 
 ### Push Notifications
