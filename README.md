@@ -1,6 +1,6 @@
 # PoH Miner Network
 
-Decentralized compute layer for the Proof of Humanity network. Miners race to evaluate wallet identity using the existing PoH checker + AI brain, earn POH token for valid work, and collectively maintain an immutable record of every verified identity on a shared blockchain.
+Decentralized compute layer for the Proof of Human network. Miners race to evaluate wallet identity using the existing PoH checker + AI brain, earn POH token for valid work, and collectively maintain an immutable record of every verified identity on a shared blockchain.
 
 ---
 
@@ -49,7 +49,6 @@ Minimal example:
 
 ```json
 {
-  "wallet": "YourSolanaAddressHere",
   "bootnodes": ["https://bootnode.proofofhuman.ge"],
   "inferenceMode": "auto",
   "model": "qwen2.5:1.5b",
@@ -57,9 +56,11 @@ Minimal example:
 }
 ```
 
+The miner creates a PoH wallet automatically on first run and stores it in `~/.poh-miner/wallets/`. To use an existing wallet, set `pohWallet` to its PoH address.
+
 | Field | Default | Description |
 |---|---|---|
-| `wallet` | auto-created | PoH address that earns rewards |
+| `pohWallet` | auto-created | PoH address that earns rewards (created on first run if not set) |
 | `bootnodes` | production bootnode | Peer discovery + chain sync entry points |
 | `inferenceMode` | `auto` | `cpu` / `gpu` / `auto` |
 | `model` | `qwen2.5:1.5b` | Ollama model used by the brain |
@@ -78,7 +79,7 @@ RPC endpoints can be configured per-chain under the `rpc` key — see `config.ex
 ```
 ┌──────────────────────────────────────────────────────────────────┐
 │                   App Layer  (proofofhuman.ge)                   │
-│   Frontend  ·  Profiles  ·  Voting  ·  Conviction Curves        │
+│   Frontend  ·  Profiles  ·  Voting  ·  Feedback        │
 └───────────────────────────┬──────────────────────────────────────┘
                             │  submits scan jobs  ▼  reads results
 ┌───────────────────────────▼──────────────────────────────────────┐

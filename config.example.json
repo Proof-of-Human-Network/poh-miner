@@ -1,8 +1,6 @@
 {
   "_comment": "Copy this file to config.json (or ~/.poh-miner/config.json). This is the current recommended format used by both CLI and the Electron GUI (onboarding + RPC settings).",
 
-  "wallet": "YOUR_SOLANA_ADDRESS_HERE",
-
   "ollamaUrl": "http://localhost:11434",
   "model": "qwen2.5:1.5b",
   "inferenceMode": "auto",

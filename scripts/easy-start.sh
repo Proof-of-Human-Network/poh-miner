@@ -81,7 +81,6 @@ CONFIG_FILE="$INSTALL_DIR/config.json"
 if [ ! -f "$CONFIG_FILE" ]; then
     cat > "$CONFIG_FILE" << EOF
 {
-  "wallet": "YOUR_SOLANA_ADDRESS_HERE",
   "ollamaUrl": "http://localhost:11434",
   "model": "$MODEL",
   "inferenceMode": "$INFERENCE_MODE",
@@ -106,9 +105,8 @@ if [ ! -f "$CONFIG_FILE" ]; then
 }
 EOF
     echo ""
-    echo "⚠️  IMPORTANT: Edit $CONFIG_FILE and set your real Solana wallet address."
-    echo "   (this is where you receive POH rewards)"
-    echo ""
+    echo "✅ Config created at $CONFIG_FILE"
+    echo "   A PoH wallet is created automatically on first run."
     echo "   Optionally add API keys for rpc.solana (Helius) and rpc.1 (Alchemy)"
     echo "   to enable more earning signals."
     echo ""
@@ -166,10 +164,6 @@ if [ "${INSTALLED_AS:-}" = "appimage" ]; then
     cat > "$INSTALL_DIR/start.sh" << LAUNCHER
 #!/usr/bin/env bash
 cd "\$(dirname "\$0")"
-if grep -q "YOUR_SOLANA_ADDRESS_HERE" config.json 2>/dev/null; then
-    echo "ERROR: Edit config.json and set your Solana wallet address first."
-    exit 1
-fi
 echo "Starting PoH Miner..."
 ./poh-miner.AppImage --no-sandbox
 LAUNCHER
@@ -177,10 +171,6 @@ else
     cat > "$INSTALL_DIR/start.sh" << LAUNCHER
 #!/usr/bin/env bash
 cd "\$(dirname "\$0")"
-if grep -q "YOUR_SOLANA_ADDRESS_HERE" config.json 2>/dev/null; then
-    echo "ERROR: Edit config.json and set your Solana wallet address first."
-    exit 1
-fi
 echo "Starting PoH Miner Node (headless)..."
 echo "Press Ctrl+C to stop."
 node src/cli.js start
@@ -193,8 +183,8 @@ echo ""
 echo "✅ Setup complete!"
 echo ""
 echo "Next steps:"
-echo "  1. Edit wallet address:  $CONFIG_FILE"
-echo "  2. Start mining:         $INSTALL_DIR/start.sh"
+echo "  1. Start mining:  $INSTALL_DIR/start.sh"
+echo "  (A PoH wallet is created automatically on first run)"
 echo ""
 
 if [ "$INFERENCE_MODE" = "cpu" ]; then
