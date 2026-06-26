@@ -59,7 +59,12 @@ export function getNextDifficulty(lastBlocks) {
   const elapsed = window[window.length - 1].timestamp - window[0].timestamp;
   const avgMs = elapsed / ADJUSTMENT_WINDOW;
 
-  if (avgMs < TARGET_BLOCK_TIME_MS * 0.5) return Math.min(MAX_DIFFICULTY, current + 1);
-  if (avgMs > TARGET_BLOCK_TIME_MS * 2.0) return Math.max(MIN_DIFFICULTY, current - 1);
+  // Step by 2 when extremely off-target so difficulty converges in minutes rather than hours.
+  // Each hex-zero step changes expected time by 16×, so a single +1 step when blocks are
+  // at 2s (vs 30s target) still leaves them at 32s after the jump — fine to do aggressively.
+  if (avgMs < TARGET_BLOCK_TIME_MS * 0.1)  return Math.min(MAX_DIFFICULTY, current + 2); // <3s → jump 2
+  if (avgMs < TARGET_BLOCK_TIME_MS * 0.5)  return Math.min(MAX_DIFFICULTY, current + 1); // <15s → jump 1
+  if (avgMs > TARGET_BLOCK_TIME_MS * 4.0)  return Math.max(MIN_DIFFICULTY, current - 2); // >120s → drop 2
+  if (avgMs > TARGET_BLOCK_TIME_MS * 2.0)  return Math.max(MIN_DIFFICULTY, current - 1); // >60s → drop 1
   return current;
 }

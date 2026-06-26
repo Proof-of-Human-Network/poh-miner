@@ -2654,6 +2654,8 @@ export class PohMinerNode {
       localHeight = forkCheckHeight - 1;
     }
     // else: full fresh start (localHeight stays -1, downloads from genesis)
+    // Save before the download loop mutates localHeight — used for anchor lookup after download.
+    const anchorHeight = localHeight;
 
     // Nothing to do: peer not taller and not a fork
     if (bestHeight <= localChainHeight && !isFork && compareChainWork(bestWork, localWork) <= 0) return;
@@ -2701,13 +2703,16 @@ export class PohMinerNode {
       for (let i = 1; i < parsed.length; i++) {
         if (parsed[i].previousHash !== parsed[i - 1].getHashSync()) { valid = false; break; }
       }
+      // effectiveAnchorHeight: where to splice. Starts as anchorHeight (fork anchor),
+      // overridden to -1 if anchor check fails (full replacement).
+      let effectiveAnchorHeight = anchorHeight;
       // For partial reorg: also verify the first downloaded block links to our anchor.
       // If it doesn't, the fork is deeper than expected — fall back to full fresh start.
-      if (valid && localHeight >= 0) {
-        const anchorIdx = localHeight - chainOffset;
+      if (valid && anchorHeight >= 0) {
+        const anchorIdx = anchorHeight - chainOffset;
         const anchor = this.chain[anchorIdx];
         if (!anchor || parsed[0].previousHash !== anchor.getHashSync()) {
-          console.warn(`[PoH-Miner] Partial reorg anchor mismatch at ${localHeight} — falling back to full resync`);
+          console.warn(`[PoH-Miner] Partial reorg anchor mismatch at ${anchorHeight} — falling back to full resync`);
           // Re-download the full chain from genesis
           downloadedBlocks.length = 0;
           let h = -1;
@@ -2732,13 +2737,13 @@ export class PohMinerNode {
             if (parsed[i].previousHash !== parsed[i - 1].getHashSync()) { valid = false; break; }
           }
           // Force full replacement (no anchor)
-          localHeight = -1;
+          effectiveAnchorHeight = -1;
         }
       }
       if (valid) {
         // Splice downloaded tail onto the common prefix (or replace entirely for full fresh start)
-        const anchorIdx = localHeight >= 0 ? localHeight - chainOffset : -1;
-        this.chain = localHeight >= 0
+        const anchorIdx = effectiveAnchorHeight >= 0 ? effectiveAnchorHeight - chainOffset : -1;
+        this.chain = effectiveAnchorHeight >= 0
           ? [...this.chain.slice(0, anchorIdx + 1), ...parsed]
           : parsed;
         for (const b of parsed) {
