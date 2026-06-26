@@ -766,8 +766,13 @@ export class PohMinerNode {
           res.statusCode = 400;
           return res.end(JSON.stringify({ error: 'address required' }));
         }
-        const balance = this.walletManager.getBalance(address);
-        return res.end(JSON.stringify({ address, balance }));
+        const confirmed  = this.walletManager.getBalance(address);
+        const pendingOut = this.txMempool ? (this.txMempool.pendingOut.get(address) || 0) : 0;
+        const pendingIn  = this.txMempool
+          ? this.txMempool.getPending(1000).filter(tx => tx.to === address).reduce((s, tx) => s + tx.amount, 0)
+          : 0;
+        const balance = Math.max(0, confirmed - pendingOut + pendingIn);
+        return res.end(JSON.stringify({ address, balance, confirmed, pendingOut, pendingIn }));
       }
 
       if (url.pathname === '/api/wallet/nonce') {
@@ -1241,7 +1246,30 @@ export class PohMinerNode {
               this.applySlashing(0.05);
               console.log(`[PoH-Miner] Reputation slashed (dislike on job ${jobId}): ${this.reputation.toFixed(3)}`);
             }
-            return res.end(JSON.stringify({ ok: true, jobId, rating }));
+            res.end(JSON.stringify({ ok: true, jobId, rating }));
+
+            // Fire-and-forget: update brain weights so 👍/👎 actually teaches the LLM
+            const scannedAddress = rec.job?.payload?.address || rec.result?.address;
+            const fbAiVerdict    = transition.originalVerdict;
+            if (scannedAddress && fbAiVerdict) {
+              const fbCorrection = rating === 'negative'
+                ? (fbAiVerdict === 'HUMAN' ? 'AI' : 'HUMAN')
+                : fbAiVerdict; // positive = user agrees; records dataset without changing weights
+              const fbSignals = Array.isArray(rec.result?.signalsUsed) ? rec.result.signalsUsed : [];
+              getBrain().then(b => {
+                if (!b?.onVerdictFeedback) return;
+                return b.onVerdictFeedback(scannedAddress, fbAiVerdict, fbCorrection, transition.comment, fbSignals);
+              }).then(() => {
+                if (!this.brainSync) this._initBrainSync();
+                if (this.brainSync) {
+                  this.brainSync.publishFeedback(
+                    { address: scannedAddress, aiVerdict: fbAiVerdict, correction: fbCorrection, comment: transition.comment, signals: fbSignals },
+                    this.peers, this.config.bootnodes
+                  ).catch(() => {});
+                }
+              }).catch(e => console.warn('[PoH-Miner] Brain update from job feedback failed:', e.message));
+            }
+            return;
           } catch (e) {
             res.statusCode = 400;
             res.end(JSON.stringify({ error: e.message }));

@@ -179,7 +179,7 @@
           <span id="chart-last-updated" class="text-white/30 tabular-nums text-xs"></span>
         </div>
       </div>
-      <div class="relative" style="height:220px">
+      <div class="relative" style="height:450px">
         <canvas id="net-chart" class="absolute inset-0 w-full h-full"></canvas>
       </div>
     </div>
@@ -1204,23 +1204,21 @@
         ctx.fillText(d.getHours().toString().padStart(2,'0') + ':' + d.getMinutes().toString().padStart(2,'0'), x, H - 8);
       }
 
-      function drawSeries(series, color, side, unit) {
+      function drawSeries(series, color, side, unit, sharedMn, sharedMx) {
         if (series.length < 2) return;
-        const sn   = series.length;
-        const vals = series.map(p => p.v);
-        let mn = Math.min(...vals), mx = Math.max(...vals);
-        const pad = (mx - mn) * 0.15 || 1;
-        mn = Math.max(0, mn - pad); mx = mx + pad;
-        const range = mx - mn || 1;
+        const sn  = series.length;
+        const mn  = sharedMn, mx = sharedMx, range = mx - mn || 1;
         const toX = i => PAD.left + (i / (sn - 1)) * cW;
         const toY = v => PAD.top  + cH - ((v - mn) / range) * cH;
 
-        // Y axis tick labels
+        // Y axis tick labels — show actual values of this series at evenly-spaced positions
         ctx.fillStyle = color + 'cc';
         ctx.font = '10px monospace';
         ctx.textAlign = side === 'left' ? 'right' : 'left';
         const xLbl = side === 'left' ? PAD.left - 6 : PAD.left + cW + 6;
-        [mn + pad * 0.5, (mn + mx) / 2, mx - pad * 0.5].forEach(v => {
+        const vals = series.map(p => p.v);
+        const sMin = Math.min(...vals), sMax = Math.max(...vals);
+        [sMin, (sMin + sMax) / 2, sMax].forEach(v => {
           ctx.fillText(fmtV(v), xLbl, toY(v) + 3);
         });
         ctx.font = '9px monospace';
@@ -1261,8 +1259,16 @@
         ctx.shadowBlur = 0;
       }
 
-      drawSeries(chartData.tflops, '#22c55e', 'left',  'TFLOPS');
-      drawSeries(chartData.nodes,  '#f97316', 'right', 'nodes');
+      // Shared Y scale so 13 TFLOPS is visually higher than 5 nodes
+      const _allVals = [...chartData.tflops.map(p => p.v), ...chartData.nodes.map(p => p.v)];
+      const _rawMin  = Math.max(0, Math.min(..._allVals));
+      const _rawMax  = Math.max(..._allVals);
+      const _pad     = (_rawMax - _rawMin) * 0.12 || 1;
+      const _sharedMn = Math.max(0, _rawMin - _pad);
+      const _sharedMx = _rawMax + _pad;
+
+      drawSeries(chartData.tflops, '#22c55e', 'left',  'TFLOPS', _sharedMn, _sharedMx);
+      drawSeries(chartData.nodes,  '#f97316', 'right', 'nodes',  _sharedMn, _sharedMx);
     }
 
     async function loadChartHistory() {

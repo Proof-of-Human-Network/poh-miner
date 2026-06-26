@@ -10,11 +10,11 @@
  * incoming gossip blocks and scan jobs are never blocked.
  *
  * Difficulty target: hash must start with `difficulty` zero hex chars.
- * Difficulty adjustment targets 30-second average block time.
+ * Difficulty adjustment targets 10-second average block time.
  */
 
 const YIELD_EVERY = 2000;         // yield to event loop this often
-const TARGET_BLOCK_TIME_MS = 30_000;
+const TARGET_BLOCK_TIME_MS = 10_000;
 const ADJUSTMENT_WINDOW = 10;    // blocks
 const MIN_DIFFICULTY = 5;        // 5 leading hex zeros ≈ 1M hashes avg (~5-15 s in JS)
 const MAX_DIFFICULTY = 20;
@@ -62,9 +62,9 @@ export function getNextDifficulty(lastBlocks) {
   // Step by 2 when extremely off-target so difficulty converges in minutes rather than hours.
   // Each hex-zero step changes expected time by 16×, so a single +1 step when blocks are
   // at 2s (vs 30s target) still leaves them at 32s after the jump — fine to do aggressively.
-  if (avgMs < TARGET_BLOCK_TIME_MS * 0.1)  return Math.min(MAX_DIFFICULTY, current + 2); // <3s → jump 2
-  if (avgMs < TARGET_BLOCK_TIME_MS * 0.5)  return Math.min(MAX_DIFFICULTY, current + 1); // <15s → jump 1
-  if (avgMs > TARGET_BLOCK_TIME_MS * 4.0)  return Math.max(MIN_DIFFICULTY, current - 2); // >120s → drop 2
-  if (avgMs > TARGET_BLOCK_TIME_MS * 2.0)  return Math.max(MIN_DIFFICULTY, current - 1); // >60s → drop 1
+  if (avgMs < TARGET_BLOCK_TIME_MS * 0.1)  return Math.min(MAX_DIFFICULTY, current + 2); // <1s → jump 2
+  if (avgMs < TARGET_BLOCK_TIME_MS * 0.5)  return Math.min(MAX_DIFFICULTY, current + 1); // <5s → jump 1
+  if (avgMs > TARGET_BLOCK_TIME_MS * 4.0)  return Math.max(MIN_DIFFICULTY, current - 2); // >40s → drop 2
+  if (avgMs > TARGET_BLOCK_TIME_MS * 2.0)  return Math.max(MIN_DIFFICULTY, current - 1); // >20s → drop 1
   return current;
 }

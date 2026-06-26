@@ -642,12 +642,14 @@ function installOllama() {
       https.get('https://ollama.com/download/OllamaSetup.exe', (res) => {
         res.pipe(file);
         file.on('finish', () => {
-          file.close();
-          sendSetupProgress({ status: 'installing', message: 'Running Ollama installer...' });
-          const proc = spawnProc(setupPath, ['/SILENT'], { stdio: 'ignore' });
-          proc.on('close', (code) => {
-            if (code === 0) resolve();
-            else reject(new Error(`OllamaSetup.exe exited ${code}`));
+          file.close((closeErr) => {
+            if (closeErr) { reject(closeErr); return; }
+            sendSetupProgress({ status: 'installing', message: 'Running Ollama installer...' });
+            const proc = spawnProc(setupPath, ['/SILENT'], { stdio: 'ignore' });
+            proc.on('close', (code) => {
+              if (code === 0) resolve();
+              else reject(new Error(`OllamaSetup.exe exited ${code}`));
+            });
           });
         });
       }).on('error', (e) => { fs.unlink(setupPath, () => {}); reject(e); });
