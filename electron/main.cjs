@@ -602,19 +602,41 @@ async function isOllamaRunning() {
 
 function ollamaInPath() {
   return new Promise((resolve) => {
-    execFile('which', ['ollama'], (err) => resolve(!err));
+    // Windows uses 'where'; Unix uses 'which'
+    const cmd = process.platform === 'win32' ? 'where' : 'which';
+    execFile(cmd, ['ollama'], (err) => {
+      if (!err) return resolve(true);
+      // On Windows also check the default install location as a fallback
+      if (process.platform === 'win32') {
+        const localAppData = process.env.LOCALAPPDATA || '';
+        const defaultPath = require('path').join(localAppData, 'Programs', 'Ollama', 'ollama.exe');
+        return resolve(require('fs').existsSync(defaultPath));
+      }
+      resolve(false);
+    });
   });
+}
+
+function getOllamaExePath() {
+  if (process.platform === 'win32') {
+    const localAppData = process.env.LOCALAPPDATA || '';
+    const defaultPath = require('path').join(localAppData, 'Programs', 'Ollama', 'ollama.exe');
+    if (require('fs').existsSync(defaultPath)) return defaultPath;
+  }
+  return 'ollama';
 }
 
 function startOllamaService() {
   return new Promise((resolve) => {
-    const proc = spawnProc('ollama', ['serve'], {
+    const ollamaExe = getOllamaExePath();
+    const proc = spawnProc(ollamaExe, ['serve'], {
       detached: true, stdio: 'ignore',
       env: { ...process.env },
     });
+    proc.on('error', () => {}); // swallow spawn errors — isOllamaRunning() will detect failure
     proc.unref();
-    // Give it 3 seconds to start
-    setTimeout(resolve, 3000);
+    // Give it 5 seconds to start (Windows service startup can be slower)
+    setTimeout(resolve, 5000);
   });
 }
 
@@ -663,20 +685,15 @@ function installOllama() {
 async function ensureOllamaAndModel(model = 'qwen2.5:1.5b') {
   sendLog(`[Setup] Checking Ollama + model (${model})...`);
 
-  // 1. Install if missing (Linux/macOS only — Windows users must install manually)
+  // 1. Install if missing (all platforms)
   const inPath = await ollamaInPath();
   if (!inPath) {
-    const platform = process.platform;
-    if (platform === 'linux' || platform === 'darwin') {
-      sendLog('[Setup] Ollama not found — installing...');
-      try { await installOllama(); } catch (e) {
-        sendLog(`[Setup] ✗ Ollama install failed: ${e.message}. Please install from https://ollama.com`);
-        return;
-      }
-    } else {
-      sendLog('[Setup] ✗ Ollama not installed. Download from https://ollama.com and restart the miner.');
+    sendLog('[Setup] Ollama not found — installing...');
+    try { await installOllama(); } catch (e) {
+      sendLog(`[Setup] ✗ Ollama install failed: ${e.message}. Please install from https://ollama.com`);
       return;
     }
+    sendLog('[Setup] ✓ Ollama installed.');
   }
 
   // 2. Start service if not running

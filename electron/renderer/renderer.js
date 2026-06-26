@@ -2076,10 +2076,34 @@ async function sendChatMessage() {
     });
 
     if (!res.ok) {
-      const err = await res.text().catch(() => res.statusText);
-      appendToLastBubble(`[Error: ${err}]`);
-      finalizeLastBubble();
-      chatHistory.push({ role: 'assistant', content: `[Error: ${err}]` });
+      const errText = await res.text().catch(() => res.statusText);
+      let errMsg = errText;
+      try { errMsg = JSON.parse(errText)?.error || errText; } catch { /* keep raw */ }
+      const isOllamaDown = errMsg.toLowerCase().includes('ollama unavailable') || errMsg.toLowerCase().includes('econnrefused');
+      if (isOllamaDown) {
+        appendToLastBubble('Ollama is not running. Attempting to start it…');
+        finalizeLastBubble();
+        chatHistory.push({ role: 'assistant', content: '[Ollama not running — attempting restart]' });
+        // Ask main process to install/start Ollama
+        const api = window.pohMinerAPI?.setup;
+        if (api?.install) {
+          api.install().then(r => {
+            const msg = r?.ok
+              ? 'Ollama is now running. Please resend your message.'
+              : `Could not start Ollama: ${r?.error || 'unknown error'}. Try running "ollama serve" manually.`;
+            renderMessage('assistant', msg);
+            chatHistory.push({ role: 'assistant', content: msg });
+          }).catch(() => {
+            renderMessage('assistant', 'Could not start Ollama automatically. Run "ollama serve" in a terminal, then try again.');
+          });
+        } else {
+          renderMessage('assistant', 'Ollama is not running. Run "ollama serve" in a terminal, then try again.');
+        }
+      } else {
+        appendToLastBubble(`Error: ${errMsg}`);
+        finalizeLastBubble();
+        chatHistory.push({ role: 'assistant', content: `[Error: ${errMsg}]` });
+      }
       return;
     }
 
