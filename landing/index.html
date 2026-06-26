@@ -1191,17 +1191,22 @@
         return;
       }
 
-      // X axis time labels
+      // X axis time labels — format adapts to the visible time span
       ctx.fillStyle = 'rgba(255,255,255,0.2)';
       ctx.font = '10px monospace';
       ctx.textAlign = 'center';
       const n = refSeries.length;
       const ticks = Math.min(6, n);
+      const spanMs = n > 1 ? refSeries[n-1].t - refSeries[0].t : 0;
       for (let k = 0; k < ticks; k++) {
         const i  = Math.round(k / (ticks - 1) * (n - 1));
         const x  = PAD.left + (i / (n - 1)) * cW;
         const d  = new Date(refSeries[i].t);
-        ctx.fillText(d.getHours().toString().padStart(2,'0') + ':' + d.getMinutes().toString().padStart(2,'0'), x, H - 8);
+        let lbl;
+        if (spanMs > 7 * 86_400_000)       lbl = (d.getMonth()+1) + '/' + d.getDate();
+        else if (spanMs > 86_400_000)       lbl = (d.getMonth()+1)+'/'+d.getDate()+' '+d.getHours()+'h';
+        else                                lbl = d.getHours().toString().padStart(2,'0') + ':' + d.getMinutes().toString().padStart(2,'0');
+        ctx.fillText(lbl, x, H - 8);
       }
 
       function drawSeries(series, color, side, unit, sharedMn, sharedMx) {
@@ -1271,14 +1276,58 @@
       drawSeries(chartData.nodes,  '#f97316', 'right', 'nodes',  _sharedMn, _sharedMx);
     }
 
+    // Merge tiered history (daily → hourly → minutely) into one timeline,
+    // then auto-aggregate to at most ~300 points for chart rendering.
+    function mergeAndAggregate(daily, hourly, minutely) {
+      // Build a deduplicated, time-ordered series from all three tiers.
+      // Newer tiers override older ones for overlapping time windows.
+      const map = new Map();
+      const add = pts => pts.forEach(p => map.set(Math.round(p.t / 60_000), p)); // key by minute
+      add(daily);
+      add(hourly);
+      add(minutely);
+      const sorted = [...map.values()].sort((a, b) => a.t - b.t);
+      if (!sorted.length) return [];
+
+      // Auto-aggregate to ≤300 visible points
+      const TARGET = 300;
+      if (sorted.length <= TARGET) return sorted;
+
+      const span   = sorted[sorted.length - 1].t - sorted[0].t;
+      const bucket = Math.ceil(span / TARGET); // ms per bucket
+
+      const buckets = new Map();
+      for (const p of sorted) {
+        const k = Math.floor(p.t / bucket);
+        if (!buckets.has(k)) buckets.set(k, []);
+        buckets.get(k).push(p);
+      }
+      return [...buckets.values()].map(pts => ({
+        t:      pts[0].t,
+        nodes:  Math.round(pts.reduce((s, p) => s + p.nodes,  0) / pts.length),
+        tflops: Math.round(pts.reduce((s, p) => s + p.tflops, 0) / pts.length * 10) / 10,
+      })).sort((a, b) => a.t - b.t);
+    }
+
+    function fmtTime(t, spanMs) {
+      const d = new Date(t);
+      if (spanMs > 3 * 86_400_000) // > 3 days → show date
+        return (d.getMonth()+1) + '/' + d.getDate();
+      return d.getHours().toString().padStart(2,'0') + ':' + d.getMinutes().toString().padStart(2,'0');
+    }
+
     async function loadChartHistory() {
       try {
-        const res = await fetchFromAnyBootnode('/network/history?limit=1440');
+        const res = await fetchFromAnyBootnode('/network/history');
         if (!res) return;
-        const { history } = await res.json();
-        if (!Array.isArray(history) || !history.length) return;
-        chartData.tflops = history.map(p => ({ t: p.t, v: p.tflops }));
-        chartData.nodes  = history.map(p => ({ t: p.t, v: p.nodes  }));
+        const data = await res.json();
+        // Support both new tiered format and legacy { history: [...] }
+        const merged = (data.minutely || data.hourly || data.daily)
+          ? mergeAndAggregate(data.daily || [], data.hourly || [], data.minutely || [])
+          : (data.history || []);
+        if (!merged.length) return;
+        chartData.tflops = merged.map(p => ({ t: p.t, v: p.tflops }));
+        chartData.nodes  = merged.map(p => ({ t: p.t, v: p.nodes  }));
         drawNetChart();
       } catch {}
     }
@@ -1353,6 +1402,8 @@
       loadRealStats();
       loadChartHistory().then(() => tickChart());
       setInterval(tickChart, 15000);
+      // Reload full all-time history every 10 minutes so daily/hourly tiers stay fresh
+      setInterval(loadChartHistory, 10 * 60 * 1000);
       window.addEventListener('resize', drawNetChart);
     };
 

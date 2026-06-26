@@ -60,30 +60,73 @@ function saveBrainEvents() {
 
 loadBrainEvents();
 
-// ── Network history (nodes + tflops over time) ────────────────────────────
+// ── Network history (nodes + tflops over time) — tiered storage ──────────
+// minutely: last 24 h at 1-min resolution  (1 440 points max)
+// hourly:   last 30 d at 1-h  resolution  (  720 points max)
+// daily:    all-time  at 1-d  resolution  (  unbounded, ~1/day)
 const NETWORK_HISTORY_FILE = path.join(DATA_DIR, 'network_history.json');
-const HISTORY_MAX = 2880; // 48 hours at 1-minute snapshots
 
-let networkHistory = []; // { t, nodes, tflops }
+let nhMinutely = []; // { t, nodes, tflops }
+let nhHourly   = [];
+let nhDaily    = [];
 
 function loadNetworkHistory() {
   try {
-    if (fs.existsSync(NETWORK_HISTORY_FILE))
-      networkHistory = JSON.parse(fs.readFileSync(NETWORK_HISTORY_FILE, 'utf8'));
-  } catch { networkHistory = []; }
+    if (!fs.existsSync(NETWORK_HISTORY_FILE)) return;
+    const raw = JSON.parse(fs.readFileSync(NETWORK_HISTORY_FILE, 'utf8'));
+    if (Array.isArray(raw)) {
+      // Migrate legacy flat array → minutely tier
+      nhMinutely = raw.slice(-1440);
+    } else {
+      nhMinutely = raw.minutely || [];
+      nhHourly   = raw.hourly   || [];
+      nhDaily    = raw.daily    || [];
+    }
+  } catch { nhMinutely = []; nhHourly = []; nhDaily = []; }
 }
 
 function saveNetworkHistory() {
-  try { fs.writeFileSync(NETWORK_HISTORY_FILE, JSON.stringify(networkHistory)); } catch {}
+  try { fs.writeFileSync(NETWORK_HISTORY_FILE, JSON.stringify({ minutely: nhMinutely, hourly: nhHourly, daily: nhDaily })); } catch {}
+}
+
+function avgBucket(pts) {
+  if (!pts.length) return null;
+  return {
+    t:      pts[0].t,
+    nodes:  Math.round(pts.reduce((s, p) => s + p.nodes, 0) / pts.length),
+    tflops: Math.round(pts.reduce((s, p) => s + p.tflops, 0) / pts.length * 10) / 10,
+  };
 }
 
 function snapshotNetwork() {
   pruneStalePeers();
   const peerList = Array.from(peers.values());
+  const now    = Date.now();
   const nodes  = peerList.length;
   const tflops = Math.round(peerList.reduce((s, p) => s + (p.tflops || 0), 0) * 10) / 10;
-  networkHistory.push({ t: Date.now(), nodes, tflops });
-  if (networkHistory.length > HISTORY_MAX) networkHistory.splice(0, networkHistory.length - HISTORY_MAX);
+  const entry  = { t: now, nodes, tflops };
+
+  // Minutely (last 24 h)
+  nhMinutely.push(entry);
+  if (nhMinutely.length > 1440) nhMinutely.shift();
+
+  // Hourly rollup: when the hour turns, average the previous hour's minutely points
+  const prevHour = Math.floor(now / 3_600_000) - 1;
+  if (!nhHourly.length || Math.floor(nhHourly[nhHourly.length - 1].t / 3_600_000) < prevHour) {
+    const pts = nhMinutely.filter(p => Math.floor(p.t / 3_600_000) === prevHour);
+    const avg = avgBucket(pts);
+    if (avg) { avg.t = prevHour * 3_600_000; nhHourly.push(avg); }
+    if (nhHourly.length > 720) nhHourly.shift();
+  }
+
+  // Daily rollup: when the UTC day turns, average the previous day's minutely points
+  const prevDay = Math.floor(now / 86_400_000) - 1;
+  if (!nhDaily.length || Math.floor(nhDaily[nhDaily.length - 1].t / 86_400_000) < prevDay) {
+    const pts = nhMinutely.filter(p => Math.floor(p.t / 86_400_000) === prevDay);
+    const avg = avgBucket(pts);
+    if (avg) { avg.t = prevDay * 86_400_000; nhDaily.push(avg); }
+  }
+
   saveNetworkHistory();
 }
 
@@ -473,12 +516,8 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (url.pathname === '/network/history') {
-      const since = parseInt(url.searchParams.get('since') || '0');
-      const limit = Math.min(parseInt(url.searchParams.get('limit') || '1440'), HISTORY_MAX);
-      const slice = since
-        ? networkHistory.filter(p => p.t > since).slice(-limit)
-        : networkHistory.slice(-limit);
-      res.end(JSON.stringify({ history: slice }));
+      // Return all three tiers so the client can auto-select granularity
+      res.end(JSON.stringify({ minutely: nhMinutely, hourly: nhHourly, daily: nhDaily }));
       return;
     }
 
