@@ -151,15 +151,15 @@
   <div class="border-y border-white/10 py-6">
     <div class="max-w-6xl mx-auto px-8 grid grid-cols-2 md:grid-cols-3 gap-8 text-center">
       <div>
-        <div class="text-[36px] md:text-[60px] font-display tracking-tighter" id="node-count">—</div>
+        <div class="text-[36px] md:text-[60px] font-display tracking-tighter" id="node-count" data-raw="0">—</div>
         <div class="text-xs text-white/50 tracking-widest mt-1">ACTIVE COMPUTE NODES</div>
       </div>
       <div>
-        <div class="text-[36px] md:text-[60px] font-display tracking-tighter text-[#22c55e]" id="network-speed">—</div>
+        <div class="text-[36px] md:text-[60px] font-display tracking-tighter text-[#22c55e]" id="network-speed" data-raw="0">—</div>
         <div class="text-xs text-white/50 tracking-widest mt-1">NETWORK SPEED</div>
       </div>
       <div>
-        <div class="text-[36px] md:text-[60px] font-display tracking-tighter" id="jobs-count">—</div>
+        <div class="text-[36px] md:text-[60px] font-display tracking-tighter" id="jobs-count" data-raw="0">—</div>
         <div class="text-xs text-white/50 tracking-widest mt-1">AI TASKS PROCESSED</div>
       </div>
     </div>
@@ -1283,19 +1283,61 @@
       } catch {}
     }
 
+    // Animate a numeric counter from its current displayed value to a new value
+    function animateCounter(el, newVal, format) {
+      if (!el) return;
+      const raw = el.dataset.raw !== undefined ? parseFloat(el.dataset.raw) : null;
+      const from = (raw !== null && !isNaN(raw)) ? raw : newVal;
+      el.dataset.raw = newVal;
+      const start = performance.now();
+      const dur = 600;
+      function step(now) {
+        const p = Math.min(1, (now - start) / dur);
+        const ease = 1 - Math.pow(1 - p, 3); // ease-out cubic
+        const cur = from + (newVal - from) * ease;
+        el.textContent = format(cur);
+        if (p < 1) requestAnimationFrame(step);
+      }
+      requestAnimationFrame(step);
+    }
+
     async function tickChart() {
       try {
-        const res = await fetchFromAnyBootnode('/peers');
-        if (!res) return;
-        const data = await res.json();
-        const count = data.count ?? (Array.isArray(data.peers) ? data.peers.length : null);
-        let tflops = data.totalTflops;
-        if (tflops == null && Array.isArray(data.peers))
-          tflops = Math.round(data.peers.reduce((s, p) => s + (p.tflops || 0), 0) * 10) / 10;
+        const [peersRes, statusRes] = await Promise.allSettled([
+          fetchFromAnyBootnode('/peers'),
+          fetch('https://miner.proofofhuman.ge/status', { cache: 'no-store' }),
+        ]);
 
-        const t = Date.now();
-        if (count  != null) { chartData.nodes.push({ t, v: count  }); if (chartData.nodes.length  > CHART_MAX_POINTS) chartData.nodes.shift(); }
-        if (tflops != null) { chartData.tflops.push({ t, v: tflops }); if (chartData.tflops.length > CHART_MAX_POINTS) chartData.tflops.shift(); }
+        // Peers → nodes + TFLOPS
+        const res = peersRes.status === 'fulfilled' ? peersRes.value : null;
+        if (res) {
+          const data = await res.json();
+          const count = data.count ?? (Array.isArray(data.peers) ? data.peers.length : null);
+          let tflops = data.totalTflops;
+          if (tflops == null && Array.isArray(data.peers))
+            tflops = Math.round(data.peers.reduce((s, p) => s + (p.tflops || 0), 0) * 10) / 10;
+
+          const t = Date.now();
+          if (count  != null) { chartData.nodes.push({ t, v: count  }); if (chartData.nodes.length  > CHART_MAX_POINTS) chartData.nodes.shift(); }
+          if (tflops != null) { chartData.tflops.push({ t, v: tflops }); if (chartData.tflops.length > CHART_MAX_POINTS) chartData.tflops.shift(); }
+
+          // Update stat counters with animation
+          if (count != null)
+            animateCounter(document.getElementById('node-count'), count, v => Math.round(v).toString());
+          if (tflops != null)
+            animateCounter(document.getElementById('network-speed'), tflops,
+              v => (v >= 1000 ? (v / 1000).toFixed(1) + 'k' : v.toFixed(1)) + ' TFLOPS');
+        }
+
+        // Status → AI tasks processed
+        if (statusRes.status === 'fulfilled' && statusRes.value.ok) {
+          try {
+            const s = await statusRes.value.json();
+            const jobs = s.totalJobsProcessed ?? s.jobsProcessed ?? s.chainHeight ?? 0;
+            if (jobs > 0)
+              animateCounter(document.getElementById('jobs-count'), jobs, v => fmtNum(Math.round(v)));
+          } catch {}
+        }
 
         drawNetChart();
         const el = document.getElementById('chart-last-updated');

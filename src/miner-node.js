@@ -3271,7 +3271,10 @@ export class PohMinerNode {
     if (appliedTxHashes.length) this.txMempool.onBlockApplied(appliedTxHashes);
 
     for (const r of (block.scanResults || [])) {
-      if (r.requestId) this.minedRequestIds.add(r.requestId);
+      if (r.requestId && !this.minedRequestIds.has(r.requestId)) {
+        this.minedRequestIds.add(r.requestId);
+        this.totalJobsProcessed = (this.totalJobsProcessed || 0) + 1;
+      }
     }
     const before = this.pendingValidResults.length;
     this.pendingValidResults = this.pendingValidResults.filter(r => !this.minedRequestIds.has(r.requestId));
@@ -4488,6 +4491,7 @@ export class PohMinerNode {
       signalsAgeMin: sig.ageMinutes,
       region: this.myLocation?.country,
       chainHeight: this.chain.length - 1,
+      totalJobsProcessed: this.totalJobsProcessed || 0,
       peers: (this.peers || []).length,
       computeEnabled: this.config.computeEnabled,
       quality: this.qualityStats,
