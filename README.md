@@ -293,6 +293,46 @@ Tests cover: P2P gossip, block/result signatures, chainWork fork resolution, tra
 
 ---
 
+## Troubleshooting
+
+All heavy dependencies (the Electron binary, the Ollama installer, the LLM
+model) are downloaded over the network. On a slow or unstable connection a
+download can drop midway. The app now retries and resumes automatically, but if
+you still get stuck:
+
+**`Electron failed to install correctly` on `npm start`**
+The Electron binary (~100 MB) didn't finish downloading during `npm install`
+(`npm install` doesn't fail when this happens). Re-run one of:
+
+```bash
+# Re-run the official downloader (no resume — may take a few tries)
+node node_modules/electron/install.js
+
+# Or use a faster mirror if the official host is slow/blocked
+ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/ node node_modules/electron/install.js
+# Windows (PowerShell): $env:ELECTRON_MIRROR='https://npmmirror.com/mirrors/electron/'; node node_modules/electron/install.js
+```
+
+A `postinstall` check prints these same instructions automatically when the
+binary is missing.
+
+**Ollama / model setup fails at startup**
+The app auto-installs Ollama and pulls the model on first run and now retries on
+failure. If it still can't finish, install Ollama manually and let the app pull
+the model (`ollama pull` resumes, so re-run until it prints `success`):
+
+```bash
+# Windows
+winget install Ollama.Ollama
+# macOS / Linux
+curl -fsSL https://ollama.com/install.sh | sh
+
+ollama serve            # start the service if it isn't already running
+ollama pull qwen2.5:1.5b
+```
+
+---
+
 ## Building
 
 ```bash

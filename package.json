@@ -26,6 +26,7 @@
     "outputPath": "dist/bin"
   },
   "scripts": {
+    "postinstall": "node scripts/verify-electron.cjs",
     "start": "electron --no-sandbox .",
     "start:headless": "node start.js",
     "dev": "node --watch start.js",
