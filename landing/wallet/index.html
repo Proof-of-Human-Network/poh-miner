@@ -45,6 +45,7 @@
       </div>
       <div class="flex items-center gap-x-4 sm:gap-x-5 text-[16px] sm:text-[18px]">
         <a href="#balance" class="hover:text-[#22c55e] transition hidden md:block">Balance</a>
+        <a href="#chat" class="hover:text-[#22c55e] transition hidden md:block">Chat</a>
         <a href="#scanner" class="hover:text-[#22c55e] transition hidden md:block">Scanner</a>
         <a href="#send" class="hover:text-[#22c55e] transition hidden md:block">Send</a>
         <a href="#download" class="px-3 sm:px-4 py-2 rounded-[4px] bg-[#22c55e] text-black hover:bg-white transition whitespace-nowrap">Download</a>
@@ -278,6 +279,117 @@
         </div>
       </div>
 
+    </div>
+  </div>
+
+  <!-- ═══ FEATURE 1.5: CHAT ═══ -->
+  <div id="chat" class="border-t border-white/10 bg-[#030303]">
+    <div class="max-w-7xl mx-auto px-4 sm:px-8 py-14 md:py-32">
+      <div class="flex flex-col lg:flex-row-reverse items-center gap-10 lg:gap-20">
+
+        <!-- iPhone: Chat screen -->
+        <div class="lg:w-1/2 flex justify-center reveal">
+          <div class="phone-glow">
+            <svg viewBox="0 0 340 700" width="280" xmlns="http://www.w3.org/2000/svg">
+              <rect x="4" y="4" width="332" height="692" rx="46" fill="#1a1a1a"/>
+              <rect x="4" y="4" width="332" height="692" rx="46" fill="none" stroke="#2a2a2a" stroke-width="2"/>
+              <rect x="336" y="140" width="8" height="60" rx="4" fill="#222"/>
+              <rect x="2" y="130" width="6" height="40" rx="3" fill="#222"/>
+              <rect x="2" y="182" width="6" height="40" rx="3" fill="#222"/>
+              <rect x="16" y="16" width="308" height="668" rx="38" fill="#000"/>
+              <rect x="125" y="26" width="90" height="28" rx="14" fill="#1a1a1a"/>
+              <!-- Status bar -->
+              <text x="36" y="52" fill="white" font-size="13" font-family="system-ui" font-weight="600">9:41</text>
+              <rect x="252" y="41" width="28" height="14" rx="3" fill="none" stroke="#fff" stroke-width="1.5"/>
+              <rect x="254" y="43" width="22" height="10" rx="2" fill="#22c55e"/>
+              <rect x="281" y="45" width="4" height="6" rx="1" fill="#fff"/>
+              <!-- Header -->
+              <text x="170" y="90" text-anchor="middle" fill="white" font-size="15" font-family="system-ui" font-weight="600">AI Assistant</text>
+              <text x="170" y="108" text-anchor="middle" fill="#22c55e" font-size="9" font-family="monospace" letter-spacing="1">● PRIVATE · LOCAL</text>
+              <line x1="16" y1="118" x2="324" y2="118" stroke="#1a1a1a" stroke-width="1"/>
+              <!-- User bubble 1 -->
+              <rect x="140" y="134" width="164" height="44" rx="14" fill="#1a2e1a"/>
+              <text x="222" y="152" text-anchor="middle" fill="white" font-size="11" font-family="system-ui">What's the difference</text>
+              <text x="222" y="168" text-anchor="middle" fill="white" font-size="11" font-family="system-ui">between POH and ETH?</text>
+              <!-- AI bubble 1 -->
+              <rect x="30" y="190" width="224" height="76" rx="14" fill="#111"/>
+              <text x="46" y="208" fill="#9ca3af" font-size="11" font-family="system-ui">POH is a Proof-of-Humanity</text>
+              <text x="46" y="224" fill="#9ca3af" font-size="11" font-family="system-ui">token — earned by running</text>
+              <text x="46" y="240" fill="#9ca3af" font-size="11" font-family="system-ui">AI compute tasks, not mining.</text>
+              <text x="46" y="256" fill="#22c55e" font-size="9" font-family="monospace">qwen2.5:1.5b · local</text>
+              <!-- User bubble 2 -->
+              <rect x="140" y="280" width="164" height="30" rx="14" fill="#1a2e1a"/>
+              <text x="222" y="300" text-anchor="middle" fill="white" font-size="11" font-family="system-ui">How do I earn more?</text>
+              <!-- AI bubble 2 -->
+              <rect x="30" y="324" width="248" height="92" rx="14" fill="#111"/>
+              <text x="46" y="342" fill="#9ca3af" font-size="11" font-family="system-ui">Keep your miner running 24/7.</text>
+              <text x="46" y="358" fill="#9ca3af" font-size="11" font-family="system-ui">Each AI scan job your node</text>
+              <text x="46" y="374" fill="#9ca3af" font-size="11" font-family="system-ui">completes earns 0.1 POH.</text>
+              <text x="46" y="390" fill="#9ca3af" font-size="11" font-family="system-ui">Faster GPU = more tasks.</text>
+              <text x="46" y="406" fill="#22c55e" font-size="9" font-family="monospace">qwen2.5:1.5b · local</text>
+              <!-- User bubble 3 -->
+              <rect x="176" y="430" width="128" height="30" rx="14" fill="#1a2e1a"/>
+              <text x="240" y="450" text-anchor="middle" fill="white" font-size="11" font-family="system-ui">Is it private?</text>
+              <!-- AI bubble 3 -->
+              <rect x="30" y="474" width="224" height="60" rx="14" fill="#111"/>
+              <text x="46" y="492" fill="#9ca3af" font-size="11" font-family="system-ui">100%. Runs entirely on your</text>
+              <text x="46" y="508" fill="#9ca3af" font-size="11" font-family="system-ui">device. No cloud. No logs.</text>
+              <text x="46" y="524" fill="#22c55e" font-size="9" font-family="monospace">qwen2.5:1.5b · local</text>
+              <!-- Input bar -->
+              <rect x="16" y="548" width="308" height="56" rx="0" fill="#0a0a0a"/>
+              <line x1="16" y1="548" x2="324" y2="548" stroke="#1c1c1c" stroke-width="1"/>
+              <rect x="28" y="562" width="244" height="32" rx="16" fill="#1a1a1a"/>
+              <text x="50" y="583" fill="#374151" font-size="11" font-family="system-ui">Message AI…</text>
+              <rect x="282" y="562" width="32" height="32" rx="16" fill="#22c55e"/>
+              <text x="298" y="583" text-anchor="middle" fill="black" font-size="16" font-family="sans-serif">↑</text>
+              <!-- Bottom tab bar -->
+              <rect x="16" y="620" width="308" height="64" rx="0" fill="#0a0a0a"/>
+              <line x1="16" y1="620" x2="324" y2="620" stroke="#1c1c1c" stroke-width="1"/>
+              <text x="62" y="644" text-anchor="middle" fill="#374151" font-size="8" font-family="monospace">●</text>
+              <text x="62" y="660" text-anchor="middle" fill="#374151" font-size="9" font-family="monospace">Home</text>
+              <text x="124" y="644" text-anchor="middle" fill="#374151" font-size="16" font-family="sans-serif">⇄</text>
+              <text x="124" y="660" text-anchor="middle" fill="#374151" font-size="9" font-family="monospace">History</text>
+              <text x="186" y="642" text-anchor="middle" fill="#22c55e" font-size="16" font-family="sans-serif">💬</text>
+              <text x="186" y="660" text-anchor="middle" fill="#22c55e" font-size="9" font-family="monospace">Chat</text>
+              <text x="262" y="644" text-anchor="middle" fill="#374151" font-size="16" font-family="sans-serif">⚙</text>
+              <text x="262" y="660" text-anchor="middle" fill="#374151" font-size="9" font-family="monospace">Settings</text>
+            </svg>
+          </div>
+        </div>
+
+        <!-- Text -->
+        <div class="lg:w-1/2 reveal">
+          <div class="uppercase tracking-[3px] text-xs text-[#22c55e] mb-4">AI CHAT</div>
+          <h2 class="font-display text-[44px] sm:text-[60px] md:text-[80px] leading-[0.9] mb-6">Your AI.<br>Right in your pocket.</h2>
+          <p class="text-[16px] sm:text-[20px] md:text-[24px] text-white/60 mb-8">
+            The same LLM that earns you POH is available as a personal AI assistant — no subscription, no API key, no cloud.
+          </p>
+          <div class="space-y-5">
+            <div class="flex items-start gap-4">
+              <div class="w-2 h-2 rounded-full bg-[#22c55e] mt-3 flex-shrink-0"></div>
+              <div>
+                <div class="text-[20px]">Always with you</div>
+                <div class="text-[18px] text-white/40">Full LLM in your pocket — ask anything, anytime, even offline</div>
+              </div>
+            </div>
+            <div class="flex items-start gap-4">
+              <div class="w-2 h-2 rounded-full bg-[#22c55e] mt-3 flex-shrink-0"></div>
+              <div>
+                <div class="text-[20px]">Private mode</div>
+                <div class="text-[18px] text-white/40">Runs entirely on your device — no data sent to any server, ever</div>
+              </div>
+            </div>
+            <div class="flex items-start gap-4">
+              <div class="w-2 h-2 rounded-full bg-[#22c55e] mt-3 flex-shrink-0"></div>
+              <div>
+                <div class="text-[20px]">Zero cost</div>
+                <div class="text-[18px] text-white/40">Powered by compute you already own — no subscriptions, no rate limits</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
     </div>
   </div>
 
