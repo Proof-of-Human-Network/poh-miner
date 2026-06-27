@@ -580,7 +580,21 @@ ipcMain.handle('app:restart', async () => {
 
 const { execFile, spawn: spawnProc } = require('child_process');
 const https = require('https');
+const http = require('http');
 const os = require('os');
+
+// Follow HTTP redirects (Node's https.get does not do this automatically)
+function httpGetFollow(url, onResponse) {
+  const lib = url.startsWith('https') ? https : http;
+  lib.get(url, (res) => {
+    if (res.statusCode === 301 || res.statusCode === 302 || res.statusCode === 307 || res.statusCode === 308) {
+      res.resume();
+      httpGetFollow(res.headers.location, onResponse);
+    } else {
+      onResponse(res);
+    }
+  }).on('error', (e) => onResponse(null, e));
+}
 
 function sendSetupProgress(msg) {
   if (mainWindow && !mainWindow.isDestroyed()) {
@@ -650,31 +664,39 @@ function installOllama() {
       });
       proc.stdout.on('data', d => sendSetupProgress({ status: 'installing', message: d.toString().trim() }));
       proc.stderr.on('data', d => sendSetupProgress({ status: 'installing', message: d.toString().trim() }));
+      proc.on('error', (e) => reject(e));
       proc.on('close', (code) => {
         if (code === 0) resolve();
         else reject(new Error(`Ollama install exited ${code}`));
       });
     } else if (platform === 'win32') {
-      const os = require('os');
       const fs = require('fs');
-      const https = require('https');
       const setupPath = path.join(os.tmpdir(), 'OllamaSetup.exe');
       sendSetupProgress({ status: 'installing', message: 'Downloading OllamaSetup.exe...' });
       const file = fs.createWriteStream(setupPath);
-      https.get('https://ollama.com/download/OllamaSetup.exe', (res) => {
+      httpGetFollow('https://ollama.com/download/OllamaSetup.exe', (res, err) => {
+        if (err || !res) { fs.unlink(setupPath, () => {}); reject(err || new Error('Download failed')); return; }
+        if (res.statusCode !== 200) {
+          res.resume();
+          fs.unlink(setupPath, () => {});
+          reject(new Error(`Download failed: HTTP ${res.statusCode}`));
+          return;
+        }
         res.pipe(file);
         file.on('finish', () => {
           file.close((closeErr) => {
             if (closeErr) { reject(closeErr); return; }
             sendSetupProgress({ status: 'installing', message: 'Running Ollama installer...' });
-            const proc = spawnProc(setupPath, ['/SILENT'], { stdio: 'ignore' });
+            const proc = spawnProc(setupPath, ['/SILENT'], { stdio: 'ignore', windowsHide: true });
+            proc.on('error', (e) => reject(e));
             proc.on('close', (code) => {
               if (code === 0) resolve();
               else reject(new Error(`OllamaSetup.exe exited ${code}`));
             });
           });
         });
-      }).on('error', (e) => { fs.unlink(setupPath, () => {}); reject(e); });
+        file.on('error', (e) => { fs.unlink(setupPath, () => {}); reject(e); });
+      });
     } else {
       reject(new Error('Auto-install not supported on this OS. Download from https://ollama.com'));
     }

@@ -72,12 +72,14 @@
     "uuid": "^9.0.0"
   },
   "dependencies": {
-    "@qvac/sdk": "^0.13.5",
     "@solana/spl-token": "^0.4.14",
     "@solana/web3.js": "^1.98.4",
     "axios": "^1.18.0",
     "ethers": "^6.17.0",
     "qrcode": "^1.5.4"
+  },
+  "optionalDependencies": {
+    "@qvac/sdk": "^0.13.5"
   },
   "build": {
     "appId": "ge.proofofhuman.pohminer",
