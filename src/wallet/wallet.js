@@ -11,8 +11,9 @@
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
+import os from 'os';
 
-const WALLETS_DIR = path.join(process.env.HOME || process.env.USERPROFILE || '.', '.poh-miner', 'wallets');
+const WALLETS_DIR = path.join(os.homedir(), '.poh-miner', 'wallets');
 
 function ensureDir(dir) {
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });

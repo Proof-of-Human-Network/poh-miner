@@ -12,6 +12,7 @@
 
 import path from 'path';
 import fs from 'fs';
+import os from 'os';
 import { fileURLToPath } from 'url';
 import { getMethodsManager } from '../../signals/methods-manager.js';
 import { resolveRpcConfig } from '../../rpc/resolver.js';
@@ -189,8 +190,7 @@ async function loadRealPohModules() {
   if (loaded) return;
 
   if (!process.env.BRAIN_DATA_DIR) {
-    const homeDir = process.env.HOME || process.env.USERPROFILE || '.';
-    const brainDir = path.join(homeDir, '.poh-miner', 'brain');
+    const brainDir = path.join(os.homedir(), '.poh-miner', 'brain');
     fs.mkdirSync(brainDir, { recursive: true });
     process.env.BRAIN_DATA_DIR = brainDir;
     console.log(`[RealPOH] Brain state dir: ${brainDir}`);
@@ -418,8 +418,7 @@ export async function getBrain() {
 
 export function getBrainDataDir() {
   if (process.env.BRAIN_DATA_DIR) return process.env.BRAIN_DATA_DIR;
-  const homeDir = process.env.HOME || process.env.USERPROFILE || '.';
-  return path.join(homeDir, '.poh-miner', 'brain');
+  return path.join(os.homedir(), '.poh-miner', 'brain');
 }
 
 function simulateVerdict(job, config, mgr = null) {

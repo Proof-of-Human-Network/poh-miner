@@ -2,6 +2,7 @@ const { app, BrowserWindow, ipcMain, Menu, globalShortcut } = require('electron'
 const path = require('path');
 const { pathToFileURL } = require('url');
 const fs = require('fs');
+const os = require('os');
 
 // Ubuntu 24.04+ tightens kernel user-namespace restrictions which breaks
 // Electron's Zygote sandbox (CLONE_NEWUSER fails with EINVAL).
@@ -139,7 +140,7 @@ async function startMiner() {
     sendLog('Starting PoH Miner Node...');
 
     const fs = require('fs');
-    const CONFIG_PATH = path.join(process.env.HOME || process.env.USERPROFILE, '.poh-miner', 'config.json');
+    const CONFIG_PATH = path.join(os.homedir(), '.poh-miner', 'config.json');
 
     let config = {};
     if (fs.existsSync(CONFIG_PATH)) {
@@ -389,7 +390,7 @@ ipcMain.handle('rpc:preview-url', async (_event, { networkId, providerId, apiKey
 
 ipcMain.handle('rpc:get-current-config', async () => {
   const fs = require('fs');
-  const CONFIG_PATH = path.join(process.env.HOME || process.env.USERPROFILE, '.poh-miner', 'config.json');
+  const CONFIG_PATH = path.join(os.homedir(), '.poh-miner', 'config.json');
   if (!fs.existsSync(CONFIG_PATH)) return { rpc: {}, rpcOverrides: {} };
   const fullConfig = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
   return {
@@ -400,7 +401,7 @@ ipcMain.handle('rpc:get-current-config', async () => {
 
 ipcMain.handle('rpc:save-network-config', async (_event, { networkId, provider, apiKey }) => {
   const fs = require('fs');
-  const CONFIG_PATH = path.join(process.env.HOME || process.env.USERPROFILE, '.poh-miner', 'config.json');
+  const CONFIG_PATH = path.join(os.homedir(), '.poh-miner', 'config.json');
   
   let config = {};
   if (fs.existsSync(CONFIG_PATH)) {
@@ -417,7 +418,7 @@ ipcMain.handle('rpc:save-network-config', async (_event, { networkId, provider, 
 ipcMain.handle('rpc:bulk-apply-evm', async (_event, { provider, apiKey }) => {
   const fs = require('fs');
   const { pathToFileURL } = require('url');
-  const CONFIG_PATH = path.join(process.env.HOME || process.env.USERPROFILE, '.poh-miner', 'config.json');
+  const CONFIG_PATH = path.join(os.homedir(), '.poh-miner', 'config.json');
 
   const rpcModule = await import(pathToFileURL(path.join(__dirname, '../src/rpc/index.js')).href);
   const { EVM_CHAIN_IDS, bulkApplyProvider } = rpcModule;
@@ -436,7 +437,7 @@ ipcMain.handle('rpc:bulk-apply-evm', async (_event, { provider, apiKey }) => {
 // --- Etherscan API Key ---
 ipcMain.handle('rpc:get-etherscan-key', async () => {
   const fs = require('fs');
-  const CONFIG_PATH = path.join(process.env.HOME || process.env.USERPROFILE, '.poh-miner', 'config.json');
+  const CONFIG_PATH = path.join(os.homedir(), '.poh-miner', 'config.json');
   if (!fs.existsSync(CONFIG_PATH)) return '';
   const config = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
   return config.etherscanApiKey || '';
@@ -444,7 +445,7 @@ ipcMain.handle('rpc:get-etherscan-key', async () => {
 
 ipcMain.handle('rpc:save-etherscan-key', async (_event, apiKey) => {
   const fs = require('fs');
-  const CONFIG_PATH = path.join(process.env.HOME || process.env.USERPROFILE, '.poh-miner', 'config.json');
+  const CONFIG_PATH = path.join(os.homedir(), '.poh-miner', 'config.json');
 
   let config = {};
   if (fs.existsSync(CONFIG_PATH)) {
@@ -461,7 +462,7 @@ ipcMain.handle('rpc:save-etherscan-key', async (_event, apiKey) => {
 // Onboarding IPC
 // =====================================================
 
-const CONFIG_PATH = path.join(process.env.HOME || process.env.USERPROFILE, '.poh-miner', 'config.json');
+const CONFIG_PATH = path.join(os.homedir(), '.poh-miner', 'config.json');
 
 function loadConfig() {
   try {
@@ -553,7 +554,7 @@ ipcMain.handle('onboarding:complete', async (_event, data) => {
 
 // Developer helper: reset onboarding
 ipcMain.handle('onboarding:reset', async () => {
-  const CONFIG_PATH = path.join(process.env.HOME || process.env.USERPROFILE, '.poh-miner', 'config.json');
+  const CONFIG_PATH = path.join(os.homedir(), '.poh-miner', 'config.json');
   
   if (fs.existsSync(CONFIG_PATH)) {
     const config = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
@@ -580,7 +581,6 @@ ipcMain.handle('app:restart', async () => {
 
 const { execFile, spawn: spawnProc } = require('child_process');
 const https = require('https');
-const os = require('os');
 const { withRetry } = require('../src/lib/retry.cjs');
 
 /**

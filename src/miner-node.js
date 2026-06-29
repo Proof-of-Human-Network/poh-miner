@@ -41,6 +41,7 @@ import { feedbackStore } from './jobs/feedback-store.js';
 import http from 'http';
 import { resolveRpcConfig } from './rpc/resolver.js';
 import crypto from 'crypto';
+import os from 'os';
 import { buildManifest, serveDataset, pullDataset } from './storage/dataset-sync.js';
 import { OrderStore, QUOTE_CURRENCIES } from './p2p/order-store.js';
 import { EscrowManager, ESCROW_ADDRESS } from './p2p/escrow.js';
@@ -177,9 +178,8 @@ export class PohMinerNode {
     // push token registry: address → { token, platform, registeredAt }
     this.pushTokens = new Map();
     this.rewardClaimStore = new RewardClaimStore();
-    const _homeDir = process.env.HOME || process.env.USERPROFILE || '.';
     this.balanceJournal = new BalanceJournal(
-      path.join(_homeDir, '.poh-miner', 'chain'),
+      path.join(os.homedir(), '.poh-miner', 'chain'),
       this.walletManager
     );
 
@@ -235,6 +235,16 @@ export class PohMinerNode {
     if (!resolvedWallet) {
       resolvedWallet = this.walletManager.createWallet();
       console.log(`[PoH-Miner] Created new PoH wallet: ${resolvedWallet.address}`);
+      // Persist the new wallet address to config.json so restarts reuse it
+      try {
+        const cfgPath = path.join(os.homedir(), '.poh-miner', 'config.json');
+        const saved = fs.existsSync(cfgPath) ? JSON.parse(fs.readFileSync(cfgPath, 'utf8')) : {};
+        saved.pohWallet = resolvedWallet.address;
+        saved.wallet    = resolvedWallet.address;
+        fs.writeFileSync(cfgPath, JSON.stringify(saved, null, 2));
+      } catch (e) {
+        console.warn('[PoH-Miner] Could not persist wallet to config:', e.message);
+      }
     }
 
     this.config.pohWallet = resolvedWallet.address;
@@ -4710,8 +4720,7 @@ export class PohMinerNode {
   }
 
   _getQualityStatePath() {
-    const home = process.env.HOME || process.env.USERPROFILE || '.';
-    const dir = path.join(home, '.poh-miner');
+    const dir = path.join(os.homedir(), '.poh-miner');
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
     return path.join(dir, 'quality.json');
   }
@@ -4955,9 +4964,7 @@ export class PohMinerNode {
   // ── Skill staking helpers ───────────────────────────────────────────────────
 
   _getStakeDir() {
-    const brainDir = getBrainDataDir();
-    const homeDir = process.env.HOME || process.env.USERPROFILE || '.';
-    return brainDir || path.join(homeDir, '.poh-miner', 'brain');
+    return getBrainDataDir() || path.join(os.homedir(), '.poh-miner', 'brain');
   }
 
   _initStakeVault() {
