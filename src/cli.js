@@ -16,6 +16,7 @@ import {
 } from './config.js';
 import fs from 'fs';
 import path from 'path';
+import os from 'os';
 import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -75,7 +76,7 @@ async function main() {
     let finalPath = targetPath;
 
     if (forceGlobal) {
-      const home = process.env.HOME || process.env.USERPROFILE || '.';
+      const home = os.homedir();
       finalPath = path.join(home, '.poh-miner', 'config.json');
     }
 
@@ -95,7 +96,7 @@ async function main() {
 
     saveConfig(defaultConfig, finalPath);
 
-    const homeForMsg = process.env.HOME || process.env.USERPROFILE || '.';
+    const homeForMsg = os.homedir();
     const locationType = finalPath.includes('.poh-miner') && !finalPath.startsWith(homeForMsg)
       ? 'local project config'
       : forceGlobal ? 'global user config (forced)' : 'config';

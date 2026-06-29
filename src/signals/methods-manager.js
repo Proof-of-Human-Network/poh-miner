@@ -17,11 +17,12 @@
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
+import os from 'os';
 import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-const CONFIG_DIR = path.join(process.env.HOME || process.env.USERPROFILE, '.poh-miner');
+const CONFIG_DIR = path.join(os.homedir(), '.poh-miner');
 const METHODS_FILE = path.join(CONFIG_DIR, 'methods.json');
 
 const PRIMARY_SOURCE = 'https://proofofhuman.ge/methods/verifyer';

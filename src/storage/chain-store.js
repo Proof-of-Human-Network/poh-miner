@@ -10,8 +10,9 @@
 
 import fs from 'fs';
 import path from 'path';
+import os from 'os';
 
-const DEFAULT_CHAIN_DIR = path.join(process.env.HOME || process.env.USERPROFILE || '.', '.poh-miner', 'chain');
+const DEFAULT_CHAIN_DIR = path.join(os.homedir(), '.poh-miner', 'chain');
 
 export class ChainStore {
   constructor(dataDir = DEFAULT_CHAIN_DIR) {

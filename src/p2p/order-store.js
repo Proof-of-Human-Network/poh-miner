@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
+import os from 'os';
 
 export const QUOTE_CURRENCIES = [
   'USDT-ERC20', 'USDT-TRC20', 'USDT-TON', 'USDT-SOL', 'USDT-BEP20',
@@ -12,7 +13,7 @@ const PAYMENT_TIMEOUT_MS = 15 * 60 * 1000;        // 15 min
 
 export class OrderStore {
   constructor(dataDir) {
-    const dir = dataDir || path.join(process.env.HOME || process.env.USERPROFILE || '.', '.poh-miner', 'p2p');
+    const dir = dataDir || path.join(os.homedir(), '.poh-miner', 'p2p');
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
     this.ordersFile = path.join(dir, 'orders.json');
     this.tradesFile  = path.join(dir, 'trades.json');

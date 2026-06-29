@@ -3,6 +3,7 @@
 const axios = require('axios');
 const fs = require('fs');
 const path = require('path');
+const os = require('os');
 
 // ── Model config ──────────────────────────────────────────────────────────────
 // Override per-role via env. All default to OLLAMA_MODEL so it works out-of-box.
@@ -29,7 +30,7 @@ console.log(`[brain] QVAC SDK: ${QVAC_ENABLED ? `enabled (model=${QVAC_SDK_MODEL
 // Set process.env.BRAIN_DATA_DIR before requiring this module to override.
 const BRAIN_DATA_DIR   = process.env.BRAIN_DATA_DIR
   ? path.resolve(process.env.BRAIN_DATA_DIR)
-  : path.join(process.env.HOME || process.env.USERPROFILE || '', '.poh-miner', 'brain');
+  : path.join(os.homedir(), '.poh-miner', 'brain');
 
 const BRAIN_STATE_PATH = path.join(BRAIN_DATA_DIR, 'brain_state.md');
 const DATASET_PATH     = path.join(BRAIN_DATA_DIR, 'dataset.json');

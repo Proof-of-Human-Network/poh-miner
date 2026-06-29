@@ -7,10 +7,11 @@
 
 import fs from 'fs';
 import path from 'path';
+import os from 'os';
 import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const CACHE_FILE = path.join(process.env.HOME || process.env.USERPROFILE || '.', '.poh-miner', 'my-location.json');
+const CACHE_FILE = path.join(os.homedir(), '.poh-miner', 'my-location.json');
 
 // Simple but comprehensive country → continent map
 // Source: UN geoscheme + common mappings

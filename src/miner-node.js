@@ -3500,8 +3500,10 @@ export class PohMinerNode {
           subBalance(t.taker, t.pohAmount);
           addBalance(ESCROW_ADDRESS, t.pohAmount);
         } else if (t.type === 'p2p-trade-release') {
-          subBalance(ESCROW_ADDRESS, t.pohAmount);
+          const totalFromEscrow = t.pohAmount + (t.referralFee || 0);
+          subBalance(ESCROW_ADDRESS, totalFromEscrow);
           addBalance(t.recipient, t.pohAmount);
+          if (t.referralFee > 0 && t.referrer) addBalance(t.referrer, t.referralFee);
         } else if (t.type === 'p2p-trade-cancel' && t.escrowLocked) {
           subBalance(ESCROW_ADDRESS, t.pohAmount);
           addBalance(t.locker, t.pohAmount);
@@ -4849,6 +4851,10 @@ export class PohMinerNode {
       const releaseTrade = this.p2pOrderStore.getTrade(transition.tradeId);
       if (releaseTrade) {
         this.p2pEscrow.release(this.walletManager, transition.recipient, transition.pohAmount);
+        if (transition.referralFee > 0 && transition.referrer) {
+          this.p2pEscrow.release(this.walletManager, transition.referrer, transition.referralFee);
+          this.p2pReferral.recordFee(transition.referrer, transition.referralFee);
+        }
         this.p2pOrderStore.completeTrade(transition.tradeId);
       }
       return;

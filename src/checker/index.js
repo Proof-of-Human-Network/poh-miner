@@ -11,6 +11,7 @@
 const crypto = require('crypto');
 const fs     = require('fs');
 const path   = require('path');
+const os     = require('os');
 const axios  = require('axios');
 
 const { getRpcUrl, callContract }                 = require('./utils/evm');
@@ -25,7 +26,7 @@ const { recordMethodResult }                      = require('./utils/methodHealt
 const brain             = require('./utils/brain');
 const { enrichProfile } = require('./utils/profileEnrich');
 
-const _pohHome    = path.join(process.env.HOME || process.env.USERPROFILE || '', '.poh-miner');
+const _pohHome    = path.join(os.homedir(), '.poh-miner');
 const _brainDir   = process.env.BRAIN_DATA_DIR || path.join(_pohHome, 'brain');
 const METHODS_PATH = path.join(_pohHome, 'methods.json');
 const DATASET_PATH = path.join(_brainDir, 'dataset.json');

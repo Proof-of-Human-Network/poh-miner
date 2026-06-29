@@ -1,12 +1,13 @@
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
+import os from 'os';
 
 const REFERRAL_FEE_BPS = 30; // 0.3% per completed trade
 
 export class ReferralStore {
   constructor(dataDir) {
-    const dir = dataDir || path.join(process.env.HOME || process.env.USERPROFILE || '.', '.poh-miner', 'p2p');
+    const dir = dataDir || path.join(os.homedir(), '.poh-miner', 'p2p');
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
     this.file = path.join(dir, 'referrals.json');
     this.data = this._load();
@@ -58,11 +59,21 @@ export class ReferralStore {
   creditFee(referrer, pohAmount) {
     const fee = Math.floor((pohAmount * REFERRAL_FEE_BPS) / 10000);
     if (fee <= 0) return 0;
+    this._recordFeeStats(referrer, fee);
+    return fee;
+  }
+
+  // Record a pre-computed fee (used during block replay to avoid double-computation)
+  recordFee(referrer, fee) {
+    if (!referrer || fee <= 0) return;
+    this._recordFeeStats(referrer, fee);
+  }
+
+  _recordFeeStats(referrer, fee) {
     if (!this.data.stats[referrer]) this.data.stats[referrer] = { tradeCount: 0, earnedFees: 0 };
     this.data.stats[referrer].tradeCount += 1;
     this.data.stats[referrer].earnedFees += fee;
     this._save();
-    return fee;
   }
 
   getStats(address) {

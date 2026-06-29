@@ -9,12 +9,9 @@
 
 import fs from 'fs';
 import path from 'path';
+import os from 'os';
 
-const DEFAULT_REWARD_DIR = path.join(
-  process.env.HOME || process.env.USERPROFILE || '.',
-  '.poh-miner',
-  'rewards'
-);
+const DEFAULT_REWARD_DIR = path.join(os.homedir(), '.poh-miner', 'rewards');
 
 export class RewardClaimStore {
   constructor(dataDir = DEFAULT_REWARD_DIR) {
