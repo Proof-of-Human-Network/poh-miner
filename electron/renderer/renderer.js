@@ -16,9 +16,7 @@ function addLog(message) {
   div.textContent = message;
   logContent.appendChild(div);
 
-  // Auto-scroll the panel (not the inner div — the panel has overflow:auto)
-  const logsPanel = document.getElementById('logs');
-  if (logsPanel) logsPanel.scrollTop = logsPanel.scrollHeight;
+  // No auto-scroll — user may be reviewing past logs
 
   // Keep only last 300 lines
   while (logContent.children.length > 300) {
