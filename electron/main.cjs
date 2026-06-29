@@ -648,30 +648,54 @@ async function isOllamaRunning() {
   });
 }
 
+// Known Ollama install locations per platform (checked when PATH lookup fails)
+function getKnownOllamaPaths() {
+  if (process.platform === 'win32') {
+    const localAppData = process.env.LOCALAPPDATA || '';
+    return [path.join(localAppData, 'Programs', 'Ollama', 'ollama.exe')];
+  }
+  if (process.platform === 'darwin') {
+    return [
+      '/usr/local/bin/ollama',
+      '/opt/homebrew/bin/ollama',       // Apple Silicon Homebrew
+      '/Applications/Ollama.app/Contents/Resources/ollama', // .dmg app bundle
+    ];
+  }
+  // Linux (.deb / tarball)
+  return ['/usr/local/bin/ollama', '/usr/bin/ollama', '/opt/ollama/ollama'];
+}
+
+// Returns the full path to the ollama binary, or null if not found anywhere
+function resolveOllamaPath() {
+  for (const p of getKnownOllamaPaths()) {
+    if (fs.existsSync(p)) return p;
+  }
+  return null;
+}
+
+// Build an env for subprocesses that includes all common binary dirs so
+// ollama and other tools are findable even when launched from a packaged app.
+function subprocEnv() {
+  const extraPaths = process.platform === 'darwin'
+    ? ['/usr/local/bin', '/opt/homebrew/bin', '/usr/bin', '/bin', '/usr/sbin', '/sbin']
+    : ['/usr/local/bin', '/usr/bin', '/bin', '/usr/sbin', '/sbin'];
+  const current = process.env.PATH || '';
+  const merged  = [...new Set([...extraPaths, ...current.split(path.delimiter)])].join(path.delimiter);
+  return { ...process.env, PATH: merged };
+}
+
 function ollamaInPath() {
   return new Promise((resolve) => {
-    // Windows uses 'where'; Unix uses 'which'
+    // First: check known install paths directly (works even when PATH is stripped)
+    if (resolveOllamaPath()) return resolve(true);
+    // Second: try which/where with an augmented PATH
     const cmd = process.platform === 'win32' ? 'where' : 'which';
-    execFile(cmd, ['ollama'], (err) => {
-      if (!err) return resolve(true);
-      // On Windows also check the default install location as a fallback
-      if (process.platform === 'win32') {
-        const localAppData = process.env.LOCALAPPDATA || '';
-        const defaultPath = require('path').join(localAppData, 'Programs', 'Ollama', 'ollama.exe');
-        return resolve(require('fs').existsSync(defaultPath));
-      }
-      resolve(false);
-    });
+    execFile(cmd, ['ollama'], { env: subprocEnv() }, (err) => resolve(!err));
   });
 }
 
 function getOllamaExePath() {
-  if (process.platform === 'win32') {
-    const localAppData = process.env.LOCALAPPDATA || '';
-    const defaultPath = require('path').join(localAppData, 'Programs', 'Ollama', 'ollama.exe');
-    if (require('fs').existsSync(defaultPath)) return defaultPath;
-  }
-  return 'ollama';
+  return resolveOllamaPath() || 'ollama';
 }
 
 function startOllamaService() {
@@ -679,7 +703,7 @@ function startOllamaService() {
     const ollamaExe = getOllamaExePath();
     const proc = spawnProc(ollamaExe, ['serve'], {
       detached: true, stdio: 'ignore',
-      env: { ...process.env },
+      env: subprocEnv(),
     });
     proc.on('error', () => {}); // swallow spawn errors — isOllamaRunning() will detect failure
     proc.unref();
@@ -696,6 +720,7 @@ async function installOllama() {
     await new Promise((resolve, reject) => {
       const proc = spawnProc('sh', ['-c', 'curl -fsSL https://ollama.com/install.sh | sh'], {
         stdio: ['ignore', 'pipe', 'pipe'],
+        env: subprocEnv(),
       });
       proc.stdout.on('data', d => sendSetupProgress({ status: 'installing', message: d.toString().trim() }));
       proc.stderr.on('data', d => sendSetupProgress({ status: 'installing', message: d.toString().trim() }));
