@@ -868,6 +868,16 @@ export class PohMinerNode {
       // Send endpoint — builds, signs, and submits a proper on-chain PoHTransaction.
       // For local wallets (created by this node) the signing key is on disk; for external
       // wallets that registered a key via /api/wallet/register-key this also works.
+      if (req.method === 'POST' && url.pathname === '/api/wallet/rebuild') {
+        try {
+          this._rebuildBalancesFromChain();
+          return res.end(JSON.stringify({ success: true, blocks: this.chain.length }));
+        } catch (e) {
+          res.statusCode = 500;
+          return res.end(JSON.stringify({ error: e.message }));
+        }
+      }
+
       if (req.method === 'POST' && url.pathname === '/api/wallet/send') {
         let body = '';
         req.on('data', chunk => body += chunk);

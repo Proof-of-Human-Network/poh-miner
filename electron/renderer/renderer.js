@@ -1154,6 +1154,30 @@ window.restartApp = async function() {
   }
 };
 
+window.rebuildBalance = async function() {
+  const btn    = document.getElementById('rebuild-balance-btn');
+  const status = document.getElementById('rebuild-status');
+  if (!btn) return;
+  btn.disabled = true;
+  btn.textContent = 'Rebuilding…';
+  if (status) status.textContent = '';
+  const port = window._minerApiPort || 3456;
+  try {
+    const r = await fetch(`http://localhost:${port}/api/wallet/rebuild`, { method: 'POST' });
+    const data = await r.json();
+    if (r.ok && data.success) {
+      if (status) { status.textContent = `Done — replayed ${data.blocks} blocks`; status.style.color = '#22c55e'; }
+    } else {
+      if (status) { status.textContent = data.error || 'Rebuild failed'; status.style.color = '#ef4444'; }
+    }
+  } catch (e) {
+    if (status) { status.textContent = 'Cannot connect to miner'; status.style.color = '#ef4444'; }
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Rebuild Balance from History';
+  }
+};
+
 // Boot the app - ensure DOM is ready
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', checkAndStartOnboarding);

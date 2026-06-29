@@ -1811,6 +1811,16 @@
             </div>
           </div>
 
+          <!-- Rebuild Balance -->
+          <div style="border-top:1px solid #1a1a1a;padding-top:12px;">
+            <div style="font-size:10px;color:#666;letter-spacing:0.1em;margin-bottom:6px;font-weight:600;">WALLET BALANCE</div>
+            <button id="rebuild-balance-btn" onclick="rebuildBalance()"
+                    style="width:100%;padding:8px;color:#a78bfa;border:1px solid rgba(109,40,217,0.3);background:rgba(109,40,217,0.05);border-radius:6px;cursor:pointer;font-size:11px;">
+              Rebuild Balance from History
+            </button>
+            <div id="rebuild-status" style="font-size:10px;color:#6b7280;margin-top:4px;min-height:14px;"></div>
+          </div>
+
           <!-- Danger Zone -->
           <div style="border-top:1px solid #1a1a1a;padding-top:12px;display:flex;gap:6px;">
             <button onclick="showPrivateKeyWarning()"
