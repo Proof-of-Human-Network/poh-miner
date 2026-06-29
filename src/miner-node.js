@@ -2802,13 +2802,14 @@ export class PohMinerNode {
     }
 
     // Determine sync mode:
-    //   - incremental: peer is simply ahead, append new blocks
+    //   - incremental: peer is simply ahead (or we only have genesis), append new blocks
     //   - partial reorg: competing tip (fork at local tip only), keep common prefix and download tail
-    //   - full fresh start: deep fork or genesis-only local chain
-    const isFreshStart = this.chain.length <= 1 || isFork;
+    //   - full fresh start: deep fork only (genesis-only local chain is handled incrementally now)
+    const isFreshStart = isFork; // no longer treat genesis-only as fresh-start
+    const startedFromGenesis = this.chain.length <= 1; // triggers rebuild after incremental sync from 0
     let localHeight = -1;
     if (!isFreshStart) {
-      localHeight = localChainHeight;  // incremental from actual tip height
+      localHeight = localChainHeight;  // incremental from actual tip height (or 0 if genesis-only)
     } else if (isFork && (bestHeight - localChainHeight) <= 50 && localChainHeight > 0) {
       // Short fork (peer at most 50 blocks ahead): try partial reorg from the fork point.
       // If the anchor check fails (fork is deeper than expected), the mismatch handler
@@ -2920,6 +2921,12 @@ export class PohMinerNode {
         this.currentDifficulty = getNextDifficulty(this.chain);
         this._rebuildBalancesFromChain();
       }
+    }
+
+    // After incremental sync from genesis, rebuild balances from the full chain
+    // (incremental _applyBlockState skips foreign senders whose wallets don't exist yet).
+    if (!isFreshStart && startedFromGenesis && this.chain.length > 1) {
+      this._rebuildBalancesFromChain();
     }
 
     this.chainStore.saveChain(this.chain);
