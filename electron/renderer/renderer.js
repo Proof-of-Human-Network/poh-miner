@@ -3965,13 +3965,14 @@ function p2pCancelTrade(tradeId)     { _p2pTradeAction(tradeId, 'cancel'); }
 function p2pDisputeTrade(tradeId)    { const r = prompt('Dispute reason:'); if (r) _p2pTradeAction(tradeId, 'dispute', { reason: r }); }
 
 async function p2pSubmitCreateOrder() {
-  const resultEl = document.getElementById('p2p-create-result');
-  const pohAmt   = parseFloat(document.getElementById('p2p-form-amount')?.value || '0');
-  const currency = document.getElementById('p2p-form-currency')?.value;
-  const price    = parseFloat(document.getElementById('p2p-form-price')?.value || '0');
-  const minT     = parseFloat(document.getElementById('p2p-form-min')?.value || '0');
-  const maxT     = parseFloat(document.getElementById('p2p-form-max')?.value || '0');
-  const methods  = _p2pPaymentMethods;
+  const resultEl  = document.getElementById('p2p-create-result');
+  const pohAmt    = parseFloat(document.getElementById('p2p-form-amount')?.value || '0');
+  const currency  = document.getElementById('p2p-form-currency')?.value;
+  const price     = parseFloat(document.getElementById('p2p-form-price')?.value || '0');
+  const minT      = parseFloat(document.getElementById('p2p-form-min')?.value || '0');
+  const maxT      = parseFloat(document.getElementById('p2p-form-max')?.value || '0');
+  const refCode   = (document.getElementById('p2p-form-referral')?.value || '').trim().toUpperCase();
+  const methods   = _p2pPaymentMethods;
   if (!pohAmt || !currency || !price) {
     resultEl.style.display='block'; resultEl.style.color='#ef4444'; resultEl.textContent='Fill in amount, currency, and price.'; return;
   }
@@ -3981,6 +3982,13 @@ async function p2pSubmitCreateOrder() {
   resultEl.style.display='block'; resultEl.style.color='#888'; resultEl.textContent='Posting order…';
   const pohAmountRaw = Math.round(pohAmt * POH_DECIMALS_P2P);
   try {
+    // Apply referral code if provided (non-blocking)
+    if (refCode && window._localWallet) {
+      _p2pApiFetch('/api/p2p/referral/apply', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ address: window._localWallet, code: refCode }),
+      }).catch(() => {});
+    }
     const orderFields = { side: 'sell', pohAmount: pohAmountRaw, quoteCurrency: currency, pricePerPOH: price, minTrade: minT||0, maxTrade: maxT||pohAmt*price, paymentMethods: methods };
     const auth = await _p2pLocalAuth('create-order', { side: 'sell', pohAmount: pohAmountRaw });
     const data = await _p2pApiFetch('/api/p2p/orders', {
@@ -3988,7 +3996,7 @@ async function p2pSubmitCreateOrder() {
     });
     if (data.error) throw new Error(data.error);
     resultEl.style.color='#22c55e'; resultEl.textContent='Order posted!';
-    ['p2p-form-amount','p2p-form-price','p2p-form-min','p2p-form-max'].forEach(id => { const el = document.getElementById(id); if (el) el.value=''; });
+    ['p2p-form-amount','p2p-form-price','p2p-form-min','p2p-form-max','p2p-form-referral'].forEach(id => { const el = document.getElementById(id); if (el) el.value=''; });
     _p2pPaymentMethods = []; _p2pRenderPaymentMethodList();
     setTimeout(() => { p2pShowBook(); p2pLoadOrders(true); }, 1200);
   } catch (e) { resultEl.style.display='block'; resultEl.style.color='#ef4444'; resultEl.textContent=e.message; }
@@ -3998,13 +4006,17 @@ function p2pActivityTab(tab) {
   _p2pActivityTab = tab;
   const oBtn = document.getElementById('p2p-act-tab-orders');
   const tBtn = document.getElementById('p2p-act-tab-trades');
+  const rBtn = document.getElementById('p2p-act-tab-referral');
   if (!oBtn || !tBtn) return;
+  oBtn.style.background='#111'; oBtn.style.color='#888'; oBtn.style.fontWeight='normal';
+  tBtn.style.background='#111'; tBtn.style.color='#888'; tBtn.style.fontWeight='normal';
+  if (rBtn) { rBtn.style.background='#111'; rBtn.style.color='#888'; rBtn.style.fontWeight='normal'; }
   if (tab === 'orders') {
     oBtn.style.background='#166534'; oBtn.style.color='#22c55e'; oBtn.style.fontWeight='600';
-    tBtn.style.background='#111';    tBtn.style.color='#888';    tBtn.style.fontWeight='normal';
-  } else {
+  } else if (tab === 'trades') {
     tBtn.style.background='#1e3a5f'; tBtn.style.color='#60a5fa'; tBtn.style.fontWeight='600';
-    oBtn.style.background='#111';    oBtn.style.color='#888';    oBtn.style.fontWeight='normal';
+  } else if (tab === 'referral') {
+    if (rBtn) { rBtn.style.background='#2d1a52'; rBtn.style.color='#a78bfa'; rBtn.style.fontWeight='600'; }
   }
   p2pLoadActivity();
 }
@@ -4015,6 +4027,47 @@ async function p2pLoadActivity() {
   if (!list) return;
   list.innerHTML = '<div style="color:#444;font-size:11px;text-align:center;padding:20px 0;font-family:monospace;">Loading…</div>';
   try {
+    if (_p2pActivityTab === 'referral') {
+      const data = myAddr ? await _p2pApiFetch(`/api/p2p/referral?address=${encodeURIComponent(myAddr)}`) : {};
+      list.innerHTML = '';
+      const code = data.code || '—';
+      const copyCode = () => { navigator.clipboard.writeText(code).catch(()=>{}); };
+      list.innerHTML = `
+        <div style="background:#0a0a0a;border:1px solid #1e1e1e;border-radius:6px;padding:12px;display:flex;flex-direction:column;gap:8px;">
+          <div style="font-size:10px;color:#555;font-family:monospace;letter-spacing:0.1em;">YOUR REFERRAL CODE</div>
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span id="p2p-ref-code" style="font-size:18px;color:#a78bfa;font-family:monospace;letter-spacing:4px;">${code}</span>
+            <button onclick="(function(){navigator.clipboard.writeText('${code}').catch(()=>{});document.getElementById('p2p-ref-copy').textContent='Copied!';setTimeout(()=>{document.getElementById('p2p-ref-copy').textContent='Copy';},1500);})()" id="p2p-ref-copy" style="font-size:10px;padding:3px 8px;border-radius:4px;border:1px solid #a78bfa44;background:#2d1a52;color:#a78bfa;cursor:pointer;font-family:monospace;">Copy</button>
+          </div>
+          <div style="font-size:10px;color:#444;font-family:monospace;">Share this code — you earn 0.3% of every completed trade by a referred user.</div>
+        </div>
+        <div style="display:flex;gap:8px;">
+          <div style="flex:1;background:#0a0a0a;border:1px solid #1e1e1e;border-radius:6px;padding:10px;text-align:center;">
+            <div style="font-size:18px;color:#fff;font-family:monospace;">${data.referredCount ?? 0}</div>
+            <div style="font-size:10px;color:#555;font-family:monospace;margin-top:2px;">Referred</div>
+          </div>
+          <div style="flex:1;background:#0a0a0a;border:1px solid #1e1e1e;border-radius:6px;padding:10px;text-align:center;">
+            <div style="font-size:18px;color:#fff;font-family:monospace;">${data.tradeCount ?? 0}</div>
+            <div style="font-size:10px;color:#555;font-family:monospace;margin-top:2px;">Trades</div>
+          </div>
+          <div style="flex:1;background:#0a0a0a;border:1px solid #1e1e1e;border-radius:6px;padding:10px;text-align:center;">
+            <div style="font-size:14px;color:#22c55e;font-family:monospace;">${((data.earnedFees||0)/1e9).toFixed(4)}</div>
+            <div style="font-size:10px;color:#555;font-family:monospace;margin-top:2px;">POH Earned</div>
+          </div>
+        </div>
+        ${!data.referredBy ? `
+        <div style="background:#0a0a0a;border:1px solid #1e1e1e;border-radius:6px;padding:12px;">
+          <div style="font-size:10px;color:#555;font-family:monospace;letter-spacing:0.1em;margin-bottom:6px;">ENTER REFERRAL CODE</div>
+          <div style="display:flex;gap:6px;">
+            <input id="p2p-ref-input" type="text" placeholder="e.g. A1B2C3D4" maxlength="8"
+              style="flex:1;background:#111;border:1px solid #252525;border-radius:4px;color:#e5e7eb;font-size:12px;font-family:monospace;padding:7px 10px;outline:none;text-transform:uppercase;" />
+            <button onclick="p2pApplyReferral()" style="padding:7px 12px;border:none;background:#a78bfa;color:#000;border-radius:4px;font-weight:600;cursor:pointer;font-size:11px;font-family:monospace;">Apply</button>
+          </div>
+          <div id="p2p-ref-apply-result" style="font-size:10px;margin-top:6px;font-family:monospace;display:none;"></div>
+        </div>` : `<div style="font-size:10px;color:#555;font-family:monospace;">Referred by: ${data.referredBy}</div>`}
+      `;
+      return;
+    }
     if (_p2pActivityTab === 'orders') {
       const data = await _p2pApiFetch(`/api/p2p/orders/my?address=${encodeURIComponent(myAddr||'')}`);
       const orders = data.orders || [];
@@ -4058,4 +4111,24 @@ async function p2pLoadActivity() {
       });
     }
   } catch (e) { list.innerHTML = `<div style="color:#ef4444;font-size:11px;text-align:center;padding:20px 0;font-family:monospace;">${e.message}</div>`; }
+}
+
+async function p2pApplyReferral() {
+  const input  = document.getElementById('p2p-ref-input');
+  const result = document.getElementById('p2p-ref-apply-result');
+  const code   = (input?.value || '').trim().toUpperCase();
+  const myAddr = window._localWallet;
+  if (!code || !myAddr) return;
+  if (result) { result.style.display='block'; result.style.color='#888'; result.textContent='Applying…'; }
+  try {
+    const data = await _p2pApiFetch('/api/p2p/referral/apply', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ address: myAddr, code }),
+    });
+    if (data.error) throw new Error(data.error);
+    if (result) { result.style.color='#22c55e'; result.textContent=`Applied! Referred by ${data.referrer?.slice(0,12)}…`; }
+    setTimeout(() => p2pLoadActivity(), 1000);
+  } catch (e) {
+    if (result) { result.style.color='#ef4444'; result.textContent=e.message; }
+  }
 }

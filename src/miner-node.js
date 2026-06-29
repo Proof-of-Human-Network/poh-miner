@@ -44,6 +44,7 @@ import crypto from 'crypto';
 import { buildManifest, serveDataset, pullDataset } from './storage/dataset-sync.js';
 import { OrderStore, QUOTE_CURRENCIES } from './p2p/order-store.js';
 import { EscrowManager, ESCROW_ADDRESS } from './p2p/escrow.js';
+import { ReferralStore } from './p2p/referral-store.js';
 
 function computeBrainStateRoot(brainDir) {
   if (!brainDir) return null;
@@ -172,6 +173,7 @@ export class PohMinerNode {
     this.txMempool = new TxMempool(this.walletManager);
     this.p2pOrderStore = new OrderStore();
     this.p2pEscrow = new EscrowManager();
+    this.p2pReferral = new ReferralStore();
     // push token registry: address → { token, platform, registeredAt }
     this.pushTokens = new Map();
     this.rewardClaimStore = new RewardClaimStore();
@@ -2263,16 +2265,24 @@ export class PohMinerNode {
             const recipient = order?.side === 'sell' ? trade.taker : order?.maker;
             if (address !== releaser) { res.statusCode = 403; return res.end(JSON.stringify({ error: 'not authorized to release' })); }
 
-            const releaseResult = this.p2pEscrow.release(this.walletManager, recipient, trade.pohAmount);
+            // Referral fee: deduct from escrow before releasing to buyer
+            const referrer = this.p2pReferral.getReferrer(recipient);
+            const referralFee = referrer ? this.p2pReferral.creditFee(referrer, trade.pohAmount) : 0;
+            const releaseAmount = trade.pohAmount - referralFee;
+
+            const releaseResult = this.p2pEscrow.release(this.walletManager, recipient, releaseAmount);
             if (releaseResult !== true) { res.statusCode = 400; return res.end(JSON.stringify(releaseResult)); }
+            if (referralFee > 0) {
+              this.p2pEscrow.release(this.walletManager, referrer, referralFee);
+            }
 
             const result = this.p2pOrderStore.completeTrade(tradeId);
             if (result.error) { res.statusCode = 400; return res.end(JSON.stringify(result)); }
             this._appliedP2PIds.add(`trade-${tradeId}-release`);
-            this.pendingBrainTransitions.push({ type: 'p2p-trade-release', tradeId, recipient, pohAmount: trade.pohAmount, updatedAt: Date.now() });
+            this.pendingBrainTransitions.push({ type: 'p2p-trade-release', tradeId, recipient, pohAmount: releaseAmount, referrer: referrer || null, referralFee, updatedAt: Date.now() });
             this.gossip.publish('p2p-trade', result.trade).catch(() => {});
             this.gossip.publish('p2p-order', this.p2pOrderStore.getOrder(trade.orderId)).catch(() => {});
-            return res.end(JSON.stringify(result));
+            return res.end(JSON.stringify({ ...result, referralFee }));
           }
 
           if (action === 'cancel') {
@@ -2310,6 +2320,27 @@ export class PohMinerNode {
 
           res.statusCode = 400;
           res.end(JSON.stringify({ error: `unknown action: ${action}` }));
+        }).catch(e => { res.statusCode = 400; res.end(JSON.stringify({ error: e.message })); });
+        return;
+      }
+
+      // ── Referral API ──────────────────────────────────────────────────────────────
+
+      // GET /api/p2p/referral?address=xxx — get referral code + stats
+      if (req.method === 'GET' && url.pathname === '/api/p2p/referral') {
+        const address = url.searchParams.get('address');
+        if (!address) { res.statusCode = 400; return res.end(JSON.stringify({ error: 'address required' })); }
+        return res.end(JSON.stringify(this.p2pReferral.getStats(address)));
+      }
+
+      // POST /api/p2p/referral/apply — bind a referrer to an address
+      if (req.method === 'POST' && url.pathname === '/api/p2p/referral/apply') {
+        readBody().then(body => {
+          const { address, code } = body;
+          if (!address || !code) { res.statusCode = 400; return res.end(JSON.stringify({ error: 'address and code required' })); }
+          const result = this.p2pReferral.applyReferral(address, code);
+          if (result.error) { res.statusCode = 400; return res.end(JSON.stringify(result)); }
+          return res.end(JSON.stringify(result));
         }).catch(e => { res.statusCode = 400; res.end(JSON.stringify({ error: e.message })); });
         return;
       }

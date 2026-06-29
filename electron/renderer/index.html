@@ -1674,6 +1674,12 @@
                 <button onclick="p2pAddPaymentMethod()" style="padding:7px 11px;border:1px solid #22c55e44;background:#052e16;color:#22c55e;border-radius:4px;cursor:pointer;font-size:14px;font-family:monospace;flex-shrink:0;">+</button>
               </div>
             </div>
+            <!-- Referral code (optional) -->
+            <div style="margin-bottom:10px;">
+              <div style="font-size:10px;color:#444;margin-bottom:4px;letter-spacing:0.1em;font-family:monospace;">REFERRAL CODE (OPTIONAL)</div>
+              <input id="p2p-form-referral" type="text" maxlength="8" placeholder="e.g. A1B2C3D4"
+                     style="width:100%;background:#111;border:1px solid #252525;border-radius:4px;color:#e5e7eb;font-size:11px;font-family:monospace;padding:7px 8px;outline:none;box-sizing:border-box;text-transform:uppercase;" />
+            </div>
             <button onclick="p2pSubmitCreateOrder()"
                     style="width:100%;padding:10px;background:#22c55e;color:#000;border:none;border-radius:4px;font-weight:600;cursor:pointer;font-size:12px;font-family:monospace;">
               POST ORDER
@@ -1696,6 +1702,8 @@
                     style="flex:1;padding:6px;font-size:10px;font-family:monospace;border:none;background:#166534;color:#22c55e;font-weight:600;cursor:pointer;">ORDERS</button>
             <button id="p2p-act-tab-trades" onclick="p2pActivityTab('trades')"
                     style="flex:1;padding:6px;font-size:10px;font-family:monospace;border:none;background:#111;color:#888;cursor:pointer;">TRADES</button>
+            <button id="p2p-act-tab-referral" onclick="p2pActivityTab('referral')"
+                    style="flex:1;padding:6px;font-size:10px;font-family:monospace;border:none;background:#111;color:#888;cursor:pointer;">REFERRALS</button>
           </div>
           <div id="p2p-activity-list" style="flex:1;overflow-y:auto;padding:0 12px 12px;display:flex;flex-direction:column;gap:6px;"></div>
         </div>
