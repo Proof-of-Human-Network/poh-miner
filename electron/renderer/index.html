@@ -1315,7 +1315,8 @@
         <button class="tab-btn"        id="tab-chat-btn"   onclick="switchTab('chat')"   data-i18n="tab.chat">CHAT</button>
         <button class="tab-btn"        id="tab-search-btn" onclick="switchTab('search')" data-i18n="tab.scanner">SCANNER</button>
         <button class="tab-btn"        id="tab-skills-btn" onclick="switchTab('skills')" data-i18n="tab.skills">SKILLS</button>
-        <button class="tab-btn"        id="tab-p2p-btn"    onclick="switchTab('p2p')">P2P</button>
+        <button class="tab-btn"        id="tab-p2p-btn"      onclick="switchTab('p2p')">P2P</button>
+        <button class="tab-btn"        id="tab-explorer-btn" onclick="switchTab('explorer')">EXPLORER</button>
         <button class="tab-btn"        id="tab-logs-btn"   onclick="switchTab('logs')"   data-i18n="tab.logs">LOGS</button>
       </div>
 
@@ -1345,7 +1346,10 @@
               <span class="action-label" data-i18n="action.scan">SCAN</span>
             </button>
           </div>
-          <div class="home-section-label" data-i18n="home.recent_activity">RECENT ACTIVITY</div>
+          <div class="home-section-label" style="display:flex;justify-content:space-between;align-items:center;">
+            <span data-i18n="home.recent_activity">RECENT ACTIVITY</span>
+            <button onclick="switchTab('explorer')" style="font-size:9px;padding:2px 8px;border-radius:4px;border:1px solid #333;background:#111;color:#22c55e;cursor:pointer;font-family:monospace;">View more →</button>
+          </div>
           <div id="home-txs">
             <div style="font-family:monospace;font-size:10px;color:#374151;padding:8px 0;" data-i18n="home.no_tx">No transactions yet — rewards appear here as blocks are mined.</div>
           </div>
@@ -1707,6 +1711,28 @@
           </div>
           <div id="p2p-activity-list" style="flex:1;overflow-y:auto;padding:0 12px 12px;display:flex;flex-direction:column;gap:6px;"></div>
         </div>
+      </div>
+
+      <!-- BLOCKCHAIN EXPLORER -->
+      <div class="panel" id="explorer-panel" style="flex-direction:column;height:100%;overflow:hidden;">
+        <!-- Search bar -->
+        <div style="padding:10px 12px 6px;border-bottom:1px solid #111;">
+          <div style="display:flex;gap:6px;">
+            <input id="explorer-search-input" type="text" placeholder="Search by address, tx hash, or block height…"
+                   style="flex:1;background:#111;border:1px solid #252525;border-radius:6px;color:#e5e7eb;font-size:12px;font-family:monospace;padding:8px 10px;outline:none;"
+                   onkeydown="if(event.key==='Enter')explorerSearch()" />
+            <button onclick="explorerSearch()" style="padding:8px 14px;border:none;background:#22c55e;color:#000;border-radius:6px;font-weight:600;font-size:12px;font-family:monospace;cursor:pointer;">Search</button>
+          </div>
+        </div>
+        <!-- Tabs: recent blocks / search results -->
+        <div style="display:flex;margin:6px 12px 0;border-radius:6px;overflow:hidden;border:1px solid #1e1e1e;flex-shrink:0;">
+          <button id="explorer-tab-blocks" onclick="explorerShowTab('blocks')"
+                  style="flex:1;padding:5px;font-size:10px;font-family:monospace;border:none;background:#166534;color:#22c55e;font-weight:600;cursor:pointer;">BLOCKS</button>
+          <button id="explorer-tab-result" onclick="explorerShowTab('result')"
+                  style="flex:1;padding:5px;font-size:10px;font-family:monospace;border:none;background:#111;color:#555;cursor:pointer;">RESULT</button>
+        </div>
+        <div id="explorer-blocks-view" style="flex:1;overflow-y:auto;padding:8px 12px 12px;display:flex;flex-direction:column;gap:5px;"></div>
+        <div id="explorer-result-view" style="flex:1;overflow-y:auto;padding:8px 12px 12px;display:none;flex-direction:column;gap:8px;"></div>
       </div>
 
       <!-- SETTINGS PAGE -->

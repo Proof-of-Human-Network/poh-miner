@@ -2035,6 +2035,89 @@ export class PohMinerNode {
         return;
       }
 
+      // ── Blockchain Explorer API ──────────────────────────────────────────────────
+
+      // GET /api/explorer/blocks?page=0&limit=20 — recent blocks
+      if (req.method === 'GET' && url.pathname === '/api/explorer/blocks') {
+        const limit = Math.min(50, parseInt(url.searchParams.get('limit') || '20', 10));
+        const page  = Math.max(0, parseInt(url.searchParams.get('page') || '0', 10));
+        const total = this.chain.length;
+        const start = Math.max(0, total - 1 - page * limit);
+        const end   = start + limit;
+        const blocks = this.chain.slice(Math.max(0, start - limit + 1), end + 1).reverse().map(b => {
+          const bj = b.toJSON ? b.toJSON() : { ...b };
+          return {
+            height:    bj.height,
+            hash:      b.getHashSync ? b.getHashSync() : (bj.hash || ''),
+            timestamp: bj.timestamp,
+            miner:     bj.minerWallet,
+            txCount:   (bj.transactions || []).length,
+            reward:    bj.coinbaseReward || 0,
+          };
+        });
+        return res.end(JSON.stringify({ blocks, total, page, limit }));
+      }
+
+      // GET /api/explorer/block/:height
+      const explorerBlockMatch = url.pathname.match(/^\/api\/explorer\/block\/(\d+)$/);
+      if (req.method === 'GET' && explorerBlockMatch) {
+        const height = parseInt(explorerBlockMatch[1], 10);
+        const block  = this.chain[height];
+        if (!block) { res.statusCode = 404; return res.end(JSON.stringify({ error: 'block not found' })); }
+        const bj = block.toJSON ? block.toJSON() : { ...block };
+        return res.end(JSON.stringify({ ...bj, hash: block.getHashSync ? block.getHashSync() : '' }));
+      }
+
+      // GET /api/explorer/search?q=address_or_hash
+      if (req.method === 'GET' && url.pathname === '/api/explorer/search') {
+        const q = (url.searchParams.get('q') || '').trim();
+        if (!q) { res.statusCode = 400; return res.end(JSON.stringify({ error: 'q required' })); }
+
+        // Check if it looks like a tx hash (64 hex chars) or block height (all digits)
+        if (/^\d+$/.test(q)) {
+          // Block height lookup
+          const height = parseInt(q, 10);
+          const block  = this.chain[height];
+          if (block) {
+            const bj = block.toJSON ? block.toJSON() : { ...block };
+            return res.end(JSON.stringify({ type: 'block', block: { ...bj, hash: block.getHashSync ? block.getHashSync() : '' } }));
+          }
+        }
+
+        if (/^[0-9a-fA-F]{60,}$/.test(q)) {
+          // Tx hash or block hash — scan recent blocks
+          const searchLen = Math.min(this.chain.length, 1000);
+          for (let i = this.chain.length - 1; i >= this.chain.length - searchLen; i--) {
+            const block = this.chain[i];
+            const bj = block.toJSON ? block.toJSON() : { ...block };
+            const blockHash = block.getHashSync ? block.getHashSync() : '';
+            if (blockHash === q) {
+              return res.end(JSON.stringify({ type: 'block', block: { ...bj, hash: blockHash } }));
+            }
+            const tx = (bj.transactions || []).find(t => t.hash === q || t.txHash === q);
+            if (tx) {
+              return res.end(JSON.stringify({ type: 'tx', tx, block: { height: bj.height, hash: blockHash, timestamp: bj.timestamp } }));
+            }
+          }
+          return res.end(JSON.stringify({ type: 'notfound', q }));
+        }
+
+        // Address lookup
+        const balance = this.walletManager.getBalance(q);
+        const entries = (this.balanceJournal?._entries || [])
+          .filter(e => e.address === q)
+          .slice(-50)
+          .reverse()
+          .map(e => ({
+            height:  e.height,
+            delta:   e.delta,
+            txHash:  e.txHash,
+            ts:      e.ts,
+            label:   e.delta > 0 ? (e.txHash?.startsWith('reward-') || e.txHash?.startsWith('coinbase') ? 'Mining reward' : 'Received') : 'Sent',
+          }));
+        return res.end(JSON.stringify({ type: 'address', address: q, balance, entries }));
+      }
+
       // ── Dataset serving (/api/dataset, /api/dataset/:file) ───────────────────
       {
         const brainDir = getBrainDataDir();

@@ -1289,8 +1289,8 @@ initEtherscanUI();
 
 // ── Tab switching ──────────────────────────────────────────────────────────────
 
-const TAB_PANELS = { home: 'home-panel', logs: 'logs', chat: 'chat-panel', search: 'search-panel', send: 'send-panel', skills: 'skills-panel', settings: 'settings-panel', p2p: 'p2p-panel' };
-const TAB_BTNS   = { home: 'tab-home-btn', logs: 'tab-logs-btn', chat: 'tab-chat-btn', search: 'tab-search-btn', send: 'tab-send-btn', skills: 'tab-skills-btn', settings: null, p2p: 'tab-p2p-btn' };
+const TAB_PANELS = { home: 'home-panel', logs: 'logs', chat: 'chat-panel', search: 'search-panel', send: 'send-panel', skills: 'skills-panel', settings: 'settings-panel', p2p: 'p2p-panel', explorer: 'explorer-panel' };
+const TAB_BTNS   = { home: 'tab-home-btn', logs: 'tab-logs-btn', chat: 'tab-chat-btn', search: 'tab-search-btn', send: 'tab-send-btn', skills: 'tab-skills-btn', settings: null, p2p: 'tab-p2p-btn', explorer: 'tab-explorer-btn' };
 
 function switchTab(name) {
   Object.entries(TAB_PANELS).forEach(([key, panelId]) => {
@@ -1306,6 +1306,7 @@ function switchTab(name) {
   if (name === 'skills')   { loadSkills(); }
   if (name === 'settings') { loadSettingsPanel(); }
   if (name === 'p2p')      { p2pInit(); }
+  if (name === 'explorer') { explorerInit(); }
 }
 
 // ── Chat state ─────────────────────────────────────────────────────────────────
@@ -4131,4 +4132,163 @@ async function p2pApplyReferral() {
   } catch (e) {
     if (result) { result.style.color='#ef4444'; result.textContent=e.message; }
   }
+}
+
+// ── Blockchain Explorer ─────────────────────────────────────────────────────────
+
+let _explorerPage = 0;
+
+function _explorerPort() { return window._minerApiPort || 3456; }
+
+async function _explorerFetch(path) {
+  const r = await fetch(`http://localhost:${_explorerPort()}${path}`);
+  return r.json();
+}
+
+function explorerShowTab(tab) {
+  const blocksView = document.getElementById('explorer-blocks-view');
+  const resultView = document.getElementById('explorer-result-view');
+  const bBtn = document.getElementById('explorer-tab-blocks');
+  const rBtn = document.getElementById('explorer-tab-result');
+  if (!blocksView || !resultView) return;
+  if (tab === 'blocks') {
+    blocksView.style.display = 'flex';
+    resultView.style.display = 'none';
+    if (bBtn) { bBtn.style.background='#166534'; bBtn.style.color='#22c55e'; bBtn.style.fontWeight='600'; }
+    if (rBtn) { rBtn.style.background='#111'; rBtn.style.color='#555'; rBtn.style.fontWeight='normal'; }
+  } else {
+    blocksView.style.display = 'none';
+    resultView.style.display = 'flex';
+    if (rBtn) { rBtn.style.background='#1e3a5f'; rBtn.style.color='#60a5fa'; rBtn.style.fontWeight='600'; }
+    if (bBtn) { bBtn.style.background='#111'; bBtn.style.color='#555'; bBtn.style.fontWeight='normal'; }
+  }
+}
+
+async function explorerInit() {
+  _explorerPage = 0;
+  await explorerLoadBlocks();
+}
+
+async function explorerLoadBlocks() {
+  const list = document.getElementById('explorer-blocks-view');
+  if (!list) return;
+  list.innerHTML = '<div style="color:#444;font-size:11px;text-align:center;padding:20px 0;font-family:monospace;">Loading…</div>';
+  try {
+    const data = await _explorerFetch(`/api/explorer/blocks?page=${_explorerPage}&limit=20`);
+    const blocks = data.blocks || [];
+    const POH = 1e9;
+    list.innerHTML = '';
+    if (!blocks.length) { list.innerHTML = '<div style="color:#374151;font-size:11px;text-align:center;padding:20px 0;font-family:monospace;">No blocks yet</div>'; return; }
+    blocks.forEach(b => {
+      const card = document.createElement('div');
+      card.style.cssText = 'background:#0a0a0a;border:1px solid #1e1e1e;border-radius:5px;padding:8px 10px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;';
+      card.innerHTML = `
+        <div>
+          <div style="font-size:11px;color:#22c55e;font-family:monospace;">#${b.height}</div>
+          <div style="font-size:9px;color:#555;font-family:monospace;margin-top:1px;">${b.miner?.slice(0,14)||'—'}… · ${b.txCount} tx</div>
+        </div>
+        <div style="text-align:right;">
+          <div style="font-size:10px;color:#aaa;font-family:monospace;">${b.reward > 0 ? '+' + (b.reward/POH).toFixed(2) + ' POH' : ''}</div>
+          <div style="font-size:9px;color:#374151;font-family:monospace;">${b.timestamp ? new Date(b.timestamp).toLocaleTimeString() : ''}</div>
+        </div>
+      `;
+      card.onclick = () => explorerViewBlock(b.height);
+      list.appendChild(card);
+    });
+    // Pagination
+    const navRow = document.createElement('div');
+    navRow.style.cssText = 'display:flex;justify-content:space-between;margin-top:6px;';
+    navRow.innerHTML = `
+      <button onclick="_explorerPage=Math.max(0,_explorerPage-1);explorerLoadBlocks()" style="font-size:10px;padding:4px 10px;border-radius:4px;border:1px solid #333;background:#111;color:#888;cursor:pointer;font-family:monospace;"${_explorerPage===0?' disabled':''}>← Newer</button>
+      <span style="font-size:10px;color:#555;font-family:monospace;">Page ${_explorerPage+1}</span>
+      <button onclick="_explorerPage++;explorerLoadBlocks()" style="font-size:10px;padding:4px 10px;border-radius:4px;border:1px solid #333;background:#111;color:#888;cursor:pointer;font-family:monospace;">Older →</button>
+    `;
+    list.appendChild(navRow);
+  } catch (e) { list.innerHTML = `<div style="color:#ef4444;font-size:11px;text-align:center;padding:20px 0;font-family:monospace;">${e.message}</div>`; }
+}
+
+async function explorerViewBlock(height) {
+  explorerShowTab('result');
+  const view = document.getElementById('explorer-result-view');
+  if (!view) return;
+  view.innerHTML = '<div style="color:#444;font-size:11px;text-align:center;padding:20px 0;font-family:monospace;">Loading block…</div>';
+  try {
+    const data = await _explorerFetch(`/api/explorer/block/${height}`);
+    const txs  = data.transactions || [];
+    const POH  = 1e9;
+    view.innerHTML = `
+      <div style="background:#0a0a0a;border:1px solid #1e1e1e;border-radius:6px;padding:12px;display:flex;flex-direction:column;gap:5px;">
+        <div style="display:flex;justify-content:space-between;"><span style="font-size:10px;color:#555;font-family:monospace;">HEIGHT</span><span style="font-size:11px;color:#22c55e;font-family:monospace;">#${data.height}</span></div>
+        <div style="display:flex;justify-content:space-between;"><span style="font-size:10px;color:#555;font-family:monospace;">HASH</span><span style="font-size:9px;color:#aaa;font-family:monospace;word-break:break-all;max-width:200px;">${data.hash||'—'}</span></div>
+        <div style="display:flex;justify-content:space-between;"><span style="font-size:10px;color:#555;font-family:monospace;">MINER</span><span style="font-size:10px;color:#aaa;font-family:monospace;cursor:pointer;" onclick="explorerSearchAddr('${data.minerWallet||''}')">${data.minerWallet||'—'}</span></div>
+        <div style="display:flex;justify-content:space-between;"><span style="font-size:10px;color:#555;font-family:monospace;">TIME</span><span style="font-size:10px;color:#aaa;font-family:monospace;">${data.timestamp ? new Date(data.timestamp).toLocaleString() : '—'}</span></div>
+        <div style="display:flex;justify-content:space-between;"><span style="font-size:10px;color:#555;font-family:monospace;">REWARD</span><span style="font-size:10px;color:#22c55e;font-family:monospace;">${data.coinbaseReward > 0 ? (data.coinbaseReward/POH).toFixed(4)+' POH' : '—'}</span></div>
+        <div style="display:flex;justify-content:space-between;"><span style="font-size:10px;color:#555;font-family:monospace;">TXS</span><span style="font-size:10px;color:#aaa;font-family:monospace;">${txs.length}</span></div>
+      </div>
+      ${txs.length ? `<div style="font-size:10px;color:#555;font-family:monospace;padding-bottom:2px;letter-spacing:0.1em;">TRANSACTIONS</div>` + txs.map(tx => `
+        <div style="background:#0a0a0a;border:1px solid #1a1a1a;border-radius:5px;padding:8px 10px;">
+          <div style="font-size:9px;color:#60a5fa;font-family:monospace;word-break:break-all;margin-bottom:3px;">${tx.hash||tx.txHash||'—'}</div>
+          <div style="display:flex;justify-content:space-between;">
+            <span style="font-size:9px;color:#555;font-family:monospace;cursor:pointer;" onclick="explorerSearchAddr('${tx.from||''}')">${(tx.from||'').slice(0,12)}…</span>
+            <span style="font-size:9px;color:#22c55e;font-family:monospace;">${tx.amount > 0 ? (tx.amount/POH).toFixed(4)+' POH' : ''}</span>
+            <span style="font-size:9px;color:#555;font-family:monospace;cursor:pointer;" onclick="explorerSearchAddr('${tx.to||''}')">${(tx.to||'').slice(0,12)}…</span>
+          </div>
+        </div>`).join('') : ''}
+    `;
+  } catch (e) { view.innerHTML = `<div style="color:#ef4444;font-size:11px;text-align:center;padding:20px 0;font-family:monospace;">${e.message}</div>`; }
+}
+
+function explorerSearchAddr(addr) {
+  if (!addr) return;
+  const input = document.getElementById('explorer-search-input');
+  if (input) input.value = addr;
+  explorerSearch();
+}
+
+async function explorerSearch() {
+  const q = (document.getElementById('explorer-search-input')?.value || '').trim();
+  if (!q) return;
+  explorerShowTab('result');
+  const view = document.getElementById('explorer-result-view');
+  if (!view) return;
+  view.innerHTML = '<div style="color:#444;font-size:11px;text-align:center;padding:20px 0;font-family:monospace;">Searching…</div>';
+  try {
+    const data = await _explorerFetch(`/api/explorer/search?q=${encodeURIComponent(q)}`);
+    const POH = 1e9;
+    if (data.type === 'block') {
+      explorerViewBlock(data.block.height);
+    } else if (data.type === 'tx') {
+      const { tx, block } = data;
+      view.innerHTML = `
+        <div style="background:#0a0a0a;border:1px solid #1e1e1e;border-radius:6px;padding:12px;display:flex;flex-direction:column;gap:5px;">
+          <div style="font-size:10px;color:#555;font-family:monospace;letter-spacing:0.1em;margin-bottom:4px;">TRANSACTION</div>
+          <div style="font-size:9px;color:#60a5fa;font-family:monospace;word-break:break-all;">${tx.hash||tx.txHash||'—'}</div>
+          <div style="display:flex;justify-content:space-between;"><span style="font-size:10px;color:#555;font-family:monospace;">BLOCK</span><span style="font-size:11px;color:#22c55e;font-family:monospace;cursor:pointer;" onclick="explorerViewBlock(${block.height})">#${block.height}</span></div>
+          <div style="display:flex;justify-content:space-between;"><span style="font-size:10px;color:#555;font-family:monospace;">FROM</span><span style="font-size:10px;color:#aaa;font-family:monospace;cursor:pointer;" onclick="explorerSearchAddr('${tx.from||''}')">${tx.from||'—'}</span></div>
+          <div style="display:flex;justify-content:space-between;"><span style="font-size:10px;color:#555;font-family:monospace;">TO</span><span style="font-size:10px;color:#aaa;font-family:monospace;cursor:pointer;" onclick="explorerSearchAddr('${tx.to||''}')">${tx.to||'—'}</span></div>
+          <div style="display:flex;justify-content:space-between;"><span style="font-size:10px;color:#555;font-family:monospace;">AMOUNT</span><span style="font-size:11px;color:#22c55e;font-family:monospace;">${((tx.amount||0)/POH).toFixed(4)} POH</span></div>
+          <div style="display:flex;justify-content:space-between;"><span style="font-size:10px;color:#555;font-family:monospace;">TIME</span><span style="font-size:10px;color:#aaa;font-family:monospace;">${block.timestamp ? new Date(block.timestamp).toLocaleString() : '—'}</span></div>
+        </div>
+      `;
+    } else if (data.type === 'address') {
+      const txRows = (data.entries || []).map(e => {
+        const sign  = e.delta > 0 ? '+' : '';
+        const color = e.delta > 0 ? '#22c55e' : '#ef4444';
+        return `<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid #111;">
+          <span style="font-size:9px;color:#555;font-family:monospace;">${e.label} · Block #${e.height||'?'}</span>
+          <span style="font-size:10px;color:${color};font-family:monospace;">${sign}${((e.delta||0)/POH).toFixed(4)} POH</span>
+        </div>`;
+      }).join('');
+      view.innerHTML = `
+        <div style="background:#0a0a0a;border:1px solid #1e1e1e;border-radius:6px;padding:12px;display:flex;flex-direction:column;gap:5px;">
+          <div style="font-size:10px;color:#555;font-family:monospace;letter-spacing:0.1em;margin-bottom:2px;">ADDRESS</div>
+          <div style="font-size:10px;color:#aaa;font-family:monospace;word-break:break-all;">${data.address}</div>
+          <div style="display:flex;justify-content:space-between;margin-top:4px;"><span style="font-size:10px;color:#555;font-family:monospace;">BALANCE</span><span style="font-size:14px;color:#22c55e;font-family:monospace;">${((data.balance||0)/POH).toFixed(4)} POH</span></div>
+        </div>
+        ${data.entries?.length ? `<div style="font-size:10px;color:#555;font-family:monospace;letter-spacing:0.1em;padding-bottom:2px;">RECENT TRANSACTIONS</div><div style="background:#0a0a0a;border:1px solid #1e1e1e;border-radius:6px;padding:8px 10px;">${txRows}</div>` : ''}
+      `;
+    } else {
+      view.innerHTML = `<div style="color:#555;font-size:11px;text-align:center;padding:20px 0;font-family:monospace;">No results for "${q}"</div>`;
+    }
+  } catch (e) { view.innerHTML = `<div style="color:#ef4444;font-size:11px;text-align:center;padding:20px 0;font-family:monospace;">${e.message}</div>`; }
 }
