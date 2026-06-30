@@ -580,20 +580,54 @@ ipcMain.handle('app:restart', async () => {
 
 const { execFile, spawn: spawnProc } = require('child_process');
 const https = require('https');
-const http = require('http');
 const os = require('os');
+const { withRetry } = require('../src/lib/retry.cjs');
 
-// Follow HTTP redirects (Node's https.get does not do this automatically)
-function httpGetFollow(url, onResponse) {
-  const lib = url.startsWith('https') ? https : http;
-  lib.get(url, (res) => {
-    if (res.statusCode === 301 || res.statusCode === 302 || res.statusCode === 307 || res.statusCode === 308) {
-      res.resume();
-      httpGetFollow(res.headers.location, onResponse);
-    } else {
-      onResponse(res);
-    }
-  }).on('error', (e) => onResponse(null, e));
+/**
+ * Download a URL to `dest` with HTTP range-resume support: if a partial file
+ * already exists we ask the server to continue from where it stopped, so a
+ * dropped connection doesn't throw away megabytes already on disk. Follows
+ * redirects. Resolves when the file is fully written.
+ */
+function downloadWithResume(url, dest, { onProgress } = {}) {
+  return new Promise((resolve, reject) => {
+    let startAt = 0;
+    try { if (fs.existsSync(dest)) startAt = fs.statSync(dest).size; } catch {}
+
+    const headers = startAt > 0 ? { Range: `bytes=${startAt}-` } : {};
+    const req = https.get(url, { headers }, (res) => {
+      const { statusCode } = res;
+
+      // Follow redirects (CDN edge → blob storage).
+      if ([301, 302, 303, 307, 308].includes(statusCode) && res.headers.location) {
+        res.resume();
+        downloadWithResume(res.headers.location, dest, { onProgress }).then(resolve, reject);
+        return;
+      }
+      // 416 = range past EOF → the file is already complete.
+      if (statusCode === 416) { res.resume(); resolve(); return; }
+      if (statusCode !== 200 && statusCode !== 206) {
+        res.resume();
+        reject(new Error(`HTTP ${statusCode}`));
+        return;
+      }
+
+      // 206 honours our Range → append; 200 means the server ignored it → restart.
+      const append = statusCode === 206 && startAt > 0;
+      const file = fs.createWriteStream(dest, { flags: append ? 'a' : 'w' });
+      const total = parseInt(res.headers['content-length'] || '0', 10) + (append ? startAt : 0);
+      let received = append ? startAt : 0;
+      res.on('data', (chunk) => {
+        received += chunk.length;
+        if (onProgress && total) onProgress(Math.min(100, Math.round((received / total) * 100)));
+      });
+      res.pipe(file);
+      file.on('error', reject);
+      file.on('finish', () => file.close((err) => (err ? reject(err) : resolve())));
+    });
+    req.on('error', reject);
+    req.setTimeout(60000, () => req.destroy(new Error('download timed out')));
+  });
 }
 
 function sendSetupProgress(msg) {
@@ -654,53 +688,54 @@ function startOllamaService() {
   });
 }
 
-function installOllama() {
-  return new Promise((resolve, reject) => {
-    sendSetupProgress({ status: 'installing', message: 'Downloading Ollama...' });
-    const platform = process.platform;
-    if (platform === 'linux' || platform === 'darwin') {
+async function installOllama() {
+  sendSetupProgress({ status: 'installing', message: 'Downloading Ollama...' });
+  const platform = process.platform;
+
+  if (platform === 'linux' || platform === 'darwin') {
+    await new Promise((resolve, reject) => {
       const proc = spawnProc('sh', ['-c', 'curl -fsSL https://ollama.com/install.sh | sh'], {
         stdio: ['ignore', 'pipe', 'pipe'],
       });
       proc.stdout.on('data', d => sendSetupProgress({ status: 'installing', message: d.toString().trim() }));
       proc.stderr.on('data', d => sendSetupProgress({ status: 'installing', message: d.toString().trim() }));
-      proc.on('error', (e) => reject(e));
-      proc.on('close', (code) => {
-        if (code === 0) resolve();
-        else reject(new Error(`Ollama install exited ${code}`));
-      });
-    } else if (platform === 'win32') {
-      const fs = require('fs');
-      const setupPath = path.join(os.tmpdir(), 'OllamaSetup.exe');
-      sendSetupProgress({ status: 'installing', message: 'Downloading OllamaSetup.exe...' });
-      const file = fs.createWriteStream(setupPath);
-      httpGetFollow('https://ollama.com/download/OllamaSetup.exe', (res, err) => {
-        if (err || !res) { fs.unlink(setupPath, () => {}); reject(err || new Error('Download failed')); return; }
-        if (res.statusCode !== 200) {
-          res.resume();
-          fs.unlink(setupPath, () => {});
-          reject(new Error(`Download failed: HTTP ${res.statusCode}`));
-          return;
-        }
-        res.pipe(file);
-        file.on('finish', () => {
-          file.close((closeErr) => {
-            if (closeErr) { reject(closeErr); return; }
-            sendSetupProgress({ status: 'installing', message: 'Running Ollama installer...' });
-            const proc = spawnProc(setupPath, ['/SILENT'], { stdio: 'ignore', windowsHide: true });
-            proc.on('error', (e) => reject(e));
-            proc.on('close', (code) => {
-              if (code === 0) resolve();
-              else reject(new Error(`OllamaSetup.exe exited ${code}`));
-            });
-          });
-        });
-        file.on('error', (e) => { fs.unlink(setupPath, () => {}); reject(e); });
-      });
-    } else {
-      reject(new Error('Auto-install not supported on this OS. Download from https://ollama.com'));
+      proc.on('error', reject);
+      proc.on('close', (code) => (code === 0 ? resolve() : reject(new Error(`Ollama install exited ${code}`))));
+    });
+    return;
+  }
+
+  if (platform === 'win32') {
+    const setupPath = path.join(os.tmpdir(), 'OllamaSetup.exe');
+    sendSetupProgress({ status: 'installing', message: 'Downloading OllamaSetup.exe...' });
+    // The installer is large; a single request often drops on a flaky link.
+    // Retry with range-resume so each attempt continues from where it stopped.
+    // downloadWithResume() already follows redirects (CDN edge → blob storage).
+    try {
+      await withRetry(
+        () => downloadWithResume('https://ollama.com/download/OllamaSetup.exe', setupPath, {
+          onProgress: (pct) => sendSetupProgress({ status: 'installing', message: `Downloading Ollama... ${pct}%` }),
+        }).then(() => true),
+        {
+          attempts: 10, baseMs: 1500, maxMs: 20000,
+          isSuccess: (r) => r === true,
+          onRetry: ({ attempt }) => sendSetupProgress({ status: 'installing', message: `Download interrupted (attempt ${attempt}) — resuming...` }),
+        },
+      );
+    } catch (e) {
+      try { fs.unlinkSync(setupPath); } catch {}
+      throw new Error(`Could not download the Ollama installer: ${e.message}. Install it manually with "winget install Ollama.Ollama" or from https://ollama.com/download, then restart.`);
     }
-  });
+    sendSetupProgress({ status: 'installing', message: 'Running Ollama installer...' });
+    await new Promise((resolve, reject) => {
+      const proc = spawnProc(setupPath, ['/SILENT'], { stdio: 'ignore', windowsHide: true });
+      proc.on('error', reject);
+      proc.on('close', (code) => (code === 0 ? resolve() : reject(new Error(`OllamaSetup.exe exited ${code}`))));
+    });
+    return;
+  }
+
+  throw new Error('Auto-install not supported on this OS. Download from https://ollama.com');
 }
 
 // Ensure Ollama is installed, running, and has the required model — called at startup.
@@ -746,40 +781,66 @@ async function ensureOllamaAndModel(model = 'qwen2.5:1.5b') {
   if (!hasModel) {
     sendLog(`[Setup] Model ${model} not found — pulling now...`);
     sendSetupProgress({ status: 'pulling', message: `Pulling ${model}...`, model });
-    // Reuse the existing pull handler logic
-    await new Promise((resolve) => {
-      const req = require('http').request(
-        { hostname: 'localhost', port: 11434, path: '/api/pull', method: 'POST', headers: { 'Content-Type': 'application/json' } },
-        (res) => {
-          let buf = '';
-          res.on('data', chunk => {
-            buf += chunk.toString();
-            const lines = buf.split('\n');
-            buf = lines.pop();
-            for (const line of lines) {
-              if (!line.trim()) continue;
-              try {
-                const evt = JSON.parse(line);
-                const pct = evt.total ? Math.round((evt.completed / evt.total) * 100) : null;
-                sendSetupProgress({ status: 'pulling', message: evt.status, model, pct });
-                sendLog(`[Setup] ${model}: ${evt.status}${pct != null ? ` ${pct}%` : ''}`);
-              } catch {}
-            }
-          });
-          res.on('end', () => {
-            sendSetupProgress({ status: 'ready', message: `${model} ready.`, model });
-            sendLog(`[Setup] ✓ ${model} ready.`);
-            resolve();
-          });
-        }
-      );
-      req.on('error', (e) => { sendLog(`[Setup] ✗ Pull failed: ${e.message}`); resolve(); });
-      req.write(JSON.stringify({ name: model, stream: true }));
-      req.end();
-    });
+    // `ollama pull` resumes partial blobs across runs, so retrying a dropped
+    // download is cheap and eventually succeeds on a flaky connection.
+    try {
+      await withRetry(() => pullModelOnce(model), {
+        attempts: 12, baseMs: 1500, maxMs: 20000,
+        isSuccess: (r) => r && r.ok,
+        onRetry: ({ attempt, error }) =>
+          sendLog(`[Setup] Pull attempt ${attempt} failed (${error ? error.message : 'interrupted'}) — resuming...`),
+      });
+      sendSetupProgress({ status: 'ready', message: `${model} ready.`, model });
+      sendLog(`[Setup] ✓ ${model} ready.`);
+    } catch (e) {
+      const msg = `Failed to download model ${model} after several attempts. Check your connection and restart — the download resumes where it left off.`;
+      sendSetupProgress({ status: 'error', message: msg, model });
+      sendLog(`[Setup] ✗ ${msg} (${e ? e.message : 'unknown error'})`);
+    }
   } else {
     sendLog(`[Setup] ✓ Model ${model} available.`);
   }
+}
+
+/**
+ * Run a single `ollama pull` over the streaming HTTP API.
+ * Resolves with { ok, error }: ok is true only when the stream reported
+ * `status: "success"` and no error line. A dropped connection resolves with
+ * ok:false so the caller can retry (the partial blobs are kept by Ollama).
+ */
+function pullModelOnce(model) {
+  return new Promise((resolve) => {
+    let sawSuccess = false;
+    let sawError = null;
+    const req = require('http').request(
+      { hostname: 'localhost', port: 11434, path: '/api/pull', method: 'POST', headers: { 'Content-Type': 'application/json' } },
+      (res) => {
+        let buf = '';
+        res.on('data', chunk => {
+          buf += chunk.toString();
+          const lines = buf.split('\n');
+          buf = lines.pop();
+          for (const line of lines) {
+            if (!line.trim()) continue;
+            try {
+              const evt = JSON.parse(line);
+              if (evt.error) sawError = evt.error;
+              if (evt.status === 'success') sawSuccess = true;
+              const pct = evt.total ? Math.round((evt.completed / evt.total) * 100) : null;
+              const label = evt.status || (evt.error ? `error: ${evt.error}` : '');
+              sendSetupProgress({ status: 'pulling', message: label, model, pct });
+              sendLog(`[Setup] ${model}: ${label}${pct != null ? ` ${pct}%` : ''}`);
+            } catch {}
+          }
+        });
+        res.on('end', () => resolve({ ok: sawSuccess && !sawError, error: sawError ? new Error(sawError) : null }));
+        res.on('error', (e) => resolve({ ok: false, error: e }));
+      }
+    );
+    req.on('error', (e) => resolve({ ok: false, error: e }));
+    req.write(JSON.stringify({ name: model, stream: true }));
+    req.end();
+  });
 }
 
 // Check Ollama + model status without installing anything

@@ -137,10 +137,24 @@ async function ensureOllama() {
   const models = await ollamaModels();
   if (!hasModel(models, DEFAULT_MODEL)) {
     console.log(`   Model ${DEFAULT_MODEL} not found locally.`);
-    try {
-      await pullModel(DEFAULT_MODEL);
-    } catch (e) {
-      console.error(`   ✗ Failed to pull ${DEFAULT_MODEL}:`, e.message);
+    // `ollama pull` resumes partial blobs across runs, so on a flaky connection
+    // we retry until the model actually shows up in /api/tags.
+    const maxAttempts = 12;
+    let pulled = false;
+    for (let i = 1; i <= maxAttempts; i++) {
+      try {
+        await pullModel(DEFAULT_MODEL);
+      } catch (e) {
+        console.error(`   Pull attempt ${i} failed: ${e.message}`);
+      }
+      if (hasModel(await ollamaModels(), DEFAULT_MODEL)) { pulled = true; break; }
+      if (i < maxAttempts) {
+        console.log(`   Download interrupted — retrying (resumes where it left off) [${i}/${maxAttempts}]...`);
+        await new Promise(r => setTimeout(r, 2000));
+      }
+    }
+    if (!pulled) {
+      console.error(`   ✗ Failed to pull ${DEFAULT_MODEL} after ${maxAttempts} attempts. Check your connection and re-run.`);
       process.exit(1);
     }
   } else {
