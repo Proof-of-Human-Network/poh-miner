@@ -187,6 +187,14 @@ export function getDefaultConfig() {
     // (Etherscan, Basescan, Arbiscan, Polygonscan, BscScan, etc. usually accept the same key)
     etherscanApiKey: "",
 
+    // === External AI providers (cloud fallback when local Ollama + peers are unavailable) ===
+    // Keyed by provider id: "anthropic" | "openai" | "xai" | "custom"
+    aiProviders: {},
+
+    // === External MCP servers (extend skill/brain capabilities) ===
+    // [{ id, name, url, apiKey, enabled }]
+    mcpServers: [],
+
     // Populated by the GUI onboarding flow
     pohWallet: "",
     solanaAddress: "",

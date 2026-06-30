@@ -3,6 +3,7 @@ const path = require('path');
 const { pathToFileURL } = require('url');
 const fs = require('fs');
 const os = require('os');
+const crypto = require('crypto');
 
 // Ubuntu 24.04+ tightens kernel user-namespace restrictions which breaks
 // Electron's Zygote sandbox (CLONE_NEWUSER fails with EINVAL).
@@ -453,6 +454,101 @@ ipcMain.handle('rpc:save-etherscan-key', async (_event, apiKey) => {
   }
 
   config.etherscanApiKey = apiKey || '';
+
+  fs.writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2));
+  return { success: true };
+});
+
+// =====================================================
+// External AI Providers (Claude / OpenAI / Grok / custom)
+// =====================================================
+
+ipcMain.handle('ai-providers:get', async () => {
+  const fs = require('fs');
+  const CONFIG_PATH = path.join(os.homedir(), '.poh-miner', 'config.json');
+  if (!fs.existsSync(CONFIG_PATH)) return {};
+  const config = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
+  return config.aiProviders || {};
+});
+
+ipcMain.handle('ai-providers:save', async (_event, { id, apiKey, model, baseUrl, enabled }) => {
+  const fs = require('fs');
+  const CONFIG_PATH = path.join(os.homedir(), '.poh-miner', 'config.json');
+
+  let config = {};
+  if (fs.existsSync(CONFIG_PATH)) {
+    config = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
+  }
+  if (!config.aiProviders) config.aiProviders = {};
+
+  config.aiProviders[id] = {
+    apiKey: apiKey || '',
+    model: model || '',
+    baseUrl: baseUrl || '',
+    enabled: !!enabled,
+  };
+
+  fs.writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2));
+  return { success: true };
+});
+
+ipcMain.handle('ai-providers:delete', async (_event, id) => {
+  const fs = require('fs');
+  const CONFIG_PATH = path.join(os.homedir(), '.poh-miner', 'config.json');
+
+  let config = {};
+  if (fs.existsSync(CONFIG_PATH)) {
+    config = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
+  }
+  if (config.aiProviders) delete config.aiProviders[id];
+
+  fs.writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2));
+  return { success: true };
+});
+
+// =====================================================
+// External MCP Servers
+// =====================================================
+
+ipcMain.handle('mcp:get-servers', async () => {
+  const fs = require('fs');
+  const CONFIG_PATH = path.join(os.homedir(), '.poh-miner', 'config.json');
+  if (!fs.existsSync(CONFIG_PATH)) return [];
+  const config = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
+  return config.mcpServers || [];
+});
+
+ipcMain.handle('mcp:save-server', async (_event, { id, name, url, apiKey, enabled }) => {
+  const fs = require('fs');
+  const CONFIG_PATH = path.join(os.homedir(), '.poh-miner', 'config.json');
+
+  let config = {};
+  if (fs.existsSync(CONFIG_PATH)) {
+    config = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
+  }
+  if (!Array.isArray(config.mcpServers)) config.mcpServers = [];
+
+  const serverId = id || crypto.randomUUID();
+  const entry = { id: serverId, name: name || '', url: url || '', apiKey: apiKey || '', enabled: !!enabled };
+  const idx = config.mcpServers.findIndex(s => s.id === serverId);
+  if (idx >= 0) config.mcpServers[idx] = entry;
+  else config.mcpServers.push(entry);
+
+  fs.writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2));
+  return { success: true, server: entry };
+});
+
+ipcMain.handle('mcp:delete-server', async (_event, id) => {
+  const fs = require('fs');
+  const CONFIG_PATH = path.join(os.homedir(), '.poh-miner', 'config.json');
+
+  let config = {};
+  if (fs.existsSync(CONFIG_PATH)) {
+    config = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
+  }
+  if (Array.isArray(config.mcpServers)) {
+    config.mcpServers = config.mcpServers.filter(s => s.id !== id);
+  }
 
   fs.writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2));
   return { success: true };

@@ -28,6 +28,20 @@ contextBridge.exposeInMainWorld('pohMinerAPI', {
     start: () => ipcRenderer.invoke('miner:start'),
   },
 
+  // External AI providers (Claude, OpenAI, Grok, custom OpenAI-compatible)
+  aiProviders: {
+    get: () => ipcRenderer.invoke('ai-providers:get'),
+    save: (data) => ipcRenderer.invoke('ai-providers:save', data),
+    delete: (id) => ipcRenderer.invoke('ai-providers:delete', id),
+  },
+
+  // External MCP servers
+  mcp: {
+    getServers: () => ipcRenderer.invoke('mcp:get-servers'),
+    saveServer: (data) => ipcRenderer.invoke('mcp:save-server', data),
+    deleteServer: (id) => ipcRenderer.invoke('mcp:delete-server', id),
+  },
+
   app: {
     restart: () => ipcRenderer.invoke('app:restart'),
   },

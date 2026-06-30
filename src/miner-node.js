@@ -46,6 +46,7 @@ import { buildManifest, serveDataset, pullDataset } from './storage/dataset-sync
 import { OrderStore, QUOTE_CURRENCIES } from './p2p/order-store.js';
 import { EscrowManager, ESCROW_ADDRESS } from './p2p/escrow.js';
 import { ReferralStore } from './p2p/referral-store.js';
+import { tryExternalProviders } from './ai/external-providers.js';
 
 // Returns true when a message segment clearly signals it needs live internet data.
 // Prevents web_search from firing on general knowledge questions the LLM already knows.
@@ -1860,9 +1861,18 @@ export class PohMinerNode {
                   return res.end(JSON.stringify({ type: 'chat', message: peerReply, _fromPeer: true }));
                 }
               } catch { /* ignore */ }
+
+              // No local/peer LLM — fall back to a configured external AI provider, if any
+              try {
+                const extMessages = [...history, { role: 'user', content: message }];
+                const ext = await tryExternalProviders(this.config, extMessages);
+                if (ext) {
+                  return res.end(JSON.stringify({ type: 'chat', message: ext.reply, _fromProvider: ext.providerId }));
+                }
+              } catch { /* ignore */ }
             }
             const fallback = isUnavailable
-              ? 'Local LLM is unavailable and no peer miner could be reached. Try again shortly.'
+              ? 'Local LLM is unavailable and no peer miner or configured AI provider could be reached. Try again shortly.'
               : 'Something went wrong. Please try again.';
             res.end(JSON.stringify({ type: 'chat', message: fallback }));
           }

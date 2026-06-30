@@ -1307,6 +1307,163 @@ async function initEtherscanUI() {
 
 initEtherscanUI();
 
+// =====================================================
+// External AI Providers (Claude, OpenAI, Grok)
+// =====================================================
+
+const AI_PROVIDER_DEFS = [
+  { id: 'anthropic', label: 'Claude (Anthropic)', defaultModel: 'claude-sonnet-4-6' },
+  { id: 'openai',    label: 'OpenAI',             defaultModel: 'gpt-4o-mini' },
+  { id: 'xai',       label: 'Grok (xAI)',          defaultModel: 'grok-2-latest' },
+];
+
+async function initAiProvidersUI() {
+  const list = document.getElementById('ai-providers-list');
+  if (!list || !window.pohMinerAPI?.aiProviders) return;
+
+  let saved = {};
+  try { saved = await window.pohMinerAPI.aiProviders.get(); } catch {}
+
+  list.innerHTML = '';
+
+  for (const def of AI_PROVIDER_DEFS) {
+    const cfg = saved[def.id] || {};
+    const row = document.createElement('div');
+    row.style.cssText = 'background:#0a0a0a;border:1px solid #1a1a1a;border-radius:6px;padding:10px;display:flex;flex-direction:column;gap:6px;';
+    row.innerHTML = `
+      <div style="display:flex;align-items:center;justify-content:space-between;">
+        <label style="font-size:11px;color:#ddd;display:flex;align-items:center;gap:6px;">
+          <input type="checkbox" id="ai-${def.id}-enabled" ${cfg.enabled ? 'checked' : ''}/> ${def.label}
+        </label>
+      </div>
+      <input id="ai-${def.id}-model" placeholder="Model (default: ${def.defaultModel})" value="${cfg.model || ''}"
+             style="width:100%;padding:5px;background:#111;color:#ddd;border:1px solid #2a2a2a;border-radius:4px;font-family:monospace;font-size:11px;box-sizing:border-box;">
+      <input id="ai-${def.id}-key" type="password" placeholder="${cfg.apiKey ? '•••••••••••••••••••••••• (key saved)' : 'API key'}"
+             style="width:100%;padding:5px;background:#111;color:#ddd;border:1px solid #2a2a2a;border-radius:4px;font-family:monospace;font-size:11px;box-sizing:border-box;">
+      <div style="display:flex;gap:4px;">
+        <button id="ai-${def.id}-save" style="flex:1;padding:5px;background:#166534;color:white;border:none;border-radius:4px;cursor:pointer;font-size:11px;">Save</button>
+        <button id="ai-${def.id}-remove" style="padding:5px 8px;background:#1a1a1a;color:#888;border:none;border-radius:4px;cursor:pointer;font-size:11px;">Remove</button>
+      </div>
+      <div id="ai-${def.id}-status" style="font-size:10px;color:#22c55e;min-height:12px;"></div>
+    `;
+    list.appendChild(row);
+
+    document.getElementById(`ai-${def.id}-save`).addEventListener('click', async () => {
+      const status  = document.getElementById(`ai-${def.id}-status`);
+      const enabled = document.getElementById(`ai-${def.id}-enabled`).checked;
+      const model   = document.getElementById(`ai-${def.id}-model`).value.trim();
+      const keyInput = document.getElementById(`ai-${def.id}-key`);
+      const apiKey  = keyInput.value.trim() || cfg.apiKey || '';
+
+      status.textContent = 'Saving...';
+      status.style.color = '#888';
+      try {
+        await window.pohMinerAPI.aiProviders.save({ id: def.id, apiKey, model, enabled });
+        status.textContent = 'Saved';
+        status.style.color = '#22c55e';
+        cfg.apiKey = apiKey;
+        if (keyInput.value.trim()) {
+          keyInput.value = '';
+          keyInput.placeholder = '•••••••••••••••••••••••• (key saved)';
+        }
+      } catch {
+        status.textContent = 'Failed to save';
+        status.style.color = '#f87171';
+      }
+    });
+
+    document.getElementById(`ai-${def.id}-remove`).addEventListener('click', async () => {
+      const status = document.getElementById(`ai-${def.id}-status`);
+      try {
+        await window.pohMinerAPI.aiProviders.delete(def.id);
+        initAiProvidersUI();
+      } catch {
+        status.textContent = 'Failed to remove';
+        status.style.color = '#f87171';
+      }
+    });
+  }
+}
+
+initAiProvidersUI();
+
+// =====================================================
+// External MCP Servers
+// =====================================================
+
+async function initMcpServersUI() {
+  const list = document.getElementById('mcp-servers-list');
+  const addBtn = document.getElementById('mcp-add-btn');
+  const status = document.getElementById('mcp-status');
+  if (!list || !addBtn || !window.pohMinerAPI?.mcp) return;
+
+  async function renderList() {
+    let servers = [];
+    try { servers = await window.pohMinerAPI.mcp.getServers(); } catch {}
+
+    list.innerHTML = '';
+    if (!servers.length) {
+      list.innerHTML = '<div style="font-size:10px;color:#444;">No MCP servers configured.</div>';
+      return;
+    }
+
+    for (const s of servers) {
+      const row = document.createElement('div');
+      row.style.cssText = 'background:#0a0a0a;border:1px solid #1a1a1a;border-radius:6px;padding:8px 10px;display:flex;align-items:center;justify-content:space-between;gap:8px;';
+      row.innerHTML = `
+        <div style="min-width:0;">
+          <div style="font-size:11px;color:#ddd;">${s.name || '(unnamed)'} ${s.enabled ? '' : '<span style="color:#666;">(disabled)</span>'}</div>
+          <div style="font-size:10px;color:#666;font-family:monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${s.url || ''}</div>
+        </div>
+        <div style="display:flex;gap:4px;flex-shrink:0;">
+          <button data-action="toggle" style="padding:4px 8px;background:#1a1a1a;color:#9ca3af;border:none;border-radius:4px;cursor:pointer;font-size:10px;">${s.enabled ? 'Disable' : 'Enable'}</button>
+          <button data-action="remove" style="padding:4px 8px;background:rgba(185,28,28,0.15);color:#f87171;border:none;border-radius:4px;cursor:pointer;font-size:10px;">Remove</button>
+        </div>
+      `;
+      row.querySelector('[data-action="toggle"]').addEventListener('click', async () => {
+        await window.pohMinerAPI.mcp.saveServer({ ...s, enabled: !s.enabled });
+        renderList();
+      });
+      row.querySelector('[data-action="remove"]').addEventListener('click', async () => {
+        await window.pohMinerAPI.mcp.deleteServer(s.id);
+        renderList();
+      });
+      list.appendChild(row);
+    }
+  }
+
+  addBtn.addEventListener('click', async () => {
+    const name = document.getElementById('mcp-new-name').value.trim();
+    const url  = document.getElementById('mcp-new-url').value.trim();
+    const apiKey = document.getElementById('mcp-new-key').value.trim();
+
+    if (!name || !url) {
+      status.textContent = 'Name and URL are required';
+      status.style.color = '#f87171';
+      return;
+    }
+
+    status.textContent = 'Adding...';
+    status.style.color = '#888';
+    try {
+      await window.pohMinerAPI.mcp.saveServer({ name, url, apiKey, enabled: true });
+      document.getElementById('mcp-new-name').value = '';
+      document.getElementById('mcp-new-url').value = '';
+      document.getElementById('mcp-new-key').value = '';
+      status.textContent = 'MCP server added';
+      status.style.color = '#22c55e';
+      renderList();
+    } catch {
+      status.textContent = 'Failed to add server';
+      status.style.color = '#f87171';
+    }
+  });
+
+  renderList();
+}
+
+initMcpServersUI();
+
 // Sidebar resizer removed — layout now uses fixed 3-column flex
 
 // ── Tab switching ──────────────────────────────────────────────────────────────

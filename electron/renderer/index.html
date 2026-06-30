@@ -1811,6 +1811,30 @@
             </div>
           </div>
 
+          <!-- AI Providers -->
+          <div style="border-top:1px solid #1a1a1a;padding-top:12px;">
+            <div style="font-size:10px;color:#666;letter-spacing:0.1em;margin-bottom:8px;font-weight:600;">AI PROVIDERS</div>
+            <div style="font-size:10px;color:#444;margin-bottom:8px;">Connect cloud AI providers as a fallback when local Ollama and peer miners are unavailable.</div>
+            <div id="ai-providers-list" style="display:flex;flex-direction:column;gap:8px;"></div>
+          </div>
+
+          <!-- MCP Servers -->
+          <div style="border-top:1px solid #1a1a1a;padding-top:12px;">
+            <div style="font-size:10px;color:#666;letter-spacing:0.1em;margin-bottom:8px;font-weight:600;">MCP SERVERS</div>
+            <div style="font-size:10px;color:#444;margin-bottom:8px;">Connect external MCP servers to extend the AI brain's tools and knowledge.</div>
+            <div id="mcp-servers-list" style="display:flex;flex-direction:column;gap:6px;margin-bottom:8px;"></div>
+            <div style="background:#0a0a0a;border:1px solid #1a1a1a;border-radius:6px;padding:10px;display:flex;flex-direction:column;gap:6px;">
+              <input id="mcp-new-name" placeholder="Server name"
+                     style="width:100%;padding:5px;background:#111;color:#ddd;border:1px solid #2a2a2a;border-radius:4px;font-size:11px;box-sizing:border-box;">
+              <input id="mcp-new-url" placeholder="Server URL (https://...)"
+                     style="width:100%;padding:5px;background:#111;color:#ddd;border:1px solid #2a2a2a;border-radius:4px;font-family:monospace;font-size:11px;box-sizing:border-box;">
+              <input id="mcp-new-key" type="password" placeholder="API key (optional)"
+                     style="width:100%;padding:5px;background:#111;color:#ddd;border:1px solid #2a2a2a;border-radius:4px;font-family:monospace;font-size:11px;box-sizing:border-box;">
+              <button id="mcp-add-btn" style="padding:5px;background:#166534;color:white;border:none;border-radius:4px;cursor:pointer;font-size:11px;">Add MCP Server</button>
+              <div id="mcp-status" style="font-size:10px;color:#22c55e;min-height:12px;"></div>
+            </div>
+          </div>
+
           <!-- Rebuild Balance -->
           <div style="border-top:1px solid #1a1a1a;padding-top:12px;">
             <div style="font-size:10px;color:#666;letter-spacing:0.1em;margin-bottom:6px;font-weight:600;">WALLET BALANCE</div>
