@@ -166,15 +166,43 @@ Every miner exposes an HTTP API for the mobile wallet and external tools. Amount
 | `POST /api/tx/submit` | Submit a pre-signed `PoHTransaction` |
 | `GET /api/tx/pending` | Inspect mempool |
 
-### Jobs (scan requests)
+### Jobs (scan requests, skills, compute)
 
 | Endpoint | Description |
 |---|---|
-| `POST /job` | Submit a scan job, returns `{jobId, statusUrl, resultUrl}` |
+| `POST /job` | Submit a job, returns `{jobId, statusUrl, resultUrl}`. `type: 'verdict'` (default) is a scan request; `type: 'skill'` runs a skill; `type: 'compute'` runs a user-specified `model` (and optional `dataset`) — see below. |
 | `GET /job/:id/status` | Poll: `queued / computing / done / error` |
 | `GET /job/:id/result` | Full verdict + profile + evidence when done |
 | `GET /jobs` | List active jobs |
 | `POST /gossip` | Receive P2P gossip envelopes from peers |
+
+`skill` and `compute` jobs always require a fee (`maxBudget > 0` μPOH) and a
+signed payment proof — the node rejects the request outright (the job never
+runs) unless it includes a valid Ed25519 signature, from a key already
+registered via `POST /api/wallet/register-key`, over a hash binding the
+payment to that exact `jobId` + this node's wallet + `maxBudget` + the
+requester's current nonce (`GET /api/wallet/nonce`). This debits the
+requester's POH balance and pays the miner network; there is no unverified
+fallback for these job types. `verdict` jobs may optionally carry the same
+`maxBudget`/`paymentTx` fields, but a fee isn't required for them (the
+default identity scan / LLM chat is free).
+
+A `compute` job looks like:
+
+```json
+{
+  "type": "compute",
+  "model": "llama3.1:8b",
+  "dataset": "some-org/some-dataset",
+  "payload": { "prompt": "Summarize the top 5 rows" },
+  "maxBudget": 500000000,
+  "requesterAddress": "poh...",
+  "paymentTx": { "txHash": "...", "signature": "..." }
+}
+```
+
+The SDKs build and sign `paymentTx` for you — see `runCompute()` /
+`submitJob()` in `sdk-js`.
 
 ### Skills
 
