@@ -64,6 +64,7 @@ contextBridge.exposeInMainWorld('pohMinerAPI', {
   onboarding: {
     getStatus: () => ipcRenderer.invoke('onboarding:get-status'),
     createPohWallet: () => ipcRenderer.invoke('onboarding:create-poh-wallet'),
+    generateWalletBackupKey: () => ipcRenderer.invoke('onboarding:generate-wallet-backup-key'),
     complete: (data) => ipcRenderer.invoke('onboarding:complete', data),
     reset: () => ipcRenderer.invoke('onboarding:reset'),
   },

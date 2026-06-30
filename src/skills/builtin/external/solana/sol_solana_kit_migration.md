@@ -1,11 +1,19 @@
 ---
 id: sol_solana_kit_migration
 version: 1.0.0
-description: Helps developers understand when to use @solana/kit vs @solana/web3.js (v1), provides migration guidance, API mappings, and handles edge cases for Solana JavaScript SDK transitions
+description: Helps developers understand when to use @solana/kit vs @solana/web3.js (v1), provides migration guidance, API mappings, and handles edge cases for Solana JavaScript SDK transitions. Use specifically when migrating existing code FROM @solana/web3.js TO @solana/kit — for using @solana/kit fresh without migration, see sol_solana_kit.
 triggers:
   - solana kit migration
   - solana-kit-migration
   - migration
+  - migrate to kit
+  - web3.js to kit
+  - v1 to kit
+  - web3.js migration
+  - upgrade solana sdk
+  - api mapping web3js
+  - replace web3.js
+  - solana sdk transition
 ---
 
 ## Context

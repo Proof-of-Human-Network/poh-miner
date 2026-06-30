@@ -1,11 +1,19 @@
 ---
 id: eth_why
 version: 1.0.0
-description: Why build on Ethereum specifically. The AI agent angle — ERC-8004, x402, composability, permissionless deployment. Use when a user asks "should I build on Ethereum?", "why blockchain?", or when an agent needs to recommend a chain for a project.
+description: Why build on Ethereum specifically. The AI agent angle — ERC-8004, x402, composability, permissionless deployment. Use when a user asks "should I build on Ethereum?", "why blockchain?", or when an agent needs to recommend a chain for a project. Distinct from eth_overview (topic index/router across all skills) and eth_concepts (the mental models for building once you've already chosen Ethereum) — this skill is specifically the pitch/justification for choosing Ethereum over alternatives.
 triggers:
   - why build on ethereum
   - why ethereum
   - choose blockchain for project
+  - should i use ethereum
+  - why blockchain
+  - which chain should i use
+  - ethereum vs other chains
+  - benefits of ethereum
+  - x402
+  - permissionless deployment
+  - network stats ethereum
 ---
 
 ## Context

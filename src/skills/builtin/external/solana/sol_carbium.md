@@ -4,6 +4,15 @@ version: 1.0.0
 description: Build on Solana with Carbium infrastructure — bare-metal RPC, Standard WebSocket pubsub, gRPC Full Block streaming (~22ms), DEX aggregation via CQ1 engine (sub-ms quotes), gasless swaps, and MEV-protected execution via Jito bundling. Drop-in replacement for Helius, QuickNode, Triton, or Jupiter Swap API.
 triggers:
   - carbium
+  - carbium rpc
+  - cq1 engine
+  - bare-metal rpc solana
+  - gasless swap solana
+  - jito bundling
+  - mev-protected execution
+  - grpc block streaming
+  - low-latency rpc solana
+  - carbium dex aggregation
 ---
 
 ## Context

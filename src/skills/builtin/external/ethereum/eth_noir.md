@@ -7,6 +7,14 @@ triggers:
   - zk privacy ethereum
   - noirjs
   - commitment nullifier
+  - noir circuit
+  - nargo
+  - barretenberg
+  - zk proof ethereum
+  - solidity verifier
+  - private transactions ethereum
+  - zero knowledge proof solidity
+  - poseidon hash
 ---
 
 ## Context

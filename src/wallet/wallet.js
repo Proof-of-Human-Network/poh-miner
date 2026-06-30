@@ -12,11 +12,29 @@ import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
 import os from 'os';
+import { sealWalletData, unsealWalletData } from '../security/wallet-crypto.js';
 
 const WALLETS_DIR = path.join(os.homedir(), '.poh-miner', 'wallets');
 
 function ensureDir(dir) {
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+}
+
+// Recompute a transaction's canonical hash from its own fields. Must exactly match
+// PoHTransaction._computeHash() (core/transaction.js) — not imported directly to avoid
+// a circular import (transaction.js already imports Wallet from this module).
+//
+// A transaction's txHash must NEVER be trusted as given: a signature only proves the
+// signer signed *some* hash string, not that the hash matches the amount/recipient
+// actually being applied. Without recomputing and comparing, an attacker could replay
+// any previously-seen valid (txHash, signature) pair from a sender — e.g. from a tiny,
+// publicly visible past transfer — with a forged `to`/`amount` and drain the account.
+export function computeTxFieldsHash(tx) {
+  const payload = JSON.stringify({
+    from: tx.from, to: tx.to, amount: tx.amount,
+    fee: tx.fee, nonce: tx.nonce, timestamp: tx.timestamp, memo: tx.memo,
+  });
+  return crypto.createHash('sha256').update(payload).digest('hex');
 }
 
 export class Wallet {
@@ -102,6 +120,20 @@ export class Wallet {
    * Verify a signature produced by a Wallet.sign.
    * Accepts a PEM string OR a raw 32-byte ed25519 public key in base64.
    */
+  /**
+   * Derive the canonical poh address bound to an ed25519 signing public key.
+   * A key may only control the address derived from itself.
+   */
+  static deriveAddressFromSigningKey(signingPublicKey) {
+    if (!signingPublicKey || typeof signingPublicKey !== 'string') return null;
+    const hash = crypto.createHash('sha256').update(signingPublicKey).digest('hex');
+    return 'poh' + hash.slice(0, 40);
+  }
+
+  static isAddressBoundToSigningKey(address, signingPublicKey) {
+    return address === Wallet.deriveAddressFromSigningKey(signingPublicKey);
+  }
+
   static verifySignature(publicKeyPem, data, signatureBase64) {
     try {
       const msg = Buffer.isBuffer(data) ? data : Buffer.from(
@@ -148,7 +180,8 @@ export class WalletManager {
   saveWallet(wallet) {
     const file = path.join(this.walletsDir, `${wallet.address}.json`);
     const tmp  = file + '.tmp';
-    fs.writeFileSync(tmp, JSON.stringify(wallet.toJSON(), null, 2));
+    const sealed = sealWalletData(wallet.toJSON());
+    fs.writeFileSync(tmp, JSON.stringify(sealed, null, 2));
     fs.renameSync(tmp, file);
     return file;
   }
@@ -156,7 +189,8 @@ export class WalletManager {
   loadWallet(address) {
     const file = path.join(this.walletsDir, `${address}.json`);
     if (!fs.existsSync(file)) return null;
-    const data = JSON.parse(fs.readFileSync(file, 'utf8'));
+    const raw = JSON.parse(fs.readFileSync(file, 'utf8'));
+    const data = unsealWalletData(raw);
     const w = Wallet.fromJSON(data);
     // Auto-upgrade old local wallets (created before signing keys existed, so they're
     // missing BOTH halves) to have a signing keypair. Must check both — a wallet with
@@ -262,6 +296,9 @@ export class WalletManager {
     if ((sender.nonce || 0) + 1 !== tx.nonce) {
       return `nonce mismatch: expected ${sender.nonce + 1}, got ${tx.nonce}`;
     }
+    if (!tx.txHash || tx.txHash !== computeTxFieldsHash(tx)) {
+      return 'txHash does not match transaction fields';
+    }
     const total = tx.amount + (tx.fee || 0);
     if ((sender.balance || 0) < total) return 'insufficient balance';
     // Verify signature against the sender's STORED public key — not the key
@@ -269,10 +306,12 @@ export class WalletManager {
     // with their own key while claiming to spend from someone else's address.
     if (!tx.signature) return 'invalid signature';
     if (!sender.signingPublicKey) {
-      // Key not yet registered — auto-register from tx if signature self-verifies.
-      // Safe: mempool already verified this signature; auto-registering on first confirmed
-      // tx eliminates the separate register-key round-trip requirement.
+      // Key not yet registered — auto-register only when address is cryptographically
+      // bound to the signing key (prevents remote key substitution on stub wallets).
       if (!tx.signingPublicKey) return 'sender has no registered signing key';
+      if (!Wallet.isAddressBoundToSigningKey(tx.from, tx.signingPublicKey)) {
+        return 'address does not match signing public key';
+      }
       if (!Wallet.verifySignature(tx.signingPublicKey, tx.txHash, tx.signature)) {
         return 'invalid signature';
       }
@@ -290,8 +329,13 @@ export class WalletManager {
     sender.nonce   += 1;
     this.saveWallet(sender);
 
-    // Credit recipient (auto-create if missing)
-    this.credit(tx.to, tx.amount);
+    // Credit recipient synchronously — applyTransaction is already serialized per block
+    let recipient = this.loadWallet(tx.to);
+    if (!recipient) {
+      recipient = new Wallet({ address: tx.to, privateKey: null, publicKey: null, createdAt: Date.now() });
+    }
+    recipient.balance = (recipient.balance || 0) + tx.amount;
+    this.saveWallet(recipient);
     // Fee goes to block proposer — caller handles this separately
     return true;
   }
@@ -305,9 +349,19 @@ export class WalletManager {
       sender.nonce   = Math.max(0, (sender.nonce || 1) - 1);
       this.saveWallet(sender);
     }
-    // Undo credit on recipient
-    this.debit(tx.to, tx.amount);
+    // Undo credit on recipient (synchronous — paired with applyTransaction)
+    const recipient = this.loadWallet(tx.to);
+    if (recipient) {
+      recipient.balance = Math.max(0, (recipient.balance || 0) - tx.amount);
+      this.saveWallet(recipient);
+    }
     // Undo fee credit on proposer
-    if (proposerAddress && tx.fee > 0) this.debit(proposerAddress, tx.fee);
+    if (proposerAddress && tx.fee > 0) {
+      const proposer = this.loadWallet(proposerAddress);
+      if (proposer) {
+        proposer.balance = Math.max(0, (proposer.balance || 0) - tx.fee);
+        this.saveWallet(proposer);
+      }
+    }
   }
 }

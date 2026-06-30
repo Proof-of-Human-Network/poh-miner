@@ -15,6 +15,11 @@ import fs from 'fs';
 import path from 'path';
 import { PohBlock } from './core/block.js';
 import { ChainStore } from './storage/chain-store.js';
+import { validateBlockExtended } from './consensus/block-validator.js';
+import { replayChainLedger } from './consensus/tx-ledger.js';
+import { computeChainWork } from './consensus/chain-selection.js';
+import { verifyBrainEvent, verifyIpfsUpdate } from './security/bootnode-auth.js';
+import { applyBootnodeCors } from './security/api-security.js';
 import { Wallet } from './wallet/wallet.js';
 import { IPFSStore } from './storage/ipfs-store.js';
 
@@ -214,9 +219,16 @@ if (chain.length === 0) {
     timestamp: 1780700000000,
     minerWallet: 'bootnode-genesis',
     difficulty: 4,
+    chainWork: computeChainWork('0', 4),
   });
   chain.push(genesis);
   chainStore.saveChain(chain);
+}
+
+let txLedger = replayChainLedger(chain);
+
+function refreshTxLedger() {
+  txLedger = replayChainLedger(chain);
 }
 
 async function syncFromPeer(peerUrl) {
@@ -240,11 +252,21 @@ async function syncFromPeer(peerUrl) {
       if (!Array.isArray(blocks) || blocks.length === 0) break;
       for (const b of blocks) {
         const block = PohBlock.fromJSON ? PohBlock.fromJSON(b) : new PohBlock(b);
+        const parent = chain[chain.length - 1];
+        const check = validateBlockExtended(block, {
+          parent, chainPrefix: chain, ledger: txLedger, strictTx: false,
+        });
+        if (!check.valid) {
+          console.warn(`[Bootnode] Peer sync rejected block #${block.height} (${check.reason})`);
+          break;
+        }
         chain.push(block);
+        txLedger.applyBlock(block, { strict: false });
       }
       from = to + 1;
     }
     chainStore.saveChain(chain);
+    refreshTxLedger();
     console.log(`[Bootnode] Sync complete — chain height now ${chain.length - 1}`);
   } catch (e) {
     console.warn(`[Bootnode] Peer sync failed: ${e.message}`);
@@ -259,11 +281,7 @@ if (PEER_SYNC_URL) {
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
 
-  // CORS support (for frontend calls to /peers, /chain/* etc. from different origin)
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-  res.setHeader('Access-Control-Max-Age', '86400');
+  applyBootnodeCors(req, res);
 
   if (req.method === 'OPTIONS') {
     res.statusCode = 204;
@@ -309,13 +327,19 @@ const server = http.createServer(async (req, res) => {
           for (const blockData of blocks) {
             const block = PohBlock.fromJSON ? PohBlock.fromJSON(blockData) : new PohBlock(blockData);
 
-            if (block.minerSignature && !block.verifySignature()) continue;
-
             const tip = chain[chain.length - 1];
-            const tipHash = await tip.getHash();
+            const tipHash = tip.blockHash || await tip.getHash();
 
-            if (block.height === chain.length && block.previousHash === tipHash) {
+            if (block.height === tip.height + 1 && block.previousHash === tipHash) {
+              const check = validateBlockExtended(block, {
+                parent: tip, chainPrefix: chain, ledger: txLedger, strictTx: true,
+              });
+              if (!check.valid) {
+                console.warn(`[Bootnode] Rejected block #${block.height} (${check.reason})`);
+                break;
+              }
               chain.push(block);
+              txLedger.applyBlock(block, { strict: false });
               accepted++;
               console.log(`[Bootnode] Accepted block #${block.height} from miner`);
             } else if (block.height <= chain.length - 1) {
@@ -417,6 +441,11 @@ const server = http.createServer(async (req, res) => {
             res.statusCode = 400;
             return res.end(JSON.stringify({ error: 'eventHash, type, data required' }));
           }
+          const auth = verifyBrainEvent(event);
+          if (!auth.ok) {
+            res.statusCode = 403;
+            return res.end(JSON.stringify({ error: auth.error }));
+          }
           if (brainEventHashes.has(event.eventHash)) {
             return res.end(JSON.stringify({ ok: true, duplicate: true }));
           }
@@ -475,6 +504,11 @@ const server = http.createServer(async (req, res) => {
       req.on('end', () => {
         try {
           const data = JSON.parse(body);
+          const auth = verifyIpfsUpdate(data);
+          if (!auth.ok) {
+            res.statusCode = 403;
+            return res.end(JSON.stringify({ error: auth.error }));
+          }
           const ts = data.ts || Date.now();
 
           for (const [type, cid] of [['chain', data.chain], ['brain', data.brain], ['selfPeer', data.selfPeer]]) {

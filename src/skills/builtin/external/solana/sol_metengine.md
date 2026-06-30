@@ -4,6 +4,18 @@ version: 1.0.0
 description: Real-time smart money analytics API for Polymarket prediction markets, Hyperliquid perpetual futures, and Meteora Solana LP/AMM pools. 63 endpoints. Pay-per-request via x402 on Solana Mainnet USDC. No API keys.
 triggers:
   - metengine
+  - smart money
+  - smart money analytics
+  - insider detection
+  - capital flow tracking
+  - wallet scoring
+  - polymarket
+  - hyperliquid
+  - x402
+  - pay-per-request api
+  - prediction markets api
+  - perp trader analytics
+  - met engine
 ---
 
 ## Context

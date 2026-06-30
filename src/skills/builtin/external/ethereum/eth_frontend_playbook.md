@@ -1,12 +1,19 @@
 ---
 id: eth_frontend_playbook
 version: 1.0.0
-description: The complete build-to-production pipeline for Ethereum dApps. Fork mode setup, IPFS deployment, Vercel config, ENS subdomain setup, and the full production checklist. Built around Scaffold-ETH 2 but applicable to any Ethereum frontend project. Use when deploying any dApp to production.
+description: The complete build-to-production pipeline for Ethereum dApps. Fork mode setup, IPFS deployment, Vercel config, ENS subdomain setup, and the full production checklist. Built around Scaffold-ETH 2 but applicable to any Ethereum frontend project. Use when deploying any dApp to production. Distinct from eth_frontend_ux (in-app UI/UX correctness patterns like button states and address formatting) — this skill covers the deployment pipeline and infra around the app, not the UI itself.
 triggers:
   - ethereum dapp deployment
   - ipfs deployment ethereum
   - scaffold-eth production
   - ens subdomain setup
+  - deploy dapp to production
+  - fork mode setup
+  - vercel config ethereum
+  - production checklist dapp
+  - yarn fork
+  - deploy frontend ethereum
+  - dapp build pipeline
 ---
 
 ## Context

@@ -7,6 +7,14 @@ triggers:
   - the graph indexing
   - query onchain events
   - ethereum event logs
+  - eth_getlogs
+  - subgraph
+  - historical onchain data
+  - archive node
+  - index blockchain data
+  - read past transactions
+  - event listener ethereum
+  - query smart contract events
 ---
 
 ## Context

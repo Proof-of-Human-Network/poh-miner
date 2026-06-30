@@ -22,6 +22,14 @@ import { validateResultWork } from './validation/result-validator.js';
 import { calculateBlockRewards, BLOCK_REWARD_POH, POH_DECIMALS } from './rewards/reward.js';
 import { computeChainWork, compareChainWork, getTipChainWork } from './consensus/chain-selection.js';
 import { mineBlock, getNextDifficulty } from './consensus/pow.js';
+import {
+  validateBlock,
+  validateBlockExtended,
+  validateBlockPowOnly,
+  validateBlockChain,
+  findParentBlock,
+} from './consensus/block-validator.js';
+import { replayChainLedger } from './consensus/tx-ledger.js';
 import { computeVerdictWithExistingPoh } from './compute/poh-adapter.js';
 import { getBrain, getBrainDataDir } from './compute/adapters/real-poh.js';
 import { BrainSync } from './brain/brain-sync.js';
@@ -50,6 +58,8 @@ import { tryExternalProviders } from './ai/external-providers.js';
 import { needsDatasetLookup, searchDatasets, disambiguateDataset } from './datasets/hf-dataset-search.js';
 import * as hfDatasetManager from './datasets/hf-dataset-manager.js';
 import { serveHfDataset, pullHfDatasetFromPeer } from './datasets/hf-dataset-peer-serve.js';
+import { applyCorsHeaders, rejectNonLocalStateChange } from './security/api-security.js';
+import { normalizeSkillId } from './security/skill-id.js';
 
 // Returns true when a message segment clearly signals it needs live internet data.
 // Prevents web_search from firing on general knowledge questions the LLM already knows.
@@ -225,10 +235,12 @@ export class PohMinerNode {
       this.config.wallet || 'unknown-miner',
       () => this.peers || [],   // live peer list — updated by discoverAndRegisterWithBootnodes
       () => this.config.bootnodes || DEFAULT_BOOTNODES,
+      { getIdentityWallet: () => this.identityWallet },
     );
     this.chainStore = new ChainStore();
     this.walletManager = new WalletManager();
     this.txMempool = new TxMempool(this.walletManager);
+    this.txLedger = null; // canonical coinbase+tx replay; rebuilt from chain
     this.p2pOrderStore = new OrderStore();
     this.p2pEscrow = new EscrowManager();
     this.p2pReferral = new ReferralStore();
@@ -675,7 +687,7 @@ export class PohMinerNode {
 
     // Refuse to start a second instance against the same wallet/chain data dir —
     // two processes writing the same JSON files (wallets, chain, config) at once
-    // can corrupt them, and they would also fight over the same HTTP port.
+    // can corrupt them, and they'd also fight over the same HTTP port.
     this._acquireSingleInstanceLock();
 
     // Validate that required API keys / RPCs are present before doing anything heavy.
@@ -872,11 +884,7 @@ export class PohMinerNode {
 
   startWalletApiServer(port = 3456) {
     const server = http.createServer((req, res) => {
-      // CORS support for browser clients (e.g. dev frontend on :5173 calling miner :3456)
-      res.setHeader('Access-Control-Allow-Origin', '*');
-      res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-      res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-      res.setHeader('Access-Control-Max-Age', '86400');
+      applyCorsHeaders(req, res);
 
       if (req.method === 'OPTIONS') {
         res.statusCode = 204;
@@ -886,6 +894,8 @@ export class PohMinerNode {
       res.setHeader('Content-Type', 'application/json');
 
       const url = new URL(req.url, `http://${req.headers.host}`);
+
+      if (rejectNonLocalStateChange(req, res, url.pathname)) return;
 
       // Health probe used by SDK node-discovery (HEAD or GET /healthz)
       if (url.pathname === '/healthz') {
@@ -933,24 +943,39 @@ export class PohMinerNode {
       }
 
       // Register an ed25519 signing public key for a wallet address.
-      // Authenticated via a self-signature: proof = sign(address, signingPrivateKey).
+      // Address must be cryptographically bound to the signing key; existing keys
+      // can only be replaced with a signature from the current key.
       if (req.method === 'POST' && url.pathname === '/api/wallet/register-key') {
         let body = '';
         req.on('data', c => body += c);
         req.on('end', () => {
           try {
-            const { address, signingPublicKey, proof } = JSON.parse(body);
+            const { address, signingPublicKey, proof, rotationProof } = JSON.parse(body);
             if (!address || !signingPublicKey || !proof) {
               res.statusCode = 400;
               return res.end(JSON.stringify({ error: 'address, signingPublicKey, and proof required' }));
             }
-            if (!Wallet.verifySignature(signingPublicKey, address, proof)) {
+            if (!Wallet.isAddressBoundToSigningKey(address, signingPublicKey)) {
               res.statusCode = 403;
-              return res.end(JSON.stringify({ error: 'invalid proof' }));
+              return res.end(JSON.stringify({ error: 'address does not match signing public key' }));
             }
             let wallet = this.walletManager.loadWallet(address);
             if (!wallet) {
               wallet = new Wallet({ address, privateKey: null, publicKey: null, createdAt: Date.now() });
+            }
+            if (wallet.signingPublicKey && wallet.signingPublicKey !== signingPublicKey) {
+              const rotatePayload = JSON.stringify({
+                action: 'rotate-key',
+                address,
+                newSigningPublicKey: signingPublicKey,
+              });
+              if (!rotationProof || !Wallet.verifySignature(wallet.signingPublicKey, rotatePayload, rotationProof)) {
+                res.statusCode = 403;
+                return res.end(JSON.stringify({ error: 'rotation requires signature from existing key' }));
+              }
+            } else if (!Wallet.verifySignature(signingPublicKey, address, proof)) {
+              res.statusCode = 403;
+              return res.end(JSON.stringify({ error: 'invalid proof' }));
             }
             wallet.signingPublicKey = signingPublicKey;
             this.walletManager.saveWallet(wallet);
@@ -1046,10 +1071,10 @@ export class PohMinerNode {
       // Send endpoint — builds, signs, and submits a proper on-chain PoHTransaction.
       // For local wallets (created by this node) the signing key is on disk; for external
       // wallets that registered a key via /api/wallet/register-key this also works.
-      if (req.method === 'POST' && url.pathname === '/api/wallet/rebuild') {
+      if (req.method === 'GET' && url.pathname === '/api/chain/supply-audit') {
         try {
-          this._rebuildBalancesFromChain();
-          return res.end(JSON.stringify({ success: true, blocks: this.chain.length }));
+          const audit = this._supplyAudit();
+          return res.end(JSON.stringify(audit));
         } catch (e) {
           res.statusCode = 500;
           return res.end(JSON.stringify({ error: e.message }));
@@ -1134,8 +1159,12 @@ export class PohMinerNode {
             // a field in the client-supplied JSON body; without this check any external caller
             // could set it themselves and skip payment verification entirely.
             const remoteIp = (req.socket.remoteAddress || '').replace(/^::ffff:/, '');
-            const fromKnownPeer = this.peers.some(p => p.host === remoteIp);
-            const trustedRelay = rawJob._relayed === true && fromKnownPeer;
+            const relayPeer = this.peers.find(p => p.host === remoteIp);
+            const relayPayload = rawJob._relayPayload;
+            const relayProofOk = relayPeer?.signingPublicKey && rawJob._relayProof && relayPayload &&
+              relayPayload.jobId === jobId &&
+              Wallet.verifySignature(relayPeer.signingPublicKey, JSON.stringify(relayPayload), rawJob._relayProof);
+            const trustedRelay = rawJob._relayed === true && !!relayPeer && relayProofOk;
             const feeRequired = FEE_REQUIRED_JOB_TYPES.has(rawJob.type) && !trustedRelay;
 
             // Fee-required job types (skill execution, model/dataset compute) must have a
@@ -1218,7 +1247,7 @@ export class PohMinerNode {
               // Atomic nonce-checked debit — fails (and the job is rejected) if the proof
               // was already spent, the nonce is stale, or the balance is insufficient.
               const escrowTransition = this._buildEscrowTransition(job, expectedHash, false, nonce);
-              const applied = this._applyEscrow(escrowTransition);
+              const applied = await this._applyEscrow(escrowTransition);
               if (applied !== true) {
                 res.statusCode = 402;
                 return res.end(JSON.stringify({ error: applied || 'Payment failed', code: 'PAYMENT_FAILED' }));
@@ -1300,7 +1329,7 @@ export class PohMinerNode {
             if (job.requesterAddress && job.maxBudget > 0 && !job._escrowApplied) {
               const escrowTransition = this._buildEscrowTransition(job, job._paymentTxHash, job._unverified);
               this.pendingBrainTransitions.push(escrowTransition);
-              this._applyEscrow(escrowTransition);
+              await this._applyEscrow(escrowTransition);
             }
 
             // Respond fast with jobId + poll urls (key for "check job status" flow)
@@ -2059,6 +2088,68 @@ export class PohMinerNode {
               return res.end(JSON.stringify({ type: 'skill', skillId: route.skillId, input: route.input, skillContext: route.skillContext }));
             }
 
+            // ── Sequenced generation + skill (e.g. "create an ERC20 contract and audit it") ──
+            // _routeMessage only emits 'sequence' when the matched skill is knowledge-only
+            // (reference text, no sandboxed code) — see the hasCode check there. Generate
+            // first, then feed the generated content into the skill's reference material as
+            // context for a second LLM call. Falls through to plain chat if generation fails.
+            if (route.type === 'sequence') {
+              try {
+                const ollamaBase = this.config.ollamaUrl || 'http://localhost:11434';
+                const selModel   = reqModel || this.config.model || 'qwen2.5:1.5b';
+
+                // Step 1 — generate the artifact the skill will analyze.
+                const genRes = await fetch(`${ollamaBase}/api/chat`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    model: selModel,
+                    messages: [
+                      { role: 'system', content: 'You write complete, correct code. Respond with a one-line description, then the code in a fenced code block. Do not explain at length — the code is the answer.' },
+                      { role: 'user', content: route.creationQuery },
+                    ],
+                    stream: false,
+                    options: { temperature: 0.4 },
+                  }),
+                  signal: AbortSignal.timeout(60_000),
+                });
+                const genData    = await genRes.json();
+                const generated  = (genData.message?.content || '').trim();
+
+                if (!generated) {
+                  return res.end(JSON.stringify({ type: 'chat', message: `Could not generate a response for: "${route.creationQuery}"` }));
+                }
+
+                // Step 2 — run the matched skill against what was just generated.
+                const skillEntry = skillsManager.getSkill(route.skillId);
+                const systemContent = [
+                  'You are a helpful assistant with access to specialized reference documentation.',
+                  'Use the reference material below to analyze the content that was just generated. Be specific and practical.',
+                  `\nReference documentation (${route.skillId}):\n${(skillEntry?.context || '').slice(0, 8000)}`,
+                ].join('\n');
+                const userContent = `Generated content:\n${generated}\n\nTask: ${route.input?.query || route.input?.message || message}`;
+                const skillRes = await fetch(`${ollamaBase}/api/chat`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    model: selModel,
+                    messages: [{ role: 'system', content: systemContent }, { role: 'user', content: userContent }],
+                    stream: false,
+                    options: { temperature: 0.5 },
+                  }),
+                  signal: AbortSignal.timeout(40_000),
+                });
+                const skillData = await skillRes.json();
+                const analysis  = (skillData.message?.content || '').trim();
+
+                const reply = `${generated}\n\n---\n\n${analysis || `(${route.skillId} analysis unavailable)`}`;
+                return res.end(JSON.stringify({ type: 'chat', message: reply, sequence: { skillId: route.skillId } }));
+              } catch (e) {
+                console.warn('[chat/ask] sequence pipeline error:', e.message);
+                // fall through to plain chat below
+              }
+            }
+
             // ── Hugging Face dataset pipeline ─────────────────────────────────────
             // No skill matched, but the message explicitly referenced a dataset.
             // Search HF → let the local LLM pick a match → answer from a local/peer
@@ -2313,7 +2404,7 @@ export class PohMinerNode {
             }
 
             // No sandboxed code (context-only skill) — publish immediately
-            const transition = { type: 'skill-proposed', manifest, code, context, authorSignature, proposerAddress: requesterAddress || null, txHash: `skill-${manifest.id}-${Date.now()}` };
+            const transition = { type: 'skill-proposed', manifest, code, context, authorSignature, proposerAddress: requesterAddress || null, txHash: `skill-${manifest.id}-${Date.now()}`, trusted: true };
             // Audit fee goes to this miner since we're approving instantly (no LLM work required)
             this.walletManager.credit(this.config.wallet, PROPOSE_FEE);
             this.pendingBrainTransitions.push(transition);
@@ -2390,10 +2481,21 @@ export class PohMinerNode {
             }
 
             this._saveSkillStakes();
-            const stakeTransition = { type: 'skill-staked', skillId, staker: stakerAddress, amount: amountRaw, txHash, ts: Date.now() };
+            const stakeSignMsg = JSON.stringify({ skillId, stakerAddress, amount: amountRaw, txHash });
+            const stakeSignature = this.identityWallet?.sign
+              ? this.identityWallet.sign(stakeSignMsg)
+              : null;
+            const stakeSigningPublicKey = this.identityWallet?.signingPublicKey || null;
+            const stakeTransition = {
+              type: 'skill-staked', skillId, staker: stakerAddress, amount: amountRaw, txHash, ts: Date.now(),
+              signature: stakeSignature, signingPublicKey: stakeSigningPublicKey,
+            };
             this.pendingBrainTransitions.push(stakeTransition);
             this._appliedStakeTxs.add(txHash);
-            this.gossip.publish('skill-staked', { skillId, stakerAddress, amount: amountRaw, total: entry.total, txHash }).catch(() => {});
+            this.gossip.publish('skill-staked', {
+              skillId, stakerAddress, amount: amountRaw, txHash,
+              signature: stakeSignature, signingPublicKey: stakeSigningPublicKey,
+            }).catch(() => {});
             console.log(`[PoH-Miner] Skill stake: ${(amountRaw / POH_DECIMALS).toFixed(2)} POH → ${skillId} (staker=${stakerAddress.slice(0,10)}…)`);
             return res.end(JSON.stringify({ ok: true, total: entry.total, myStake: entry.stakers.get(stakerAddress), txHash }));
           } catch (e) { res.statusCode = 400; res.end(JSON.stringify({ error: e.message })); }
@@ -2650,6 +2752,9 @@ export class PohMinerNode {
       // over JSON.stringify({address, timestamp, ...actionFields}) using signingPublicKey.
       const verifyP2PAuth = (address, signingPublicKey, signature, payloadObj) => {
         if (!address || !signingPublicKey || !signature) return { error: 'missing auth fields' };
+        if (!Wallet.isAddressBoundToSigningKey(address, signingPublicKey)) {
+          return { error: 'address does not match signing public key' };
+        }
         if (Math.abs(Date.now() - (payloadObj.timestamp || 0)) > 5 * 60 * 1000) return { error: 'request expired' };
         const payloadStr = JSON.stringify(payloadObj);
         if (!Wallet.verifySignature(signingPublicKey, payloadStr, signature)) return { error: 'invalid signature' };
@@ -2965,9 +3070,13 @@ export class PohMinerNode {
       this.walletApiServer = null;
     });
 
-    server.listen(port, () => {
-      this._openFirewallPort(port);
-      console.log(`[PoH-Miner] Wallet API listening on http://localhost:${port}`);
+    // Remote peer access is on by default (P2P gossip, job relay, discovery).
+    // Set localOnly: true in config to bind 127.0.0.1 and skip firewall rules.
+    const localOnly = this.config.localOnly === true;
+    const bindHost = localOnly ? '127.0.0.1' : (this.config.bindHost || '0.0.0.0');
+    server.listen(port, bindHost, () => {
+      if (!localOnly) this._openFirewallPort(port);
+      console.log(`[PoH-Miner] Wallet API listening on http://${bindHost}:${port}${localOnly ? ' (localOnly)' : ''}`);
       console.log(`   Wallet: curl "http://localhost:${port}/api/wallet/balance?address=${this.config.wallet}"`);
       console.log(`   Submit job: curl -X POST http://localhost:${port}/job -d '{"payload":{"address":"bc1q..."}}'`);
       console.log(`   Check status: curl http://localhost:${port}/job/<jobId>/status`);
@@ -3017,6 +3126,7 @@ export class PohMinerNode {
         }
       }
       console.log(`[PoH-Miner] Loaded ${this.chain.length} blocks from disk (${this.minedRequestIds.size} known request IDs)`);
+      this._refreshTxLedger();
     }
 
     // 2. If still empty, create genesis
@@ -3045,6 +3155,18 @@ export class PohMinerNode {
       }
     }
 
+    // 2b. Prefetch IPFS CIDs (bootnode or local cache) before catch-up so sync
+    // survives when every configured bootnode is unreachable.
+    if (this.ipfsSync && this.config.bootnodes?.length > 0) {
+      await this.ipfsSync.fetchLatestCIDs();
+      if (!this._pendingIPFSChainSnap) {
+        const chainSnap = await this.ipfsSync.fetchChainSnapshot();
+        if (chainSnap?.blocks?.length) {
+          this._pendingIPFSChainSnap = chainSnap;
+        }
+      }
+    }
+
     // 3. Apply IPFS chain snapshot if it extends our local chain
     if (this._pendingIPFSChainSnap) {
       const snap = this._pendingIPFSChainSnap;
@@ -3053,13 +3175,9 @@ export class PohMinerNode {
       if (snap.height > localHeight) {
         try {
           const blocks = snap.blocks.map(b => PohBlock.fromJSON(b));
-          // Verify chain linkage before applying
-          let valid = true;
-          for (let i = 1; i < blocks.length; i++) {
-            if (blocks[i].previousHash !== blocks[i - 1].getHashSync()) { valid = false; break; }
-          }
-          if (valid) {
-            this.chain = blocks;
+          const chainCheck = validateBlockChain(blocks, []);
+          if (chainCheck.valid) {
+            this.chain = chainCheck.chain;
             this.chainStore.saveChain(this.chain);
             // Rebuild minedRequestIds from IPFS snapshot
             for (const b of this.chain) {
@@ -3265,13 +3383,10 @@ export class PohMinerNode {
       if (snap?.blocks?.length && snap.height > localChainHeight) {
         console.log(`[PoH-Miner] Applying IPFS chain snapshot (height ${snap.height})`);
         try {
-          let valid = true;
           const blocks = snap.blocks.map(b => PohBlock.fromJSON ? PohBlock.fromJSON(b) : new PohBlock(b));
-          for (let i = 1; i < blocks.length; i++) {
-            if (blocks[i].previousHash !== blocks[i - 1].getHashSync()) { valid = false; break; }
-          }
-          if (valid) {
-            this.chain = blocks;
+          const chainCheck = validateBlockChain(blocks, []);
+          if (chainCheck.valid) {
+            this.chain = chainCheck.chain;
             this.chainStore.saveChain(this.chain);
             for (const b of this.chain) {
               for (const r of (b.scanResults || [])) {
@@ -3303,7 +3418,6 @@ export class PohMinerNode {
     //   - partial reorg: competing tip (fork at local tip only), keep common prefix and download tail
     //   - full fresh start: deep fork only (genesis-only local chain is handled incrementally now)
     const isFreshStart = isFork; // no longer treat genesis-only as fresh-start
-    const startedFromGenesis = this.chain.length <= 1; // triggers rebuild after incremental sync from 0
     let localHeight = -1;
     if (!isFreshStart) {
       localHeight = localChainHeight;  // incremental from actual tip height (or 0 if genesis-only)
@@ -3343,8 +3457,16 @@ export class PohMinerNode {
             // Prefer stored blockHash over re-computation: getHashSync() changes when block.js fields change.
             const prevHash = prev.blockHash || prev.getHashSync();
             if (block.previousHash === prevHash && block.height === prev.height + 1) {
+              const check = validateBlockExtended(block, {
+                parent: prev, chainPrefix: this.chain, ledger: this.txLedger, strictTx: false,
+              });
+              if (!check.valid) {
+                console.warn(`[PoH-Miner] Sync rejected block #${block.height} (${check.reason})`);
+                break;
+              }
               this._applyBlockState(block);
               this.chain.push(block);
+              this._advanceTxLedger(block);
               this.currentDifficulty = getNextDifficulty(this.chain);
               added++;
             }
@@ -3397,15 +3519,16 @@ export class PohMinerNode {
         }
       }
 
-      // For full replacement: genesis was already verified above — trust the downloaded chain.
-      // Re-verifying internal linkage via getHashSync() can fail when block.js's hash
-      // function has been updated since old blocks were mined (fields added/removed).
-      // The bootnode's chain is self-consistent; re-computation on old blocks is unreliable.
       {
-        // Splice downloaded tail onto the common prefix (or replace entirely for full fresh start)
         const anchorIdx = effectiveAnchorHeight >= 0 ? effectiveAnchorHeight - chainOffset : -1;
+        const prefix = effectiveAnchorHeight >= 0 ? this.chain.slice(0, anchorIdx + 1) : [];
+        const chainCheck = validateBlockChain(parsed, prefix);
+        if (!chainCheck.valid) {
+          console.warn(`[PoH-Miner] Fresh-start sync rejected at #${chainCheck.height} (${chainCheck.reason})`);
+          return;
+        }
         this.chain = effectiveAnchorHeight >= 0
-          ? [...this.chain.slice(0, anchorIdx + 1), ...parsed]
+          ? [...prefix, ...parsed]
           : parsed;
         for (const b of parsed) {
           for (const r of (b.scanResults || [])) {
@@ -3416,17 +3539,18 @@ export class PohMinerNode {
           }
         }
         this.currentDifficulty = getNextDifficulty(this.chain);
-        this._rebuildBalancesFromChain();
       }
     }
 
-    // After incremental sync from genesis, rebuild balances from the full chain
-    // (incremental _applyBlockState skips foreign senders whose wallets don't exist yet).
-    if (!isFreshStart && startedFromGenesis && this.chain.length > 1) {
+    this.chainStore.saveChain(this.chain);
+
+    // Replay canonical balances from chain on every startup (dedupes replay inflation).
+    if (this.chain.length > 0) {
       this._rebuildBalancesFromChain();
+    } else {
+      this._refreshTxLedger();
     }
 
-    this.chainStore.saveChain(this.chain);
     console.log(`[PoH-Miner] Chain sync complete — height ${this.chain[this.chain.length - 1]?.height ?? this.chain.length - 1}`);
   }
 
@@ -3600,13 +3724,8 @@ export class PohMinerNode {
         await this.brainSync.pullFromBootnodes(this.config.bootnodes, brain);
       }
 
-      // Bootstrap from IPFS if our chain is stale or we have no brain weights yet
+      // Refresh CIDs for brain pinning (chain catch-up already bootstrapped in syncChain)
       await this.ipfsSync.fetchLatestCIDs();
-      const chainSnap = await this.ipfsSync.fetchChainSnapshot();
-      if (chainSnap?.blocks?.length) {
-        console.log(`[PoH-Miner] IPFS chain snapshot available (height ${chainSnap.height}) — will be applied during syncChain`);
-        this._pendingIPFSChainSnap = chainSnap;
-      }
 
       // Start periodic brain pinning
       this.ipfsSync.startPeriodicBrainSync();
@@ -3670,14 +3789,25 @@ export class PohMinerNode {
     // Layer 6: relay and apply skill proposals from peers
     this.gossip.subscribe('skill-proposed', (transition) => {
       if (transition?.manifest?.id) {
-        skillsManager.processTransition(transition);
-        this.pendingBrainTransitions.push(transition);
-        // Persist to disk so the skill survives restart
+        const safeId = normalizeSkillId(transition.manifest.id);
+        if (!safeId) {
+          console.warn(`[PoH-Miner] Rejected skill proposal with invalid id: ${transition.manifest.id}`);
+          return;
+        }
+        const safeTransition = {
+          ...transition,
+          manifest: { ...transition.manifest, id: safeId },
+          networkSourced: true,
+          trusted: false,
+        };
+        skillsManager.processTransition(safeTransition);
+        this.pendingBrainTransitions.push(safeTransition);
+        // Persist metadata only — network code is stored but never executed
         try {
           const brainDir = getBrainDataDir();
           const skillsDir = path.join(brainDir, 'skills');
-          writeSkillFile(skillsDir, transition.manifest, transition.code || null, transition.context || '');
-          console.log(`[PoH-Miner] Persisted skill ${transition.manifest.id} to ${skillsDir}`);
+          writeSkillFile(skillsDir, safeTransition.manifest, transition.code || null, transition.context || '');
+          console.log(`[PoH-Miner] Persisted skill ${safeId} to ${skillsDir} (not executable until locally trusted)`);
         } catch (err) {
           console.warn('[PoH-Miner] Failed to persist skill to disk:', err.message);
         }
@@ -3701,9 +3831,10 @@ export class PohMinerNode {
       }
     });
 
-    // Job lifecycle transitions gossiped by the node that ran the job — any winner includes them
+    // Job lifecycle transitions — economic types must originate locally, not via gossip
     this.gossip.subscribe('job-transition', (t) => {
       if (!t?.type || !t?.jobId) return;
+      if (['job-escrow', 'job-settled', 'job-timeout'].includes(t.type)) return;
       const key = `${t.jobId}:${t.type}`;
       if (this._gossipedJobTransitions.has(key)) return;
       this._gossipedJobTransitions.add(key);
@@ -3719,10 +3850,23 @@ export class PohMinerNode {
       this.pendingBrainTransitions.push({ type: 'skill-result-hash', ...t });
     });
 
-    // Peer feedback — sync reputation across all nodes; slash if this node was the miner
+    // Peer feedback — only from jobs this node processed or with requester signature
     this.gossip.subscribe('job-feedback', (transition) => {
       if (!transition?.jobId || !transition?.rating) return;
-      if (feedbackStore.getByJob(transition.jobId)) return; // already applied
+      if (feedbackStore.getByJob(transition.jobId)) return;
+      const localJob = this.jobResults?.get(transition.jobId);
+      if (!localJob) {
+        if (!transition.requesterAddress || !transition.signature || !transition.signingPublicKey) return;
+        const msg = JSON.stringify({
+          jobId: transition.jobId,
+          rating: transition.rating,
+          stars: transition.stars ?? null,
+          minerAddress: transition.minerAddress,
+          requesterAddress: transition.requesterAddress,
+        });
+        if (!Wallet.verifySignature(transition.signingPublicKey, msg, transition.signature)) return;
+        if (!Wallet.isAddressBoundToSigningKey(transition.requesterAddress, transition.signingPublicKey)) return;
+      }
       feedbackStore.apply(transition);
       if (transition.rating === 'negative' && transition.minerAddress === this.config.wallet) {
         this.applySlashing(0.05);
@@ -3732,12 +3876,16 @@ export class PohMinerNode {
 
     // Skill stake events from peers — apply immediately for UX, mark txHash so
     // block replay (processStateTransition) skips the same event to prevent double-apply.
-    this.gossip.subscribe('skill-staked', ({ skillId, stakerAddress, amount, total, txHash }) => {
+    this.gossip.subscribe('skill-staked', ({ skillId, stakerAddress, amount, txHash, signature, signingPublicKey }) => {
       if (!skillId || !stakerAddress || !amount) return;
+      if (!signature || !signingPublicKey) return;
+      const stakeMsg = JSON.stringify({ skillId, stakerAddress, amount, txHash });
+      if (!Wallet.verifySignature(signingPublicKey, stakeMsg, signature)) return;
+      if (txHash && this._appliedStakeTxs.has(txHash)) return;
       if (!this._skillStakes.has(skillId)) this._skillStakes.set(skillId, { total: 0, stakers: new Map() });
       const entry = this._skillStakes.get(skillId);
       entry.stakers.set(stakerAddress, (entry.stakers.get(stakerAddress) || 0) + amount);
-      entry.total = (total !== undefined) ? total : (entry.total || 0) + amount;
+      entry.total = (entry.total || 0) + amount;
       if (txHash) this._appliedStakeTxs.add(txHash);
       this._saveSkillStakes();
       const GRADUATION_THRESHOLD = 10000 * POH_DECIMALS;
@@ -3828,24 +3976,29 @@ export class PohMinerNode {
         return;
       }
 
-      // Ensure incoming block has chainWork set
-      if (!newBlock.chainWork || newBlock.chainWork === '0') {
-        const parent = this.chain.find(b => b.getHashSync() === newBlock.previousHash);
-        newBlock.chainWork = computeChainWork(parent?.chainWork, newBlock.difficulty);
+      // Never trust gossiped chainWork — verify PoW and recompute from parent.
+      const parent = findParentBlock(this.chain, newBlock);
+      if (parent) {
+        const parentIdx = this.chain.indexOf(parent);
+        const chainPrefix = this.chain.slice(0, parentIdx + 1);
+        const check = validateBlock(newBlock, { parent, chainPrefix });
+        if (!check.valid) {
+          console.warn(`[PoH-Miner] Block #${newBlock.height} rejected (${check.reason}) from ${from?.slice(0, 8)}`);
+          return;
+        }
+      } else if (newBlock.height > 0) {
+        const powCheck = validateBlockPowOnly(newBlock);
+        if (!powCheck.valid) {
+          console.warn(`[PoH-Miner] Block #${newBlock.height} rejected (${powCheck.reason}) from ${from?.slice(0, 8)}`);
+          return;
+        }
       }
 
       if (newBlock.height === currentHeight + 1 && newBlock.previousHash === tipHash) {
         // ── Happy path: extends our current tip ─────────────────────────────
-        if (newBlock.stateRoot) {
-          const localRoot = this.walletManager.getStateRoot();
-          if (localRoot !== newBlock.stateRoot) {
-            // Soft warning only — hard rejection caused self-reinforcing divergence when nodes
-            // had different canonical chains. Log for monitoring; still accept the block.
-            console.warn(`[PoH-Miner] Block #${newBlock.height} stateRoot mismatch — peer=${newBlock.stateRoot.slice(0,12)} local=${localRoot.slice(0,12)} (warning only)`);
-          }
+        if (await this._acceptBlock(newBlock, from, { checkStateRoot: true })) {
+          this._drainOrphans(newBlock.getHashSync());
         }
-        this._appendBlock(newBlock, from);
-        this._drainOrphans(newBlock.getHashSync());
 
       } else if (newBlock.height === currentHeight + 1 && newBlock.previousHash !== tipHash) {
         // ── Fork at same height: competing block ─────────────────────────────
@@ -3955,23 +4108,57 @@ export class PohMinerNode {
     }
   }
 
+  // Replay canonical ledger from chain (coinbase + deduped txs + P2P escrow).
+  _refreshTxLedger() {
+    this.txLedger = replayChainLedger(this.chain, { applyP2P: true });
+    this.txMempool.setSpentTxHashes(this.txLedger.spentTxHashes);
+  }
+
+  _advanceTxLedger(block) {
+    if (!this.txLedger) {
+      this._refreshTxLedger();
+      return;
+    }
+    const beforeSpent = new Set(this.txLedger.spentTxHashes);
+    this.txLedger.applyBlock(block, { strict: false });
+    for (const t of (block.stateTransitions || [])) {
+      this.txLedger.applyP2PEscrowTransition(t);
+    }
+    const newlySpent = [];
+    for (const h of this.txLedger.spentTxHashes) {
+      if (!beforeSpent.has(h)) newlySpent.push(h);
+    }
+    if (newlySpent.length) this.txMempool.markSpent(newlySpent);
+  }
+
+  _supplyAudit() {
+    const ledger = this.txLedger || replayChainLedger(this.chain, { applyP2P: true });
+    const inv = ledger.checkSupplyInvariant();
+    const height = this.chain.length ? this.chain[this.chain.length - 1].height : 0;
+    return {
+      chainHeight: height,
+      blockCount: this.chain.length,
+      totalMinted: inv.totalMinted,
+      totalBalances: inv.totalBalances,
+      supplyOk: inv.ok,
+      delta: inv.delta,
+      activeWallets: ledger.activeWalletCount(),
+      spentTxCount: ledger.spentTxHashes.size,
+    };
+  }
+
   // Rebuild all wallet balances from scratch by replaying the current chain.
   // Called after fork recovery (fresh-start sync) to discard stale-fork balances.
-  // Uses an in-memory accumulator to avoid O(blocks × wallets) synchronous disk writes.
+  // Uses canonical tx-ledger replay (spent-tx dedup) so replay inflation is undone.
   _rebuildBalancesFromChain() {
     console.log(`[PoH-Miner] Rebuilding wallet balances from ${this.chain.length} canonical blocks…`);
 
-    // Accumulate all balance deltas in memory: address → total amount
-    const balances = new Map(); // address → accumulated balance (number)
-    const nonces   = new Map(); // address → confirmed tx count (= final nonce)
-    const addBalance = (addr, amount) => {
-      if (!addr || amount <= 0) return;
-      balances.set(addr, (balances.get(addr) || 0) + amount);
-    };
-    const subBalance = (addr, amount) => {
-      if (!addr || amount <= 0) return;
-      balances.set(addr, Math.max(0, (balances.get(addr) || 0) - amount));
-    };
+    const ledger = replayChainLedger(this.chain, { applyP2P: true });
+    this.txLedger = ledger;
+    this.txMempool.setSpentTxHashes(ledger.spentTxHashes);
+
+    const balances = ledger.balances;
+    const nonces   = ledger.nonces;
 
     // Clear claim store so replayed rewards aren't skipped
     this.rewardClaimStore.reset();
@@ -3981,46 +4168,12 @@ export class PohMinerNode {
       const coinbase = block.coinbaseReward;
       if (coinbase && block.minerWallet) {
         if (coinbase.proposerReward > 0) {
-          addBalance(block.minerWallet, coinbase.proposerReward);
           claimKeys.push(`proposer-${block.height}`);
         }
         for (const worker of (coinbase.workerRewards || [])) {
           if (worker.workerId && worker.amount > 0) {
-            addBalance(worker.workerId, worker.amount);
             claimKeys.push(RewardClaimStore.makeClaimKey(block.height, worker.workProofHash));
           }
-        }
-      }
-      // Apply transactions
-      for (const txData of (block.transactions || [])) {
-        try {
-          const tx = PoHTransaction.fromJSON(txData);
-          subBalance(tx.from, tx.amount + (tx.fee || 0));
-          addBalance(tx.to, tx.amount);
-          if (tx.fee > 0 && block.minerWallet) addBalance(block.minerWallet, tx.fee);
-          nonces.set(tx.from, (nonces.get(tx.from) || 0) + 1);
-        } catch { /* skip malformed tx */ }
-      }
-      // Apply P2P escrow movements from stateTransitions so poh_p2p_escrow
-      // balance survives a fresh-start rebuild (escrow is off-chain state).
-      for (const t of (block.stateTransitions || [])) {
-        if (t.type === 'p2p-order-created' && t.side === 'sell' && t.escrowLocked) {
-          subBalance(t.maker, t.pohAmount);
-          addBalance(ESCROW_ADDRESS, t.pohAmount);
-        } else if (t.type === 'p2p-order-cancelled' && t.side === 'sell' && t.escrowLocked) {
-          subBalance(ESCROW_ADDRESS, t.pohAmount);
-          addBalance(t.maker, t.pohAmount);
-        } else if (t.type === 'p2p-trade-created' && t.orderSide === 'buy') {
-          subBalance(t.taker, t.pohAmount);
-          addBalance(ESCROW_ADDRESS, t.pohAmount);
-        } else if (t.type === 'p2p-trade-release') {
-          const totalFromEscrow = t.pohAmount + (t.referralFee || 0);
-          subBalance(ESCROW_ADDRESS, totalFromEscrow);
-          addBalance(t.recipient, t.pohAmount);
-          if (t.referralFee > 0 && t.referrer) addBalance(t.referrer, t.referralFee);
-        } else if (t.type === 'p2p-trade-cancel' && t.escrowLocked) {
-          subBalance(ESCROW_ADDRESS, t.pohAmount);
-          addBalance(t.locker, t.pohAmount);
         }
       }
     }
@@ -4059,16 +4212,61 @@ export class PohMinerNode {
     this._appliedEscrowJobIds.clear();
     this._appliedStateTransitionHeights.clear();
 
-    console.log(`[PoH-Miner] Balance rebuild complete — processed ${this.chain.length} blocks`);
+    const audit = ledger.checkSupplyInvariant();
+    console.log(
+      `[PoH-Miner] Balance rebuild complete — ${this.chain.length} blocks, ` +
+      `supply ${audit.ok ? 'OK' : 'MISMATCH'} ` +
+      `(minted ${audit.totalMinted}, balances ${audit.totalBalances})`
+    );
+  }
+
+  async _acceptBlock(block, from, { checkStateRoot = false } = {}) {
+    const parent = this.chain[this.chain.length - 1] ?? null;
+    if (block.height > 0) {
+      const check = validateBlockExtended(block, {
+        parent, chainPrefix: this.chain, ledger: this.txLedger, strictTx: true,
+      });
+      if (!check.valid) {
+        console.warn(`[PoH-Miner] Block #${block.height} rejected (${check.reason}) from ${from?.slice(0, 8)}`);
+        return false;
+      }
+      if (checkStateRoot && block.stateRoot) {
+        const localRoot = this.walletManager.getStateRoot();
+        if (localRoot !== block.stateRoot) {
+          console.warn(`[PoH-Miner] Block #${block.height} stateRoot mismatch — rejected`);
+          return false;
+        }
+      }
+      for (const result of (block.scanResults || [])) {
+        const workCheck = await validateResultWork(result);
+        if (!workCheck.isValid) {
+          console.warn(`[PoH-Miner] Block #${block.height} invalid scanResult: ${workCheck.errors?.join('; ')}`);
+          return false;
+        }
+      }
+    }
+    return this._appendBlock(block, from);
   }
 
   _appendBlock(block, from) {
+    const parent = this.chain[this.chain.length - 1] ?? null;
+    if (block.height > 0) {
+      const check = validateBlockExtended(block, {
+        parent, chainPrefix: this.chain, ledger: this.txLedger, strictTx: true,
+      });
+      if (!check.valid) {
+        console.warn(`[PoH-Miner] Refused to append block #${block.height} (${check.reason}) from ${from?.slice(0, 8)}`);
+        return false;
+      }
+    }
+
     this._applyBlockState(block);
 
     // Abort current mining immediately — we need to mine on the new tip
     this._abortMining();
 
     this.chain.push(block);
+    this._advanceTxLedger(block);
     this.chainStore.saveBlock(block);
     this.currentDifficulty = getNextDifficulty(this.chain);
     console.log(`[PoH-Miner] Accepted block #${block.height} chainWork=${block.chainWork} txs=${(block.transactions||[]).length} [sig:${block.minerSignature ? '✓' : 'none'}] from ${from?.slice(0,8)}`);
@@ -4082,6 +4280,7 @@ export class PohMinerNode {
         if (cid) this.pendingBrainTransitions.push({ type: 'state-snapshot', brainCID: cid, height: block.height });
       }).catch(() => {});
     }
+    return true;
   }
 
   _storeOrphan(block) {
@@ -4104,12 +4303,16 @@ export class PohMinerNode {
     if (!waiting?.length) return;
     this.orphanPool.delete(newTipHash);
 
-    // Sort by chainWork desc, pick heaviest
+    // Sort by chainWork desc, pick heaviest (chainWork was recomputed at ingest when parent was known)
     waiting.sort((a, b) => compareChainWork(b.chainWork, a.chainWork));
-    const best = waiting[0];
-    if (compareChainWork(best.chainWork, getTipChainWork(this.chain)) > 0) {
-      this._appendBlock(best, 'orphan-pool');
-      this._drainOrphans(best.getHashSync());
+    for (const candidate of waiting) {
+      const parent = this.chain[this.chain.length - 1];
+      if (compareChainWork(candidate.chainWork, getTipChainWork(this.chain)) > 0) {
+        this._acceptBlock(candidate, 'orphan-pool').then(ok => {
+          if (ok) this._drainOrphans(candidate.getHashSync());
+        }).catch(() => {});
+        break;
+      }
     }
   }
 
@@ -4158,7 +4361,8 @@ export class PohMinerNode {
           for (const block of incoming) {
             const prev = this.chain[this.chain.length - 1];
             if (block.height === prev.height + 1 && block.previousHash === prev.getHashSync()) {
-              this._appendBlock(block, bootnode);
+              const ok = await this._acceptBlock(block, bootnode);
+              if (!ok) break;
               added++;
             }
           }
@@ -4171,6 +4375,11 @@ export class PohMinerNode {
           console.warn(`[PoH-Miner] [Sync] Failed to fetch from ${bootnode}:`, err.message);
         }
       }
+
+      // Bootnodes unreachable — fall back to IPFS peer directory + peer/chain sync
+      console.log('[PoH-Miner] [Sync] Bootnode pull failed — trying IPFS-aware sync');
+      this._syncInProgress = false;
+      await this.syncFromBootnodes();
     } finally {
       this._syncInProgress = false;
     }
@@ -4252,7 +4461,23 @@ export class PohMinerNode {
   async _relayJobToPeers(job) {
     try {
       const peers = await this._getComputePeers();
-      const jobJson = JSON.stringify({ ...job, _relayed: true });
+      const relayPayload = {
+        jobId: job.id,
+        maxBudget: job.maxBudget,
+        requesterAddress: job.requesterAddress,
+        type: job.type,
+      };
+      const relayProof = this.identityWallet?.sign
+        ? this.identityWallet.sign(JSON.stringify(relayPayload))
+        : null;
+      const relaySigner = this.identityWallet?.signingPublicKey || null;
+      const jobJson = JSON.stringify({
+        ...job,
+        _relayed: true,
+        _relayPayload: relayPayload,
+        _relayProof: relayProof,
+        _relaySigner: relaySigner,
+      });
       await Promise.allSettled(peers.map(base =>
         fetch(`${base}/job`, {
           method: 'POST',
@@ -4455,7 +4680,11 @@ export class PohMinerNode {
 
     // Apply the new branch blocks
     for (const block of newBlocks) {
-      this._appendBlock(block, 'reorg');
+      const ok = await this._acceptBlock(block, 'reorg');
+      if (!ok) {
+        console.warn(`[PoH-Miner] Reorg aborted at block #${block.height}`);
+        return false;
+      }
     }
     this.chainStore.saveChain(this.chain);
     console.log(`[PoH-Miner] Reorg complete. New tip: #${this.chain[this.chain.length - 1].height}`);
@@ -4936,16 +5165,16 @@ export class PohMinerNode {
    * Without a nonce, falls back to the legacy best-effort debit used by
    * optionally-paid 'verdict' jobs.
    */
-  _applyEscrow(transition) {
+  async _applyEscrow(transition) {
     const { jobId, requesterAddress, amount, minerAddress, nonce } = transition;
     if (!requesterAddress || !amount) return 'missing requesterAddress/amount';
     if (this._appliedEscrowJobIds.has(jobId)) return true; // block replay — already debited locally
 
     if (typeof nonce === 'number') {
-      const result = this.walletManager.debitWithNonce(requesterAddress, amount, nonce);
+      const result = await this.walletManager.debitWithNonce(requesterAddress, amount, nonce);
       if (result !== true) return result.error || 'payment failed';
     } else {
-      this.walletManager.debit(requesterAddress, amount);
+      await this.walletManager.debit(requesterAddress, amount);
     }
 
     this._appliedEscrowJobIds.add(jobId);
@@ -4989,7 +5218,7 @@ export class PohMinerNode {
       }
     } else {
       // Publish the skill to the network
-      const transition = { type: 'skill-proposed', manifest: pending.manifest, code: pending.code, context: pending.context, authorSignature: pending.authorSignature, proposerAddress: pending.proposerAddress || null, txHash: `skill-${pending.manifest.id}-${Date.now()}` };
+      const transition = { type: 'skill-proposed', manifest: pending.manifest, code: pending.code, context: pending.context, authorSignature: pending.authorSignature, proposerAddress: pending.proposerAddress || null, txHash: `skill-${pending.manifest.id}-${Date.now()}`, trusted: true };
       this.pendingBrainTransitions.push(transition);
       skillsManager.processTransition(transition);
       this.gossip.publish('skill-proposed', transition).catch(() => {});
@@ -5244,6 +5473,7 @@ export class PohMinerNode {
       }
 
       this.chain.push(newBlock);
+      this._advanceTxLedger(newBlock);
       this.chainStore.saveBlock(newBlock);
       console.log(`[PoH-Miner] Produced block #${newBlock.height} (nonce ${newBlock.nonce})`);
 
@@ -5631,7 +5861,9 @@ export class PohMinerNode {
       return;
     }
     if (transition.type === 'job-escrow') {
-      this._applyEscrow(transition);
+      if (!transition.paymentTxHash && !this._appliedEscrowJobIds.has(transition.jobId)) return;
+      void this._applyEscrow(transition).catch(err =>
+        console.warn('[PoH-Miner] job-escrow apply failed:', err?.message || err));
       return;
     }
     if (transition.type === 'job-settled' || transition.type === 'job-timeout') {
@@ -5641,15 +5873,21 @@ export class PohMinerNode {
 
     // Layer 6: skill lifecycle transitions
     if (transition.type === 'skill-proposed' || transition.type === 'skill-graduated' || transition.type === 'skill-deprecated') {
-      skillsManager.processTransition(transition);
+      const replayTransition = transition.type === 'skill-proposed'
+        ? { ...transition, networkSourced: true, trusted: false }
+        : transition;
+      skillsManager.processTransition(replayTransition);
       return;
     }
 
     // Skill stake tally — replayed on all nodes so stake state is deterministic.
     // txHash dedup prevents double-apply when both gossip and block carry the same event.
     if (transition.type === 'skill-staked') {
-      const { skillId, staker, amount, txHash } = transition;
+      const { skillId, staker, amount, txHash, signature, signingPublicKey } = transition;
       if (!skillId || !staker || !amount) return;
+      if (!signature || !signingPublicKey) return;
+      const stakeMsg = JSON.stringify({ skillId, stakerAddress: staker, amount, txHash });
+      if (!Wallet.verifySignature(signingPublicKey, stakeMsg, signature)) return;
       if (txHash && this._appliedStakeTxs.has(txHash)) return;
       if (!this._skillStakes.has(skillId)) this._skillStakes.set(skillId, { total: 0, stakers: new Map() });
       const entry = this._skillStakes.get(skillId);

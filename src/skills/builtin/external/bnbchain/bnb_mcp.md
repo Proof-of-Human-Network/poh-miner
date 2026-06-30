@@ -10,6 +10,12 @@ triggers:
   - greenfield
   - erc-8004
   - bsc
+  - binance smart chain
+  - bnbchain-mcp
+  - bnb wallet
+  - bnb transfer
+  - bnb contract
+  - agent registration erc-8004
 ---
 
 ## Context

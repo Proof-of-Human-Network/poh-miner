@@ -7,6 +7,16 @@ triggers:
   - ethereum fork process
   - ethereum protocol upgrade
   - ethereum roadmap
+  - eip
+  - hard fork
+  - next ethereum upgrade
+  - is this feature live yet
+  - forkcast
+  - pectra
+  - fusaka
+  - glamsterdam
+  - verkle trees
+  - upcoming ethereum changes
 ---
 
 ## Context

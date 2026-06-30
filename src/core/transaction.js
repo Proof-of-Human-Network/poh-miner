@@ -54,6 +54,12 @@ export class PoHTransaction {
 
   verify() {
     if (!this.signature || !this.signingPublicKey) return false;
+    // The signature only proves the signer signed *some* hash string — it says nothing
+    // about whether that hash matches this transaction's real from/to/amount/fee/nonce/
+    // timestamp/memo. Recompute and compare first, or a forged tx could reuse a valid
+    // signature+hash pair lifted from a smaller/differently-routed past transaction by
+    // the same sender while carrying an attacker-chosen amount/recipient.
+    if (this.txHash !== this._computeHash()) return false;
     return Wallet.verifySignature(this.signingPublicKey, this.txHash, this.signature);
   }
 
@@ -77,12 +83,44 @@ export class TxMempool {
     this.txs = new Map();            // txHash → PoHTransaction
     this.pendingOut = new Map();     // address → total μPOH locked in mempool
     this.accountPendingNonce = new Map(); // address → highest pending nonce
+    this.spentTxHashes = new Set();  // txHashes already mined on canonical chain
+  }
+
+  setSpentTxHashes(hashes) {
+    this.spentTxHashes = new Set(hashes || []);
+    this._purgeSpent();
+  }
+
+  markSpent(txHashes) {
+    for (const h of txHashes || []) {
+      if (h) this.spentTxHashes.add(h);
+    }
+    this._purgeSpent();
+  }
+
+  _purgeSpent() {
+    for (const hash of [...this.txs.keys()]) {
+      if (this.spentTxHashes.has(hash)) {
+        const tx = this.txs.get(hash);
+        this.txs.delete(hash);
+        if (tx) {
+          const locked = this.pendingOut.get(tx.from) || 0;
+          this.pendingOut.set(tx.from, Math.max(0, locked - tx.amount - tx.fee));
+        }
+      }
+    }
+    this.accountPendingNonce.clear();
+    for (const tx of this.txs.values()) {
+      const cur = this.accountPendingNonce.get(tx.from) ?? 0;
+      if (tx.nonce > cur) this.accountPendingNonce.set(tx.from, tx.nonce);
+    }
   }
 
   // Returns true and adds to pool, or returns { error } string on rejection.
   submit(tx) {
     if (!(tx instanceof PoHTransaction)) tx = PoHTransaction.fromJSON(tx);
 
+    if (this.spentTxHashes.has(tx.txHash)) return { error: 'tx already mined' };
     if (this.txs.has(tx.txHash)) return { error: 'duplicate tx' };
     if (!tx.verify())             return { error: 'invalid signature' };
     if (tx.amount <= 0)           return { error: 'amount must be positive' };
@@ -125,9 +163,10 @@ export class TxMempool {
     }
   }
 
-  // Return txs ordered by fee desc (highest priority first)
+  // Return txs ordered by fee desc (highest priority first), excluding already-mined hashes.
   getPending(limit = 50) {
     return [...this.txs.values()]
+      .filter(tx => !this.spentTxHashes.has(tx.txHash))
       .sort((a, b) => b.fee - a.fee)
       .slice(0, limit);
   }

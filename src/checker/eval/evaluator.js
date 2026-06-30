@@ -36,8 +36,21 @@ function makeSandboxValue(val, lang) {
   return lang === 'js' ? val : Number(val);
 }
 
+const BLOCKED_EXPR = [
+  /require\s*\(/,
+  /import\s*\(/,
+  /process\./,
+  /child_process/,
+  /fs\./,
+  /eval\s*\(/,
+  /Function\s*\(/,
+];
+
 function evaluate(expression, vars, lang = 'js') {
   const jsExpr = normalize(expression, lang);
+  for (const re of BLOCKED_EXPR) {
+    if (re.test(jsExpr)) throw new Error(`Expression blocked by security policy: ${re}`);
+  }
   const sandbox = {};
   for (const [key, val] of Object.entries(vars)) {
     sandbox[key] = Array.isArray(val)

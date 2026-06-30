@@ -1,12 +1,18 @@
 ---
 id: sol_helius_phantom
 version: 1.0.0
-description: Build frontend Solana applications with Phantom Connect SDK and Helius infrastructure. Covers React, React Native, and browser SDK integration, transaction signing via Helius Sender, API key proxying, token gating, NFT minting, crypto payments, real-time updates, and secure frontend architecture.
+description: Build frontend Solana applications with Phantom Connect SDK and Helius infrastructure specifically. Covers React, React Native, and browser SDK integration, transaction signing via Helius Sender, API key proxying, token gating, NFT minting, crypto payments, real-time updates, and secure frontend architecture. Use this skill (not the general sol_helius.md) when the question explicitly combines Helius infra with Phantom wallet/Connect SDK frontend integration.
 triggers:
   - helius phantom
   - helius-phantom
-  - helius
-  - phantom
+  - phantom connect
+  - phantom connect sdk
+  - phantom wallet integration
+  - phantom react
+  - phantom react native
+  - token gating solana
+  - phantom frontend
+  - helius phantom integration
 ---
 
 ## Context

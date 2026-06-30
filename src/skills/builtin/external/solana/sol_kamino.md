@@ -4,6 +4,16 @@ version: 1.0.0
 description: Complete guide for Kamino Finance - Solana's leading DeFi protocol for lending, borrowing, liquidity management, and leverage trading. Covers klend-sdk (lending), kliquidity-sdk (automated liquidity strategies), scope-sdk (oracle aggregator), multiply/leverage operations, vaults, and obligation orders.
 triggers:
   - kamino
+  - kamino finance
+  - klend
+  - kliquidity
+  - kamino lending
+  - kamino vault
+  - kamino multiply
+  - kamino leverage
+  - kamino borrow
+  - obligation order
+  - scope oracle
 ---
 
 ## Context

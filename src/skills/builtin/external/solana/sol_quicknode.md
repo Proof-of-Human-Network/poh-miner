@@ -4,6 +4,17 @@ version: 1.0.0
 description: Quicknode blockchain infrastructure for Solana — RPC endpoints, DAS API (Digital Asset Standard) for NFTs and compressed assets, Yellowstone gRPC streaming, Priority Fee API, Streams (real-time data pipelines), Webhooks, Metis Jupiter Swap integration, IPFS storage, Key-Value Store, Admin API, and x402 pay-per-request RPC. Supports 80+ chains including Ethereum, Polygon, Arbitrum, Base, and more. Use when setting up Solana RPC infrastructure, querying NFTs/tokens/compressed assets via DAS API, building real-time gRPC streams, configuring data pipelines, estimating priority fees, or integrating Jupiter swaps via Metis. Triggers on mentions of Quicknode, qn_ methods, DAS API, getAssetsByOwner, searchAssets, Yellowstone, gRPC, Geyser, Streams, IPFS, Key-Value Store, qnLib, Metis, x402, or Quicknode RPC.
 triggers:
   - quicknode
+  - quick node
+  - das api
+  - yellowstone
+  - grpc streaming
+  - geyser
+  - priority fee api
+  - rpc endpoint
+  - rpc infrastructure
+  - metis swap
+  - qn_
+  - solana rpc provider
 ---
 
 ## Context

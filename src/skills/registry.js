@@ -28,23 +28,15 @@ export class SkillsRegistry {
   }
 
   // Register a skill that has graduated the conviction curve.
-  // code is the run.js source (string); manifest is the parsed manifest object.
+  // Network-delivered code must not be evaluated in the main process — delegate to SkillsManager.
   registerSkill(manifest, code) {
     const skillId = manifest.id;
     if (!skillId) throw new Error('manifest.id required');
-    // Dynamically evaluate the skill code in a minimal scope.
-    // Production: use worker_threads sandbox (Layer 6). For now, Function() is used
-    // only for graduated, on-chain-verified skills.
-    let runFn;
-    try {
-      // eslint-disable-next-line no-new-func
-      runFn = new Function('exports', `${code}; return exports.run || module?.exports?.run;`)({});
-    } catch (e) {
-      throw new Error(`Skill ${skillId} code eval failed: ${e.message}`);
+    if (code) {
+      throw new Error(`Skill ${skillId}: main-process code eval is disabled; use SkillsManager.runSkill (worker sandbox)`);
     }
-    if (typeof runFn !== 'function') throw new Error(`Skill ${skillId} must export async function run()`);
-    this._skills[skillId] = { manifest, run: runFn };
-    console.log(`[SkillsRegistry] Registered skill: ${skillId} v${manifest.version}`);
+    this._skills[skillId] = { manifest, run: null };
+    console.log(`[SkillsRegistry] Registered skill metadata: ${skillId} v${manifest.version}`);
   }
 
   unregisterSkill(skillId) {

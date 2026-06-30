@@ -393,6 +393,7 @@ initRpcUI();
 let currentOnboardingData = {
   pohWallet: null,
   privateKey: null,
+  walletBackupKey: null,
 };
 
 async function checkAndStartOnboarding() {
@@ -606,6 +607,44 @@ window.checkBackupConfirmation = function() {
   }
 };
 
+window.proceedToWalletKeyBackup = async function() {
+  goToStep('wallet-key');
+  const keyEl = document.getElementById('poh-wallet-key');
+  if (keyEl) keyEl.textContent = 'Generating…';
+
+  try {
+    const result = await window.pohMinerAPI.onboarding.generateWalletBackupKey();
+    currentOnboardingData.walletBackupKey = result.walletBackupKey;
+    if (keyEl) keyEl.textContent = result.walletBackupKey;
+  } catch (err) {
+    console.error('Failed to generate wallet backup key:', err);
+    if (keyEl) keyEl.textContent = 'Error — restart the app and try again';
+    alert('Could not generate wallet encryption key. Please restart and try again.');
+  }
+};
+
+window.copyWalletBackupKey = function() {
+  if (!currentOnboardingData.walletBackupKey) return;
+  navigator.clipboard.writeText(currentOnboardingData.walletBackupKey);
+};
+
+window.checkWalletKeyConfirmation = function() {
+  const input = document.getElementById('wallet-key-confirm-input');
+  const btn = document.getElementById('wallet-key-continue-btn');
+  if (!input || !btn) return;
+
+  const expected = 'I have backed up my wallet encryption key';
+  if (input.value.trim() === expected) {
+    btn.disabled = false;
+    btn.classList.remove('bg-zinc-800', 'hover:bg-zinc-700');
+    btn.classList.add('bg-[#22c55e]', 'hover:bg-[#16a34a]', 'text-black');
+  } else {
+    btn.disabled = true;
+    btn.classList.add('bg-zinc-800', 'hover:bg-zinc-700');
+    btn.classList.remove('bg-[#22c55e]', 'hover:bg-[#16a34a]', 'text-black');
+  }
+};
+
 window.saveSolanaAndContinue = function() {
   const input = document.getElementById('solana-address-input').value.trim();
   if (!input) {
@@ -662,6 +701,7 @@ window.completeOnboarding = async function() {
   const payload = {
     pohWallet: currentOnboardingData.pohWallet,
     solanaAddress: currentOnboardingData.solanaAddress,
+    walletBackupKeyConfirmed: !!currentOnboardingData.walletBackupKey,
   };
 
   await window.pohMinerAPI.onboarding.complete(payload);
@@ -1211,30 +1251,6 @@ window.restartApp = async function() {
     await window.pohMinerAPI?.app?.restart();
   } catch (e) {
     alert('Restart failed: ' + e.message);
-  }
-};
-
-window.rebuildBalance = async function() {
-  const btn    = document.getElementById('rebuild-balance-btn');
-  const status = document.getElementById('rebuild-status');
-  if (!btn) return;
-  btn.disabled = true;
-  btn.textContent = 'Rebuilding…';
-  if (status) status.textContent = '';
-  const port = window._minerApiPort || 3456;
-  try {
-    const r = await fetch(`http://localhost:${port}/api/wallet/rebuild`, { method: 'POST' });
-    const data = await r.json();
-    if (r.ok && data.success) {
-      if (status) { status.textContent = `Done — replayed ${data.blocks} blocks`; status.style.color = '#22c55e'; }
-    } else {
-      if (status) { status.textContent = data.error || 'Rebuild failed'; status.style.color = '#ef4444'; }
-    }
-  } catch (e) {
-    if (status) { status.textContent = 'Cannot connect to miner'; status.style.color = '#ef4444'; }
-  } finally {
-    btn.disabled = false;
-    btn.textContent = 'Rebuild Balance from History';
   }
 };
 
@@ -2503,6 +2519,35 @@ async function sendChatMessage() {
           finalizeLastBubble();
           console.warn('[cascade] /chat/ask failed:', e.message);
           const msg = `\`${skillNames}\` failed: ${e.message}`;
+          renderMessage('assistant', msg);
+          chatHistory.push({ role: 'assistant', content: msg });
+          _skillDone = true;
+        }
+      }
+
+      if (!_skillDone && route.type === 'sequence') {
+        // e.g. "create an ERC20 contract and audit it" — backend generates the code first,
+        // then runs the matched skill's reference material against what was generated.
+        renderMessage('assistant', `Generating, then running \`${route.skillId}\`…`, true);
+        _bubbleShown = true;
+        chatAbortController = new AbortController();
+        try {
+          const seqRes = await fetch(`http://localhost:${port}/chat/ask`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message: text, history: chatHistory, private: isPrivate }),
+            signal: AbortSignal.timeout(120000),
+          });
+          finalizeLastBubble();
+          const seqData = await seqRes.json();
+          const reply = seqData.message || `\`${route.skillId}\` returned no result.`;
+          renderMessage('assistant', reply);
+          chatHistory.push({ role: 'assistant', content: reply });
+          _skillDone = true;
+        } catch (e) {
+          finalizeLastBubble();
+          console.warn('[sequence] /chat/ask failed:', e.message);
+          const msg = `Generate-then-${route.skillId} failed: ${e.message}`;
           renderMessage('assistant', msg);
           chatHistory.push({ role: 'assistant', content: msg });
           _skillDone = true;

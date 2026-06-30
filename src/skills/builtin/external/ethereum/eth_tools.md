@@ -1,12 +1,20 @@
 ---
 id: eth_tools
 version: 1.0.0
-description: Current Ethereum development tools, frameworks, libraries, RPCs, and block explorers. What actually works today for building on Ethereum. Includes tool discovery for AI agents — MCPs, abi.ninja, Foundry, Scaffold-ETH 2, Hardhat, and more. Use when setting up a dev environment, choosing tools, or when an agent needs to discover what's available.
+description: Current Ethereum development tools, frameworks, libraries, RPCs, and block explorers. What actually works today for building on Ethereum. Includes tool discovery for AI agents — MCPs, abi.ninja, Foundry, Scaffold-ETH 2, Hardhat, and more. Use when setting up a dev environment, choosing tools, or when an agent needs to discover what's available. Distinct from eth_orchestration (the phase-by-phase build process) — this skill is a catalog of which tools/frameworks/RPCs/explorers to use, not the sequencing of a build.
 triggers:
   - ethereum dev tools
   - foundry hardhat
   - scaffold-eth 2
   - ethereum rpc tools
+  - block explorer
+  - abi.ninja
+  - blockscout
+  - etherscan
+  - which rpc to use
+  - mcp ethereum
+  - dev environment setup ethereum
+  - what tools should i use
 ---
 
 ## Context

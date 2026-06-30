@@ -1,12 +1,18 @@
 ---
 id: sol_ranger_finance
 version: 1.0.0
-description: Ranger Finance SDK for building perpetual futures trading applications on Solana. The first Solana Perps Aggregator - aggregates liquidity across multiple perp protocols (Drift, Flash, Adrena, Jupiter). Use when integrating perps trading, smart order routing, position management, or building AI trading agents.
+description: Ranger Finance SDK for building perpetual futures trading applications on Solana. The first Solana Perps Aggregator - aggregates liquidity across multiple perp protocols (Drift, Flash, Adrena, Jupiter). Use when integrating perps trading, smart order routing, position management, or building AI trading agents. Distinct from Phoenix, which is a single perps exchange rather than an aggregator across venues.
 triggers:
   - ranger finance
   - ranger-finance
   - ranger
-  - finance
+  - perps aggregator
+  - smart order routing
+  - perps trading solana
+  - ranger sdk
+  - aggregate perp liquidity
+  - drift flash adrena
+  - ai trading agent perps
 ---
 
 ## Context

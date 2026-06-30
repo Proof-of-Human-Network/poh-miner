@@ -15,6 +15,15 @@ triggers:
   - jupiter-send
   - jupiter-studio
   - jupiter-lock
+  - jupiter swap
+  - jupiter api
+  - jup swap
+  - jupiter aggregator
+  - jupiter exchange
+  - limit order solana
+  - dca solana
+  - jupiter dca
+  - jupiter price api
 ---
 
 ## Context

@@ -7,6 +7,14 @@ triggers:
   - ethereum gas fees
   - transaction cost ethereum
   - is ethereum expensive
+  - gwei
+  - base fee
+  - gas estimate
+  - how much does a transaction cost
+  - eip-1559
+  - priority fee
+  - gas limit
+  - mainnet vs l2 cost
 ---
 
 ## Context

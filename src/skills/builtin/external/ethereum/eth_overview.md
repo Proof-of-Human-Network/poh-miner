@@ -1,12 +1,20 @@
 ---
 id: eth_overview
 version: 1.0.0
-description: Use when a request involves Ethereum, the EVM, or blockchain systems. Applies to building, auditing, deploying, or interacting with smart contracts, dApps, wallets, or DeFi protocols. Covers Solidity development, contract addresses, token standards (ERC-20, ERC-721, ERC-4626, etc.), Layer 2 networks (Base, Arbitrum, Optimism, zkSync, Polygon), and integrations with DeFi protocols such as Uniswap, Aave, and Curve. Includes topics such as gas costs, contract decimals, oracle safety, reentrancy, MEV, bridging, wallets, querying data from onchain, production deployment, and protocol evolution (EIP lifecycle, fork tracking, upcoming changes).
+description: Use when a request involves Ethereum, the EVM, or blockchain systems. Applies to building, auditing, deploying, or interacting with smart contracts, dApps, wallets, or DeFi protocols. Covers Solidity development, contract addresses, token standards (ERC-20, ERC-721, ERC-4626, etc.), Layer 2 networks (Base, Arbitrum, Optimism, zkSync, Polygon), and integrations with DeFi protocols such as Uniswap, Aave, and Curve. Includes topics such as gas costs, contract decimals, oracle safety, reentrancy, MEV, bridging, wallets, querying data from onchain, production deployment, and protocol evolution (EIP lifecycle, fork tracking, upcoming changes). This is the top-level topic index that routes to all other eth_ skills — use it for broad or ambiguous Ethereum questions, not for the underlying mental models (see eth_concepts) or for the pitch on choosing Ethereum (see eth_why).
 triggers:
   - ethereum overview
   - ethskills
   - building on ethereum
   - ethereum development
+  - ethereum
+  - evm
+  - solidity
+  - smart contract
+  - blockchain development
+  - what skills are available
+  - ethereum topic index
+  - getting started with ethereum
 ---
 
 ## Context

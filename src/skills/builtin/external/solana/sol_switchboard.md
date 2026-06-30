@@ -1,9 +1,18 @@
 ---
 id: sol_switchboard
 version: 1.0.0
-description: Complete Switchboard Oracle Protocol SDK for Solana - the permissionless oracle solution for price feeds, on-demand data, VRF randomness, and real-time streaming via Surge. Covers TypeScript SDK, Rust integration, Oracle Quotes, and all Switchboard tools.
+description: Complete Switchboard Oracle Protocol SDK for Solana - the permissionless oracle solution for price feeds, on-demand data, VRF randomness, and real-time streaming via Surge. Covers TypeScript SDK, Rust integration, Oracle Quotes, and all Switchboard tools. Use Switchboard specifically (not Pyth) when the user names Switchboard, VRF randomness, Oracle Quotes, or Surge streaming.
 triggers:
   - switchboard
+  - switchboard oracle
+  - vrf
+  - vrf randomness
+  - oracle quotes
+  - surge streaming
+  - on-demand oracle
+  - permissionless oracle
+  - random number solana
+  - switchboard sdk
 ---
 
 ## Context

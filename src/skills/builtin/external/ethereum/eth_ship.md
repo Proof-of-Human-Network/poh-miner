@@ -6,6 +6,13 @@ triggers:
   - ship ethereum dapp
   - deploy ethereum dapp
   - ethereum dapp idea to production
+  - build a dapp
+  - i want to build on ethereum
+  - dapp idea
+  - where do i start ethereum
+  - plan an ethereum project
+  - new ethereum project
+  - how many contracts do i need
 ---
 
 ## Context

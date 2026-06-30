@@ -4,6 +4,14 @@ version: 1.0.0
 description: Complete guide for Marginfi - Solana's decentralized lending protocol for lending, borrowing, leveraged positions(looping) and flash loans. Covers account creation, deposits, borrows, repayments, withdrawals, flash loans, and leveraged positions using the @mrgnlabs/marginfi-client-v2 SDK.
 triggers:
   - marginfi
+  - mrgn
+  - marginfi lending
+  - marginfi flash loan
+  - marginfi borrow
+  - marginfi deposit
+  - looping solana
+  - mrgnlabs sdk
+  - marginfi leveraged position
 ---
 
 ## Context

@@ -1,12 +1,17 @@
 ---
 id: sol_helius_dflow
 version: 1.0.0
-description: Build Solana trading applications combining DFlow trading APIs with Helius infrastructure. Covers spot swaps (imperative and declarative), prediction markets, real-time market streaming, Proof KYC, transaction submission via Sender, fee optimization, shred-level streaming via LaserStream, and wallet intelligence.
+description: Build Solana trading applications combining DFlow trading APIs with Helius infrastructure specifically. Covers spot swaps (imperative and declarative), prediction markets, real-time market streaming, Proof KYC, transaction submission via Sender, fee optimization, shred-level streaming via LaserStream, and wallet intelligence. Use this skill (not the general sol_helius.md or sol_dflow.md) when the question explicitly combines Helius infra with DFlow trading.
 triggers:
   - helius dflow
   - helius-dflow
-  - helius
-  - dflow
+  - helius + dflow
+  - dflow with helius
+  - dflow proof kyc
+  - dflow laserstream
+  - dflow sender
+  - helius dflow integration
+  - dflow shred streaming
 ---
 
 ## Context

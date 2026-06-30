@@ -1,9 +1,17 @@
 ---
 id: sol_debridge
 version: 1.0.0
-description: Complete deBridge Protocol SDK for building cross-chain bridges, message passing, and token transfers on Solana. Use when building cross-chain applications, bridging assets between Solana and EVM chains, or implementing trustless external calls.
+description: Complete deBridge Protocol SDK for building cross-chain bridges, message passing, and token transfers on Solana. Use when building cross-chain applications, bridging assets between Solana and EVM chains, or implementing trustless external calls. Distinct from sol_lifi.md (LI.FI aggregator) — use this skill specifically for the deBridge SDK/DLN.
 triggers:
   - debridge
+  - debridge protocol
+  - dln
+  - cross-chain bridge solana
+  - bridge solana to evm
+  - cross-chain message passing
+  - trustless external call
+  - bridge assets solana
+  - debridge finance
 ---
 
 ## Context

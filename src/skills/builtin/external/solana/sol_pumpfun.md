@@ -4,6 +4,15 @@ version: 1.0.0
 description: Complete PumpFun Protocol guide for building token launches, bonding curves, and AMM integrations on Solana. Covers Pump Program (token creation, buy/sell on bonding curves), PumpSwap AMM (liquidity pools, swaps), fee structures, creator fees, and SDK integration.
 triggers:
   - pumpfun
+  - pump.fun
+  - pump fun
+  - bonding curve
+  - pumpswap
+  - pump program
+  - token launch solana
+  - memecoin launch
+  - creator fees
+  - buy sell bonding curve
 ---
 
 ## Context

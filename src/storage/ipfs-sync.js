@@ -76,8 +76,8 @@ export class IPFSSync {
       } catch { /* try next bootnode */ }
     }
     // Bootnode unreachable — return cached CIDs from disk
-    if (this.latestCIDs.peers) {
-      console.log('[IPFSSync] Bootnode unreachable — using cached CIDs for peer discovery');
+    if (this.latestCIDs.peers || this.latestCIDs.chain) {
+      console.log('[IPFSSync] Bootnode unreachable — using cached CIDs for peer discovery and chain catch-up');
     }
     return this.latestCIDs;
   }

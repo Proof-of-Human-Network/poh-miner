@@ -7,6 +7,12 @@ triggers:
   - solidity unit test
   - fuzz testing
   - fork testing ethereum
+  - forge test
+  - invariant testing
+  - write tests for contract
+  - test smart contract
+  - solidity test coverage
+  - mock contract testing
 ---
 
 ## Context

@@ -4,6 +4,13 @@ version: 1.0.0
 description: Lavarage Protocol — leveraged trading on Solana for any SPL token. Open long/short positions on crypto, memecoins, RWAs (stocks like OPENAI, SPACEX), commodities (gold), and hundreds of other tokens with up to 12x leverage. Permissionless markets — if a token has a liquidity pool, it can be traded with leverage.
 triggers:
   - lavarage
+  - lavarage protocol
+  - leveraged trading solana
+  - long short position solana
+  - memecoin leverage
+  - permissionless leverage
+  - leverage any spl token
+  - 12x leverage solana
 ---
 
 ## Context

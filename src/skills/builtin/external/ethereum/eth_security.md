@@ -1,12 +1,21 @@
 ---
 id: eth_security
 version: 1.0.0
-description: Solidity security patterns, common vulnerabilities, and pre-deploy audit checklist. The specific code patterns that prevent real losses — not just warnings, but defensive implementations. Use before deploying any contract, when reviewing code, or when building anything that holds or moves value.
+description: Solidity security patterns, common vulnerabilities, and pre-deploy audit checklist. The specific code patterns that prevent real losses — not just warnings, but defensive implementations. Use before deploying any contract, when reviewing code, or when building anything that holds or moves value. Different from eth_audit (which systematically audits a contract you didn't write via parallel sub-agents and a formal findings report) — this skill teaches the defensive coding patterns to apply while writing or reviewing your own contract.
 triggers:
   - solidity security
   - smart contract vulnerability
   - reentrancy
   - ethereum audit checklist
+  - oracle manipulation
+  - access control solidity
+  - approval exploit
+  - flash loan attack
+  - secure my contract
+  - defensive solidity patterns
+  - reentrancy guard
+  - integer overflow solidity
+  - mev protection
 ---
 
 ## Context

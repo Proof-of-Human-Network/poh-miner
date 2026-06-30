@@ -4,6 +4,13 @@ version: 1.0.0
 description: Build and integrate Manifest DEX on Solana using the Manifest SDK. Covers market reads, order placement, wrapper and global account setup, reverse and global order types, and frontend integration patterns.
 triggers:
   - manifest
+  - manifest dex
+  - manifest sdk
+  - manifest order placement
+  - manifest market
+  - global order solana
+  - reverse order type
+  - manifest wrapper account
 ---
 
 ## Context

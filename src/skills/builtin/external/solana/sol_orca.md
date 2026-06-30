@@ -1,9 +1,19 @@
 ---
 id: sol_orca
 version: 1.0.0
-description: Complete guide for Orca - Solana's leading concentrated liquidity AMM (CLMM). Covers Whirlpools SDK for swaps, liquidity provision, pool creation, position management, and fee harvesting on Solana and Eclipse networks.
+description: Complete guide for Orca - Solana's leading concentrated liquidity AMM (CLMM). Covers Whirlpools SDK for swaps, liquidity provision, pool creation, position management, and fee harvesting on Solana and Eclipse networks — distinct from Meteora's DLMM/DAMM pools and Raydium's AMM/CLMM despite similar liquidity pool concepts.
 triggers:
   - orca
+  - whirlpool
+  - whirlpools
+  - orca swap
+  - orca pool
+  - orca liquidity
+  - concentrated liquidity
+  - clmm
+  - fee harvesting
+  - eclipse network
+  - orca sdk
 ---
 
 ## Context

@@ -124,7 +124,7 @@ Each block contains:
 | New blocks | P2P gossip `new-block` (flood-fill, TTL=4) |
 | Pending transactions | P2P gossip `new-tx` |
 | Node status (methodsHash, region, load) | P2P gossip `node-status` |
-| Chain history (cold start) | HTTP pull from bootnode `/chain/blocks` |
+| Chain history (cold start) | HTTP pull from bootnode `/chain/blocks` + IPFS snapshot fallback |
 | Verified signals (canonical set + hash) | HTTP from proofofhuman.ge + IPFS fallback |
 | Brain feedback events | Peer-to-peer push + bootnode `/brain/events` |
 | Signal weight updates | Same as brain feedback |
@@ -273,7 +273,7 @@ Miners automatically pin data to IPFS and share CIDs via the bootnode.
 | Own peer record (host:port signed) | After every bootnode registration | `selfPeer` |
 | Peer directory (all known peers) | Bootnode pins every 60 s after changes | `peers` |
 
-CIDs are cached locally in `~/.poh-miner/ipfs_cid_cache.json`. If the bootnode is unreachable at startup, the node uses cached CIDs to discover peers from IPFS directly.
+CIDs are cached locally in `~/.poh-miner/ipfs_cid_cache.json`. If every bootnode is unreachable at startup, the node uses cached CIDs to discover peers from IPFS and to pull chain snapshots for catch-up — not just for peer discovery.
 
 Configure a pinning service via env vars:
 

@@ -4,6 +4,15 @@ version: 1.0.0
 description: Complete CoinGecko Solana API integration for token prices, DEX pool data, OHLCV charts, trades, and market analytics. Use for building trading bots, portfolio trackers, price feeds, and on-chain data applications.
 triggers:
   - coingecko
+  - coingecko api
+  - gecko terminal
+  - geckoterminal
+  - dex pool data
+  - market cap solana
+  - coin price api
+  - token market analytics
+  - price feed api
+  - coingecko ohlcv
 ---
 
 ## Context

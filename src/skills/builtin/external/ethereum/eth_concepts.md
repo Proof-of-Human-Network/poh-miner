@@ -1,12 +1,21 @@
 ---
 id: eth_concepts
 version: 1.0.0
-description: The essential mental models for building onchain — focused on what LLMs get wrong and what humans need explained. "Nothing is automatic" and "incentives are everything" are the core messages. Use when your human is new to onchain development, when they're designing a system, or when they ask "how does this actually work?" Also use when YOU are designing a system — the state machine + incentive framework catches design mistakes before they become dead code.
+description: The essential mental models for building onchain — focused on what LLMs get wrong and what humans need explained. "Nothing is automatic" and "incentives are everything" are the core messages. Use when your human is new to onchain development, when they're designing a system, or when they ask "how does this actually work?" Also use when YOU are designing a system — the state machine + incentive framework catches design mistakes before they become dead code. Distinct from eth_overview (a topic index/router) and eth_why (the pitch for choosing Ethereum) — this skill is for explaining or applying the underlying mental models (state machines, incentive design, decentralization tradeoffs) themselves.
 triggers:
   - ethereum concepts
   - onchain mental model
   - how ethereum works
   - state machine ethereum
+  - nothing is automatic
+  - incentive design
+  - who pays for this
+  - decentralization tradeoffs
+  - crops framework
+  - smart contracts are not automatic
+  - explain blockchain to a beginner
+  - new to onchain
+  - design an onchain system
 ---
 
 ## Context

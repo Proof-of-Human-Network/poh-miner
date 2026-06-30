@@ -4,6 +4,17 @@ version: 1.0.0
 description: Complete Birdeye API integration for real-time DeFi data across Solana and 15 other chains. Use for token prices, OHLCV charts, market discovery, on-chain trader intelligence, holder analysis, wallet portfolio & P&L, and WebSocket streams for live prices and whale alerts.
 triggers:
   - birdeye
+  - birdeye api
+  - token price solana
+  - ohlcv
+  - whale alert
+  - holder analysis
+  - trader intelligence
+  - wallet portfolio pnl
+  - token market data
+  - price chart solana
+  - new token discovery
+  - birdeye websocket
 ---
 
 ## Context

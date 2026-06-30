@@ -55,8 +55,14 @@ export class PohBlock {
       stateTransitions: this.stateTransitions,
       transactions: this.transactions,
       coinbaseReward: this.coinbaseReward ? {
+        blockHeight: this.coinbaseReward.blockHeight,
         totalNewSupply: this.coinbaseReward.totalNewSupply,
         proposerReward: this.coinbaseReward.proposerReward,
+        workerRewards: (this.coinbaseReward.workerRewards || []).map(w => ({
+          workerId: w.workerId,
+          amount: w.amount,
+          workProofHash: w.workProofHash,
+        })),
       } : null,
       stateRoot: this.stateRoot,
       brainStateRoot: this.brainStateRoot,

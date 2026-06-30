@@ -91,9 +91,17 @@ function filterApplicableSignals(liveSignals, chains) {
  * Validates that a ScanResult represents honest, full work.
  */
 export async function validateResultWork(result, request = {}) {
-  // Skill jobs return arbitrary JSON — signal-count validation doesn't apply
+  // Skill jobs return arbitrary JSON — still require timing sanity and reject sim hashes
   if (result.verdict === 'SKILL_RESULT') {
-    return { isValid: true, errors: [], signalsEvaluated: 0, liveCount: 0, fraction: 1 };
+    const errors = [];
+    if (result.methodsHash && String(result.methodsHash).startsWith('sim-')) {
+      errors.push('sim- methodsHash not accepted for skill results');
+    }
+    const timeMs = result.computationTimeMs || 0;
+    if (timeMs < 1) {
+      errors.push('Skill result missing computation time');
+    }
+    return { isValid: errors.length === 0, errors, signalsEvaluated: 0, liveCount: 0, fraction: 1 };
   }
 
   const manager = await getManager();

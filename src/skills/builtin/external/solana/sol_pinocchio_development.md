@@ -6,7 +6,14 @@ triggers:
   - pinocchio development
   - pinocchio-development
   - pinocchio
-  - development
+  - zero-copy framework
+  - zero-dependency framework
+  - solana program optimization
+  - compute unit reduction
+  - account validation cpi
+  - anchor migration
+  - native solana program
+  - pinocchio framework
 ---
 
 ## Context

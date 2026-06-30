@@ -106,6 +106,56 @@ describe('Fix 1 — P2P Gossip', () => {
     expect(sentTo).toContain('other');
     gossip.destroy();
   });
+
+  it('rejects unsigned envelopes when signatures are required', async () => {
+    const { P2PGossip } = await import('../src/network/p2p-gossip.js');
+    const { Wallet } = await import('../src/wallet/wallet.js');
+    const wallet = Wallet.generate();
+    const gossip = new P2PGossip('node-A', () => [], () => [], {
+      getIdentityWallet: () => wallet,
+      requireSignatures: true,
+    });
+    const received = [];
+    gossip.subscribe('test', (msg) => received.push(msg));
+
+    await gossip.receive({ id: 'unsigned', topic: 'test', message: 'x', from: 'node-B', ts: Date.now(), ttl: 2, path: [] });
+    expect(received).toHaveLength(0);
+    gossip.destroy();
+  });
+
+  it('accepts signed envelopes from peers', async () => {
+    const { P2PGossip } = await import('../src/network/p2p-gossip.js');
+    const { Wallet } = await import('../src/wallet/wallet.js');
+    const peer = Wallet.generate();
+    const gossip = new P2PGossip('node-A', () => [], () => [], {
+      requireSignatures: true,
+    });
+    const received = [];
+    gossip.subscribe('test', (msg) => received.push(msg));
+
+    const envelope = {
+      id: 'signed-1',
+      topic: 'test',
+      message: { ok: true },
+      from: peer.address,
+      ts: Date.now(),
+      ttl: 2,
+      path: [],
+    };
+    envelope.signature = peer.sign(JSON.stringify({
+      id: envelope.id,
+      topic: envelope.topic,
+      message: envelope.message,
+      from: envelope.from,
+      ts: envelope.ts,
+    }));
+    envelope.signingPublicKey = peer.signingPublicKey;
+
+    await gossip.receive(envelope);
+    expect(received).toHaveLength(1);
+    expect(received[0].ok).toBe(true);
+    gossip.destroy();
+  });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -276,6 +326,29 @@ describe('Fix 4 — Transactions & Double-Spend Protection', () => {
     expect(wm.applyTransaction(tx)).toMatch(/signature/);
   });
 
+  it('rejects a forged amount reusing a validly-signed txHash+signature from a smaller tx', () => {
+    const legit = new PoHTransaction({ from: alice.address, to: bob.address, amount: 1, fee: 0, nonce: 1, timestamp: Date.now() });
+    legit.sign(alice);
+    const forged = { ...legit, amount: 500_000 }; // txHash/signature reused, amount inflated
+    expect(wm.applyTransaction(forged)).toMatch(/txHash/);
+    expect(wm.getBalance(alice.address)).toBe(INITIAL); // untouched
+  });
+
+  it('rejects a forged recipient reusing a validly-signed txHash+signature', () => {
+    const mallory = Wallet.generate();
+    const legit = new PoHTransaction({ from: alice.address, to: bob.address, amount: 1, fee: 0, nonce: 1, timestamp: Date.now() });
+    legit.sign(alice);
+    const forged = { ...legit, to: mallory.address };
+    expect(wm.applyTransaction(forged)).toMatch(/txHash/);
+  });
+
+  it('PoHTransaction.verify() rejects a forged amount at the mempool entry point', () => {
+    const legit = new PoHTransaction({ from: alice.address, to: bob.address, amount: 1, fee: 0, nonce: 1, timestamp: Date.now() });
+    legit.sign(alice);
+    const forged = PoHTransaction.fromJSON({ ...legit, amount: 999_000 });
+    expect(forged.verify()).toBe(false);
+  });
+
   it('TxMempool prevents double-spend via pendingOut lock', () => {
     const mempool = new TxMempool(wm);
 
@@ -421,6 +494,65 @@ describe('Fix 5 — Proof of Work', () => {
     const b1 = await makeBlock({ nonce: 1 });
     const b2 = await makeBlock({ nonce: 2 });
     expect(b1.getHashSync()).not.toBe(b2.getHashSync());
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Block validation — reject fake chainWork / difficulty claims
+// ─────────────────────────────────────────────────────────────────────────────
+
+describe('Block validation — anti-spoof chainWork', () => {
+  it('rejects block with inflated chainWork and no valid PoW', async () => {
+    const { validateBlock } = await import('../src/consensus/block-validator.js');
+    const parent = await makeBlock({ height: 0, difficulty: 5, chainWork: '20', nonce: 0 });
+    parent.blockHash = parent.getHashSync();
+    const attack = await makeBlock({
+      height: 1,
+      previousHash: parent.blockHash,
+      difficulty: 20,
+      chainWork: 'f'.repeat(64),
+      nonce: 0,
+    });
+    const check = validateBlock(attack, { parent, chainPrefix: [parent] });
+    expect(check.valid).toBe(false);
+    expect(check.reason).toMatch(/proof of work|difficulty/);
+    // Spoofed chainWork must not be overwritten when validation fails
+    expect(attack.chainWork).toBe('f'.repeat(64));
+  });
+
+  it('recomputes chainWork from parent instead of trusting gossip', async () => {
+    const { validateBlock } = await import('../src/consensus/block-validator.js');
+    const { computeChainWork } = await import('../src/consensus/chain-selection.js');
+    const parent = await makeBlock({ height: 0, difficulty: 5, chainWork: computeChainWork('0', 5), nonce: 0 });
+    parent.blockHash = parent.getHashSync();
+    const block = await makeBlock({
+      height: 1,
+      previousHash: parent.blockHash,
+      difficulty: 5,
+      chainWork: 'deadbeef',
+      nonce: 0,
+    });
+    block.meetsDifficultySync = () => true;
+    const check = validateBlock(block, { parent, chainPrefix: [parent] });
+    expect(check.valid).toBe(true);
+    expect(block.chainWork).toBe(computeChainWork(parent.chainWork, 5));
+    expect(block.chainWork).not.toBe('deadbeef');
+  });
+
+  it('rejects difficulty claim that does not match parent chain adjustment', async () => {
+    const { validateBlock } = await import('../src/consensus/block-validator.js');
+    const parent = await makeBlock({ height: 0, difficulty: 5, chainWork: '20', nonce: 0 });
+    parent.blockHash = parent.getHashSync();
+    const block = await makeBlock({
+      height: 1,
+      previousHash: parent.blockHash,
+      difficulty: 20,
+      nonce: 0,
+    });
+    block.meetsDifficultySync = () => true;
+    const check = validateBlock(block, { parent, chainPrefix: [parent] });
+    expect(check.valid).toBe(false);
+    expect(check.reason).toMatch(/difficulty mismatch/);
   });
 });
 

@@ -4,6 +4,13 @@ version: 1.0.0
 description: Complete guide for Lulo - Solana's premier lending aggregator. Covers API integration for deposits, withdrawals, balance queries, Protected/Boosted deposits, Custom deposits, and automated yield optimization across Kamino, Drift, MarginFi, and Jupiter.
 triggers:
   - lulo
+  - lulo finance
+  - lending aggregator solana
+  - yield optimization solana
+  - protected deposit
+  - boosted deposit
+  - lulo api
+  - automated yield solana
 ---
 
 ## Context

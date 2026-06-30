@@ -1,9 +1,21 @@
 ---
 id: sol_arcium
 version: 1.0.0
-description: Build and debug encrypted Solana applications with Arcium — data stays private during computation, no single party sees it. Use when writing Arcis circuits (#[encrypted], #[instruction]), wiring Anchor programs with init/queue_computation/callback flows, choosing Shared vs Mxe encrypted state, encrypting inputs with @arcium-hq/client (RescueCipher, x25519), or debugging ArgBuilder ordering, nonce, callback, or computation finalization failures. Covers dark pools, sealed-bid auctions, encrypted voting, hidden game state, confidential DeFi, secure randomness, and threshold signing. Also use for getting started with your first Arcium app.
+description: Build and debug encrypted Solana applications with Arcium — MPC-based confidential computing where data stays private during computation and no single party sees it. Use when writing Arcis circuits (#[encrypted], #[instruction]), wiring Anchor programs with init/queue_computation/callback flows, choosing Shared vs Mxe encrypted state, encrypting inputs with @arcium-hq/client (RescueCipher, x25519), or debugging ArgBuilder ordering, nonce, callback, or computation finalization failures. Covers dark pools, sealed-bid auctions, encrypted voting, hidden game state, confidential DeFi, secure randomness, and threshold signing. Also use for getting started with your first Arcium app. Distinct from sol_inco.md (TEE-based confidentiality) and sol_light_protocol.md (ZK compression, not encryption).
 triggers:
   - arcium
+  - arcis
+  - mpc solana
+  - multi-party computation solana
+  - encrypted computation
+  - confidential computing solana
+  - arcium network
+  - dark pool solana
+  - sealed-bid auction solana
+  - encrypted voting solana
+  - mxe
+  - arcium circuit
+  - queue_computation
 ---
 
 ## Context

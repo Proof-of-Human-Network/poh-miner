@@ -1,11 +1,18 @@
 ---
 id: eth_orchestration
 version: 1.0.0
-description: How an AI agent plans, builds, and deploys a complete Ethereum dApp. The three-phase build system for Scaffold-ETH 2 projects. Use when building a full application on Ethereum — from contracts to frontend to production deployment on IPFS.
+description: How an AI agent plans, builds, and deploys a complete Ethereum dApp. The three-phase build system for Scaffold-ETH 2 projects. Use when building a full application on Ethereum — from contracts to frontend to production deployment on IPFS. Distinct from eth_tools (what tools/frameworks exist and how to set them up) — this skill is the phase-by-phase process/sequencing for orchestrating a full build with those tools.
 triggers:
   - ethereum agent orchestration
   - scaffold-eth build system
   - ai agent ethereum dapp
+  - build full dapp
+  - three phase build
+  - contracts then frontend
+  - se2 build process
+  - deployedcontracts.ts
+  - externalcontracts.ts
+  - build plan ethereum app
 ---
 
 ## Context

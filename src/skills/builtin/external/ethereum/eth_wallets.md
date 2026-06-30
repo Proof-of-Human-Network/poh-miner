@@ -8,6 +8,14 @@ triggers:
   - account abstraction
   - safe multisig
   - eoa wallet
+  - private key handling
+  - sign a message
+  - send a transaction
+  - eip-7702
+  - multisig wallet
+  - seed phrase safety
+  - manage funds ethereum
+  - wallet creation
 ---
 
 ## Context

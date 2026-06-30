@@ -7,7 +7,7 @@
  * SECURITY BOUNDARIES:
  *  - Network: fetch is patched to enforce allowedEndpoints whitelist
  *  - Compute: hard-killed after 15s (timeout set by SkillsManager)
- *  - Process: process.exit / process.env / require are shadowed to no-ops
+ *  - Process: process/require/import are blocked; globalThis is frozen
  *  - Filesystem: fs access throws because require is blocked
  *  - Output: only plain JSON; no postMessage of functions/streams
  */
@@ -15,12 +15,53 @@ import { workerData, parentPort } from 'worker_threads';
 
 const { code, input, config, maxBudget = 0, allowedEndpoints = [] } = workerData;
 
+// ── Block dangerous globals before any skill code runs ────────────────────────
+const _blocked = () => { throw new Error('not allowed in skill sandbox'); };
+const _safeProcess = {
+  env: {},
+  exit: () => { throw new Error('process.exit not allowed in skill'); },
+  cwd: () => '/',
+  versions: {},
+  platform: 'sandbox',
+  arch: 'sandbox',
+};
+const require = _blocked;
+const __dirname  = '/';
+const __filename = '/skill.js';
+
+// Shadow Function constructor to block constructor-chain escapes
+const _OrigFunction = Function;
+// eslint-disable-next-line no-shadow
+const Function = function (...args) {
+  throw new Error('Function constructor not allowed in skill sandbox');
+};
+Function.prototype = _OrigFunction.prototype;
+
+// Block dynamic import
+const dynamicImport = async () => { throw new Error('dynamic import not allowed in skill sandbox'); };
+globalThis.import = dynamicImport;
+globalThis.require = require;
+globalThis.process = _safeProcess;
+globalThis.Function = Function;
+
 // ── Patch fetch to enforce allowedEndpoints and count calls ───────────────────
 let _fetchCallCount = 0;
 const _origFetch = globalThis.fetch;
+const BLOCKED_FETCH_HOSTS = new Set(['localhost', '127.0.0.1', '0.0.0.0', '::1', '[::1]']);
+
 globalThis.fetch = async (url, opts) => {
-  const host = new URL(url).hostname;
-  if (allowedEndpoints.length && !allowedEndpoints.includes('*')) {
+  const parsed = new URL(url);
+  const host = parsed.hostname.toLowerCase();
+  if (BLOCKED_FETCH_HOSTS.has(host)) {
+    throw new Error(`Skill fetch blocked: loopback host ${host}`);
+  }
+  if (/^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(host)) {
+    throw new Error(`Skill fetch blocked: private network host ${host}`);
+  }
+  if (!allowedEndpoints.length) {
+    throw new Error(`Skill fetch blocked: no allowedEndpoints configured for this skill`);
+  }
+  if (!allowedEndpoints.includes('*')) {
     if (!allowedEndpoints.some(ep => host === ep || host.endsWith('.' + ep))) {
       throw new Error(`Skill fetch blocked: ${host} not in allowedEndpoints`);
     }
@@ -29,24 +70,14 @@ globalThis.fetch = async (url, opts) => {
   return _origFetch(url, opts);
 };
 
-// ── Block dangerous globals ────────────────────────────────────────────────────
-// Shadow process.exit so a skill can't crash the worker supervisor
-const _safeProcess = {
-  env: {},           // empty — skills get no env vars
-  exit: () => { throw new Error('process.exit not allowed in skill'); },
-  cwd: () => '/',
-};
-const require = () => { throw new Error('require not allowed in skill sandbox'); };
-const __dirname  = '/';
-const __filename = '/skill.js';
+// Freeze globalThis after patching — prevents skill code from restoring escapes
+Object.freeze(globalThis.process);
+Object.freeze(_safeProcess);
 
 // ── Evaluate skill code ────────────────────────────────────────────────────────
 try {
   const mod = { exports: {} };
-  // Skills receive only: module, exports, fetch (patched), console, JSON, Math,
-  // Promise, setTimeout, clearTimeout. Everything else is shadowed above.
-  // eslint-disable-next-line no-new-func
-  const factory = new Function(
+  const factory = _OrigFunction(
     'module', 'exports',
     'require', 'process', '__dirname', '__filename',
     code
@@ -60,7 +91,6 @@ try {
   const result = await runFn(input, { ...config, maxBudget });
   const _computeMs = Date.now() - _start;
 
-  // Sanitize output — only allow plain serialisable values
   const safe = JSON.parse(JSON.stringify(result ?? null));
   parentPort.postMessage({ result: safe, meta: { fetchCalls: _fetchCallCount, computeMs: _computeMs } });
 } catch (err) {

@@ -4,6 +4,13 @@ version: 1.0.0
 description: Complete guide for MagicBlock Ephemeral Rollups - high-performance Solana execution with sub-10ms latency, gasless transactions, and Solana Plugins. Use when building real-time games, high-frequency trading, or any application requiring ultra-low latency on Solana.
 triggers:
   - magicblock
+  - ephemeral rollup
+  - sub-10ms latency solana
+  - solana plugins
+  - real-time games solana
+  - high-frequency trading solana
+  - low latency solana execution
+  - magicblock rollup
 ---
 
 ## Context

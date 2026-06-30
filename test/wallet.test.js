@@ -20,4 +20,12 @@ describe('Wallet', () => {
     expect(restored.privateKey).toBe(original.privateKey);
     expect(restored.publicKey).toBe(original.publicKey);
   });
+
+  it('derives a canonical address from a signing public key', () => {
+    const wallet = Wallet.generate();
+    const derived = Wallet.deriveAddressFromSigningKey(wallet.signingPublicKey);
+    expect(derived).toMatch(/^poh[a-f0-9]{40}$/);
+    expect(Wallet.isAddressBoundToSigningKey(derived, wallet.signingPublicKey)).toBe(true);
+    expect(Wallet.isAddressBoundToSigningKey(wallet.address, wallet.signingPublicKey)).toBe(false);
+  });
 });

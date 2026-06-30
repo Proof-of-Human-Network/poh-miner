@@ -1,10 +1,18 @@
 ---
 id: sol_solana_agent_kit
 version: 1.0.0
-description: Comprehensive guide for building AI agents that interact with Solana blockchain using SendAI's Solana Agent Kit. Covers 60+ actions, LangChain/Vercel AI integration, MCP server setup, and autonomous agent patterns.
+description: Comprehensive guide for building AI agents that interact with Solana blockchain using SendAI's Solana Agent Kit. Covers 60+ actions, LangChain/Vercel AI integration, MCP server setup, and autonomous agent patterns. This is SendAI's AI-agent toolkit (the package "solana-agent-kit") — a distinct product from @solana/kit (the Anza low-level RPC/transaction SDK, see sol_solana_kit) despite the similar name; use this one specifically for building autonomous AI agents.
 triggers:
   - solana agent kit
   - solana-agent-kit
+  - sendai
+  - ai agent solana
+  - autonomous agent solana
+  - langchain solana
+  - vercel ai solana
+  - agent kit mcp
+  - solana ai agent
+  - 60+ actions
 ---
 
 ## Context

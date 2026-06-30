@@ -1,11 +1,17 @@
 ---
 id: eth_qa
 version: 1.0.0
-description: Pre-ship audit checklist for Ethereum dApps built with Scaffold-ETH 2. Give this to a separate reviewer agent (or fresh context) AFTER the build is complete. Use this skill whenever you are finalizing a dApp built with Scaffold-ETH 2.
+description: Pre-ship audit checklist for Ethereum dApps built with Scaffold-ETH 2. Give this to a separate reviewer agent (or fresh context) AFTER the build is complete. Use this skill whenever you are finalizing a dApp built with Scaffold-ETH 2. Distinct from eth_security/eth_audit (contract-level vulnerability review) — this is a whole-app pre-ship QA pass covering UX, metadata, RPC reliability, and branding, not contract code auditing.
 triggers:
   - scaffold-eth audit
   - dapp pre-ship checklist
   - ethereum qa checklist
+  - pre-ship review
+  - final review dapp
+  - ready to ship dapp
+  - qa checklist scaffold-eth
+  - finalize dapp
+  - pre-launch checklist
 ---
 
 ## Context

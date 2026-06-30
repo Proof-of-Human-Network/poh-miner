@@ -35,7 +35,12 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  const filePath = path.join(ROOT, urlPath);
+  const filePath = path.resolve(ROOT, '.' + urlPath);
+  if (!filePath.startsWith(ROOT + path.sep) && filePath !== ROOT) {
+    res.writeHead(403);
+    res.end('Forbidden');
+    return;
+  }
 
   fs.stat(filePath, (err, stats) => {
     if (err) { res.writeHead(404); res.end('Not found'); return; }

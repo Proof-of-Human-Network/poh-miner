@@ -6,6 +6,14 @@ triggers:
   - wallet analysis
   - wallet-analysis
   - analysis
+  - zerion
+  - portfolio value
+  - token positions
+  - transaction history wallet
+  - wallet pnl
+  - portfolio tracker
+  - analyze wallet
+  - multichain portfolio
 ---
 
 ## Context

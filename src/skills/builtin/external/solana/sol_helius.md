@@ -1,9 +1,20 @@
 ---
 id: sol_helius
 version: 1.0.0
-description: Build Solana applications with Helius infrastructure. Covers transaction sending (Sender), asset/NFT queries (DAS API), real-time streaming (WebSockets, Laserstream), event pipelines (webhooks), priority fees, wallet analysis, and agent onboarding.
+description: Build Solana applications with Helius infrastructure in general. Covers transaction sending (Sender), asset/NFT queries (DAS API), real-time streaming (WebSockets, Laserstream), event pipelines (webhooks), priority fees, wallet analysis, and agent onboarding. This is the base/general Helius skill — use sol_helius_dflow.md when the question specifically pairs Helius with DFlow trading, and sol_helius_phantom.md when it specifically pairs Helius with Phantom Connect frontend integration.
 triggers:
   - helius
+  - helius api
+  - helius rpc
+  - das api
+  - laserstream
+  - helius webhook
+  - helius sender
+  - priority fees solana
+  - helius das
+  - helius nft query
+  - helius wallet analysis
+  - helius websocket
 ---
 
 ## Context

@@ -8,6 +8,17 @@ triggers:
   - uniswap address
   - aave address
   - token address ethereum
+  - contract address lookup
+  - usdc address
+  - usdt address
+  - dai address
+  - weth address
+  - ens address
+  - safe address
+  - chainlink address
+  - permit2 address
+  - what is the address of
+  - mainnet contract addresses
 ---
 
 ## Context

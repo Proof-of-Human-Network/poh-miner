@@ -1,9 +1,20 @@
 ---
 id: sol_meteora
 version: 1.0.0
-description: Complete Meteora DeFi SDK suite for building liquidity pools, AMMs, bonding curves, vaults, token launches, and zap operations on Solana. Use when integrating DLMM, DAMM v2, DAMM v1, Dynamic Bonding Curves, Alpha Vaults, Zap, or Stake-for-Fee functionality.
+description: Complete Meteora DeFi SDK suite for building liquidity pools, AMMs, bonding curves, vaults, token launches, and zap operations on Solana. Use when integrating DLMM, DAMM v2, DAMM v1, Dynamic Bonding Curves, Alpha Vaults, Zap, or Stake-for-Fee functionality — distinct from Orca's Whirlpools CLMM and Raydium's AMM/CLMM despite similar liquidity pool concepts.
 triggers:
   - meteora
+  - dlmm
+  - damm
+  - damm v2
+  - dynamic bonding curve
+  - alpha vault
+  - stake-for-fee
+  - meteora pool
+  - meteora liquidity
+  - meteora swap
+  - meteora zap
+  - dynamic amm
 ---
 
 ## Context

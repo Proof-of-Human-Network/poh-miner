@@ -4,6 +4,14 @@ version: 1.0.0
 description: Complete Surfpool development environment for Solana - drop-in replacement for solana-test-validator with mainnet forking, cheatcodes, Infrastructure as Code, and Surfpool Studio. The fastest way to develop and test Solana programs.
 triggers:
   - surfpool
+  - solana-test-validator
+  - test validator
+  - mainnet forking
+  - cheatcodes
+  - surfpool studio
+  - local solana testing
+  - fork mainnet solana
+  - solana simulation
 ---
 
 ## Context

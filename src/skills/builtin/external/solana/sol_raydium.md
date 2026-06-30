@@ -1,9 +1,18 @@
 ---
 id: sol_raydium
 version: 1.0.0
-description: Complete Raydium Protocol SDK - the single source of truth for integrating Raydium on Solana. Covers SDK, Trade API, CLMM, CPMM, AMM pools, LaunchLab token launches, farming, CPI integration, and all Raydium tools.
+description: Complete Raydium Protocol SDK - the single source of truth for integrating Raydium on Solana. Covers SDK, Trade API, CLMM, CPMM, AMM pools, LaunchLab token launches, farming, CPI integration, and all Raydium tools — distinct from Orca's Whirlpools CLMM and Meteora's DLMM/DAMM pools despite similar AMM concepts.
 triggers:
   - raydium
+  - raydium swap
+  - raydium pool
+  - cpmm
+  - launchlab
+  - raydium trade api
+  - raydium farming
+  - raydium liquidity
+  - raydium sdk
+  - raydium clmm
 ---
 
 ## Context

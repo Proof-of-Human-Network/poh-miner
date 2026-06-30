@@ -1,11 +1,18 @@
 ---
 id: sol_light_protocol
 version: 1.0.0
-description: Complete guide for Light Protocol on Solana - includes ZK Compression for rent-free compressed tokens and PDAs using zero-knowledge proofs, and the Light Token Program for high-performance token standard (200x cheaper than SPL). Covers TypeScript SDK, JSON RPC methods, and complete integration patterns.
+description: Complete guide for Light Protocol on Solana - includes ZK Compression for rent-free compressed tokens and PDAs using zero-knowledge proofs, and the Light Token Program for high-performance token standard (200x cheaper than SPL). Covers TypeScript SDK, JSON RPC methods, and complete integration patterns. This is about cost-efficient compressed state via ZK proofs, not confidential/encrypted computation — for privacy use sol_arcium.md (MPC) or sol_inco.md (TEE) instead.
 triggers:
   - light protocol
   - light-protocol
   - light
+  - zk compression
+  - compressed tokens solana
+  - compressed pda
+  - rent-free tokens
+  - light token program
+  - zero-knowledge proof solana
+  - state compression solana
 ---
 
 ## Context

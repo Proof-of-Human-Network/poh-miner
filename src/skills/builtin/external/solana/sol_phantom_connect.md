@@ -1,12 +1,21 @@
 ---
 id: sol_phantom_connect
 version: 1.0.0
-description: Build wallet-connected applications with the Phantom Connect SDK for Solana. Use when integrating Phantom wallets into React, React Native, or vanilla JS/TS apps — including wallet connection, social login (Google/Apple), transaction signing, message signing, token-gated access, crypto payments, and NFT minting. Covers @phantom/react-sdk, @phantom/react-native-sdk, and @phantom/browser-sdk.
+description: Build wallet-connected applications with the Phantom Connect SDK for Solana. Use when building a frontend or app that integrates Phantom wallets into React, React Native, or vanilla JS/TS — including wallet connection UI, social login (Google/Apple), transaction signing, message signing, token-gated access, crypto payments, and NFT minting. Covers @phantom/react-sdk, @phantom/react-native-sdk, and @phantom/browser-sdk. Distinct from sol_phantom_wallet_mcp, which executes wallet operations via Phantom's MCP server in a developer-tool/agent context rather than building a frontend.
 triggers:
   - phantom connect
   - phantom-connect
   - phantom
-  - connect
+  - phantom sdk
+  - phantom react sdk
+  - connect wallet
+  - wallet connect button
+  - social login wallet
+  - embedded wallet
+  - token-gated access
+  - phantom browser sdk
+  - phantom react native
+  - build with phantom
 ---
 
 ## Context

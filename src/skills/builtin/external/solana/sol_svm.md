@@ -4,6 +4,16 @@ version: 1.0.0
 description: Explore Solana's architecture and protocol internals. Covers the SVM execution engine, account model, consensus, transactions, validator economics, data layer, development tooling, and token extensions using the Helius blog, SIMDs, and Agave/Firedancer source code.
 triggers:
   - svm
+  - solana architecture
+  - solana internals
+  - solana execution engine
+  - account model
+  - solana consensus
+  - simd
+  - agave
+  - firedancer
+  - validator economics
+  - how solana works
 ---
 
 ## Context

@@ -4,6 +4,15 @@ version: 1.0.0
 description: Complete Sanctum SDK for liquid staking, LST swaps, and Infinity pool operations on Solana. Use when working with LSTs (mSOL, jitoSOL, bSOL, INF), staking SOL, swapping between liquid staking tokens, or integrating Sanctum's liquidity infrastructure.
 triggers:
   - sanctum
+  - liquid staking
+  - lst
+  - msol
+  - jitosol
+  - bsol
+  - infinity pool
+  - lst swap
+  - stake sol
+  - sanctum sdk
 ---
 
 ## Context

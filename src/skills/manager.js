@@ -31,6 +31,8 @@ export class SkillsManager {
     if (transition.type === 'skill-proposed') {
       const { manifest, code, context, authorSignature, proposerAddress, txHash } = transition;
       if (!manifest?.id) return;
+      const networkSourced = !!transition.networkSourced;
+      const trusted = transition.trusted ?? !networkSourced;
       const codeHash    = code    ? crypto.createHash('sha256').update(code).digest('hex')    : null;
       const contextHash = context ? crypto.createHash('sha256').update(context).digest('hex') : null;
       this._skills.set(manifest.id, {
@@ -39,6 +41,9 @@ export class SkillsManager {
         context: context || null,
         status: 'proposed',
         private: false,
+        networkSourced,
+        trusted,
+        executable: trusted && !networkSourced,
         proposedAt: Date.now(),
         proposerAddress: proposerAddress || null,
         txHash,
@@ -66,6 +71,9 @@ export class SkillsManager {
       context: context || null,
       status: 'proposed',
       private: true,
+      networkSourced: false,
+      trusted: true,
+      executable: true,
       proposedAt: Date.now(),
       txHash: null,
       authorSignature: null,
@@ -102,7 +110,7 @@ export class SkillsManager {
   }
 
   getAllSkills() {
-    return [...this._skills.values()].map(s => ({ ...s.manifest, status: s.status, private: s.private || false, context: s.context || null }));
+    return [...this._skills.values()].map(s => ({ ...s.manifest, status: s.status, private: s.private || false, context: s.context || null, hasCode: !!s.code }));
   }
 
   getSkill(skillId) {
@@ -114,6 +122,9 @@ export class SkillsManager {
   async runSkill(skillId, input, config, maxBudget = 0) {
     const skill = this._skills.get(skillId);
     if (!skill || !skill.code) throw new Error(`Skill ${skillId} not found or has no run.js`);
+    if (skill.executable === false || (skill.networkSourced && !skill.trusted)) {
+      throw new Error(`Skill ${skillId} cannot be executed: network-delivered code is not run for security`);
+    }
 
     if (maxBudget > 0) {
       const estimatedCost = (skill.manifest.allowedEndpoints?.length || 1) * 10;

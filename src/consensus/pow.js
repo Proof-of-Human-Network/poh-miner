@@ -16,8 +16,8 @@
 const YIELD_EVERY = 2000;         // yield to event loop this often
 const TARGET_BLOCK_TIME_MS = 10_000;
 const ADJUSTMENT_WINDOW = 10;    // blocks
-const MIN_DIFFICULTY = 5;        // 5 leading hex zeros ≈ 1M hashes avg (~5-15 s in JS)
-const MAX_DIFFICULTY = 20;
+export const MIN_DIFFICULTY = 5;        // 5 leading hex zeros ≈ 1M hashes avg (~5-15 s in JS)
+export const MAX_DIFFICULTY = 20;
 
 export async function mineBlock(block, difficulty, abortSignal) {
   block.difficulty = difficulty;

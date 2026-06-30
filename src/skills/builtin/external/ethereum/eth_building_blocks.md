@@ -7,6 +7,16 @@ triggers:
   - defi legos
   - uniswap aave curve
   - yield strategy ethereum
+  - defi protocols
+  - aerodrome base
+  - gmx pendle arbitrum
+  - velodrome optimism
+  - compose protocols
+  - flash loan
+  - liquidity pool integration
+  - defi integration
+  - which protocol to use
+  - defi tvl
 ---
 
 ## Context

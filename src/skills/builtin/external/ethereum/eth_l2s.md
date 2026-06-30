@@ -7,6 +7,17 @@ triggers:
   - arbitrum optimism base
   - l2 bridging
   - zksync scroll
+  - layer 2
+  - rollup
+  - bridge tokens to l2
+  - unichain
+  - celo
+  - which l2 should i use
+  - deploy on arbitrum
+  - deploy on base
+  - deploy on optimism
+  - scaling ethereum
+  - cross-chain deployment
 ---
 
 ## Context

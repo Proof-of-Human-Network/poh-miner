@@ -1,9 +1,18 @@
 ---
 id: sol_pyth
 version: 1.0.0
-description: Complete guide for Pyth Network - decentralized oracle providing real-time price feeds for DeFi. Covers price feed integration, confidence intervals, EMA prices, on-chain CPI, off-chain fetching, and streaming updates for Solana applications.
+description: Complete guide for Pyth Network - decentralized oracle providing real-time price feeds for DeFi. Covers price feed integration, confidence intervals, EMA prices, on-chain CPI, off-chain fetching, and streaming updates for Solana applications. Use Pyth specifically (not Switchboard) when the user names Pyth, Hermes, or asks about pull-oracle price feeds with confidence intervals.
 triggers:
   - pyth
+  - pyth network
+  - price feed
+  - price oracle
+  - oracle price feed
+  - hermes
+  - confidence interval
+  - ema price
+  - pull oracle
+  - on-chain price data
 ---
 
 ## Context

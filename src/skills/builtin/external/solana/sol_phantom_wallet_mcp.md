@@ -1,11 +1,19 @@
 ---
 id: sol_phantom_wallet_mcp
 version: 1.0.0
-description: Execute wallet operations through the Phantom MCP server — get addresses, sign transactions, transfer tokens, buy tokens, and sign messages across Solana, Ethereum, Bitcoin, and Sui
+description: Execute wallet operations through the Phantom MCP server — get addresses, sign transactions, transfer tokens, buy tokens, and sign messages across Solana, Ethereum, Bitcoin, and Sui. Use for MCP server wallet operations in a developer-tool/agent context, not for building a wallet-connected frontend (that's sol_phantom_connect).
 triggers:
   - phantom wallet mcp
   - phantom-wallet-mcp
   - phantom
+  - phantom mcp
+  - sign transaction
+  - sign message
+  - transfer tokens
+  - get wallet address
+  - mcp wallet
+  - buy tokens phantom
+  - phantom server
 ---
 
 ## Context

@@ -169,6 +169,10 @@ async function startMiner() {
       sendLog('No config found at ~/.poh-miner/config.json');
     }
 
+    if (config.walletBackupKey) {
+      process.env.POH_WALLET_KEY = config.walletBackupKey;
+    }
+
     // Dynamically import the ESM miner module
     const minerModule = await import(pathToFileURL(path.join(__dirname, '../src/miner-node.js')).href);
     const { PohMinerNode } = minerModule;
@@ -651,6 +655,26 @@ ipcMain.handle('onboarding:create-poh-wallet', async () => {
     privateKey: wallet.privateKey,
     alreadyExisted: false,
   };
+});
+
+ipcMain.handle('onboarding:generate-wallet-backup-key', async () => {
+  const crypto = require('crypto');
+  const walletBackupKey = crypto.randomBytes(32).toString('base64url');
+
+  saveConfig({ walletBackupKey });
+  process.env.POH_WALLET_KEY = walletBackupKey;
+
+  const { WalletManager } = await import(pathToFileURL(path.join(__dirname, '../src/wallet/wallet.js')).href);
+  const { resetKeyCache } = await import(pathToFileURL(path.join(__dirname, '../src/security/wallet-crypto.js')).href);
+  resetKeyCache();
+
+  const wm = new WalletManager();
+  for (const addr of wm.listWallets()) {
+    const w = wm.loadWallet(addr);
+    if (w) wm.saveWallet(w);
+  }
+
+  return { walletBackupKey };
 });
 
 ipcMain.handle('onboarding:complete', async (_event, data) => {

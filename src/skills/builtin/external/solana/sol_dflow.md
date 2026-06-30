@@ -1,9 +1,15 @@
 ---
 id: sol_dflow
 version: 1.0.0
-description: Complete DFlow trading protocol SDK - the single source of truth for integrating DFlow on Solana. Covers spot trading, prediction markets, Swap API, Metadata API, WebSocket streaming, and all DFlow tools.
+description: Complete DFlow trading protocol SDK - the single source of truth for integrating DFlow on Solana. Covers spot trading, prediction markets, Swap API, Metadata API, WebSocket streaming, and all DFlow tools. This is the general DFlow skill; use sol_helius_dflow.md instead when the question specifically combines DFlow with Helius infrastructure (Sender, LaserStream, Proof KYC).
 triggers:
   - dflow
+  - dflow protocol
+  - dflow swap api
+  - dflow prediction markets
+  - dflow sdk
+  - dflow metadata api
+  - dflow trading
 ---
 
 ## Context

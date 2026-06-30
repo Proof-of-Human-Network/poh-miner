@@ -1,9 +1,17 @@
 ---
 id: sol_lifi
 version: 1.0.0
-description: Integrate LI.FI for cross-chain swaps, bridging, payments, route discovery, and transfer status tracking across Solana, EVM, Bitcoin, and Sui. Use when building Solana applications or AI agents that need quotes, routes, executable transactions, supported chains/tokens/tools, or cross-chain transfer monitoring.
+description: Integrate LI.FI for cross-chain swaps, bridging, payments, route discovery, and transfer status tracking across Solana, EVM, Bitcoin, and Sui. Use when building Solana applications or AI agents that need quotes, routes, executable transactions, supported chains/tokens/tools, or cross-chain transfer monitoring. Distinct from sol_debridge.md (deBridge SDK/DLN) — use this skill specifically for the LI.FI aggregator and route API.
 triggers:
   - lifi
+  - li.fi
+  - li fi
+  - cross-chain bridge solana
+  - cross-chain swap
+  - bridge route discovery
+  - lifi quote api
+  - cross-chain transfer status
+  - bridge aggregator
 ---
 
 ## Context

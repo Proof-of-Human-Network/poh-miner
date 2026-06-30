@@ -1,10 +1,17 @@
 ---
 id: sol_solana_kit
 version: 1.0.0
-description: Complete guide for @solana/kit - the modern, tree-shakeable, zero-dependency JavaScript SDK from Anza. Covers RPC connections, signers, transaction building with pipe, signing, sending, and account fetching with full TypeScript support.
+description: Complete guide for @solana/kit - the modern, tree-shakeable, zero-dependency JavaScript SDK from Anza for RPC connections, signers, and transaction building. This is the SDK itself (use sol_solana_kit_migration for moving from @solana/web3.js to @solana/kit, and sol_solana_agent_kit for SendAI's unrelated AI-agent toolkit). Covers RPC connections, signers, transaction building with pipe, signing, sending, and account fetching with full TypeScript support.
 triggers:
   - solana kit
   - solana-kit
+  - @solana/kit
+  - anza sdk
+  - tree-shakeable sdk
+  - transaction pipe
+  - kit rpc
+  - solana typescript sdk
+  - codama
 ---
 
 ## Context

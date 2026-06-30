@@ -1,12 +1,19 @@
 ---
 id: eth_frontend_ux
 version: 1.0.0
-description: Frontend UX rules for Ethereum dApps that prevent the most common AI agent UI bugs. Mandatory patterns for onchain buttons, approval flows, address UX, USD context, RPC reliability, theming, and pre-publish metadata. Use whenever you are building a frontend for an Ethereum dApp.
+description: Frontend UX rules for Ethereum dApps that prevent the most common AI agent UI bugs. Mandatory patterns for onchain buttons, approval flows, address UX, USD context, RPC reliability, theming, and pre-publish metadata. Use whenever you are building a frontend for an Ethereum dApp. Distinct from eth_frontend_playbook (the deployment pipeline and infra) — this skill covers in-app UI/UX correctness patterns themselves, like button pending states and address formatting.
 triggers:
   - ethereum frontend ux
   - dapp ui patterns
   - approval flow ux
   - onchain button ux
+  - pending transaction state
+  - address formatting ux
+  - wallet connect button
+  - dapp ui bugs
+  - transaction button disabled
+  - rpc reliability frontend
+  - usd value display
 ---
 
 ## Context

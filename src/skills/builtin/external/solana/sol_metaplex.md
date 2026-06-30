@@ -4,6 +4,16 @@ version: 1.0.0
 description: Complete Metaplex Protocol guide for Solana NFTs and digital assets. Covers Core (next-gen NFTs), Token Metadata, Bubblegum (compressed NFTs), Candy Machine, Genesis (token launches), MPL-Hybrid, Inscriptions, DAS API, and the Umi framework. The single source of truth for all Metaplex integrations.
 triggers:
   - metaplex
+  - nft solana
+  - mint nft solana
+  - candy machine
+  - bubblegum
+  - compressed nft
+  - token metadata solana
+  - umi framework
+  - metaplex core
+  - nft collection solana
+  - mpl-hybrid
 ---
 
 ## Context

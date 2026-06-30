@@ -10,6 +10,7 @@ import fs   from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { skillsManager } from './manager.js';
+import { normalizeSkillId, MAX_STORED_SKILLS } from '../security/skill-id.js';
 
 // ── Frontmatter parser (no yaml dependency) ───────────────────────────────────
 
@@ -115,8 +116,26 @@ export function loadSkillsFromDir(dir) {
 
 // ── Write a skill back to disk (called when published via gossip) ─────────────
 
+function countSkillFiles(dir) {
+  if (!fs.existsSync(dir)) return 0;
+  let count = 0;
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    if (entry.isDirectory()) count += countSkillFiles(path.join(dir, entry.name));
+    else if (entry.name.endsWith('.md')) count++;
+  }
+  return count;
+}
+
 export function writeSkillFile(dir, manifest, code, context) {
+  const safeId = normalizeSkillId(manifest?.id);
+  if (!safeId) throw new Error(`Invalid skill id: ${manifest?.id}`);
+  manifest = { ...manifest, id: safeId };
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+
+  const target = path.join(dir, `${safeId}.md`);
+  if (!fs.existsSync(target) && countSkillFiles(dir) >= MAX_STORED_SKILLS) {
+    throw new Error(`Skill storage limit reached (${MAX_STORED_SKILLS})`);
+  }
 
   const endpoints = (manifest.allowedEndpoints || []).map(e => `  - ${e}`).join('\n');
   const triggers  = (manifest.triggers         || []).map(t => `  - ${t}`).join('\n');

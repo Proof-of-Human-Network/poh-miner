@@ -15,6 +15,7 @@
 import crypto from 'crypto';
 import fs from 'fs';
 import path from 'path';
+import { Wallet } from '../wallet/wallet.js';
 
 const MAX_SEEN_HASHES = 5000;
 const SYNC_STATE_FILE = 'brain_sync.json';
@@ -73,8 +74,22 @@ export class BrainSync {
 
   // ── Event application ─────────────────────────────────────────────────────────
 
+  _verifyEvent(event) {
+    if (!event?.signature || !event?.signingPublicKey || !event?.minerWallet) return false;
+    const canonical = JSON.stringify({
+      type: event.type,
+      data: event.data,
+      ts: event.ts,
+      minerWallet: event.minerWallet,
+    });
+    const hash = crypto.createHash('sha256').update(canonical).digest('hex').slice(0, 24);
+    if (hash !== event.eventHash) return false;
+    return Wallet.verifySignature(event.signingPublicKey, canonical, event.signature);
+  }
+
   async applyEvent(event, brain) {
     if (!event?.type || !event?.data || !event?.eventHash) return false;
+    if (!this._verifyEvent(event)) return false;
 
     // Deduplicate
     if (this.seenHashes.has(event.eventHash)) return false;

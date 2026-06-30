@@ -1,9 +1,19 @@
 ---
 id: sol_inco
 version: 1.0.0
-description: Build confidential dApps on Solana using Inco Lightning encryption — encrypted balances, private transfers, and attested decryption
+description: Build confidential dApps on Solana using Inco Lightning encryption — encrypted balances, private transfers, and attested decryption via Trusted Execution Environments (TEEs). Distinct from sol_arcium.md (MPC-based confidentiality) and sol_light_protocol.md (ZK compression, not encryption).
 triggers:
   - inco
+  - inco lightning
+  - inco svm
+  - tee solana
+  - confidential dapp solana
+  - encrypted balance solana
+  - private transfer solana
+  - attested decryption
+  - euint128
+  - confidential spl token
+  - trusted execution environment
 ---
 
 ## Context

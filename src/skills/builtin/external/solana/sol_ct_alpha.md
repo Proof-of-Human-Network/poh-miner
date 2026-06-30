@@ -8,6 +8,16 @@ triggers:
   - crypto-twitter
   - trending
   - tweetrank
+  - crypto twitter
+  - alpha research
+  - smart money signals
+  - trending tokens twitter
+  - twitter sentiment crypto
+  - narrative research
+  - coordinated raid detection
+  - x search crypto
+  - yield strategy research
+  - tweet credibility scoring
 ---
 
 ## Context

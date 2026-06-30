@@ -6,6 +6,13 @@ triggers:
   - sol incinerator
   - sol-incinerator
   - incinerator
+  - burn tokens
+  - burn nft
+  - close token account
+  - close accounts
+  - reclaim rent
+  - cleanup wallet
+  - empty accounts
 ---
 
 ## Context

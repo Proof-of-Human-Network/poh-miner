@@ -1,11 +1,20 @@
 ---
 id: eth_audit
 version: 1.0.0
-description: Deep EVM smart contract security audit system. Use when asked to audit a contract, find vulnerabilities, review code for security issues, or file security issues on a GitHub repo. Covers 500+ non-obvious checklist items across 19 domains via parallel sub-agents. Different from the security skill (which teaches defensive coding) — this is for systematically auditing contracts you didn't write.
+description: Deep EVM smart contract security audit system. Use when asked to audit a contract, find vulnerabilities, review code for security issues, or file security issues on a GitHub repo. Covers 500+ non-obvious checklist items across 19 domains via parallel sub-agents. Different from the security skill (which teaches defensive coding patterns to use while writing your own contract) — this skill is for systematically auditing a contract someone else already wrote, with parallel specialist sub-agents and a formal findings report.
 triggers:
   - smart contract audit
   - evm security audit
   - find solidity vulnerabilities
+  - audit this contract
+  - audit checklist
+  - security audit report
+  - file github security issue
+  - vulnerability checklist
+  - audit my solidity code
+  - contract i did not write
+  - third party contract audit
+  - exploit checklist
 ---
 
 ## Context

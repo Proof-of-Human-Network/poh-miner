@@ -1,13 +1,21 @@
 ---
 id: eth_standards
 version: 1.0.0
-description: Ethereum token and protocol standards — ERC-20, ERC-721, ERC-1155, ERC-4337, ERC-8004, and newer standards. When to use each, how they work, key interfaces. Use when building tokens, NFTs, or choosing the right standard for a project.
+description: Ethereum token and protocol standards — ERC-20, ERC-721, ERC-1155, ERC-4337, ERC-8004, and newer standards. When to use each, how they work, key interfaces. Use when building tokens, NFTs, or choosing the right standard for a project. Distinct from eth_building_blocks (using existing deployed protocols like Uniswap/Aave) and eth_protocol (how the base protocol itself evolves) — this skill is about which token/interface standard to implement for your own contract.
 triggers:
   - erc-20
   - erc-721
   - erc-1155
   - erc-4337
   - ethereum token standard
+  - erc-4626
+  - erc-8004
+  - nft standard
+  - fungible token standard
+  - token interface
+  - which erc should i use
+  - create a token contract
+  - account abstraction standard
 ---
 
 ## Context
