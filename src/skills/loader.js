@@ -40,8 +40,11 @@ function parseFrontmatter(text) {
 // ── Section extractor ─────────────────────────────────────────────────────────
 
 function extractSection(body, name) {
-  // No 'm' flag — '$' must mean end-of-string, not end-of-line, so [\s\S]*? captures full section
-  const re = new RegExp(`##\\s+${name}[^\\n]*\\n([\\s\\S]*?)(?=\\n##\\s|$)`);
+  // No 'm' flag — '$' must mean end-of-string, not end-of-line, so [\s\S]*? captures full section.
+  // Only stop at a literal "## Context" or "## Code" heading (the two recognized section
+  // markers) — NOT at any "##" heading, so a skill's own internal subheadings (common in
+  // ported reference docs) don't get mistaken for the start of a new top-level section.
+  const re = new RegExp(`##\\s+${name}[^\\n]*\\n([\\s\\S]*?)(?=\\n##\\s+(?:Context|Code)\\b|$)`, 'i');
   return body.match(re)?.[1]?.trim() || null;
 }
 
@@ -89,18 +92,23 @@ export function parseSkillFile(filePath) {
 
 export function loadSkillsFromDir(dir) {
   if (!fs.existsSync(dir)) return;
-  const files = fs.readdirSync(dir).filter(f => f.endsWith('.md'));
-  for (const file of files) {
-    const skillPath = path.join(dir, file);
+  const entries = fs.readdirSync(dir, { withFileTypes: true });
+  for (const entry of entries) {
+    const entryPath = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      loadSkillsFromDir(entryPath); // recurse — allows organizing builtins into subfolders
+      continue;
+    }
+    if (!entry.name.endsWith('.md')) continue;
     try {
-      const parsed = parseSkillFile(skillPath);
+      const parsed = parseSkillFile(entryPath);
       if (!parsed) continue;
       const { manifest, code, context } = parsed;
       skillsManager.addPrivateSkill(manifest, code, context);
       skillsManager._skills.get(manifest.id).status = 'active';
-      console.log(`[SkillLoader] Loaded skill: ${manifest.id} from ${file}`);
+      console.log(`[SkillLoader] Loaded skill: ${manifest.id} from ${entry.name}`);
     } catch (err) {
-      console.warn(`[SkillLoader] Failed to load ${file}:`, err.message);
+      console.warn(`[SkillLoader] Failed to load ${entry.name}:`, err.message);
     }
   }
 }

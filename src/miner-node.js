@@ -137,6 +137,26 @@ const DEFAULT_ENABLED_SKILLS = new Set([
   'read_zora',
   'code_audit',
   'web_search',
+
+  // Ported reference-knowledge skill packs (src/skills/builtin/external/) —
+  // sendaifun/skills, bnb-chain/bnbchain-skills, austintgriffith/ethskills.
+  // No live API calls — answered directly from bundled reference docs.
+  'bnb_mcp',
+  'eth_addresses', 'eth_audit', 'eth_building_blocks', 'eth_concepts',
+  'eth_frontend_playbook', 'eth_frontend_ux', 'eth_gas', 'eth_indexing',
+  'eth_l2s', 'eth_noir', 'eth_orchestration', 'eth_overview', 'eth_protocol',
+  'eth_qa', 'eth_security', 'eth_ship', 'eth_standards', 'eth_testing',
+  'eth_tools', 'eth_wallets', 'eth_why',
+  'sol_arcium', 'sol_birdeye', 'sol_carbium', 'sol_coingecko', 'sol_ct_alpha',
+  'sol_debridge', 'sol_dflow', 'sol_glam', 'sol_helius', 'sol_helius_dflow',
+  'sol_helius_phantom', 'sol_inco', 'sol_jupiter', 'sol_kamino', 'sol_lavarage',
+  'sol_lifi', 'sol_light_protocol', 'sol_lulo', 'sol_magicblock', 'sol_manifest',
+  'sol_marginfi', 'sol_metaplex', 'sol_metengine', 'sol_meteora', 'sol_orca',
+  'sol_phantom_connect', 'sol_phantom_wallet_mcp', 'sol_phoenix',
+  'sol_pinocchio_development', 'sol_pumpfun', 'sol_pyth', 'sol_quicknode',
+  'sol_ranger_finance', 'sol_raydium', 'sol_sanctum', 'sol_sol_incinerator',
+  'sol_solana_agent_kit', 'sol_solana_kit', 'sol_solana_kit_migration',
+  'sol_squads', 'sol_surfpool', 'sol_svm', 'sol_switchboard', 'sol_wallet_analysis',
 ]);
 
 // Well-known production bootnodes. Used when no bootnodes are configured
@@ -1808,13 +1828,49 @@ export class PohMinerNode {
                   // fall through to job routing
                 }
               }
+
+              // Knowledge-only skills (no sandboxed code — just reference docs in `context`,
+              // e.g. ported third-party skill packs) answer directly from that text.
+              // No fetch, no job queue, no fee — it's pure local reference material.
+              if (skillEntry?.private === true && !skillEntry?.code && skillEntry?.context) {
+                try {
+                  const ollamaBase = this.config.ollamaUrl || 'http://localhost:11434';
+                  const selModel   = reqModel || this.config.model || 'qwen2.5:1.5b';
+                  const systemContent = [
+                    'You are a helpful assistant with access to specialized reference documentation.',
+                    'Answer the user\'s question using the reference material below. Be specific and practical.',
+                    'Write in clear, human-readable Markdown. Do not mention tools or MCP servers you don\'t actually have access to —',
+                    'if the material references one, explain the underlying concept instead.',
+                    `\nReference documentation (${route.skillId}):\n${skillEntry.context.slice(0, 8000)}`,
+                  ].join('\n');
+                  const llmRes = await fetch(`${ollamaBase}/api/chat`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ model: selModel, messages: [{ role: 'system', content: systemContent }, { role: 'user', content: message }], stream: false, options: { temperature: 0.5 } }),
+                    signal: AbortSignal.timeout(40_000),
+                  });
+                  const llmData = await llmRes.json();
+                  const llmReply = (llmData.message?.content || '').trim();
+                  if (llmReply) return res.end(JSON.stringify({ type: 'chat', message: llmReply, skill: route.skillId }));
+                } catch (e) {
+                  console.warn('[chat/ask] inline knowledge-skill error:', e.message);
+                  // fall through to job routing (will fail there too, but keeps a consistent error shape)
+                }
+              }
+
               return res.end(JSON.stringify({ type: 'skill', skillId: route.skillId, input: route.input, skillContext: route.skillContext }));
             }
 
             if (route.type === 'cascade') {
-              // Run all cascade skills in parallel, then synthesize with LLM
+              // Run all cascade skills in parallel, then synthesize with LLM.
+              // Knowledge-only skills (no code) have nothing to "run" — feed their
+              // reference text directly into the synthesis step instead.
               const jobResults = await Promise.allSettled(
                 route.jobs.map(async job => {
+                  const entry = skillsManager.getSkill(job.skillId);
+                  if (!entry?.code && entry?.context) {
+                    return { skillId: job.skillId, output: { reference: entry.context.slice(0, 3000) } };
+                  }
                   const { output } = await skillsManager.runSkill(job.skillId, job.input, this.config);
                   return { skillId: job.skillId, output };
                 })
