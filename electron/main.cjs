@@ -710,6 +710,7 @@ async function installOllama() {
     sendSetupProgress({ status: 'installing', message: 'Downloading OllamaSetup.exe...' });
     // The installer is large; a single request often drops on a flaky link.
     // Retry with range-resume so each attempt continues from where it stopped.
+    // downloadWithResume() already follows redirects (CDN edge → blob storage).
     try {
       await withRetry(
         () => downloadWithResume('https://ollama.com/download/OllamaSetup.exe', setupPath, {
@@ -727,7 +728,7 @@ async function installOllama() {
     }
     sendSetupProgress({ status: 'installing', message: 'Running Ollama installer...' });
     await new Promise((resolve, reject) => {
-      const proc = spawnProc(setupPath, ['/SILENT'], { stdio: 'ignore' });
+      const proc = spawnProc(setupPath, ['/SILENT'], { stdio: 'ignore', windowsHide: true });
       proc.on('error', reject);
       proc.on('close', (code) => (code === 0 ? resolve() : reject(new Error(`OllamaSetup.exe exited ${code}`))));
     });
