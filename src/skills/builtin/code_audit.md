@@ -13,6 +13,15 @@ triggers:
 
 ## Context
 
+**When to run this skill:**
+- Only when explicitly asked to audit, review, or check skill code safety
+- When a new skill proposal is submitted to the network
+- Keywords: "audit skill", "review skill code", "check skill safety", "code audit"
+
+**Do NOT run for:**
+- General code review questions
+- Questions about writing or explaining code
+
 Analyzes a proposed skill before it is broadcast to the network.
 
 Input: `{ manifest: { id, description }, code: string, context: string }`

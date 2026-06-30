@@ -47,6 +47,27 @@ import { OrderStore, QUOTE_CURRENCIES } from './p2p/order-store.js';
 import { EscrowManager, ESCROW_ADDRESS } from './p2p/escrow.js';
 import { ReferralStore } from './p2p/referral-store.js';
 
+// Returns true when a message segment clearly signals it needs live internet data.
+// Prevents web_search from firing on general knowledge questions the LLM already knows.
+function _segmentNeedsWebSearch(segment) {
+  const s = segment.toLowerCase();
+  // Explicit search intent
+  if (/\b(search|google|look up|find out|web search|look into|browse|research)\b/.test(s)) return true;
+  // Current / real-time data signals
+  if (/\b(today|right now|currently|this (week|month|year)|just now|breaking|live|real.?time)\b/.test(s)) return true;
+  // Recency signals
+  if (/\b(latest|recent|newest|just (released|announced|happened)|this morning|yesterday|last (week|night|month))\b/.test(s)) return true;
+  // News / events
+  if (/\b(news|headline|update|score|result|match|game|event|happening)\b/.test(s)) return true;
+  // Price / weather / status
+  if (/\b(price|cost|rate|exchange rate|weather|forecast|temperature|status|outage)\b/.test(s)) return true;
+  // Explicit year references that could be recent
+  if (/\b(2024|2025|2026)\b/.test(s)) return true;
+  // URL / website references
+  if (/https?:\/\/|www\./.test(s)) return true;
+  return false;
+}
+
 function computeBrainStateRoot(brainDir) {
   if (!brainDir) return null;
   try {
@@ -707,8 +728,8 @@ export class PohMinerNode {
         }
       } else if (webSearchSkill && !usedSkillIds.has('web_search')
                  && !CONVERSATIONAL_RE.test(segment)
-                 && segment.trim().split(/\s+/).length >= 2) {
-        // Any substantive multi-word segment that no skill claimed → web_search catch-all
+                 && _segmentNeedsWebSearch(segment)) {
+        // Only web-search when the segment signals it needs live internet data
         usedSkillIds.add('web_search');
         jobs.push({ skillId: 'web_search', input: segInput, skillContext: webSearchSkill.context || null });
       }
@@ -1797,6 +1818,34 @@ export class PohMinerNode {
             });
             const data  = await ollamaRes.json();
             const reply = data.message?.content || '';
+
+            // 2nd-pass web search: if LLM says it can't access internet, run web_search and retry
+            const LLM_NO_WEB_RE = /(?:don['']t|do not|cannot|can['']t|no|lack|without).{0,40}(?:internet|web|real.?time|online|access|current|browse|search)/i;
+            const NEEDS_SEARCH_RE = /(?:latest|current|recent|up-to-date).{0,30}(?:information|news|data|event)/i;
+            const webSearchEntry = skillsManager.getSkill('web_search');
+            if ((LLM_NO_WEB_RE.test(reply) || NEEDS_SEARCH_RE.test(reply)) && webSearchEntry?.private === true) {
+              try {
+                const { output: searchOut } = await skillsManager.runSkill('web_search', { query: message, message }, this.config);
+                const dataStr = JSON.stringify(searchOut, null, 2).slice(0, 5000);
+                const retry = await fetch(`${ollamaBase}/api/chat`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    model: selModel,
+                    messages: [
+                      { role: 'system', content: 'You are a helpful assistant. Answer using the web search results provided. Write in clear Markdown. Be specific and cite sources.' },
+                      { role: 'user', content: `Web search results:\n${dataStr}\n\nUser question: ${message}` },
+                    ],
+                    stream: false, options: { temperature: 0.7 },
+                  }),
+                  signal: AbortSignal.timeout(40_000),
+                });
+                const retryData = await retry.json();
+                const retryReply = retryData.message?.content || reply;
+                return res.end(JSON.stringify({ type: 'chat', message: retryReply, skill: 'web_search' }));
+              } catch { /* fall through to original reply */ }
+            }
+
             return res.end(JSON.stringify({ type: 'chat', message: reply }));
           } catch (err) {
             const isUnavailable = err.name === 'AbortError' || err.name === 'TimeoutError'

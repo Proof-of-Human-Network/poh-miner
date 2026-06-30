@@ -8,6 +8,7 @@
 
 import fs   from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
 import { skillsManager } from './manager.js';
 
 // ── Frontmatter parser (no yaml dependency) ───────────────────────────────────
@@ -139,7 +140,8 @@ ${code || '// No sandboxed code — handled natively'}
 // ── Convenience: seed built-ins then user skills ──────────────────────────────
 
 export function loadAllSkills(brainDataDir) {
-  const builtinDir = new URL('./builtin', import.meta.url).pathname;
+  // fileURLToPath handles Windows paths (no leading slash) and URL-encoded characters
+  const builtinDir = fileURLToPath(new URL('./builtin', import.meta.url));
   loadSkillsFromDir(builtinDir);
 
   if (brainDataDir) {

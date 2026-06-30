@@ -1,14 +1,14 @@
 ---
 id: web_search
-version: 1.1.0
-description: Search the web for any topic and return real results using DuckDuckGo
+version: 1.2.0
+description: Search the web for current events, news, prices, and real-time information
 allowedEndpoints:
   - html.duckduckgo.com
   - api.duckduckgo.com
 triggers:
   - search
   - search for
-  - look up
+  - search the web
   - look up
   - google
   - web search
@@ -16,17 +16,40 @@ triggers:
   - find information
   - news about
   - latest on
-  - information about
-  - research
-  - look into
+  - latest news
+  - recent news
   - what happened
   - current events
-  - recent news
+  - breaking news
+  - today's
+  - right now
+  - currently
+  - live score
+  - weather
+  - price of
+  - exchange rate
+  - what is the price
+  - is it raining
+  - stock price
+  - sports score
+  - game result
 ---
 
 ## Context
 
-Searches the web for any topic using DuckDuckGo and returns real search results with titles and snippets. Use this for current events, sports results, news, facts, or anything that needs up-to-date web data.
+Searches the web for any topic using DuckDuckGo and returns real search results with titles and snippets.
+
+**When to run this skill:**
+- Questions about current events, news, or recent happenings
+- Real-time or live data: prices, scores, weather, exchange rates
+- Anything that happened recently (today, this week, this year)
+- Questions where an LLM would otherwise say "I don't have access to real-time information"
+- Explicit requests to search, google, or look something up
+
+**Do NOT run for:**
+- General knowledge questions (history, science, math, explanations)
+- Questions the LLM already knows from training data
+- Conversational messages
 
 **Input:**
 ```json

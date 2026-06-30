@@ -23,6 +23,8 @@ triggers:
 
 ## Context
 
+**When to run:** User asks about someone's Zora activity, NFTs they minted, or coins they created/collected. Keywords: "zora", "coins", "minted", "collected", "nft", "creator". Must have a wallet address or username.
+
 Fetches and analyzes Zora creator data for a wallet address or username. Returns profile info, coins they've created, coins they've collected, trading activity, sentiment, and inferred interests/topics.
 
 **Input:**

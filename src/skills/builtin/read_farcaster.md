@@ -29,6 +29,16 @@ triggers:
 
 Fetches and analyzes Farcaster social data for an EVM wallet address. Returns a fully analyzed profile: cast history, sentiment, topics, active channels, engagement metrics, and optionally filtered results for a search query.
 
+**When to run this skill:**
+- User mentions Farcaster, Warpcast, or asks about someone's casts/posts
+- User provides a wallet address and asks what someone posts or believes
+- User asks about social activity, opinions, or topics a person discusses on Farcaster
+- Keywords: "farcaster", "warpcast", "cast", "posts", "what does X think", "social profile"
+
+**Do NOT run for:**
+- General social media questions not about Farcaster
+- Questions about Twitter/X or other platforms
+
 **Input:**
 ```json
 { "address": "0x...", "username": "icetoad", "query": "optional keyword" }

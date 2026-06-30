@@ -26,6 +26,8 @@ triggers:
 
 ## Context
 
+**When to run:** User asks about someone's Paragraph blog, articles, or writing. Keywords: "paragraph", "blog", "articles", "blog posts", "writings". Must have a specific author handle or username.
+
 Fetches and analyzes Paragraph blog posts for an author handle. Returns full post content, writing topics, publication frequency, sentiment, and inferred interests. Uses the author's RSS feed (which often includes full article HTML) and falls back to fetching post pages directly for any posts where the RSS excerpt is too short.
 
 **Input:**
