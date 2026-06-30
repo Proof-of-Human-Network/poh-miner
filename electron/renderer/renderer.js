@@ -2790,6 +2790,12 @@ async function pollNodeStatus() {
 }
 setInterval(pollNodeStatus, 10000);
 
+function _homeTxIcon(label) {
+  if (label === 'Mining reward') return { icon: '⛏', cls: 'mining' };
+  if (label === 'Received')      return { icon: '↓', cls: 'mining' };
+  return { icon: '↑', cls: 'send' };
+}
+
 async function pollTxHistory() {
   const port = window._minerApiPort || 3456;
   const addr = window._localWallet;
@@ -2798,15 +2804,27 @@ async function pollTxHistory() {
     const res = await fetch(`http://localhost:${port}/api/wallet/history?address=${encodeURIComponent(addr)}&limit=5`);
     if (!res.ok) return;
     const { entries } = await res.json();
-    const el = document.getElementById('sidebar-tx-history');
+    const el = document.getElementById('home-txs');
     if (!el || !entries?.length) return;
     const POH = 1_000_000_000;
     el.innerHTML = entries.map(e => {
-      const sign  = e.delta > 0 ? '+' : '';
-      const amt   = (e.delta / POH).toFixed(3);
-      const color = e.delta > 0 ? '#22c55e' : '#ef4444';
+      const sign  = e.delta > 0 ? '+' : '-';
+      const amt   = Math.abs(e.delta / POH).toFixed(3);
+      const amtCls = e.delta > 0 ? 'pos' : 'neg';
       const ts    = e.ts ? new Date(e.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
-      return `<div style="display:flex;justify-content:space-between;"><span>${e.label}</span><span style="color:${color}">${sign}${amt} POH${ts ? ' · ' + ts : ''}</span></div>`;
+      const { icon, cls } = _homeTxIcon(e.label);
+      return `
+        <div class="home-tx-row">
+          <div class="home-tx-icon ${cls}">${icon}</div>
+          <div class="home-tx-body">
+            <div class="home-tx-title">${e.label}</div>
+            <div class="home-tx-time">${ts}</div>
+          </div>
+          <div class="home-tx-right">
+            <div class="home-tx-amount ${amtCls}">${sign}${amt}</div>
+            <div class="home-tx-unit">POH</div>
+          </div>
+        </div>`;
     }).join('');
   } catch {}
 }
