@@ -998,6 +998,13 @@ window.skipOtherChain = function(chainId) {
 // Settings Page
 // =====================================================
 
+// ── Settings subpages ────────────────────────────────────────────────────────
+
+window.switchSettingsSubpage = function(name) {
+  document.querySelectorAll('.settings-subpage').forEach(el => el.classList.toggle('active', el.id === `settings-sub-${name}`));
+  document.querySelectorAll('.settings-subtab').forEach(el => el.classList.toggle('active', el.dataset.sub === name));
+};
+
 async function loadSettingsPanel() {
   // Build language selector
   if (window.buildLangSelector) {
