@@ -12,6 +12,25 @@ const crypto = require('crypto');
 app.commandLine.appendSwitch('no-sandbox');
 app.commandLine.appendSwitch('disable-setuid-sandbox');
 
+// Block a second instance of the app — running two miners against the same
+// wallet/chain data dir at once causes port conflicts and can corrupt the
+// chain/wallet files on disk (two processes writing the same JSON files).
+// If we don't get the lock, another instance already owns it: quit immediately
+// instead of starting a second miner backend or window.
+const gotSingleInstanceLock = app.requestSingleInstanceLock();
+if (!gotSingleInstanceLock) {
+  app.quit();
+  process.exit(0);
+}
+
+app.on('second-instance', () => {
+  // Someone tried to launch a second copy — bring the existing window to front instead.
+  if (mainWindow) {
+    if (mainWindow.isMinimized()) mainWindow.restore();
+    mainWindow.focus();
+  }
+});
+
 let mainWindow;
 let minerNode = null;
 let isStartingMiner = false;

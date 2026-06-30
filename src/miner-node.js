@@ -633,8 +633,50 @@ export class PohMinerNode {
     );
   }
 
+  // Refuses to start if another live process already holds the lock for this
+  // data directory — protects the headless/CLI entry points (the Electron app
+  // has its own OS-level single-instance lock; this is the equivalent for
+  // `node src/miner-node.js` / `node start.js` / the packaged binary).
+  _acquireSingleInstanceLock() {
+    const lockPath = path.join(os.homedir(), '.poh-miner', 'miner.lock');
+    try {
+      fs.mkdirSync(path.dirname(lockPath), { recursive: true });
+      if (fs.existsSync(lockPath)) {
+        const existingPid = parseInt(fs.readFileSync(lockPath, 'utf8').trim(), 10);
+        if (existingPid && existingPid !== process.pid) {
+          let alive = false;
+          try { process.kill(existingPid, 0); alive = true; } catch { alive = false; }
+          if (alive) {
+            console.error(`[PoH-Miner] Another miner instance is already running (PID ${existingPid}) against this data directory. Refusing to start a second one — stop it first.`);
+            process.exit(1);
+          }
+          console.log(`[PoH-Miner] Found a stale lock from PID ${existingPid} (process no longer running) — taking over.`);
+        }
+      }
+      fs.writeFileSync(lockPath, String(process.pid));
+
+      const release = () => {
+        try {
+          if (fs.existsSync(lockPath) && fs.readFileSync(lockPath, 'utf8').trim() === String(process.pid)) {
+            fs.unlinkSync(lockPath);
+          }
+        } catch { /* best effort */ }
+      };
+      process.on('exit', release);
+      process.on('SIGINT', () => { release(); process.exit(0); });
+      process.on('SIGTERM', () => { release(); process.exit(0); });
+    } catch (e) {
+      console.warn('[PoH-Miner] Could not acquire single-instance lock (continuing anyway):', e.message);
+    }
+  }
+
   async start() {
     console.log('[PoH-Miner] Initializing...');
+
+    // Refuse to start a second instance against the same wallet/chain data dir —
+    // two processes writing the same JSON files (wallets, chain, config) at once
+    // can corrupt them, and they would also fight over the same HTTP port.
+    this._acquireSingleInstanceLock();
 
     // Validate that required API keys / RPCs are present before doing anything heavy.
     // Many signals in the real POH checker require paid or reliable RPC endpoints.
