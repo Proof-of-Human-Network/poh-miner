@@ -717,6 +717,14 @@ export class PohMinerNode {
     // Short conversational filler — don't web-search these
     const CONVERSATIONAL_RE = /^(hi|hello|hey|thanks|thank you|ok|okay|yes|no|sure|great|cool|got it|makes sense|sounds good|nice|perfect|good|bye|see you|lol|haha|awesome|interesting|are you|what is your|what's your|how are you)\b/i;
 
+    // A segment like "create a standard ERC20 token contract" never matches any skill
+    // (no skill writes code from scratch) — it's a plain LLM generation request. When it's
+    // followed by a segment that DOES match a skill (e.g. "do a smart contract audit"),
+    // that's not two independent parallel tasks — it's "generate, then analyze what you
+    // just generated". Recorded here; resolved into a 'sequence' route after the loop.
+    const CREATION_RE = /\b(?:create|write|generate|build|implement|draft|code up|code me)\b/i;
+    let creationSegment = null;
+
     const webSearchSkill = allSkills.find(s => s.id === 'web_search');
     const usedSkillIds   = new Set();
     const jobs           = [];
@@ -768,6 +776,26 @@ export class PohMinerNode {
         // Only web-search when the segment signals it needs live internet data
         usedSkillIds.add('web_search');
         jobs.push({ skillId: 'web_search', input: segInput, skillContext: webSearchSkill.context || null });
+      } else if (!creationSegment && CREATION_RE.test(segment)) {
+        creationSegment = segment;
+      }
+    }
+
+    // "create X and <skill action>" — generate first, then run the matched skill against
+    // what was generated. Only safe for knowledge-only skills (reference text fed to the
+    // LLM as context): sandboxed skills like web_search/read_zora have rigid input schemas
+    // (query/username/address) that generated code wouldn't fit, so those fall back to
+    // being treated as a normal single-skill match instead (creationSegment is just dropped).
+    if (jobs.length === 1 && creationSegment) {
+      const matchedSkill = allSkills.find(s => s.id === jobs[0].skillId);
+      if (matchedSkill && !matchedSkill.hasCode) {
+        return Promise.resolve({
+          type: 'sequence',
+          creationQuery: creationSegment,
+          skillId: jobs[0].skillId,
+          input: jobs[0].input,
+          skillContext: jobs[0].skillContext,
+        });
       }
     }
 
@@ -885,6 +913,50 @@ export class PohMinerNode {
             wallet.signingPublicKey = signingPublicKey;
             this.walletManager.saveWallet(wallet);
             return res.end(JSON.stringify({ ok: true }));
+          } catch (e) {
+            res.statusCode = 400;
+            res.end(JSON.stringify({ error: e.message }));
+          }
+        });
+        return;
+      }
+
+      // Sign a job payment proof using THIS node's own wallet — for the common case
+      // of a local UI (desktop/mobile chat) paying a job out of its own node's balance.
+      // Localhost-only: this signs away POH on request, so it must never be reachable
+      // from outside the machine running the node.
+      if (req.method === 'POST' && url.pathname === '/api/wallet/sign-job-payment') {
+        const remote = req.socket.remoteAddress || '';
+        const isLocalRequest = remote === '127.0.0.1' || remote === '::1' || remote === '::ffff:127.0.0.1';
+        if (!isLocalRequest) {
+          res.statusCode = 403;
+          return res.end(JSON.stringify({ error: 'This endpoint is restricted to localhost.' }));
+        }
+        let body = '';
+        req.on('data', c => body += c);
+        req.on('end', () => {
+          try {
+            const { jobId, amount } = JSON.parse(body);
+            if (!jobId || !(amount > 0)) {
+              res.statusCode = 400;
+              return res.end(JSON.stringify({ error: 'jobId and amount (>0) are required' }));
+            }
+            const requesterAddress = this.config.pohWallet || this.config.wallet;
+            const wallet = this.walletManager.loadWallet(requesterAddress);
+            if (!wallet) {
+              res.statusCode = 404;
+              return res.end(JSON.stringify({ error: 'local wallet not found' }));
+            }
+            const nonce = this.walletManager.getNonce(requesterAddress);
+            const txHash = computeJobPaymentHash({
+              jobId,
+              requesterAddress,
+              minerAddress: this.config.wallet,
+              amount,
+              nonce,
+            });
+            const signature = wallet.sign(txHash);
+            return res.end(JSON.stringify({ requesterAddress, amount, txHash, signature, signingPublicKey: wallet.signingPublicKey }));
           } catch (e) {
             res.statusCode = 400;
             res.end(JSON.stringify({ error: e.message }));
@@ -4591,6 +4663,16 @@ export class PohMinerNode {
           });
           datasetUsed = dataset;
         }
+
+        // Prior conversation turns, if the client sent any — keeps Public-mode chat
+        // conversational instead of resetting context on every paid message.
+        const history = Array.isArray(job.payload?.history) ? job.payload.history : [];
+        for (const turn of history) {
+          if (turn?.role && turn?.content && ['user', 'assistant', 'system'].includes(turn.role)) {
+            messages.push({ role: turn.role, content: String(turn.content).slice(0, 8000) });
+          }
+        }
+
         messages.push({ role: 'user', content: prompt });
 
         const ollamaRes = await fetch(`${ollamaBase}/api/chat`, {

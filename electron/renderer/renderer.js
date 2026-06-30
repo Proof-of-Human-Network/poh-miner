@@ -1582,7 +1582,7 @@ function switchTab(name) {
     if (btn)   btn.classList.toggle('active', key === name);
   });
   if (name === 'home')     { syncHomeBalance(); }
-  if (name === 'chat')     { loadChatModels(); loadChatBrainContext(true); document.getElementById('chat-input')?.focus(); }
+  if (name === 'chat')     { loadChatModels(); document.getElementById('chat-input')?.focus(); }
   if (name === 'send')     { syncSendWallet(); showSendView(); }
   if (name === 'skills')   { loadSkills(); }
   if (name === 'settings') { loadSettingsPanel(); refreshHfDatasetsSettings(); }
@@ -1596,57 +1596,6 @@ const chatHistory = []; // { role: 'user'|'assistant', content: string }
 let chatStreaming = false;
 let chatAbortController = null;
 let _brainSystemPrompt = null; // full brain state injected as system msg on every chat send
-
-function _setBrainIndicator(state) {
-  const el = document.getElementById('chat-brain-pill');
-  if (!el) return;
-  if (state === 'loaded') {
-    el.textContent = '🧠 brain loaded';
-    el.style.display = 'inline-flex';
-    el.style.color = '#22c55e';
-    el.style.borderColor = 'rgba(34,197,94,0.3)';
-  } else if (state === 'loading') {
-    el.textContent = '🧠 loading…';
-    el.style.display = 'inline-flex';
-    el.style.color = '#6b7280';
-    el.style.borderColor = '#2a2a2a';
-  } else {
-    el.textContent = '🧠 no context';
-    el.style.display = 'inline-flex';
-    el.style.color = '#ef4444';
-    el.style.borderColor = 'rgba(239,68,68,0.3)';
-  }
-}
-
-async function loadChatBrainContext(force = false) {
-  if (_brainSystemPrompt && !force) return;
-  _setBrainIndicator('loading');
-  const port = window._minerApiPort || 3456;
-  try {
-    // Manual timeout via Promise.race for broad compatibility
-    const timeout = new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), 8000));
-    const fetchP  = fetch(`http://localhost:${port}/api/brain/state`);
-    const r = await Promise.race([fetchP, timeout]);
-    if (!r.ok) throw new Error(`HTTP ${r.status}`);
-    const d = await r.json();
-    const stateText = (d.stateSummary || '').slice(0, 3000);
-    if (!stateText.trim()) throw new Error('brain_state.md is empty');
-
-    _brainSystemPrompt =
-      `You are the AI assistant for the PoH Miner desktop app and the Proof of Human (POH) protocol. ` +
-      `Answer all questions about POH, the miner network, the wallet, staking, Conviction Curves, ` +
-      `signals, the AI brain, token economics, and anything else in your knowledge base below. ` +
-      `Never say you cannot discuss POH topics.\n\n` +
-      `=== KNOWLEDGE BASE (brain_state.md) ===\n\n${stateText}`;
-
-    console.log(`[chat] ✓ Brain context loaded — ${_brainSystemPrompt.length} chars from ${port}`);
-    _setBrainIndicator('loaded');
-  } catch (e) {
-    _brainSystemPrompt = null;
-    console.warn('[chat] Brain context failed:', e.message);
-    _setBrainIndicator('error');
-  }
-}
 
 // ── Social context injection ──────────────────────────────────────────────────
 // Populated after a scan; prepended as system message to every chat send.
@@ -2102,38 +2051,46 @@ function finalizeLastBubble() {
 // ── Send + stream ──────────────────────────────────────────────────────────────
 
 function getChatBudget() {
-  const step = parseInt(document.getElementById('chat-budget-slider')?.value || '0', 10);
-  if (step <= 0) return 0;
+  // Slider min is 1 (= 0.01 POH) — 0/"no fee" is no longer a selectable value.
+  const step = Math.max(1, parseInt(document.getElementById('chat-budget-slider')?.value || '1', 10));
   return Math.round(_sliderStepToPoh(step) * BUDGET_DECIMALS);
 }
 
 window.updateChatBudgetDisplay = function(val) {
-  const step = parseInt(val, 10);
+  const step = Math.max(1, parseInt(val, 10) || 1);
   const el = document.getElementById('chat-budget-display');
   if (!el) return;
-  el.textContent = step <= 0 ? 'no fee' : _formatPoh(_sliderStepToPoh(step));
+  el.textContent = _formatPoh(_sliderStepToPoh(step));
   const slider = document.getElementById('chat-budget-slider');
   if (slider) slider.style.setProperty('--fill', `${(step / _BLOG_STEPS) * 100}%`);
 };
 
 // ── Privacy toggle ──────────────────────────────────────────────────────────────
-// Private (default): conversation never leaves this device — local Ollama only.
-// Public: allowed to fall back to a peer miner or a configured cloud AI provider,
-// and required for using network-only (peer-served) models.
+// Private (default): conversation never leaves this device — runs on local Ollama
+// only, free, no job/fee involved. Public: every message is submitted as a paid
+// network compute job (even "hello") — the budget slider only matters in this mode.
 
 window._chatPrivate = true;
+
+function _updateChatBudgetVisibility() {
+  const row = document.getElementById('chat-budget-row');
+  if (row) row.style.display = window._chatPrivate ? 'none' : '';
+}
+_updateChatBudgetVisibility();
 
 window.toggleChatPrivacy = function() {
   window._chatPrivate = !window._chatPrivate;
   const btn = document.getElementById('chat-privacy-toggle');
-  if (!btn) return;
-  if (window._chatPrivate) {
-    btn.textContent = '🔒 Private';
-    btn.classList.remove('public');
-  } else {
-    btn.textContent = '🌐 Public';
-    btn.classList.add('public');
+  if (btn) {
+    if (window._chatPrivate) {
+      btn.textContent = '🔒 Private';
+      btn.classList.remove('public');
+    } else {
+      btn.textContent = '🌐 Public';
+      btn.classList.add('public');
+    }
   }
+  _updateChatBudgetVisibility();
 };
 
 // ── File upload ────────────────────────────────────────────────────────────────
@@ -2169,6 +2126,159 @@ window.removeChatFile = function() {
   if (chip) chip.style.display = 'none';
 };
 
+// ── Paid job payments ─────────────────────────────────────────────────────────
+// Signs a job's fee payment using this node's own wallet (the node pays itself —
+// the common case for a local desktop UI). The node holds the wallet's signing
+// key locally, so it can produce the proof on our behalf without ever exposing
+// the private key to the renderer.
+async function _signJobPayment(jobId, amount) {
+  const port = window._minerApiPort || 3456;
+  const r = await fetch(`http://localhost:${port}/api/wallet/sign-job-payment`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ jobId, amount }),
+  });
+  if (!r.ok) {
+    const err = await r.json().catch(() => ({}));
+    throw new Error(err.error || `Could not sign payment (HTTP ${r.status})`);
+  }
+  return r.json(); // { requesterAddress, txHash, signature, signingPublicKey }
+}
+
+function _renderJobFeedbackStars(jobId) {
+  const port = window._minerApiPort || 3456;
+  const msgs = document.getElementById('chat-messages');
+  if (!msgs || !jobId) return;
+  const fb = document.createElement('div');
+  fb.className = 'chat-feedback';
+  fb.dataset.jobId = jobId;
+  const stars = [1, 2, 3, 4, 5].map(n =>
+    `<span class="chat-star" data-star="${n}" onclick="window._sendJobFeedback('${jobId}',${n},this.closest('.chat-feedback'))">★</span>`
+  ).join('');
+  fb.innerHTML = `<span class="chat-feedback-label">Rate this:</span><span class="chat-star-row">${stars}</span>`;
+  fb.querySelectorAll('.chat-star').forEach(el => {
+    el.addEventListener('mouseenter', () => {
+      const n = parseInt(el.dataset.star, 10);
+      fb.querySelectorAll('.chat-star').forEach(s => s.classList.toggle('hover', parseInt(s.dataset.star, 10) <= n));
+    });
+    el.addEventListener('mouseleave', () => {
+      fb.querySelectorAll('.chat-star').forEach(s => s.classList.remove('hover'));
+    });
+  });
+  msgs.appendChild(fb);
+  msgs.scrollTop = msgs.scrollHeight;
+  if (!window._sendJobFeedback) {
+    window._sendJobFeedback = async function(jId, stars2, container) {
+      try {
+        const r = await fetch(`http://localhost:${port}/api/jobs/${jId}/feedback`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ stars: stars2, requesterAddress: window._localWallet }),
+        });
+        if (r.ok && container) {
+          container.innerHTML = `<span class="chat-feedback-label">Thanks! ${'★'.repeat(stars2)}${'☆'.repeat(5 - stars2)}</span>`;
+        }
+      } catch {}
+    };
+  }
+}
+
+// ── Public mode: every message is a paid network compute job ───────────────────
+async function submitComputeJob(promptText) {
+  const port  = window._minerApiPort || 3456;
+  const model = getActiveModel();
+  const budget = getChatBudget();
+  const input = document.getElementById('chat-input');
+
+  function _finish() {
+    chatAbortController = null;
+    setChatStreaming(false);
+    if (input) { input.disabled = false; input.focus(); }
+  }
+
+  if (!window._localWallet) {
+    renderMessage('assistant', 'No local wallet found — cannot submit a paid job in Public mode.');
+    chatHistory.push({ role: 'assistant', content: 'No local wallet found — cannot submit a paid job in Public mode.' });
+    _finish();
+    return;
+  }
+
+  renderMessage('assistant', 'Submitting paid compute job…', true);
+  chatAbortController = new AbortController();
+
+  try {
+    const jobId = `job-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const { requesterAddress, txHash, signature } = await _signJobPayment(jobId, budget);
+
+    const jobRes = await fetch(`http://localhost:${port}/job`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        id: jobId,
+        type: 'compute',
+        model,
+        payload: { prompt: promptText, history: chatHistory.slice(0, -1) },
+        maxBudget: budget,
+        requesterAddress,
+        paymentTx: { txHash, signature },
+      }),
+    });
+    if (!jobRes.ok) {
+      const err = await jobRes.json().catch(() => ({}));
+      throw new Error(err.error || `Job submit failed (HTTP ${jobRes.status})`);
+    }
+
+    // Poll for completion (same shape/timeout as skill jobs)
+    let attempts = 0;
+    const result = await new Promise(resolve => {
+      const t = setInterval(async () => {
+        attempts++;
+        try {
+          const r = await fetch(`http://localhost:${port}/job/${jobId}/result`);
+          const data = await r.json();
+          if (r.status === 202) {
+            if (data.status === 'error' || data.status === 'ignored') {
+              clearInterval(t);
+              resolve({ _jobError: data.status, error: data.message || data.error });
+              return;
+            }
+            if (attempts % 5 === 0) appendToLastBubble('.');
+            if (attempts > 30) { clearInterval(t); resolve(null); }
+            return;
+          }
+          if (!r.ok || !data.verdict) return;
+          clearInterval(t);
+          resolve(data);
+        } catch { if (attempts > 30) { clearInterval(t); resolve(null); } }
+      }, 2000);
+    });
+
+    finalizeLastBubble();
+
+    if (result?._jobError) {
+      const msg = `Compute job failed (${result.error || result._jobError}).`;
+      renderMessage('assistant', msg);
+      chatHistory.push({ role: 'assistant', content: msg });
+    } else if (result) {
+      const reply = result.profile?.computeOutput || 'No response generated.';
+      renderMessage('assistant', reply);
+      chatHistory.push({ role: 'assistant', content: reply });
+      _renderJobFeedbackStars(jobId);
+    } else {
+      const msg = 'Compute job timed out waiting for a miner. It may still complete — check Explorer.';
+      renderMessage('assistant', msg);
+      chatHistory.push({ role: 'assistant', content: msg });
+    }
+  } catch (e) {
+    finalizeLastBubble();
+    const msg = `Could not submit paid job: ${e.message}`;
+    renderMessage('assistant', msg);
+    chatHistory.push({ role: 'assistant', content: msg });
+  } finally {
+    _finish();
+  }
+}
+
 async function sendChatMessage() {
   if (chatStreaming) return;
   const input = document.getElementById('chat-input');
@@ -2200,14 +2310,32 @@ async function sendChatMessage() {
   const port  = window._minerApiPort || 3456;
   const isPrivate = window._chatPrivate !== false;
 
+  // ── Public mode: always a paid network compute job, no free path — even "hello" ──
+  if (!isPrivate) {
+    await submitComputeJob(llmText);
+    return;
+  }
+
   // ── Skill routing ──────────────────────────────────────────────────────────
   const ADDR_RE = /0x[0-9a-fA-F]{40}|[1-9A-HJ-NP-Za-km-z]{32,44}(?=[\s,!?"]|$)|(bc1|[13])[a-zA-HJ-NP-Z0-9]{25,62}|(EQ|UQ)[A-Za-z0-9+/_-]{46}|[\w-]+\.eth\b|[\w-]+\.sol\b|[\w-]+\.bnb\b/;
   const addrMatch = text.match(ADDR_RE);
 
   async function _submitSkillJob(skillId, payload) {
-    const budget = getChatBudget();
+    // This branch only runs in Private mode (Public mode short-circuits to
+    // submitComputeJob above) — so never attach a payment here, even if the
+    // budget slider has a leftover value from before it was hidden. Builtin
+    // skills are all private/free; a non-private skill would simply be
+    // rejected by the server with FEE_REQUIRED, which is correct in Private mode.
     const body = { type: 'skill', skillId, payload };
-    if (budget > 0) { body.maxBudget = budget; body.requesterAddress = window._localWallet; }
+    if (!isPrivate) {
+      const budget = getChatBudget();
+      const jobId = `job-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      const { requesterAddress, txHash, signature } = await _signJobPayment(jobId, budget);
+      body.id = jobId;
+      body.maxBudget = budget;
+      body.requesterAddress = requesterAddress;
+      body.paymentTx = { txHash, signature };
+    }
     const r = await fetch(`http://localhost:${port}/job`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     if (!r.ok) throw new Error(`job submit HTTP ${r.status}`);
     return (await r.json()).jobId;
@@ -2329,6 +2457,11 @@ async function sendChatMessage() {
   }
 
   let _skillDone = false;
+  // Tracks whether a "Fetching data via..." / "Searching..." placeholder bubble is
+  // currently on screen, so the outer catch below knows to finalize it with an error
+  // instead of silently falling through to plain Ollama chat (which would produce a
+  // second, unrelated reply on top of the stuck placeholder bubble).
+  let _bubbleShown = false;
 
   // Route message to a skill via backend (keyword fast path + LLM fallback)
   try {
@@ -2344,6 +2477,7 @@ async function sendChatMessage() {
         // inline and synthesizes the results with LLM — no paid job queue needed.
         const skillNames = route.jobs.map(j => j.skillId).join(' + ');
         renderMessage('assistant', `Fetching data via \`${skillNames}\`…`, true);
+        _bubbleShown = true;
         chatAbortController = new AbortController();
         try {
           const cascadeRes = await fetch(`http://localhost:${port}/chat/ask`, {
@@ -2352,17 +2486,29 @@ async function sendChatMessage() {
             body: JSON.stringify({ message: text, history: chatHistory, private: isPrivate }),
             signal: AbortSignal.timeout(60000),
           });
+          finalizeLastBubble();
           if (cascadeRes.ok) {
             const cascadeData = await cascadeRes.json();
-            finalizeLastBubble();
             const reply = cascadeData.message || route.jobs.map(j => j.skillId).join(' + ') + ' returned no data.';
             renderMessage('assistant', reply);
             chatHistory.push({ role: 'assistant', content: reply });
-            _skillDone = true;
+          } else {
+            const errData = await cascadeRes.json().catch(() => ({}));
+            const msg = errData.error || `\`${skillNames}\` failed (HTTP ${cascadeRes.status}).`;
+            renderMessage('assistant', msg);
+            chatHistory.push({ role: 'assistant', content: msg });
           }
+          _skillDone = true;
         } catch (e) {
+          // A "Fetching data via..." bubble is already on screen — must finalize it with
+          // a real message and mark _skillDone, otherwise execution falls through to
+          // plain Ollama chat below and produces a second, unrelated reply.
           finalizeLastBubble();
           console.warn('[cascade] /chat/ask failed:', e.message);
+          const msg = `\`${skillNames}\` failed: ${e.message}`;
+          renderMessage('assistant', msg);
+          chatHistory.push({ role: 'assistant', content: msg });
+          _skillDone = true;
         }
       }
 
@@ -2371,6 +2517,7 @@ async function sendChatMessage() {
         // search Hugging Face, disambiguate, and answer from a local/peer copy.
         // A 412 means nobody has it; show the download-approval modal.
         renderMessage('assistant', 'Searching Hugging Face datasets…', true);
+        _bubbleShown = true;
         chatAbortController = new AbortController();
         try {
           const dsRes = await fetch(`http://localhost:${port}/chat/ask`, {
@@ -2422,19 +2569,23 @@ async function sendChatMessage() {
             _skillDone = true;
           }
         } catch (e) {
+          // A bubble ("Searching Hugging Face datasets…") is already on screen — must
+          // finalize it with a real message and mark _skillDone, otherwise execution
+          // falls through to plain Ollama chat below and produces a second, unrelated reply.
           finalizeLastBubble();
           console.warn('[dataset] /chat/ask failed:', e.message);
+          const msg = 'Could not search Hugging Face datasets. Please try again.';
+          renderMessage('assistant', msg);
+          chatHistory.push({ role: 'assistant', content: msg });
+          _skillDone = true;
         }
       }
 
       if (!_skillDone && route.type === 'skill' && route.skillId) {
-        // Skills are not free — require a budget tip to the developer and miner
-        if (getChatBudget() === 0) {
-          document.getElementById('skill-fee-modal')?.classList.remove('hidden');
-          setChatStreaming(false);
-          document.getElementById('chat-input').disabled = false;
-          return;
-        }
+        // We only get here in Private mode (Public mode submits a paid compute job
+        // before any skill routing happens). Builtin skills are all private/free;
+        // if this ever resolves to a genuinely paid community skill, the server
+        // rejects it with FEE_REQUIRED — caught below like any other job error.
 
         // Check if skill is enabled locally before submitting
         const skillInfo = window._skillsData?.[route.skillId];
@@ -2450,6 +2601,7 @@ async function sendChatMessage() {
 
         // Show fetching indicator
         renderMessage('assistant', `Fetching data via \`${route.skillId}\`…`, true);
+        _bubbleShown = true;
         chatAbortController = new AbortController();
 
         // Include the user's question so the miner can run LLM analysis server-side.
@@ -2496,10 +2648,30 @@ async function sendChatMessage() {
             _appendFeedbackButtons(jobId);
           }
           _skillDone = true;
+        } else {
+          // jobResult is null — _waitForSkillRawOutput hit its 60s poll timeout.
+          // Must still mark _skillDone so we don't fall through to plain Ollama
+          // chat below and show a second, uninformed reply.
+          const msg = `\`${route.skillId}\` timed out waiting for a response. Please try again.`;
+          renderMessage('assistant', msg);
+          chatHistory.push({ role: 'assistant', content: msg });
+          _skillDone = true;
         }
       }
     }
-  } catch { /* fall through to Ollama */ }
+  } catch (e) {
+    // If a placeholder bubble is already on screen (e.g. job submission itself threw,
+    // before any of the branches above got a chance to run), finalize it with an error
+    // instead of silently falling through to plain Ollama chat — that would leave the
+    // stuck placeholder bubble on screen AND show a second, unrelated reply underneath it.
+    if (_bubbleShown) {
+      finalizeLastBubble();
+      const msg = `Something went wrong: ${e.message}`;
+      renderMessage('assistant', msg);
+      chatHistory.push({ role: 'assistant', content: msg });
+      _skillDone = true;
+    }
+  }
 
   if (_skillDone) {
     chatAbortController = null;
@@ -2509,36 +2681,8 @@ async function sendChatMessage() {
     return;
   }
   // ── End skill routing ─────────────────────────────────────────────────────
-
-  // Network-only models aren't installed locally — no local Ollama stream is possible.
-  // Route through /chat/ask instead, which relays to a peer reporting this exact model.
-  if (window._activeModelIsNetwork) {
-    renderMessage('assistant', '', true);
-    chatAbortController = new AbortController();
-    try {
-      const r = await fetch(`http://localhost:${port}/chat/ask`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        signal: chatAbortController.signal,
-        body: JSON.stringify({ message: text, history: chatHistory, model, private: isPrivate }),
-      });
-      const data = await r.json();
-      finalizeLastBubble();
-      const reply = data.message || `No peer running ${model} responded. Try a local model instead.`;
-      renderMessage('assistant', reply);
-      chatHistory.push({ role: 'assistant', content: reply });
-    } catch (e) {
-      finalizeLastBubble();
-      const msg = `Could not reach a peer running ${model}.`;
-      renderMessage('assistant', msg);
-      chatHistory.push({ role: 'assistant', content: msg });
-    }
-    chatAbortController = null;
-    setChatStreaming(false);
-    input.disabled = false;
-    input.focus();
-    return;
-  }
+  // (Network-only models are blocked earlier in Private mode, and Public mode
+  // never reaches this point — it always submits a paid compute job instead.)
 
   renderMessage('assistant', '', true); // empty bubble with cursor
 
