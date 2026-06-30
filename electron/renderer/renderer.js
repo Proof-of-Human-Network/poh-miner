@@ -2008,7 +2008,7 @@ function renderMessage(role, content, streaming = false) {
   wrap.appendChild(bubble);
   wrap.appendChild(meta);
   msgs.appendChild(wrap);
-  msgs.scrollTop = msgs.scrollHeight;
+  // No auto-scroll — user may be scrolled up reading earlier messages
   return bubble;
 }
 
@@ -2030,8 +2030,7 @@ function appendToLastBubble(token) {
   } else {
     last.appendChild(cur);
   }
-
-  msgs.scrollTop = msgs.scrollHeight;
+  // No auto-scroll — user may be scrolled up reading earlier messages
 }
 
 function finalizeLastBubble() {
@@ -2166,7 +2165,6 @@ function _renderJobFeedbackStars(jobId) {
     });
   });
   msgs.appendChild(fb);
-  msgs.scrollTop = msgs.scrollHeight;
   if (!window._sendJobFeedback) {
     window._sendJobFeedback = async function(jId, stars2, container) {
       try {
@@ -2364,7 +2362,6 @@ async function sendChatMessage() {
     });
 
     msgs.appendChild(fb);
-    msgs.scrollTop = msgs.scrollHeight;
   }
 
   window._sendJobFeedback = async function(jobId, stars, container) {
