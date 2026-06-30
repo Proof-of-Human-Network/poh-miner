@@ -1745,25 +1745,50 @@ window.closeModelPicker = function() {
   document.getElementById('model-picker-backdrop')?.classList.add('hidden');
 };
 
+window._cachedModelEntries = []; // [{ name, local, peerCount }]
+
 async function _renderModelList() {
   const listEl = document.getElementById('mp-list');
   if (!listEl) return;
 
-  // Use cache if fresh, otherwise re-fetch
-  if (!window._cachedModels.length) {
+  // Use cache if fresh, otherwise re-fetch (local Ollama catalog + network-reported models)
+  if (!window._cachedModelEntries.length) {
     listEl.innerHTML = '<div class="mp-empty">Loading…</div>';
     try {
       const port = window._minerApiPort || 3456;
-      const res  = await fetch(`http://localhost:${port}/api/models`);
-      if (res.ok) {
-        const data = await res.json();
-        window._cachedModels = (data.models || []).map(m => m.name || m.model).filter(Boolean);
+      const [localRes, netRes] = await Promise.all([
+        fetch(`http://localhost:${port}/api/models`).catch(() => null),
+        fetch(`http://localhost:${port}/api/network-models`).catch(() => null),
+      ]);
+
+      const byName = new Map();
+      if (localRes?.ok) {
+        const data = await localRes.json();
+        for (const m of (data.models || [])) {
+          const name = m.name || m.model;
+          if (name) byName.set(name, { name, local: true, peerCount: 0 });
+        }
       }
+      if (netRes?.ok) {
+        const data = await netRes.json();
+        for (const m of (data.models || [])) {
+          const existing = byName.get(m.name);
+          byName.set(m.name, { name: m.name, local: existing?.local || m.local, peerCount: m.peerCount || 0 });
+        }
+      }
+      window._cachedModelEntries = [...byName.values()];
+      window._cachedModels = window._cachedModelEntries.map(m => m.name);
     } catch {}
   }
 
-  const models = window._cachedModels;
-  if (!models.length) {
+  _paintModelList(window._cachedModelEntries);
+}
+
+function _paintModelList(entries) {
+  const listEl = document.getElementById('mp-list');
+  if (!listEl) return;
+
+  if (!entries.length) {
     listEl.innerHTML = '<div class="mp-empty">No models found.<br>Make sure Ollama is running and has models installed.</div>';
     return;
   }
@@ -1775,18 +1800,31 @@ async function _renderModelList() {
     return icons.default;
   }
 
-  listEl.innerHTML = models.map(m => {
-    const active = m === window._activeModel;
-    return `<div class="mp-item${active ? ' active' : ''}" onclick="pickModel('${m.replace(/'/g,"\\'")}')">
-      <div class="mp-item-icon">${modelIcon(m)}</div>
-      <span class="mp-item-name">${m}</span>
-      ${active ? '<span class="mp-item-badge">ACTIVE</span>' : ''}
+  listEl.innerHTML = entries.map(m => {
+    const active = m.name === window._activeModel;
+    const networkBadge = !m.local
+      ? `<span class="mp-item-badge" style="color:#60a5fa;background:#0a1a2f;border-color:#1a3a5a;">NETWORK${m.peerCount > 1 ? ` ·${m.peerCount}` : ''}</span>`
+      : '';
+    return `<div class="mp-item${active ? ' active' : ''}" onclick="pickModel('${m.name.replace(/'/g,"\\'")}')">
+      <div class="mp-item-icon">${modelIcon(m.name)}</div>
+      <span class="mp-item-name">${m.name}</span>
+      ${active ? '<span class="mp-item-badge">ACTIVE</span>' : networkBadge}
     </div>`;
   }).join('');
 }
 
+window._filterModelList = function(query) {
+  const q = (query || '').trim().toLowerCase();
+  const filtered = !q
+    ? window._cachedModelEntries
+    : window._cachedModelEntries.filter(m => m.name.toLowerCase().includes(q));
+  _paintModelList(filtered);
+};
+
 window.pickModel = function(name) {
   window._modelUserPicked = true;
+  const entry = window._cachedModelEntries.find(m => m.name === name);
+  window._activeModelIsNetwork = !!entry && !entry.local;
   setActiveModel(name);
   closeModelPicker();
 };
@@ -1976,22 +2014,89 @@ window.updateChatBudgetDisplay = function(val) {
   if (slider) slider.style.setProperty('--fill', `${(step / _BLOG_STEPS) * 100}%`);
 };
 
+// ── Privacy toggle ──────────────────────────────────────────────────────────────
+// Private (default): conversation never leaves this device — local Ollama only.
+// Public: allowed to fall back to a peer miner or a configured cloud AI provider,
+// and required for using network-only (peer-served) models.
+
+window._chatPrivate = true;
+
+window.toggleChatPrivacy = function() {
+  window._chatPrivate = !window._chatPrivate;
+  const btn = document.getElementById('chat-privacy-toggle');
+  if (!btn) return;
+  if (window._chatPrivate) {
+    btn.textContent = '🔒 Private';
+    btn.classList.remove('public');
+  } else {
+    btn.textContent = '🌐 Public';
+    btn.classList.add('public');
+  }
+};
+
+// ── File upload ────────────────────────────────────────────────────────────────
+
+window._chatAttachedFile = null;
+const MAX_CHAT_FILE_BYTES = 100 * 1024;
+
+window.handleChatFileUpload = function(event) {
+  const file = event.target.files?.[0];
+  event.target.value = ''; // allow re-selecting the same file later
+  if (!file) return;
+  if (file.size > MAX_CHAT_FILE_BYTES) {
+    alert(`File too large (max 100KB). "${file.name}" is ${(file.size / 1024).toFixed(0)}KB.`);
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = () => {
+    window._chatAttachedFile = { name: file.name, content: String(reader.result).slice(0, 100_000) };
+    const chip = document.getElementById('chat-file-chip');
+    const chipName = document.getElementById('chat-file-chip-name');
+    if (chip && chipName) {
+      chipName.textContent = `📎 ${file.name}`;
+      chip.style.display = 'flex';
+    }
+  };
+  reader.onerror = () => alert(`Could not read file "${file.name}".`);
+  reader.readAsText(file);
+};
+
+window.removeChatFile = function() {
+  window._chatAttachedFile = null;
+  const chip = document.getElementById('chat-file-chip');
+  if (chip) chip.style.display = 'none';
+};
+
 async function sendChatMessage() {
   if (chatStreaming) return;
   const input = document.getElementById('chat-input');
   const text  = input.value.trim();
-  if (!text) return;
+  const attachedFile = window._chatAttachedFile;
+  if (!text && !attachedFile) return;
+
+  // Network-only (peer-served) models can't be used in Private mode — never silently leak.
+  if (window._chatPrivate && window._activeModelIsNetwork) {
+    alert(`"${getActiveModel()}" is only available on the network. Switch to Public mode or pick a local model.`);
+    return;
+  }
 
   input.value = '';
   input.style.height = '';
   input.disabled = true;
   setChatStreaming(true);
 
-  chatHistory.push({ role: 'user', content: text });
-  renderMessage('user', text);
+  let llmText = text;
+  if (attachedFile) {
+    llmText = `${text}\n\n[Attached file: ${attachedFile.name}]\n\`\`\`\n${attachedFile.content}\n\`\`\``;
+  }
+
+  chatHistory.push({ role: 'user', content: llmText });
+  renderMessage('user', attachedFile ? `${text}\n\n📎 ${attachedFile.name}` : text);
+  if (attachedFile) window.removeChatFile();
 
   const model = getActiveModel();
   const port  = window._minerApiPort || 3456;
+  const isPrivate = window._chatPrivate !== false;
 
   // ── Skill routing ──────────────────────────────────────────────────────────
   const ADDR_RE = /0x[0-9a-fA-F]{40}|[1-9A-HJ-NP-Za-km-z]{32,44}(?=[\s,!?"]|$)|(bc1|[13])[a-zA-HJ-NP-Z0-9]{25,62}|(EQ|UQ)[A-Za-z0-9+/_-]{46}|[\w-]+\.eth\b|[\w-]+\.sol\b|[\w-]+\.bnb\b/;
@@ -2012,22 +2117,35 @@ async function sendChatMessage() {
     const fb = document.createElement('div');
     fb.className = 'chat-feedback';
     fb.dataset.jobId = jobId;
-    fb.innerHTML = `<span class="chat-feedback-label">Was this helpful?</span>
-      <button class="chat-fb-btn" data-rating="positive" onclick="window._sendJobFeedback('${jobId}','positive',this.closest('.chat-feedback'))">👍</button>
-      <button class="chat-fb-btn" data-rating="negative" onclick="window._sendJobFeedback('${jobId}','negative',this.closest('.chat-feedback'))">👎</button>`;
+    const stars = [1, 2, 3, 4, 5].map(n =>
+      `<span class="chat-star" data-star="${n}" onclick="window._sendJobFeedback('${jobId}',${n},this.closest('.chat-feedback'))">★</span>`
+    ).join('');
+    fb.innerHTML = `<span class="chat-feedback-label">Rate this:</span><span class="chat-star-row">${stars}</span>`;
+
+    // Hover preview: fill stars up to the hovered one
+    fb.querySelectorAll('.chat-star').forEach(el => {
+      el.addEventListener('mouseenter', () => {
+        const n = parseInt(el.dataset.star, 10);
+        fb.querySelectorAll('.chat-star').forEach(s => s.classList.toggle('hover', parseInt(s.dataset.star, 10) <= n));
+      });
+      el.addEventListener('mouseleave', () => {
+        fb.querySelectorAll('.chat-star').forEach(s => s.classList.remove('hover'));
+      });
+    });
+
     msgs.appendChild(fb);
     msgs.scrollTop = msgs.scrollHeight;
   }
 
-  window._sendJobFeedback = async function(jobId, rating, container) {
+  window._sendJobFeedback = async function(jobId, stars, container) {
     try {
       const r = await fetch(`http://localhost:${port}/api/jobs/${jobId}/feedback`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ rating, requesterAddress: window._localWallet }),
+        body: JSON.stringify({ stars, requesterAddress: window._localWallet }),
       });
       if (r.ok && container) {
-        container.innerHTML = `<span class="chat-feedback-label">${rating === 'positive' ? '👍 Thanks!' : '👎 Noted — miner penalised'}</span>`;
+        container.innerHTML = `<span class="chat-feedback-label">Thanks! ${'★'.repeat(stars)}${'☆'.repeat(5 - stars)}</span>`;
       }
     } catch {}
   };
@@ -2129,7 +2247,7 @@ async function sendChatMessage() {
           const cascadeRes = await fetch(`http://localhost:${port}/chat/ask`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ message: text, history: chatHistory }),
+            body: JSON.stringify({ message: text, history: chatHistory, private: isPrivate }),
             signal: AbortSignal.timeout(60000),
           });
           if (cascadeRes.ok) {
@@ -2229,6 +2347,36 @@ async function sendChatMessage() {
   }
   // ── End skill routing ─────────────────────────────────────────────────────
 
+  // Network-only models aren't installed locally — no local Ollama stream is possible.
+  // Route through /chat/ask instead, which relays to a peer reporting this exact model.
+  if (window._activeModelIsNetwork) {
+    renderMessage('assistant', '', true);
+    chatAbortController = new AbortController();
+    try {
+      const r = await fetch(`http://localhost:${port}/chat/ask`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        signal: chatAbortController.signal,
+        body: JSON.stringify({ message: text, history: chatHistory, model, private: isPrivate }),
+      });
+      const data = await r.json();
+      finalizeLastBubble();
+      const reply = data.message || `No peer running ${model} responded. Try a local model instead.`;
+      renderMessage('assistant', reply);
+      chatHistory.push({ role: 'assistant', content: reply });
+    } catch (e) {
+      finalizeLastBubble();
+      const msg = `Could not reach a peer running ${model}.`;
+      renderMessage('assistant', msg);
+      chatHistory.push({ role: 'assistant', content: msg });
+    }
+    chatAbortController = null;
+    setChatStreaming(false);
+    input.disabled = false;
+    input.focus();
+    return;
+  }
+
   renderMessage('assistant', '', true); // empty bubble with cursor
 
   chatAbortController = new AbortController();
@@ -2261,6 +2409,25 @@ async function sendChatMessage() {
       try { errMsg = JSON.parse(errText)?.error || errText; } catch { /* keep raw */ }
       const isOllamaDown = errMsg.toLowerCase().includes('ollama unavailable') || errMsg.toLowerCase().includes('econnrefused');
       if (isOllamaDown) {
+        // Public mode: try a peer miner or a configured cloud AI provider before
+        // bothering the user with a local-install flow.
+        if (!isPrivate) {
+          try {
+            const fbRes = await fetch(`http://localhost:${port}/chat/ask`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ message: text, history: chatHistory, model, private: false }),
+              signal: AbortSignal.timeout(50000),
+            });
+            const fbData = await fbRes.json();
+            if (fbData?.message && !/local llm is unavailable/i.test(fbData.message)) {
+              finalizeLastBubble();
+              renderMessage('assistant', fbData.message);
+              chatHistory.push({ role: 'assistant', content: fbData.message });
+              return;
+            }
+          } catch { /* fall through to local install attempt */ }
+        }
         appendToLastBubble('Ollama is not running. Attempting to start it…');
         finalizeLastBubble();
         chatHistory.push({ role: 'assistant', content: '[Ollama not running — attempting restart]' });

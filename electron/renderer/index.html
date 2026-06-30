@@ -277,6 +277,7 @@
       display: flex;
       flex-direction: column;
       max-width: 82%;
+      min-width: 0;
       gap: 3px;
     }
     .chat-msg.user { align-self: flex-end; align-items: flex-end; }
@@ -287,6 +288,10 @@
       font-size: 13px;
       line-height: 1.6;
       word-break: break-word;
+      overflow-wrap: anywhere;
+      max-width: 100%;
+      min-width: 0;
+      box-sizing: border-box;
     }
 
     /* Markdown elements inside chat bubbles */
@@ -309,7 +314,9 @@
     .chat-bubble pre {
       background: #0d0d0d; border: 1px solid #2a2a2a; border-radius: 6px;
       padding: 12px 14px; overflow-x: auto; margin: 10px 0;
+      max-width: 100%; box-sizing: border-box;
     }
+    .chat-bubble img { max-width: 100%; height: auto; }
     .chat-bubble pre code {
       background: none; border: none; padding: 0;
       color: #9ca3af; font-size: 12px; line-height: 1.5;
@@ -321,7 +328,7 @@
     .chat-bubble strong { color: #f9fafb; font-weight: 600; }
     .chat-bubble em { color: #d1d5db; }
     .chat-bubble hr { border: none; border-top: 1px solid #2a2a2a; margin: 10px 0; }
-    .chat-bubble table { border-collapse: collapse; margin: 8px 0; font-size: 12px; }
+    .chat-bubble table { border-collapse: collapse; margin: 8px 0; font-size: 12px; display: block; max-width: 100%; overflow-x: auto; }
     .chat-bubble th, .chat-bubble td {
       border: 1px solid #2a2a2a; padding: 5px 10px; text-align: left;
     }
@@ -373,8 +380,9 @@
     .chat-cursor { display: inline-block; width: 7px; height: 13px; background: #22c55e; animation: blink 1s step-end infinite; vertical-align: text-bottom; margin-left: 2px; }
     .chat-feedback { display: flex; align-items: center; gap: 6px; margin-top: 4px; padding-left: 2px; }
     .chat-feedback-label { color: #4b5563; font-size: 11px; }
-    .chat-fb-btn { background: none; border: 1px solid #2a2a2a; border-radius: 6px; padding: 2px 8px; cursor: pointer; font-size: 14px; color: #9ca3af; transition: border-color 0.15s; }
-    .chat-fb-btn:hover { border-color: #4b5563; }
+    .chat-star-row { display: inline-flex; gap: 2px; }
+    .chat-star { font-size: 16px; line-height: 1; color: #2a2a2a; cursor: pointer; transition: color 0.1s; }
+    .chat-star.hover, .chat-star:hover { color: #facc15; }
     .chat-copy-btn { background: none; border: 1px solid #222; border-radius: 4px; color: #555; cursor: pointer; font-size: 12px; padding: 1px 6px; margin-left: 4px; transition: color 0.15s, border-color 0.15s; }
     .chat-copy-btn:hover { color: #888; border-color: #444; }
     @keyframes blink { 50% { opacity: 0; } }
@@ -409,6 +417,8 @@
       padding: 2px 8px;
     }
     .chat-clear-btn:hover { color: #888; }
+    #chat-privacy-toggle { margin-left: 8px; }
+    #chat-privacy-toggle.public { color: #60a5fa; }
     #chat-context-pill, #chat-brain-pill {
       font-family: monospace; font-size: 10px;
       background: rgba(0,0,0,0.3);
@@ -1374,6 +1384,8 @@
           <span id="chat-context-pill" title="Social context active — LLM knows recent activity for this address" style="display:none;"></span>
           <button class="chat-clear-btn" onclick="clearChat()" data-i18n="chat.clear">Clear</button>
           <button class="chat-clear-btn" onclick="clearChatContext()" id="chat-ctx-clear-btn" title="Clear social context" style="display:none; color:#374151;" data-i18n="chat.ctx">× context</button>
+          <button class="chat-clear-btn" id="chat-privacy-toggle" onclick="toggleChatPrivacy()"
+                  title="Private: stays on this device only. Public: may use peer miners or configured cloud AI providers as fallback.">🔒 Private</button>
         </div>
         <div class="chat-messages" id="chat-messages">
           <div class="chat-empty" id="chat-empty">
@@ -1388,7 +1400,16 @@
                  min="0" max="200" step="1" value="0"
                  oninput="updateChatBudgetDisplay(this.value)" />
         </div>
+        <div id="chat-file-chip" style="display:none;align-items:center;gap:6px;padding:4px 4px 0;font-size:11px;color:#9ca3af;">
+          <span id="chat-file-chip-name" style="font-family:monospace;background:#111;border:1px solid #2a2a2a;border-radius:4px;padding:2px 8px;"></span>
+          <span onclick="removeChatFile()" style="cursor:pointer;color:#f87171;">×</span>
+        </div>
         <div class="chat-input-row">
+          <input type="file" id="chat-file-input" style="display:none"
+                 accept=".txt,.md,.json,.csv,.log,.js,.jsx,.ts,.tsx,.py,.html,.css,.yaml,.yml,.xml,.sh"
+                 onchange="handleChatFileUpload(event)" />
+          <button id="chat-upload-btn" onclick="document.getElementById('chat-file-input').click()"
+                  title="Attach a text file (max 100KB)" data-i18n="chat.attach">📎</button>
           <textarea id="chat-input" rows="1" placeholder="Message the AI…"
                     data-i18n-placeholder="chat.placeholder"
                     onkeydown="chatKeydown(event)" oninput="autoResize(this)"></textarea>
@@ -1941,6 +1962,8 @@
         <span class="mp-title" data-i18n="picker.title">Select Model</span>
         <button class="mp-close" onclick="closeModelPicker()">×</button>
       </div>
+      <input id="mp-filter" type="text" placeholder="Filter models…" oninput="window._filterModelList(this.value)"
+             style="margin:0 8px 8px;width:calc(100% - 16px);padding:6px 8px;background:#0a0a0a;border:1px solid #1a1a1a;border-radius:6px;color:#e5e7eb;font-family:monospace;font-size:11px;box-sizing:border-box;outline:none;">
       <div class="mp-list" id="mp-list">
         <div class="mp-empty" data-i18n="picker.loading">Loading models…</div>
       </div>

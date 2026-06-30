@@ -1250,11 +1250,20 @@ export class PohMinerNode {
         req.on('data', c => body += c);
         req.on('end', () => {
           try {
-            const { rating, comment, requesterAddress, signature } = JSON.parse(body);
-            if (!jobId || !rating || !['positive', 'negative'].includes(rating)) {
+            const { stars, rating: legacyRating, comment, requesterAddress, signature } = JSON.parse(body);
+
+            // New: 5-star rating (1-5 int). Legacy: 'positive'|'negative' string still accepted.
+            const hasStars = Number.isInteger(stars) && stars >= 1 && stars <= 5;
+            const hasLegacy = ['positive', 'negative'].includes(legacyRating);
+            if (!jobId || (!hasStars && !hasLegacy)) {
               res.statusCode = 400;
-              return res.end(JSON.stringify({ error: 'jobId and rating (positive|negative) required' }));
+              return res.end(JSON.stringify({ error: 'jobId and stars (1-5) required' }));
             }
+            // Derived bucket used for slashing + brain correction: 4-5★ = positive, 1-2★ = negative, 3★ = neutral
+            const rating = hasStars
+              ? (stars >= 4 ? 'positive' : stars <= 2 ? 'negative' : 'neutral')
+              : legacyRating;
+
             const rec = this._getJobRecord(jobId);
             if (!rec) {
               res.statusCode = 404;
@@ -1275,6 +1284,7 @@ export class PohMinerNode {
               minerAddress:     this.config.wallet,
               requesterAddress: requesterAddress || rec.job?.requesterAddress || null,
               originalVerdict:  rec.result?.verdict || null,
+              stars:            hasStars ? stars : null,
               rating,
               comment:          (comment || '').slice(0, 500),
               timestamp:        Date.now(),
@@ -1288,14 +1298,15 @@ export class PohMinerNode {
             // Slash own reputation if the negative feedback targets this node's work
             if (transition.rating === 'negative' && transition.minerAddress === this.config.wallet) {
               this.applySlashing(0.05);
-              console.log(`[PoH-Miner] Reputation slashed (dislike on job ${jobId}): ${this.reputation.toFixed(3)}`);
+              console.log(`[PoH-Miner] Reputation slashed (${hasStars ? stars + '★' : 'dislike'} on job ${jobId}): ${this.reputation.toFixed(3)}`);
             }
-            res.end(JSON.stringify({ ok: true, jobId, rating }));
+            res.end(JSON.stringify({ ok: true, jobId, rating, stars: transition.stars }));
 
-            // Fire-and-forget: update brain weights so 👍/👎 actually teaches the LLM
+            // Fire-and-forget: update brain weights so star ratings actually teach the LLM.
+            // Neutral (3★) carries no clear correction signal — skip the brain update for it.
             const scannedAddress = rec.job?.payload?.address || rec.result?.address;
             const fbAiVerdict    = transition.originalVerdict;
-            if (scannedAddress && fbAiVerdict) {
+            if (scannedAddress && fbAiVerdict && rating !== 'neutral') {
               const fbCorrection = rating === 'negative'
                 ? (fbAiVerdict === 'HUMAN' ? 'AI' : 'HUMAN')
                 : fbAiVerdict; // positive = user agrees; records dataset without changing weights
@@ -1526,6 +1537,20 @@ export class PohMinerNode {
         return;
       }
 
+      // ── Network-wide model discovery (local Ollama models + models peers report) ──
+      if (req.method === 'GET' && url.pathname === '/api/network-models') {
+        (async () => {
+          try {
+            const models = await this._getNetworkModels();
+            res.end(JSON.stringify({ models }));
+          } catch (e) {
+            res.statusCode = 500;
+            res.end(JSON.stringify({ error: e.message }));
+          }
+        })();
+        return;
+      }
+
       // ── Brain state API (/api/brain/*) ────────────────────────────────────────
       if (url.pathname === '/api/brain/state') {
         const brainDir = getBrainDataDir();
@@ -1729,8 +1754,21 @@ export class PohMinerNode {
         req.on('data', c => body += c);
         req.on('end', async () => {
           try {
-            const { message, history = [], model: reqModel } = JSON.parse(body);
+            const { message, history = [], model: reqModel, private: isPrivate = false } = JSON.parse(body);
             if (!message) { res.statusCode = 400; return res.end(JSON.stringify({ error: 'message required' })); }
+
+            // Private mode: never leaves this device — no peer relay, no network-only
+            // model routing, no cloud AI provider fallback. Just the local Ollama instance.
+            if (isPrivate && reqModel) {
+              try {
+                const networkModels = await this._getNetworkModels();
+                const known = networkModels.find(m => m.name === reqModel);
+                if (known && !known.local) {
+                  res.statusCode = 400;
+                  return res.end(JSON.stringify({ error: `Model "${reqModel}" is only available on the network — switch to Public mode or pick a local model.` }));
+                }
+              } catch { /* ignore — fall through to local attempt */ }
+            }
 
             const route = await this._routeMessage(message);
 
@@ -1807,6 +1845,21 @@ export class PohMinerNode {
               }
             }
 
+            // If the requested model isn't installed locally, route directly to a peer
+            // that's running it (model filtering — avoids a doomed local 404 round-trip).
+            if (reqModel) {
+              try {
+                const networkModels = await this._getNetworkModels();
+                const known = networkModels.find(m => m.name === reqModel);
+                if (known && !known.local) {
+                  const peerReply = await this._relayToPeerChat(message, history, reqModel);
+                  if (peerReply) {
+                    return res.end(JSON.stringify({ type: 'chat', message: peerReply, _fromPeer: true, model: reqModel }));
+                  }
+                }
+              } catch { /* fall through to local attempt */ }
+            }
+
             // Free LLM answer (non-streaming so any client can use it)
             const ollamaBase = this.config.ollamaUrl || 'http://localhost:11434';
             const selModel   = reqModel || this.config.model || 'qwen2.5:1.5b';
@@ -1853,7 +1906,7 @@ export class PohMinerNode {
               || (err.message || '').toLowerCase().includes('timeout')
               || (err.message || '').toLowerCase().includes('abort')
               || (err.message || '').toLowerCase().includes('connect');
-            if (isUnavailable) {
+            if (isUnavailable && !isPrivate) {
               // Local Ollama unavailable — try a peer miner that has one
               try {
                 const peerReply = await this._relayToPeerChat(message, history);
@@ -1872,7 +1925,9 @@ export class PohMinerNode {
               } catch { /* ignore */ }
             }
             const fallback = isUnavailable
-              ? 'Local LLM is unavailable and no peer miner or configured AI provider could be reached. Try again shortly.'
+              ? (isPrivate
+                  ? 'Local LLM is unavailable. Private mode keeps this conversation on your device only — switch to Public to allow a peer miner or configured AI provider to answer instead.'
+                  : 'Local LLM is unavailable and no peer miner or configured AI provider could be reached. Try again shortly.')
               : 'Something went wrong. Please try again.';
             res.end(JSON.stringify({ type: 'chat', message: fallback }));
           }
@@ -3761,6 +3816,54 @@ export class PohMinerNode {
     return peers;
   }
 
+  // Aggregate the set of LLM models available across this node + reachable peers.
+  // Local models come from Ollama's full tag list; peer models come from their
+  // self-reported `/status` (each peer only advertises the one model it's actively
+  // running — peers don't expose their full local Ollama catalog to the network).
+  async _getNetworkModels() {
+    const now = Date.now();
+    if (this._networkModelsCache && (now - this._networkModelsCache.ts) < 60_000) {
+      return this._networkModelsCache.models;
+    }
+
+    const byName = new Map(); // name → { name, local, peerCount }
+
+    // 1. Local Ollama catalog — fully usable, no network round-trip
+    try {
+      const ollamaBase = this.config.ollamaUrl || 'http://localhost:11434';
+      const r = await fetch(`${ollamaBase}/api/tags`, { signal: AbortSignal.timeout(4000) });
+      if (r.ok) {
+        const data = await r.json();
+        for (const m of (data.models || [])) {
+          const name = m.name || m.model;
+          if (!name) continue;
+          byName.set(name, { name, local: true, peerCount: 0 });
+        }
+      }
+    } catch { /* ollama unavailable locally */ }
+
+    // 2. Models peers are actively running — discovered via their /status
+    try {
+      const peers = await this._getComputePeers();
+      const results = await Promise.allSettled(peers.slice(0, 25).map(base =>
+        fetch(`${base}/status`, { signal: AbortSignal.timeout(4000) }).then(r => r.ok ? r.json() : null)
+      ));
+      for (const r of results) {
+        const model = r.status === 'fulfilled' ? r.value?.model : null;
+        if (!model) continue;
+        const entry = byName.get(model) || { name: model, local: false, peerCount: 0 };
+        entry.peerCount += 1;
+        byName.set(model, entry);
+      }
+    } catch { /* peer discovery unavailable */ }
+
+    const models = [...byName.values()].sort((a, b) =>
+      (b.local - a.local) || (b.peerCount - a.peerCount) || a.name.localeCompare(b.name)
+    );
+    this._networkModelsCache = { ts: now, models };
+    return models;
+  }
+
   // Relay a job to all known peer miners (non-blocking best-effort).
   // Peers receiving it will compute and store the result under the same jobId.
   async _relayJobToPeers(job) {
@@ -3796,15 +3899,28 @@ export class PohMinerNode {
   }
 
   // Send a chat message to the best available peer and return the reply text.
-  async _relayToPeerChat(message, history = []) {
+  async _relayToPeerChat(message, history = [], requiredModel = null) {
     try {
-      const peers = await this._getComputePeers();
+      let peers = await this._getComputePeers();
+
+      // Model filtering: only relay to peers self-reporting this exact model
+      if (requiredModel) {
+        const statusResults = await Promise.allSettled(peers.map(base =>
+          fetch(`${base}/status`, { signal: AbortSignal.timeout(4000) }).then(r => r.ok ? r.json() : null)
+        ));
+        peers = peers.filter((_, i) =>
+          statusResults[i].status === 'fulfilled' && statusResults[i].value?.model === requiredModel
+        );
+        if (!peers.length) return null;
+      }
+
       for (const base of peers) {
         try {
+          const body = requiredModel ? { message, history, model: requiredModel } : { message, history };
           const r = await fetch(`${base}/chat/ask`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ message, history }),
+            body: JSON.stringify(body),
             signal: AbortSignal.timeout(45000),
           });
           if (r.ok) {
@@ -4703,6 +4819,7 @@ export class PohMinerNode {
     return {
       wallet: this.config.pohWallet || this.config.wallet,
       pohWallet: this.config.pohWallet || this.config.wallet,
+      model: this.config.model || 'qwen2.5:1.5b',
       methodsHash: sig.hash,
       methodsCount: sig.count,
       signalsSource: sig.source,
