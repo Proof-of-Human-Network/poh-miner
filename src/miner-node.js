@@ -47,6 +47,9 @@ import { OrderStore, QUOTE_CURRENCIES } from './p2p/order-store.js';
 import { EscrowManager, ESCROW_ADDRESS } from './p2p/escrow.js';
 import { ReferralStore } from './p2p/referral-store.js';
 import { tryExternalProviders } from './ai/external-providers.js';
+import { needsDatasetLookup, searchDatasets, disambiguateDataset } from './datasets/hf-dataset-search.js';
+import * as hfDatasetManager from './datasets/hf-dataset-manager.js';
+import { serveHfDataset, pullHfDatasetFromPeer } from './datasets/hf-dataset-peer-serve.js';
 
 // Returns true when a message segment clearly signals it needs live internet data.
 // Prevents web_search from firing on general knowledge questions the LLM already knows.
@@ -158,6 +161,18 @@ const DEFAULT_ENABLED_SKILLS = new Set([
   'sol_solana_agent_kit', 'sol_solana_kit', 'sol_solana_kit_migration',
   'sol_squads', 'sol_surfpool', 'sol_svm', 'sol_switchboard', 'sol_wallet_analysis',
 ]);
+
+// Job types that require a paid, signature-verified fee before the node will
+// run them at all (as opposed to 'verdict' jobs, where a fee is optional).
+const FEE_REQUIRED_JOB_TYPES = new Set(['skill', 'compute']);
+
+// Canonical hash committing a fee payment to one specific job + miner + amount + nonce,
+// so a signature over it can't be replayed against a different job or a higher budget.
+function computeJobPaymentHash({ jobId, requesterAddress, minerAddress, amount, nonce }) {
+  return crypto.createHash('sha256')
+    .update(JSON.stringify({ jobId, requesterAddress, minerAddress, amount, nonce }))
+    .digest('hex');
+}
 
 // Well-known production bootnodes. Used when no bootnodes are configured
 // (e.g. fresh GUI onboarding). Individual users can override via config.bootnodes.
@@ -756,7 +771,14 @@ export class PohMinerNode {
       }
     }
 
-    if (jobs.length === 0)  return Promise.resolve({ type: 'chat' });
+    if (jobs.length === 0) {
+      // No skill matched — if the message explicitly references a dataset,
+      // try the Hugging Face dataset pipeline before falling back to plain chat.
+      if (needsDatasetLookup(message)) {
+        return Promise.resolve({ type: 'dataset', query: message });
+      }
+      return Promise.resolve({ type: 'chat' });
+    }
     if (jobs.length === 1)  return Promise.resolve({ type: 'skill', skillId: jobs[0].skillId, input: jobs[0].input, skillContext: jobs[0].skillContext, reason: 'segment match' });
     return Promise.resolve({ type: 'cascade', jobs, reason: `segment cascade: ${jobs.map(j => j.skillId).join(', ')}` });
   }
@@ -989,29 +1011,114 @@ export class PohMinerNode {
           try {
             const parsed = JSON.parse(body);
             const { paymentTx, ...rawJob } = parsed;
+            const jobId = rawJob.id || (url.pathname === '/test/job' ? `test-${Date.now()}-${Math.random().toString(36).slice(2, 8)}` : `job-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
+            // A job relayed from a peer miner (geo/competition fan-out) already had its fee
+            // verified + escrowed by the node that first received it from the client — that
+            // node's payment proof is bound to *its* minerAddress, so it can't be re-verified
+            // here. Trust the upstream node and skip straight to the legacy escrow bookkeeping —
+            // but ONLY when the request actually arrived from a known peer's IP. `_relayed` is
+            // a field in the client-supplied JSON body; without this check any external caller
+            // could set it themselves and skip payment verification entirely.
+            const remoteIp = (req.socket.remoteAddress || '').replace(/^::ffff:/, '');
+            const fromKnownPeer = this.peers.some(p => p.host === remoteIp);
+            const trustedRelay = rawJob._relayed === true && fromKnownPeer;
+            const feeRequired = FEE_REQUIRED_JOB_TYPES.has(rawJob.type) && !trustedRelay;
 
-            // Skill jobs must have a non-zero budget — the network charges for AI execution.
-            // The default LLM chat is free, but skills (real-time data fetching) require a
-            // fee that goes to the skill developer (20%) and the miner running it (80%).
-            if (rawJob.type === 'skill' && !(rawJob.maxBudget > 0)) {
+            // Fee-required job types (skill execution, model/dataset compute) must have a
+            // non-zero budget — the default LLM chat is free, but real compute work tips
+            // the developer/dataset (where applicable) and the miner running it.
+            if (feeRequired && !(rawJob.maxBudget > 0)) {
               res.statusCode = 402;
               return res.end(JSON.stringify({
-                error: 'Skills require a fee (maxBudget > 0). The default LLM chat is free, but skill execution tips the developer and miner.',
-                code: 'SKILL_FEE_REQUIRED',
+                error: `${rawJob.type} jobs require a fee (maxBudget > 0) paid in POH. The default LLM chat is free, but real compute tips the developer/dataset and the miner.`,
+                code: 'FEE_REQUIRED',
               }));
             }
 
-            // Payment validation (Phase 1: unverified allowed when no key registered)
-            if (!rawJob.requesterAddress && rawJob.maxBudget > 0) {
-              res.statusCode = 402;
-              return res.end(JSON.stringify({ error: 'requesterAddress is required when maxBudget > 0' }));
+            if (rawJob.type === 'compute' && !rawJob.model) {
+              res.statusCode = 400;
+              return res.end(JSON.stringify({ error: 'model is required for compute jobs' }));
             }
 
-            if (rawJob.requesterAddress && rawJob.maxBudget > 0) {
-              // Signature check
+            // Normalize a bit
+            const job = {
+              type: rawJob.type || 'verdict',
+              payload: rawJob.payload || { address: rawJob.address },
+              originCountry: rawJob.originCountry || rawJob.originRegion,
+              source: 'api', // marks as local UI job — skip network slashing
+              ...rawJob,
+              id: jobId, // always wins over rawJob.id (same value when caller supplied one)
+            };
+            // Use maxBudget as fee when no explicit fee provided (budget slider → job priority)
+            if (!job.fee) job.fee = job.maxBudget || 10_000_000;
+
+            if (!job.payload?.address && job.type !== 'skill' && job.type !== 'compute') {
+              res.statusCode = 400;
+              return res.end(JSON.stringify({ error: 'payload.address is required for verdict jobs' }));
+            }
+
+            if (feeRequired) {
+              // Strict path: the fee MUST be backed by a valid Ed25519 signature from a
+              // registered signing key, over a hash bound to this exact jobId + miner +
+              // amount + nonce. There is no "unverified" fallback here — the job is
+              // rejected outright (never recorded, never run) if this fails.
+              if (!job.requesterAddress) {
+                res.statusCode = 402;
+                return res.end(JSON.stringify({ error: 'requesterAddress is required when a fee is required' }));
+              }
+              const senderWallet = this.walletManager.loadWallet(job.requesterAddress);
+              if (!senderWallet?.signingPublicKey) {
+                res.statusCode = 403;
+                return res.end(JSON.stringify({
+                  error: 'No signing key registered for requesterAddress. Call /api/wallet/register-key first.',
+                  code: 'NO_SIGNING_KEY',
+                }));
+              }
+              if (!paymentTx?.signature) {
+                res.statusCode = 402;
+                return res.end(JSON.stringify({
+                  error: 'A signed fee payment (paymentTx.signature) is required for this job.',
+                  code: 'PAYMENT_PROOF_REQUIRED',
+                }));
+              }
+              const nonce = this.walletManager.getNonce(job.requesterAddress);
+              const expectedHash = computeJobPaymentHash({
+                jobId:             job.id,
+                requesterAddress:  job.requesterAddress,
+                minerAddress:      this.config.wallet,
+                amount:            job.maxBudget,
+                nonce,
+              });
+              if (paymentTx.txHash !== expectedHash) {
+                res.statusCode = 403;
+                return res.end(JSON.stringify({
+                  error: 'Payment proof does not match this job (jobId, amount, miner, or nonce mismatch).',
+                  code: 'PAYMENT_PROOF_MISMATCH',
+                }));
+              }
+              if (!Wallet.verifySignature(senderWallet.signingPublicKey, expectedHash, paymentTx.signature)) {
+                res.statusCode = 403;
+                return res.end(JSON.stringify({ error: 'Invalid payment signature', code: 'INVALID_PAYMENT_SIGNATURE' }));
+              }
+
+              // Atomic nonce-checked debit — fails (and the job is rejected) if the proof
+              // was already spent, the nonce is stale, or the balance is insufficient.
+              const escrowTransition = this._buildEscrowTransition(job, expectedHash, false, nonce);
+              const applied = this._applyEscrow(escrowTransition);
+              if (applied !== true) {
+                res.statusCode = 402;
+                return res.end(JSON.stringify({ error: applied || 'Payment failed', code: 'PAYMENT_FAILED' }));
+              }
+              this.pendingBrainTransitions.push(escrowTransition);
+              job._paymentTxHash = expectedHash;
+              job._unverified    = false;
+              job._escrowApplied = true;
+            } else if (job.requesterAddress && job.maxBudget > 0) {
+              // Legacy lenient path (e.g. optionally paid 'verdict' jobs): balance-checked
+              // but allows an unverified signature when no signing key is registered yet.
               let unverified = false;
               if (paymentTx?.txHash && paymentTx?.signature) {
-                const senderWallet = this.walletManager.loadWallet(rawJob.requesterAddress);
+                const senderWallet = this.walletManager.loadWallet(job.requesterAddress);
                 if (senderWallet?.signingPublicKey) {
                   const sigOk = Wallet.verifySignature(senderWallet.signingPublicKey, paymentTx.txHash, paymentTx.signature);
                   if (!sigOk) {
@@ -1026,31 +1133,14 @@ export class PohMinerNode {
               }
 
               // Balance check
-              const balance = this.walletManager.getBalance(rawJob.requesterAddress);
-              if (balance < rawJob.maxBudget) {
+              const balance = this.walletManager.getBalance(job.requesterAddress);
+              if (balance < job.maxBudget) {
                 res.statusCode = 402;
-                return res.end(JSON.stringify({ error: 'Insufficient balance', balance, required: rawJob.maxBudget }));
+                return res.end(JSON.stringify({ error: 'Insufficient balance', balance, required: job.maxBudget }));
               }
 
-              rawJob._paymentTxHash = paymentTx?.txHash || null;
-              rawJob._unverified    = unverified;
-            }
-
-            // Normalize a bit
-            const job = {
-              id: rawJob.id || (url.pathname === '/test/job' ? `test-${Date.now()}-${Math.random().toString(36).slice(2, 8)}` : `job-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`),
-              type: rawJob.type || 'verdict',
-              payload: rawJob.payload || { address: rawJob.address },
-              originCountry: rawJob.originCountry || rawJob.originRegion,
-              source: 'api', // marks as local UI job — skip network slashing
-              ...rawJob,
-            };
-            // Use maxBudget as fee when no explicit fee provided (budget slider → job priority)
-            if (!job.fee) job.fee = job.maxBudget || 10_000_000;
-
-            if (!job.payload?.address && job.type !== 'skill') {
-              res.statusCode = 400;
-              return res.end(JSON.stringify({ error: 'payload.address is required for verdict jobs' }));
+              job._paymentTxHash = paymentTx?.txHash || null;
+              job._unverified    = unverified;
             }
 
             // Skill jobs may not have an address — skip address-specific processing
@@ -1091,23 +1181,10 @@ export class PohMinerNode {
             // Gossip the transition so any node that wins the next block can include it
             this.gossip.publish('job-transition', jobSubmittedTransition).catch(() => {});
 
-            // Emit escrow transition if this is a paid job
-            if (job.requesterAddress && job.maxBudget > 0) {
-              const activeSignals = this.methodsManager?.getActiveMethods().length || 0;
-              const estTokens = job.estimatedTokens || estimateTokens(activeSignals, job.payload.address);
-              const escrowTransition = {
-                type:              'job-escrow',
-                jobId:             job.id,
-                requesterAddress:  job.requesterAddress,
-                minerAddress:      this.config.wallet,
-                amount:            job.maxBudget,
-                maxWait:           job.maxWait,
-                gasPrice:          this.config.gasPrice || GAS.DEFAULT_GAS_PRICE,
-                estimatedTokens:   estTokens,
-                paymentTxHash:     job._paymentTxHash || null,
-                unverified:        job._unverified || false,
-                timestamp:         Date.now(),
-              };
+            // Emit escrow transition if this is a paid job (fee-required job types already
+            // applied + gossiped their escrow transition above, gated on a verified payment).
+            if (job.requesterAddress && job.maxBudget > 0 && !job._escrowApplied) {
+              const escrowTransition = this._buildEscrowTransition(job, job._paymentTxHash, job._unverified);
               this.pendingBrainTransitions.push(escrowTransition);
               this._applyEscrow(escrowTransition);
             }
@@ -1372,11 +1449,16 @@ export class PohMinerNode {
       if (req.method === 'GET' && (url.pathname === '/status' || url.pathname === '/node')) {
         const s = typeof this.getStatus === 'function' ? this.getStatus() : {};
         const active = this.jobResults ? Array.from(this.jobResults.values()).filter(r => ['queued','computing'].includes(r.status)).length : 0;
+        const brainDataDirForStatus = getBrainDataDir();
+        const installedHfDatasets = brainDataDirForStatus
+          ? hfDatasetManager.listInstalled(brainDataDirForStatus).map(m => m.id)
+          : [];
         return res.end(JSON.stringify({
           ...s,
           activeJobs: active,
           walletApiPort: port,
           version: 'poh-miner-network',
+          installedHfDatasets,
         }));
       }
 
@@ -1768,13 +1850,15 @@ export class PohMinerNode {
 
       // ── Free chat + skill dispatch: POST /chat/ask ────────────────────────────
       // Routes the message; if a skill matches returns { type:'skill', skillId, input };
+      // if a dataset is referenced and no peer/local copy answers it, may return
+      // 412 { code:'HF_DATASET_DOWNLOAD_REQUIRED' } for the caller to confirm a download;
       // otherwise calls the local LLM and returns { type:'chat', message } — no fee.
       if (req.method === 'POST' && url.pathname === '/chat/ask') {
         let body = '';
         req.on('data', c => body += c);
         req.on('end', async () => {
           try {
-            const { message, history = [], model: reqModel, private: isPrivate = false } = JSON.parse(body);
+            const { message, history = [], model: reqModel, private: isPrivate = false, datasetId: forcedDatasetId } = JSON.parse(body);
             if (!message) { res.statusCode = 400; return res.end(JSON.stringify({ error: 'message required' })); }
 
             // Private mode: never leaves this device — no peer relay, no network-only
@@ -1859,6 +1943,65 @@ export class PohMinerNode {
               }
 
               return res.end(JSON.stringify({ type: 'skill', skillId: route.skillId, input: route.input, skillContext: route.skillContext }));
+            }
+
+            // ── Hugging Face dataset pipeline ─────────────────────────────────────
+            // No skill matched, but the message explicitly referenced a dataset.
+            // Search HF → let the local LLM pick a match → answer from a local/peer
+            // copy, or (if nobody has it) ask the user to approve a download.
+            // Falls through to plain chat below if no relevant dataset is found.
+            if (route.type === 'dataset') {
+              try {
+                const ollamaBase   = this.config.ollamaUrl || 'http://localhost:11434';
+                const selModel     = reqModel || this.config.model || 'qwen2.5:1.5b';
+                const brainDataDir = getBrainDataDir();
+
+                // A peer relay (see _relayToPeerForDataset) already knows which dataset to
+                // use — skip the search+disambiguation round-trip and use it directly.
+                const candidates = forcedDatasetId ? [] : await searchDatasets(route.query);
+                const datasetId  = forcedDatasetId || await disambiguateDataset(route.query, candidates, { ollamaUrl: ollamaBase, model: selModel });
+
+                if (datasetId && brainDataDir && hfDatasetManager.isInstalled(brainDataDir, datasetId)) {
+                  const slice = hfDatasetManager.loadRelevantSlice(brainDataDir, datasetId, route.query);
+                  const systemContent = [
+                    'You are a helpful assistant answering using data from a Hugging Face dataset.',
+                    'Use the dataset rows below to answer the user\'s question. Write in clear, human-readable Markdown.',
+                    `\nDataset: ${datasetId}\nRelevant rows:\n${slice || '(no matching rows found in the installed dataset)'}`,
+                  ].join('\n');
+                  const llmRes = await fetch(`${ollamaBase}/api/chat`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ model: selModel, messages: [{ role: 'system', content: systemContent }, { role: 'user', content: message }], stream: false, options: { temperature: 0.5 } }),
+                    signal: AbortSignal.timeout(40_000),
+                  });
+                  const llmData = await llmRes.json();
+                  const reply = (llmData.message?.content || '').trim();
+                  return res.end(JSON.stringify({ type: 'chat', message: reply || `No answer could be generated from dataset "${datasetId}".`, dataset: datasetId }));
+                }
+
+                if (datasetId) {
+                  // Not installed locally — see if a peer already has it before asking to download.
+                  const peerReply = await this._relayToPeerForDataset(message, history, datasetId);
+                  if (peerReply) {
+                    return res.end(JSON.stringify({ type: 'chat', message: peerReply, dataset: datasetId, _fromPeer: true }));
+                  }
+
+                  // No peer has it either — ask the user (via the Electron modal) to approve a download.
+                  const meta = candidates.find(c => c.id === datasetId) || { id: datasetId };
+                  res.statusCode = 412;
+                  return res.end(JSON.stringify({
+                    error: `Answering this may require the "${datasetId}" dataset, which isn't installed locally or on a known peer.`,
+                    code: 'HF_DATASET_DOWNLOAD_REQUIRED',
+                    datasetId,
+                    description: meta.description || '',
+                    estimatedSizeBytes: meta.sizeBytes || null,
+                  }));
+                }
+                // datasetId is null — none of the candidates actually help; fall through to plain chat.
+              } catch (e) {
+                console.warn('[chat/ask] dataset pipeline error:', e.message);
+                // fall through to plain chat below
+              }
             }
 
             if (route.type === 'cascade') {
@@ -2312,6 +2455,55 @@ export class PohMinerNode {
       {
         const brainDir = getBrainDataDir();
         if (brainDir && serveDataset(req, res, brainDir)) return;
+      }
+
+      // ── HF dataset peer serving (/api/hf-dataset/:id/manifest, /:id/file/:name) ──
+      {
+        const brainDir = getBrainDataDir();
+        if (brainDir && serveHfDataset(req, res, brainDir)) return;
+      }
+
+      // ── HF dataset management (list / delete / download) ─────────────────────
+      if (req.method === 'GET' && url.pathname === '/api/hf-dataset') {
+        const brainDir = getBrainDataDir();
+        return res.end(JSON.stringify({ datasets: brainDir ? hfDatasetManager.listInstalled(brainDir) : [] }));
+      }
+
+      {
+        const delMatch = url.pathname.match(/^\/api\/hf-dataset\/([^/]+)$/);
+        if (req.method === 'DELETE' && delMatch) {
+          const brainDir = getBrainDataDir();
+          const datasetId = decodeURIComponent(delMatch[1]);
+          if (brainDir) hfDatasetManager.deleteDataset(brainDir, datasetId);
+          return res.end(JSON.stringify({ ok: true }));
+        }
+      }
+
+      {
+        const dlMatch = url.pathname.match(/^\/api\/hf-dataset\/([^/]+)\/download$/);
+        if (req.method === 'POST' && dlMatch) {
+          const datasetId = decodeURIComponent(dlMatch[1]);
+          const brainDir = getBrainDataDir();
+          if (!brainDir) { res.statusCode = 500; res.end(JSON.stringify({ error: 'brain data dir unavailable' })); return; }
+          (async () => {
+            try {
+              let manifest;
+              try {
+                manifest = await hfDatasetManager.installFromHuggingFace(brainDir, datasetId);
+              } catch (hfErr) {
+                // Hugging Face unreachable/unavailable — fall back to a peer that already has it.
+                const peers = await this._getComputePeers();
+                manifest = await pullHfDatasetFromPeer(peers, brainDir, datasetId);
+                if (!manifest) throw hfErr;
+              }
+              res.end(JSON.stringify({ ok: true, manifest }));
+            } catch (e) {
+              res.statusCode = 502;
+              res.end(JSON.stringify({ error: e.message }));
+            }
+          })();
+          return;
+        }
       }
 
       // ── Cached profile by address (/profile/:address) ─────────────────────────
@@ -3989,6 +4181,37 @@ export class PohMinerNode {
     return null;
   }
 
+  // Sibling of _relayToPeerChat, filtered by installedHfDatasets instead of model.
+  // No raw dataset bytes move here — just the question and the peer's answer.
+  async _relayToPeerForDataset(message, history = [], datasetId) {
+    try {
+      let peers = await this._getComputePeers();
+      const statusResults = await Promise.allSettled(peers.map(base =>
+        fetch(`${base}/status`, { signal: AbortSignal.timeout(4000) }).then(r => r.ok ? r.json() : null)
+      ));
+      peers = peers.filter((_, i) =>
+        statusResults[i].status === 'fulfilled' && statusResults[i].value?.installedHfDatasets?.includes(datasetId)
+      );
+      if (!peers.length) return null;
+
+      for (const base of peers) {
+        try {
+          const r = await fetch(`${base}/chat/ask`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message, history, datasetId }),
+            signal: AbortSignal.timeout(45000),
+          });
+          if (r.ok) {
+            const data = await r.json();
+            if (data.message) return data.message;
+          }
+        } catch { /* try next peer */ }
+      }
+    } catch { /* ignore */ }
+    return null;
+  }
+
   // Pull any pending transactions from bootnodes that this node missed via gossip
   // (e.g. submitted while this node was down). Called once before each block proposal
   // so that every tx eventually gets included even without a live gossip connection.
@@ -4323,6 +4546,84 @@ export class PohMinerNode {
       }
     }
 
+    // ── Compute job path (user-specified model + optional dataset) ─────────────
+    if (job.type === 'compute') {
+      try {
+        const model   = job.model || this.config.model || 'qwen2.5:1.5b';
+        const dataset = job.dataset || job.datasetId || null;
+        const prompt  = job.payload?.prompt || job.payload?.message || job.payload?.question;
+        if (!prompt) throw new Error('payload.prompt is required for compute jobs');
+
+        const ollamaBase = this.config.ollamaUrl || 'http://localhost:11434';
+        const messages = [];
+        let datasetUsed = null;
+
+        if (dataset) {
+          const brainDataDir = getBrainDataDir();
+          if (!brainDataDir || !hfDatasetManager.isInstalled(brainDataDir, dataset)) {
+            throw new Error(`Dataset "${dataset}" is not installed on this miner`);
+          }
+          const slice = hfDatasetManager.loadRelevantSlice(brainDataDir, dataset, prompt);
+          messages.push({
+            role: 'system',
+            content: `You are a helpful assistant answering using data from a Hugging Face dataset.\nUse the dataset rows below to answer the user's request. Write in clear, human-readable Markdown.\n\nDataset: ${dataset}\nRelevant rows:\n${slice || '(no matching rows found in the installed dataset)'}`,
+          });
+          datasetUsed = dataset;
+        }
+        messages.push({ role: 'user', content: prompt });
+
+        const ollamaRes = await fetch(`${ollamaBase}/api/chat`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ model, messages, stream: false, options: { temperature: 0.7 } }),
+          signal: AbortSignal.timeout(60_000),
+        });
+        if (!ollamaRes.ok) throw new Error(`Model "${model}" is unavailable on this miner (HTTP ${ollamaRes.status})`);
+        const data       = await ollamaRes.json();
+        const reply      = data.message?.content || '';
+        const tokensUsed = job.estimatedTokens || estimateTokens(0, null);
+
+        const result = new ScanResult({
+          requestId:         job.id,
+          address:           job.payload?.address || 'compute-job',
+          verdict:           'COMPUTE_RESULT',
+          confidence:        1,
+          reasoning:         `Compute job executed with model ${model}` + (datasetUsed ? ` over dataset ${datasetUsed}` : ''),
+          signalsUsed:       [],
+          modelUsed:         model,
+          computationTimeMs: Date.now() - start,
+          minerWallet:       this.config.wallet,
+          methodsHash:       this.methodsManager?.getStatus().hash || 'compute',
+          methodsCount:      0,
+          realPohUsed:       false,
+          profile:           { computeOutput: reply, model, dataset: datasetUsed },
+        });
+
+        await this.submitResult(job, result);
+        if (!this.jobQueue.completed.has(job.id)) this.jobQueue.markCompleted(job.id);
+
+        if (job.requesterAddress && job.maxBudget > 0 && this.escrow.has(job.id)) {
+          const gasPrice         = this.config.gasPrice || GAS.DEFAULT_GAS_PRICE;
+          const { fee, refund }  = settleFee(tokensUsed, gasPrice, job.maxBudget);
+          const settled = { type: 'job-settled', jobId: job.id, requesterAddress: job.requesterAddress, minerAddress: this.config.wallet, actualTokens: tokensUsed, actualFee: fee, refund, gasPrice, completedAt: Date.now() };
+          this.pendingBrainTransitions.push(settled);
+          this._gossipedJobTransitions.add(`${job.id}:job-settled`);
+          this.gossip.publish('job-transition', settled).catch(() => {});
+          this._applySettlement(settled);
+        }
+        return result;
+      } catch (err) {
+        console.error(`[PoH-Miner] Compute job ${job.id} failed:`, err.message);
+        this._updateJob(job.id, { status: 'error', error: err.message });
+        if (job.requesterAddress && job.maxBudget > 0 && this.escrow.has(job.id)) {
+          const timeout = { type: 'job-timeout', jobId: job.id, requesterAddress: job.requesterAddress, minerAddress: this.config.wallet, reservationFee: 0, refund: job.maxBudget, completedAt: Date.now() };
+          this.pendingBrainTransitions.push(timeout);
+          this._applySettlement(timeout);
+        }
+        return null;
+      }
+    }
+
     try {
       console.log(`[PoH-Miner] Computing ${job.type} for job ${job.id} using real POH brain (geo-aware)`);
 
@@ -4455,13 +4756,56 @@ export class PohMinerNode {
     return this.jobResults ? this.jobResults.get(jobId) : null;
   }
 
+  /**
+   * Build a 'job-escrow' transition. When `nonce` is provided, the resulting
+   * transition is nonce-bound — `_applyEscrow` will atomically verify the nonce
+   * and debit (no replay of the same payment proof against a second job).
+   */
+  _buildEscrowTransition(job, paymentTxHash, unverified, nonce) {
+    const activeSignals = this.methodsManager?.getActiveMethods().length || 0;
+    const estTokens = job.estimatedTokens || estimateTokens(activeSignals, job.payload?.address);
+    return {
+      type:              'job-escrow',
+      jobId:             job.id,
+      requesterAddress:  job.requesterAddress,
+      minerAddress:      this.config.wallet,
+      amount:            job.maxBudget,
+      maxWait:           job.maxWait,
+      gasPrice:          this.config.gasPrice || GAS.DEFAULT_GAS_PRICE,
+      estimatedTokens:   estTokens,
+      paymentTxHash:     paymentTxHash || null,
+      unverified:        unverified || false,
+      nonce,
+      timestamp:         Date.now(),
+    };
+  }
+
+  /**
+   * Apply a 'job-escrow' transition: debit the requester and hold the amount in
+   * local escrow pending settlement. Returns `true` on success, or an error
+   * string/falsy value on failure.
+   *
+   * When `transition.nonce` is a number the debit is atomic and nonce-checked
+   * (see WalletManager.debitWithNonce) — required for fee-required job types
+   * (skill/compute), where the caller rejects the job outright on failure.
+   * Without a nonce, falls back to the legacy best-effort debit used by
+   * optionally-paid 'verdict' jobs.
+   */
   _applyEscrow(transition) {
-    const { jobId, requesterAddress, amount, minerAddress } = transition;
-    if (!requesterAddress || !amount) return;
-    if (this._appliedEscrowJobIds.has(jobId)) return; // block replay — already debited locally
+    const { jobId, requesterAddress, amount, minerAddress, nonce } = transition;
+    if (!requesterAddress || !amount) return 'missing requesterAddress/amount';
+    if (this._appliedEscrowJobIds.has(jobId)) return true; // block replay — already debited locally
+
+    if (typeof nonce === 'number') {
+      const result = this.walletManager.debitWithNonce(requesterAddress, amount, nonce);
+      if (result !== true) return result.error || 'payment failed';
+    } else {
+      this.walletManager.debit(requesterAddress, amount);
+    }
+
     this._appliedEscrowJobIds.add(jobId);
-    this.walletManager.debit(requesterAddress, amount);
     this.escrow.set(jobId, { amount, requesterAddress, minerAddress });
+    return true;
   }
 
   _applySettlement(transition) {
@@ -4533,8 +4877,8 @@ export class PohMinerNode {
       return;
     }
 
-    // Skill results are local-only — no network validation, just store for polling
-    if (result.verdict === 'SKILL_RESULT') {
+    // Skill / compute results are local-only — no network validation, just store for polling
+    if (result.verdict === 'SKILL_RESULT' || result.verdict === 'COMPUTE_RESULT') {
       result.isValidWork = true;
       if (this.jobResults && this.jobResults.has(request.id)) {
         const rec = this.jobResults.get(request.id);
@@ -4544,7 +4888,7 @@ export class PohMinerNode {
       } else if (this.jobResults) {
         this.jobResults.set(request.id, { id: request.id, status: 'done', job: request, result, error: null, createdAt: Date.now(), updatedAt: Date.now() });
       }
-      console.log(`[PoH-Miner] ✓ Skill result stored for polling: ${request.id} (skill: ${result.profile?.skillId})`);
+      console.log(`[PoH-Miner] ✓ ${result.verdict === 'COMPUTE_RESULT' ? 'Compute' : 'Skill'} result stored for polling: ${request.id}`);
       return;
     }
 
@@ -4614,8 +4958,8 @@ export class PohMinerNode {
    * Fault tolerance check: ensure the result was computed with the current signals set.
    */
   _validateResultMethods(result) {
-    // Skill results don't use signal methods — bypass validation
-    if (result.verdict === 'SKILL_RESULT') return true;
+    // Skill / compute results don't use signal methods — bypass validation
+    if (result.verdict === 'SKILL_RESULT' || result.verdict === 'COMPUTE_RESULT') return true;
 
     if (!this.methodsManager) return true; // during early bootstrap
     if (!result.methodsHash) return false;

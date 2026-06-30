@@ -158,8 +158,12 @@ export class WalletManager {
     if (!fs.existsSync(file)) return null;
     const data = JSON.parse(fs.readFileSync(file, 'utf8'));
     const w = Wallet.fromJSON(data);
-    // Auto-upgrade old wallets to have signing keys (for register protection etc)
-    if (!w.signingPublicKey || !w.signingPrivateKey) {
+    // Auto-upgrade old local wallets (created before signing keys existed, so they're
+    // missing BOTH halves) to have a signing keypair. Must check both — a wallet with
+    // only a signingPublicKey is an externally registered key (see /api/wallet/register-key):
+    // the node never holds that private key by design, so regenerating here would silently
+    // overwrite the registered public key and break signature verification for that wallet.
+    if (!w.signingPublicKey && !w.signingPrivateKey) {
       w.ensureSigningKeys();
       this.saveWallet(w);
     }
@@ -199,6 +203,25 @@ export class WalletManager {
       const wallet = this.loadWallet(address);
       if (!wallet || (wallet.balance || 0) < amount) return false;
       wallet.balance = (wallet.balance || 0) - amount;
+      this.saveWallet(wallet);
+      return true;
+    });
+  }
+
+  // Atomically validate nonce + balance and debit + bump nonce in one step.
+  // Used for off-chain job fee payments authorized by a nonce-bound signature
+  // (see miner-node.js job payment verification) — prevents the same signed
+  // payment proof from being replayed against a second job.
+  debitWithNonce(address, amount, expectedNonce) {
+    return this._withLock(address, () => {
+      const wallet = this.loadWallet(address);
+      if (!wallet) return { error: 'wallet not found' };
+      if ((wallet.nonce || 0) !== expectedNonce) {
+        return { error: `nonce mismatch: expected ${wallet.nonce || 0}, got ${expectedNonce}` };
+      }
+      if ((wallet.balance || 0) < amount) return { error: 'insufficient balance' };
+      wallet.balance -= amount;
+      wallet.nonce = (wallet.nonce || 0) + 1;
       this.saveWallet(wallet);
       return true;
     });

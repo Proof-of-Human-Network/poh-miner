@@ -1145,6 +1145,59 @@ window.skillDisabledProceedCommunity = function() {
   if (_skillDisabledResolve) { _skillDisabledResolve(true); _skillDisabledResolve = null; }
 };
 
+// ── HF dataset download-approval modal ────────────────────────────────────────
+
+let _hfDatasetResolve = null;
+
+function _fmtBytes(n) {
+  if (n == null) return 'unknown size';
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
+  if (n < 1024 * 1024 * 1024) return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+  return `${(n / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+}
+
+function showHfDatasetDownloadModal(info) {
+  return new Promise(resolve => {
+    _hfDatasetResolve = resolve;
+    let modal = document.getElementById('hf-dataset-modal');
+    if (!modal) {
+      modal = document.createElement('div');
+      modal.id = 'hf-dataset-modal';
+      modal.className = 'fixed inset-0 bg-black/80 z-[200] flex items-center justify-center';
+      modal.innerHTML = `
+        <div class="glass w-full max-w-sm rounded-3xl p-6 border border-white/10 text-center">
+          <div class="text-3xl mb-3">🤗</div>
+          <h3 class="font-display text-lg mb-2">Download dataset?</h3>
+          <p class="text-xs text-zinc-300 mb-1 font-mono" id="hf-dataset-id"></p>
+          <p class="text-xs text-zinc-500 mb-2" id="hf-dataset-desc"></p>
+          <p class="text-xs text-zinc-400 mb-5" id="hf-dataset-size"></p>
+          <div class="flex gap-2">
+            <button onclick="window._hfDatasetCancel()"
+                    class="flex-1 py-2.5 border border-white/20 rounded-2xl text-sm">Cancel</button>
+            <button onclick="window._hfDatasetApprove()"
+                    class="flex-1 py-2.5 bg-white text-black rounded-2xl text-sm font-semibold">Download</button>
+          </div>
+        </div>`;
+      document.body.appendChild(modal);
+    }
+    document.getElementById('hf-dataset-id').textContent = info.datasetId;
+    document.getElementById('hf-dataset-desc').textContent = info.description || 'No description available.';
+    document.getElementById('hf-dataset-size').textContent = `Size: ${_fmtBytes(info.estimatedSizeBytes)}`;
+    modal.classList.remove('hidden');
+  });
+}
+
+window._hfDatasetCancel = function() {
+  document.getElementById('hf-dataset-modal')?.classList.add('hidden');
+  if (_hfDatasetResolve) { _hfDatasetResolve(false); _hfDatasetResolve = null; }
+};
+
+window._hfDatasetApprove = function() {
+  document.getElementById('hf-dataset-modal')?.classList.add('hidden');
+  if (_hfDatasetResolve) { _hfDatasetResolve(true); _hfDatasetResolve = null; }
+};
+
 window.restartApp = async function() {
   if (!confirm('Restart the app now? This will reload the miner and clear any stuck transactions.')) return;
   try {
@@ -1464,6 +1517,48 @@ async function initMcpServersUI() {
 
 initMcpServersUI();
 
+// =====================================================
+// Installed HF Datasets (Settings panel)
+// =====================================================
+
+async function refreshHfDatasetsSettings() {
+  const list = document.getElementById('hf-datasets-list');
+  if (!list) return;
+  const port = window._minerApiPort || 3456;
+
+  let datasets = [];
+  try {
+    const r = await fetch(`http://localhost:${port}/api/hf-dataset`);
+    if (r.ok) datasets = (await r.json()).datasets || [];
+  } catch { /* miner API not reachable yet */ }
+
+  list.innerHTML = '';
+  if (!datasets.length) {
+    list.innerHTML = '<div style="font-size:10px;color:#444;">No datasets installed yet.</div>';
+    return;
+  }
+
+  for (const d of datasets) {
+    const sizeBytes = (d.files || []).reduce((sum, f) => sum + (f.size || 0), 0);
+    const row = document.createElement('div');
+    row.style.cssText = 'background:#0a0a0a;border:1px solid #1a1a1a;border-radius:6px;padding:8px 10px;display:flex;align-items:center;justify-content:space-between;gap:8px;';
+    row.innerHTML = `
+      <div style="min-width:0;">
+        <div style="font-size:11px;color:#ddd;font-family:monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${d.id}</div>
+        <div style="font-size:10px;color:#666;">${_fmtBytes(sizeBytes)} · ${d.source || 'huggingface'}${d.rowCount ? ` · ${d.rowCount} rows` : ''}</div>
+      </div>
+      <button data-action="remove" style="padding:4px 8px;background:rgba(185,28,28,0.15);color:#f87171;border:none;border-radius:4px;cursor:pointer;font-size:10px;flex-shrink:0;">Remove</button>
+    `;
+    row.querySelector('[data-action="remove"]').addEventListener('click', async () => {
+      try {
+        await fetch(`http://localhost:${port}/api/hf-dataset/${encodeURIComponent(d.id)}`, { method: 'DELETE' });
+      } catch { /* best effort */ }
+      refreshHfDatasetsSettings();
+    });
+    list.appendChild(row);
+  }
+}
+
 // Sidebar resizer removed — layout now uses fixed 3-column flex
 
 // ── Tab switching ──────────────────────────────────────────────────────────────
@@ -1483,7 +1578,7 @@ function switchTab(name) {
   if (name === 'chat')     { loadChatModels(); loadChatBrainContext(true); document.getElementById('chat-input')?.focus(); }
   if (name === 'send')     { syncSendWallet(); showSendView(); }
   if (name === 'skills')   { loadSkills(); }
-  if (name === 'settings') { loadSettingsPanel(); }
+  if (name === 'settings') { loadSettingsPanel(); refreshHfDatasetsSettings(); }
   if (name === 'p2p')      { p2pInit(); }
   if (name === 'explorer') { explorerInit(); }
 }
@@ -2261,6 +2356,67 @@ async function sendChatMessage() {
         } catch (e) {
           finalizeLastBubble();
           console.warn('[cascade] /chat/ask failed:', e.message);
+        }
+      }
+
+      if (!_skillDone && route.type === 'dataset') {
+        // No skill matched, but the message referenced a dataset — let the backend
+        // search Hugging Face, disambiguate, and answer from a local/peer copy.
+        // A 412 means nobody has it; show the download-approval modal.
+        renderMessage('assistant', 'Searching Hugging Face datasets…', true);
+        chatAbortController = new AbortController();
+        try {
+          const dsRes = await fetch(`http://localhost:${port}/chat/ask`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ message: text, history: chatHistory, private: isPrivate }),
+            signal: AbortSignal.timeout(60000),
+          });
+          finalizeLastBubble();
+
+          if (dsRes.status === 412) {
+            const info = await dsRes.json();
+            const approved = await showHfDatasetDownloadModal(info);
+            if (approved) {
+              renderMessage('assistant', `Downloading dataset \`${info.datasetId}\`…`, true);
+              const dlRes = await fetch(`http://localhost:${port}/api/hf-dataset/${encodeURIComponent(info.datasetId)}/download`, { method: 'POST' });
+              finalizeLastBubble();
+              if (dlRes.ok) {
+                renderMessage('assistant', '', true);
+                const retryRes = await fetch(`http://localhost:${port}/chat/ask`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ message: text, history: chatHistory, private: isPrivate, datasetId: info.datasetId }),
+                  signal: AbortSignal.timeout(60000),
+                });
+                const retryData = await retryRes.json();
+                finalizeLastBubble();
+                const reply = retryData.message || 'Could not answer using the downloaded dataset.';
+                renderMessage('assistant', reply);
+                chatHistory.push({ role: 'assistant', content: reply });
+                refreshHfDatasetsSettings();
+              } else {
+                const errData = await dlRes.json().catch(() => ({}));
+                const msg = `Failed to download dataset: ${errData.error || dlRes.statusText}`;
+                renderMessage('assistant', msg);
+                chatHistory.push({ role: 'assistant', content: msg });
+              }
+            } else {
+              const msg = 'Download declined — let me know if you\'d like to try a different question.';
+              renderMessage('assistant', msg);
+              chatHistory.push({ role: 'assistant', content: msg });
+            }
+            _skillDone = true;
+          } else if (dsRes.ok) {
+            const data = await dsRes.json();
+            const reply = data.message || 'No answer found.';
+            renderMessage('assistant', reply);
+            chatHistory.push({ role: 'assistant', content: reply });
+            _skillDone = true;
+          }
+        } catch (e) {
+          finalizeLastBubble();
+          console.warn('[dataset] /chat/ask failed:', e.message);
         }
       }
 
