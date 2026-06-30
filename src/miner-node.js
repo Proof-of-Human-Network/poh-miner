@@ -3035,6 +3035,27 @@ export class PohMinerNode {
       candidates.push({ label: bootnode, base: bootnode.replace(/\/$/, '') });
     }
 
+    // 2b. Peer directory pinned to IPFS — works even when every configured bootnode is
+    // unreachable, as long as we (or a prior run) ever learned the directory's CID.
+    // This is what makes sync genuinely independent of the two default bootnodes:
+    // the directory is built from every miner that has ever registered, and
+    // fetchLatestCIDs() falls back to a local on-disk CID cache when bootnodes are down.
+    if (this.ipfsSync) {
+      try {
+        await this.ipfsSync.fetchLatestCIDs();
+        const walletAddr = this.config.pohWallet || this.config.wallet;
+        const ipfsPeers  = await this.ipfsSync.fetchPeerDirectory(walletAddr);
+        const known = new Set(candidates.map(c => c.base));
+        for (const p of ipfsPeers) {
+          const base = `http://${p.host}:${p.walletApiPort}`;
+          if (!known.has(base)) {
+            known.add(base);
+            candidates.push({ label: p.wallet?.slice(0, 8) ?? p.host, base });
+          }
+        }
+      } catch { /* IPFS unreachable too — proceed with whatever we have */ }
+    }
+
     if (!candidates.length) {
       console.log('[PoH-Miner] No sync candidates found');
       return;
