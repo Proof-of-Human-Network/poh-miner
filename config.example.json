@@ -49,6 +49,13 @@
 
   "onboarded": false,
 
+  "meilisearch": {
+    "enabled": true,
+    "host": "http://127.0.0.1:7700",
+    "apiKey": "",
+    "indexJobs": "poh-chat-history"
+  },
+
   "_comment_genesisAlloc": "Optional: pre-fund addresses at block 0 on a clean network start. Amounts in raw POH (1 POH = 1000000000 raw). Only applied once when chain is empty.",
   "genesisAlloc": {
     "poh_YOUR_WALLET_HERE": 1000000000000

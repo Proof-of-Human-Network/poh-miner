@@ -52,25 +52,25 @@ export class Wallet {
   }
 
   static generate() {
-    // Very simple key generation for MVP (NOT production secure)
+    // Legacy entropy fields kept for wallet file compatibility; the canonical poh
+    // address is always derived from the ed25519 signing public key.
     const privateKey = crypto.randomBytes(32).toString('hex');
     const publicKey = crypto.createHash('sha256').update(privateKey).digest('hex').slice(0, 64);
-    const address = 'poh' + publicKey.slice(0, 40); // fake address format
 
-    // Generate real ed25519 signing keypair for node registration proof + future result sigs
     const { publicKey: spk, privateKey: spr } = crypto.generateKeyPairSync('ed25519', {
       publicKeyEncoding: { type: 'spki', format: 'pem' },
       privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
     });
 
-    const w = new Wallet({
+    const address = Wallet.deriveAddressFromSigningKey(spk);
+
+    return new Wallet({
       address,
       privateKey,
       publicKey,
+      signingPublicKey: spk,
+      signingPrivateKey: spr,
     });
-    w.signingPublicKey = spk;
-    w.signingPrivateKey = spr;
-    return w;
   }
 
   static fromJSON(data) {
@@ -126,7 +126,8 @@ export class Wallet {
    */
   static deriveAddressFromSigningKey(signingPublicKey) {
     if (!signingPublicKey || typeof signingPublicKey !== 'string') return null;
-    const hash = crypto.createHash('sha256').update(signingPublicKey).digest('hex');
+    const normalized = signingPublicKey.trim().replace(/\r\n/g, '\n');
+    const hash = crypto.createHash('sha256').update(normalized).digest('hex');
     return 'poh' + hash.slice(0, 40);
   }
 
@@ -177,6 +178,49 @@ export class WalletManager {
     return wallet;
   }
 
+  /**
+   * Migrate a legacy wallet whose display address was not derived from its signing
+   * public key. Merges balance into the canonical file and removes the old path.
+   * Returns the wallet object (possibly with a new address).
+   */
+  ensureCanonicalAddress(wallet) {
+    if (!wallet?.signingPublicKey) return wallet;
+    const canonical = Wallet.deriveAddressFromSigningKey(wallet.signingPublicKey);
+    if (!canonical || wallet.address === canonical) return wallet;
+
+    const oldAddress = wallet.address;
+    wallet.address = canonical;
+
+    const canonicalPath = path.join(this.walletsDir, `${canonical}.json`);
+    const oldPath = path.join(this.walletsDir, `${oldAddress}.json`);
+
+    if (fs.existsSync(canonicalPath)) {
+      const raw = JSON.parse(fs.readFileSync(canonicalPath, 'utf8'));
+      const existing = Wallet.fromJSON(unsealWalletData(raw));
+      existing.balance = (existing.balance || 0) + (wallet.balance || 0);
+      existing.nonce = Math.max(existing.nonce || 0, wallet.nonce || 0);
+      if (wallet.signingPrivateKey && !existing.signingPrivateKey) {
+        existing.signingPrivateKey = wallet.signingPrivateKey;
+        existing.signingPublicKey = wallet.signingPublicKey;
+        existing.privateKey = wallet.privateKey || existing.privateKey;
+        existing.publicKey = wallet.publicKey || existing.publicKey;
+      } else if (!existing.signingPublicKey) {
+        existing.signingPublicKey = wallet.signingPublicKey;
+      }
+      this.saveWallet(existing);
+      wallet = existing;
+    } else {
+      this.saveWallet(wallet);
+    }
+
+    if (oldAddress !== canonical && fs.existsSync(oldPath)) {
+      try { fs.unlinkSync(oldPath); } catch { /* ignore */ }
+    }
+
+    console.log(`[WalletManager] Migrated wallet ${oldAddress} → ${canonical}`);
+    return wallet;
+  }
+
   saveWallet(wallet) {
     const file = path.join(this.walletsDir, `${wallet.address}.json`);
     const tmp  = file + '.tmp';
@@ -184,6 +228,30 @@ export class WalletManager {
     fs.writeFileSync(tmp, JSON.stringify(sealed, null, 2));
     fs.renameSync(tmp, file);
     return file;
+  }
+
+  /** Resolve a wallet by address and/or signing public key (handles legacy address migration). */
+  resolveWallet(address, signingPublicKey = null) {
+    if (address) {
+      const w = this.loadWallet(address);
+      if (w) {
+        if (!signingPublicKey || w.signingPublicKey === signingPublicKey) return w;
+        const canonical = Wallet.deriveAddressFromSigningKey(signingPublicKey);
+        if (canonical && w.address === canonical) return w;
+      }
+    }
+    if (signingPublicKey) {
+      const canonical = Wallet.deriveAddressFromSigningKey(signingPublicKey);
+      if (canonical) {
+        const w = this.loadWallet(canonical);
+        if (w) return w;
+      }
+      for (const addr of this.listWallets()) {
+        const w = this.loadWallet(addr);
+        if (w?.signingPublicKey === signingPublicKey) return w;
+      }
+    }
+    return null;
   }
 
   loadWallet(address) {
@@ -201,7 +269,7 @@ export class WalletManager {
       w.ensureSigningKeys();
       this.saveWallet(w);
     }
-    return w;
+    return this.ensureCanonicalAddress(w);
   }
 
   listWallets() {

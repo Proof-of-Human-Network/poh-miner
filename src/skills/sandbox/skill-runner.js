@@ -29,20 +29,21 @@ const require = _blocked;
 const __dirname  = '/';
 const __filename = '/skill.js';
 
-// Shadow Function constructor to block constructor-chain escapes
-const _OrigFunction = Function;
-// eslint-disable-next-line no-shadow
-const Function = function (...args) {
+// Shadow Function constructor to block constructor-chain escapes.
+// Must NOT redeclare `Function` in module scope — that puts `Function` in the TDZ
+// and breaks `_OrigFunction = Function` with "Cannot access 'Function' before initialization".
+const _OrigFunction = globalThis.Function;
+const _BlockedFunction = function (...args) {
   throw new Error('Function constructor not allowed in skill sandbox');
 };
-Function.prototype = _OrigFunction.prototype;
+_BlockedFunction.prototype = _OrigFunction.prototype;
 
 // Block dynamic import
 const dynamicImport = async () => { throw new Error('dynamic import not allowed in skill sandbox'); };
 globalThis.import = dynamicImport;
 globalThis.require = require;
 globalThis.process = _safeProcess;
-globalThis.Function = Function;
+globalThis.Function = _BlockedFunction;
 
 // ── Patch fetch to enforce allowedEndpoints and count calls ───────────────────
 let _fetchCallCount = 0;

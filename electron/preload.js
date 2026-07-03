@@ -39,6 +39,7 @@ contextBridge.exposeInMainWorld('pohMinerAPI', {
   mcp: {
     getServers: () => ipcRenderer.invoke('mcp:get-servers'),
     saveServer: (data) => ipcRenderer.invoke('mcp:save-server', data),
+    importJson: (jsonText) => ipcRenderer.invoke('mcp:import-json', jsonText),
     deleteServer: (id) => ipcRenderer.invoke('mcp:delete-server', id),
   },
 

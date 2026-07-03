@@ -191,9 +191,17 @@ export function getDefaultConfig() {
     // Keyed by provider id: "anthropic" | "openai" | "xai" | "custom"
     aiProviders: {},
 
-    // === External MCP servers (extend skill/brain capabilities) ===
-    // [{ id, name, url, apiKey, enabled }]
-    mcpServers: [],
+    // === External MCP servers (standard MCP format) ===
+    // { "serverId": { "command": "npx", "args": ["-y", "pkg"], "env": {} } }
+    mcpServers: {},
+
+    // Blockchain chat history search (Meilisearch + local fallback)
+    meilisearch: {
+      enabled: true,
+      host: "http://127.0.0.1:7700",
+      apiKey: "",
+      indexJobs: "poh-chat-history",
+    },
 
     // Populated by the GUI onboarding flow
     pohWallet: "",

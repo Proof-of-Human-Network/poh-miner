@@ -25,7 +25,7 @@ describe('Wallet', () => {
     const wallet = Wallet.generate();
     const derived = Wallet.deriveAddressFromSigningKey(wallet.signingPublicKey);
     expect(derived).toMatch(/^poh[a-f0-9]{40}$/);
-    expect(Wallet.isAddressBoundToSigningKey(derived, wallet.signingPublicKey)).toBe(true);
-    expect(Wallet.isAddressBoundToSigningKey(wallet.address, wallet.signingPublicKey)).toBe(false);
+    expect(wallet.address).toBe(derived);
+    expect(Wallet.isAddressBoundToSigningKey(wallet.address, wallet.signingPublicKey)).toBe(true);
   });
 });

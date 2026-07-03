@@ -530,18 +530,51 @@ ipcMain.handle('ai-providers:delete', async (_event, id) => {
 });
 
 // =====================================================
-// External MCP Servers
+// External MCP Servers (standard mcpServers object format)
 // =====================================================
+
+function _normalizeMcpConfig(raw) {
+  if (!raw) return {};
+  // Legacy array: [{ id, name, url, apiKey, enabled }]
+  if (Array.isArray(raw)) {
+    const out = {};
+    for (const s of raw) {
+      const id = s.id || s.name || crypto.randomUUID();
+      out[id] = {
+        command: s.command || 'npx',
+        args: s.args || (s.url ? ['-y', s.url] : []),
+        env: s.env || (s.apiKey ? { API_KEY: s.apiKey } : {}),
+        disabled: s.enabled === false,
+      };
+    }
+    return out;
+  }
+  if (typeof raw === 'object') return raw;
+  return {};
+}
+
+function _mcpListFromConfig(config) {
+  const map = _normalizeMcpConfig(config.mcpServers);
+  return Object.entries(map).map(([id, entry]) => ({
+    id,
+    name: id,
+    command: entry.command || '',
+    args: Array.isArray(entry.args) ? entry.args : [],
+    env: entry.env && typeof entry.env === 'object' ? entry.env : {},
+    url: entry.url || '',
+    enabled: entry.disabled !== true,
+  }));
+}
 
 ipcMain.handle('mcp:get-servers', async () => {
   const fs = require('fs');
   const CONFIG_PATH = path.join(os.homedir(), '.poh-miner', 'config.json');
   if (!fs.existsSync(CONFIG_PATH)) return [];
   const config = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
-  return config.mcpServers || [];
+  return _mcpListFromConfig(config);
 });
 
-ipcMain.handle('mcp:save-server', async (_event, { id, name, url, apiKey, enabled }) => {
+ipcMain.handle('mcp:save-server', async (_event, { id, name, command, args, env, url, apiKey, enabled }) => {
   const fs = require('fs');
   const CONFIG_PATH = path.join(os.homedir(), '.poh-miner', 'config.json');
 
@@ -549,16 +582,49 @@ ipcMain.handle('mcp:save-server', async (_event, { id, name, url, apiKey, enable
   if (fs.existsSync(CONFIG_PATH)) {
     config = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
   }
-  if (!Array.isArray(config.mcpServers)) config.mcpServers = [];
-
-  const serverId = id || crypto.randomUUID();
-  const entry = { id: serverId, name: name || '', url: url || '', apiKey: apiKey || '', enabled: !!enabled };
-  const idx = config.mcpServers.findIndex(s => s.id === serverId);
-  if (idx >= 0) config.mcpServers[idx] = entry;
-  else config.mcpServers.push(entry);
+  const map = _normalizeMcpConfig(config.mcpServers);
+  const serverId = (id || name || '').trim() || crypto.randomUUID();
+  const entry = {
+    command: command || 'npx',
+    args: Array.isArray(args) ? args : [],
+    env: env && typeof env === 'object' ? env : {},
+  };
+  if (url) entry.url = url;
+  if (apiKey) entry.env = { ...entry.env, API_KEY: apiKey };
+  if (enabled === false) entry.disabled = true;
+  else delete entry.disabled;
+  map[serverId] = entry;
+  config.mcpServers = map;
 
   fs.writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2));
-  return { success: true, server: entry };
+  return { success: true, server: { id: serverId, name: serverId, command: entry.command, args: entry.args, env: entry.env, enabled: enabled !== false } };
+});
+
+ipcMain.handle('mcp:import-json', async (_event, jsonText) => {
+  const fs = require('fs');
+  const CONFIG_PATH = path.join(os.homedir(), '.poh-miner', 'config.json');
+  let parsed;
+  try {
+    parsed = JSON.parse(jsonText || '{}');
+  } catch (e) {
+    return { success: false, error: 'Invalid JSON: ' + e.message };
+  }
+  const incoming = parsed.mcpServers && typeof parsed.mcpServers === 'object' ? parsed.mcpServers : parsed;
+  if (!incoming || typeof incoming !== 'object' || Array.isArray(incoming)) {
+    return { success: false, error: 'Expected { "serverId": { "command", "args", "env" } } object' };
+  }
+
+  let config = {};
+  if (fs.existsSync(CONFIG_PATH)) {
+    config = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
+  }
+  const map = _normalizeMcpConfig(config.mcpServers);
+  for (const [id, entry] of Object.entries(incoming)) {
+    map[id] = entry;
+  }
+  config.mcpServers = map;
+  fs.writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2));
+  return { success: true, count: Object.keys(incoming).length };
 });
 
 ipcMain.handle('mcp:delete-server', async (_event, id) => {
@@ -569,9 +635,9 @@ ipcMain.handle('mcp:delete-server', async (_event, id) => {
   if (fs.existsSync(CONFIG_PATH)) {
     config = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
   }
-  if (Array.isArray(config.mcpServers)) {
-    config.mcpServers = config.mcpServers.filter(s => s.id !== id);
-  }
+  const map = _normalizeMcpConfig(config.mcpServers);
+  delete map[id];
+  config.mcpServers = map;
 
   fs.writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2));
   return { success: true };

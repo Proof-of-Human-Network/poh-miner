@@ -56,13 +56,101 @@ import { EscrowManager, ESCROW_ADDRESS } from './p2p/escrow.js';
 import { ReferralStore } from './p2p/referral-store.js';
 import { tryExternalProviders } from './ai/external-providers.js';
 import { needsDatasetLookup, searchDatasets, disambiguateDataset } from './datasets/hf-dataset-search.js';
+import { needsHfModelLookup, searchModelsWithFallback, pickRelevantModels, formatModelSuggestions } from './datasets/hf-model-search.js';
 import * as hfDatasetManager from './datasets/hf-dataset-manager.js';
 import { serveHfDataset, pullHfDatasetFromPeer } from './datasets/hf-dataset-peer-serve.js';
 import { applyCorsHeaders, rejectNonLocalStateChange } from './security/api-security.js';
 import { normalizeSkillId } from './security/skill-id.js';
+import { buildWalletJobContext, promptPreviewFromJob, jobToSearchDocument, buildAllSearchDocuments, PROMPT_PREVIEW_MAX } from './chain/chain-job-index.js';
+import { ChatHistorySearch } from './search/chat-history-search.js';
 
 // Returns true when a message segment clearly signals it needs live internet data.
 // Prevents web_search from firing on general knowledge questions the LLM already knows.
+const SOCIAL_SKILL_IDS = new Set(['read_farcaster', 'read_paragraph', 'read_zora', 'poh_identity']);
+
+function _isFollowUpQuestion(message) {
+  return /\b(link|url|that|this|it|same|previous|above|latest|most recent|last (?:one|post|cast|article)|give me|show me|what was)\b/i.test(message || '');
+}
+
+function _answerFromSkillMemory(message, memory) {
+  if (!memory?.output) return null;
+  const out = memory.output;
+  const skillId = memory.skillId;
+  const lower = (message || '').toLowerCase();
+
+  if (skillId === 'read_paragraph' && out.posts?.length) {
+    const latest = out.posts[0];
+    if (/\b(link|url)\b/i.test(message)) {
+      return latest.url
+        ? `The latest Paragraph post is **"${latest.title}"** (${latest.publishedAt ? new Date(latest.publishedAt * 1000).toLocaleDateString() : 'recent'}):\n\n${latest.url}`
+        : `Latest post "${latest.title}" has no URL in the feed.`;
+    }
+    return `Latest Paragraph post by **${out.author?.displayName || out.author?.handle || 'author'}**:\n\n**${latest.title}**${latest.url ? `\n\n${latest.url}` : ''}\n\n${(latest.excerpt || latest.content || '').slice(0, 500)}`;
+  }
+
+  if (skillId === 'read_farcaster' && out.casts?.length) {
+    const latest = out.casts[0];
+    const profileUrl = out.username ? `https://warpcast.com/${out.username}` : null;
+    if (/\b(link|url|profile)\b/i.test(message)) {
+      return profileUrl
+        ? `Farcaster profile for **@${out.username}**: ${profileUrl}`
+        : `_No profile link available._`;
+    }
+    return `Latest cast by **@${out.username}** (${out.displayName || out.username}):\n\n> ${latest.text}\n\n${latest.channel ? `Channel: #${latest.channel}` : ''}`;
+  }
+
+  if (skillId === '__compute__' || memory.fromCompute) {
+    const text = typeof out === 'string' ? out : out?.computeOutput;
+    if (text && /\b(link|url|repeat|again|what did you|latest|previous|that)\b/i.test(message)) {
+      return String(text).slice(0, 8000);
+    }
+  }
+
+  if (lower.includes('link') || lower.includes('url')) {
+    return _formatSkillOutputFallback(skillId, out);
+  }
+  return null;
+}
+
+function _mergeHistoryWithChainTurns(history, chainTurns) {
+  if (!chainTurns?.length) return history;
+  const seen = new Set((history || []).map(h => `${h.role}:${(h.content || '').slice(0, 80)}`));
+  const merged = [];
+  for (const t of chainTurns) {
+    const key = `${t.role}:${(t.content || '').slice(0, 80)}`;
+    if (!seen.has(key)) {
+      merged.push({ role: t.role, content: t.content });
+      seen.add(key);
+    }
+  }
+  return [...merged, ...(history || [])];
+}
+
+function _skillLlmSystemPrompt(skillId, skillContext) {
+  const social = SOCIAL_SKILL_IDS.has(skillId);
+  const base = [
+    'You are a helpful assistant. Answer the user\'s question using the real-time data provided.',
+    'Rules:',
+    '- Write in clear, human-readable Markdown (use ## headings, **bold**, bullet points).',
+    '- NEVER output raw JSON or code blocks in your answer.',
+    '- Be specific — include names, numbers, dates, URLs, and post titles from the data.',
+    '- If the user asks a follow-up about "the latest" or "a link", use the most recent item in the data.',
+  ];
+  if (social) {
+    base.push(
+      '- For social/blog skills: write at least 3 paragraphs — profile summary, main topics/interests, then 3–5 recent posts/casts with titles and links.',
+      '- Always include clickable Markdown links when URLs are present in the data.',
+      '- Mention follower counts, engagement, sentiment, and channels/topics explicitly.',
+    );
+  } else if (skillId === 'web_search') {
+    base.push('- For search results: summary paragraph, then top results as "- **Title** — snippet" bullets with source links.');
+  } else {
+    base.push('- For social/profile data: write a substantive natural-language summary, not a one-liner.');
+  }
+  if (skillContext) base.push(`\nSkill context (how to interpret the data):\n${skillContext}`);
+  return base.filter(Boolean).join('\n');
+}
+
 function _segmentNeedsWebSearch(segment) {
   const s = segment.toLowerCase();
   // Explicit search intent
@@ -126,10 +214,40 @@ function _formatSkillOutputFallback(skillId, output) {
     if (!output.fid) return '_No Farcaster account found for this address._';
     const lines = [
       `## ${output.displayName || output.username}`,
-      `**@${output.username}** · ${output.followerCount?.toLocaleString() || 0} followers`,
+      `**@${output.username}** · ${(output.followerCount || 0).toLocaleString()} followers · ${(output.followingCount || 0).toLocaleString()} following`,
     ];
     if (output.bio) lines.push(`\n> ${output.bio}`);
-    if (output.analysis?.summary) lines.push(`\n${output.analysis.summary}`);
+    if (output.url) lines.push(`\nProfile: ${output.url}`);
+    const a = output.analysis || {};
+    if (a.topics?.length) lines.push(`\n**Topics:** ${a.topics.slice(0, 8).map(t => t.word || t).join(', ')}`);
+    if (a.channels?.length) lines.push(`**Channels:** ${a.channels.slice(0, 5).join(', ')}`);
+    if (a.sentiment?.label) lines.push(`**Tone:** ${a.sentiment.label} (score ${a.sentiment.score ?? '—'})`);
+    if (a.avgLikes != null) lines.push(`**Engagement:** ~${a.avgLikes} likes/cast, reply ratio ${Math.round((a.replyRatio || 0) * 100)}%`);
+    if (output.casts?.length) {
+      lines.push('\n### Recent casts');
+      for (const c of output.casts.slice(0, 5)) {
+        const when = c.ts ? new Date(c.ts * 1000).toLocaleDateString() : '';
+        lines.push(`- ${when ? `*${when}* — ` : ''}${(c.text || '').slice(0, 200)}${c.channel ? ` _(#${c.channel})_` : ''}`);
+      }
+    }
+    return lines.join('\n');
+  }
+
+  if (skillId === 'read_paragraph') {
+    const author = output.author?.displayName || output.author?.handle || 'Author';
+    if (!output.posts?.length) return `_No Paragraph posts found for ${author}._`;
+    const lines = [`## ${author} on Paragraph`];
+    if (output.author?.bio) lines.push(`\n> ${output.author.bio}`);
+    const a = output.analysis || {};
+    if (a.topics?.length) lines.push(`\n**Writes about:** ${a.topics.slice(0, 8).map(t => t.word || t).join(', ')}`);
+    if (a.publishFrequencyPerMonth) lines.push(`**Frequency:** ~${a.publishFrequencyPerMonth} posts/month`);
+    lines.push('\n### Recent posts');
+    for (const p of output.posts.slice(0, 5)) {
+      const when = p.publishedAt ? new Date(p.publishedAt * 1000).toLocaleDateString() : '';
+      const link = p.url ? ` — [Read](${p.url})` : '';
+      lines.push(`- **${p.title || 'Untitled'}**${when ? ` (${when})` : ''}${link}`);
+      if (p.excerpt) lines.push(`  ${p.excerpt.slice(0, 160)}…`);
+    }
     return lines.join('\n');
   }
 
@@ -238,6 +356,13 @@ export class PohMinerNode {
       { getIdentityWallet: () => this.identityWallet },
     );
     this.chainStore = new ChainStore();
+    const msCfg = this.config.meilisearch || {};
+    this.chatHistorySearch = new ChatHistorySearch({
+      enabled: msCfg.enabled !== false,
+      host: msCfg.host,
+      apiKey: msCfg.apiKey,
+      indexName: msCfg.indexJobs,
+    });
     this.walletManager = new WalletManager();
     this.txMempool = new TxMempool(this.walletManager);
     this.txLedger = null; // canonical coinbase+tx replay; rebuilt from chain
@@ -316,9 +441,24 @@ export class PohMinerNode {
       }
     }
 
-    this.config.pohWallet = resolvedWallet.address;
-    this.config.wallet    = resolvedWallet.address;
-    this.identityWallet   = resolvedWallet;
+    resolvedWallet = this.walletManager.ensureCanonicalAddress(resolvedWallet);
+    if (resolvedWallet.address !== (this.config.pohWallet || this.config.wallet)) {
+      this.config.pohWallet = resolvedWallet.address;
+      this.config.wallet    = resolvedWallet.address;
+      try {
+        const cfgPath = path.join(os.homedir(), '.poh-miner', 'config.json');
+        const saved = fs.existsSync(cfgPath) ? JSON.parse(fs.readFileSync(cfgPath, 'utf8')) : {};
+        saved.pohWallet = resolvedWallet.address;
+        saved.wallet    = resolvedWallet.address;
+        fs.writeFileSync(cfgPath, JSON.stringify(saved, null, 2));
+      } catch (e) {
+        console.warn('[PoH-Miner] Could not persist migrated wallet to config:', e.message);
+      }
+    } else {
+      this.config.pohWallet = resolvedWallet.address;
+      this.config.wallet    = resolvedWallet.address;
+    }
+    this.identityWallet = resolvedWallet;
 
     console.log(`[PoH-Miner] Mining wallet: ${resolvedWallet.address}`);
 
@@ -706,6 +846,15 @@ export class PohMinerNode {
     // 3. Bootstrap / sync the chain
     await this.syncChain();
 
+    // 3a. Index blockchain chat history for autocomplete / repeat detection
+    try {
+      await this.chatHistorySearch.init();
+      const localRecords = this.jobResults ? Array.from(this.jobResults.values()) : [];
+      await this.chatHistorySearch.reindexAll(this.chain, localRecords);
+    } catch (e) {
+      console.warn('[PoH-Miner] Chat history search init failed:', e.message);
+    }
+
     // 3. Connect to the P2P network
     await this.connectToNetwork();
 
@@ -854,8 +1003,11 @@ export class PohMinerNode {
     }
 
     if (jobs.length === 0) {
-      // No skill matched — if the message explicitly references a dataset,
-      // try the Hugging Face dataset pipeline before falling back to plain chat.
+      // Media-generation requests (video/image/audio) → search HF models and suggest.
+      if (needsHfModelLookup(message)) {
+        return Promise.resolve({ type: 'hf-model', query: message });
+      }
+      // Explicit dataset mentions → Hugging Face dataset pipeline.
       if (needsDatasetLookup(message)) {
         return Promise.resolve({ type: 'dataset', query: message });
       }
@@ -1008,8 +1160,13 @@ export class PohMinerNode {
               res.statusCode = 400;
               return res.end(JSON.stringify({ error: 'jobId and amount (>0) are required' }));
             }
-            const requesterAddress = this.config.pohWallet || this.config.wallet;
-            const wallet = this.walletManager.loadWallet(requesterAddress);
+            let wallet = this.identityWallet;
+            if (wallet) wallet = this.walletManager.ensureCanonicalAddress(wallet);
+            const requesterAddress = wallet?.address
+              || Wallet.deriveAddressFromSigningKey(wallet?.signingPublicKey)
+              || this.config.pohWallet
+              || this.config.wallet;
+            wallet = wallet || this.walletManager.resolveWallet(requesterAddress);
             if (!wallet) {
               res.statusCode = 404;
               return res.end(JSON.stringify({ error: 'local wallet not found' }));
@@ -1048,6 +1205,15 @@ export class PohMinerNode {
           address,
           transactions: history
         }));
+      }
+
+      // Public job history for a wallet (chain + local cache)
+      if (url.pathname === '/api/wallet/jobs') {
+        const address = url.searchParams.get('address');
+        const limit = parseInt(url.searchParams.get('limit') || '20', 10);
+        if (!address) { res.statusCode = 400; return res.end(JSON.stringify({ error: 'address required' })); }
+        const ctx = this._getWalletJobContext(address, limit);
+        return res.end(JSON.stringify({ address, ...ctx }));
       }
 
       // Balance journal history for the sidebar transaction feed
@@ -1317,6 +1483,9 @@ export class PohMinerNode {
               skillId: job.skillId || null,
               requesterAddress: job.requesterAddress || null,
               maxBudget: job.maxBudget || 0,
+              promptPreview: promptPreviewFromJob(job),
+              model: job.model || null,
+              dataset: job.dataset || job.datasetId || null,
               timestamp: Date.now(),
             };
             this.pendingBrainTransitions.push(jobSubmittedTransition);
@@ -2001,8 +2170,44 @@ export class PohMinerNode {
         req.on('data', c => body += c);
         req.on('end', async () => {
           try {
-            const { message, history = [], model: reqModel, private: isPrivate = false, datasetId: forcedDatasetId } = JSON.parse(body);
+            const { message, history = [], model: reqModel, private: isPrivate = false, datasetId: forcedDatasetId, skillMemory = null, requesterAddress: reqRequester = null, skipHistoryMatch = false } = JSON.parse(body);
             if (!message) { res.statusCode = 400; return res.end(JSON.stringify({ error: 'message required' })); }
+
+            const requesterAddress = reqRequester || (!isPrivate ? (this.config.pohWallet || this.config.wallet) : null);
+
+            if (!skipHistoryMatch && this.chatHistorySearch?.enabled) {
+              try {
+                await this.chatHistorySearch.init();
+                const repeat = await this.chatHistorySearch.matchRepetitive({ q: message, wallet: requesterAddress, minScore: 0.86 });
+                if (repeat?.reply) {
+                  return res.end(JSON.stringify({
+                    type: 'chat',
+                    message: repeat.reply,
+                    fromChainHistory: true,
+                    jobId: repeat.jobId,
+                    matchScore: repeat.score,
+                    skillId: repeat.skillId,
+                  }));
+                }
+              } catch { /* non-fatal — continue to normal chat */ }
+            }
+            let chainContext = null;
+            if (!isPrivate && requesterAddress) {
+              const localRecords = this.jobResults ? Array.from(this.jobResults.values()) : [];
+              chainContext = buildWalletJobContext(this.chain, requesterAddress, { limit: 20, localRecords, chatTurnLimit: 8 });
+            }
+            const historyWithChain = _mergeHistoryWithChainTurns(history, chainContext?.chatTurns);
+
+            // Follow-up questions ("give me the link") — answer from prior skill data in history
+            if (_isFollowUpQuestion(message)) {
+              const mem = skillMemory
+                || chainContext?.latestSkillMemory
+                || [...history].reverse().find(h => h._skillMemory)?._skillMemory;
+              if (mem) {
+                const reply = _answerFromSkillMemory(message, mem);
+                if (reply) return res.end(JSON.stringify({ type: 'chat', message: reply, skill: mem.skillId, fromMemory: true, fromChain: !!mem.fromChain }));
+              }
+            }
 
             // Private mode: never leaves this device — no peer relay, no network-only
             // model routing, no cloud AI provider fallback. Just the local Ollama instance.
@@ -2027,19 +2232,15 @@ export class PohMinerNode {
                   const { output } = await skillsManager.runSkill(route.skillId, route.input, this.config);
                   const ollamaBase = this.config.ollamaUrl || 'http://localhost:11434';
                   const selModel   = reqModel || this.config.model || 'qwen2.5:1.5b';
-                  const systemContent = [
-                    'You are a helpful assistant. Answer the user\'s question using the real-time data provided.',
-                    'Rules:',
-                    '- Write in clear, human-readable Markdown (use ## headings, **bold**, bullet points).',
-                    '- NEVER output raw JSON, code blocks, or data structures in your answer.',
-                    '- For search results: write a short summary paragraph, then list the top results as "- **Title** — snippet" bullets.',
-                    '- For social/profile data: write a short natural-language summary.',
-                    '- Be specific — mention names, numbers, sources from the data.',
-                    '- If the data is empty or has no results, say so clearly and suggest rephrasing.',
-                    skillEntry.context ? `\nSkill context (how to interpret the data):\n${skillEntry.context}` : '',
+                  const systemContent = _skillLlmSystemPrompt(route.skillId, skillEntry.context);
+                  const dataLimit = SOCIAL_SKILL_IDS.has(route.skillId) ? 12000 : 6000;
+                  const dataStr = JSON.stringify(output, null, 2).slice(0, dataLimit);
+                  const histSnippet = historyWithChain.slice(-6).map(h => `${h.role}: ${(h.content || '').slice(0, 300)}`).join('\n');
+                  const userContent = [
+                    histSnippet ? `Recent conversation:\n${histSnippet}\n` : '',
+                    `Fetched data:\n${dataStr}`,
+                    `\nUser question: ${message}`,
                   ].filter(Boolean).join('\n');
-                  const dataStr = JSON.stringify(output, null, 2).slice(0, 6000);
-                  const userContent = `Fetched data:\n${dataStr}\n\nUser question: ${message}`;
                   const llmRes = await fetch(`${ollamaBase}/api/chat`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -2049,7 +2250,10 @@ export class PohMinerNode {
                   const llmData = await llmRes.json();
                   const llmReply = llmData.message?.content || '';
                   const reply = llmReply.trim() || _formatSkillOutputFallback(route.skillId, output);
-                  return res.end(JSON.stringify({ type: 'chat', message: reply, skill: route.skillId }));
+                  return res.end(JSON.stringify({
+                    type: 'chat', message: reply, skill: route.skillId,
+                    skillMemory: { skillId: route.skillId, output, at: Date.now() },
+                  }));
                 } catch (e) {
                   console.warn('[chat/ask] inline skill error:', e.message);
                   // fall through to job routing
@@ -2150,6 +2354,21 @@ export class PohMinerNode {
               }
             }
 
+            // ── Hugging Face model suggestion (video/image/audio generation) ───────
+            if (route.type === 'hf-model') {
+              try {
+                const ollamaBase = this.config.ollamaUrl || 'http://localhost:11434';
+                const selModel   = reqModel || this.config.model || 'qwen2.5:1.5b';
+                const candidates = await searchModelsWithFallback(route.query);
+                const models     = await pickRelevantModels(route.query, candidates, { ollamaUrl: ollamaBase, model: selModel });
+                const reply      = formatModelSuggestions(route.query, models);
+                return res.end(JSON.stringify({ type: 'chat', message: reply, hfModels: models.map(m => m.id) }));
+              } catch (e) {
+                console.warn('[chat/ask] hf-model pipeline error:', e.message);
+                // fall through to plain chat below
+              }
+            }
+
             // ── Hugging Face dataset pipeline ─────────────────────────────────────
             // No skill matched, but the message explicitly referenced a dataset.
             // Search HF → let the local LLM pick a match → answer from a local/peer
@@ -2200,6 +2419,12 @@ export class PohMinerNode {
                     datasetId,
                     description: meta.description || '',
                     estimatedSizeBytes: meta.sizeBytes || null,
+                    installInstructions: [
+                      'Approve the download prompt in Chat, or',
+                      `POST /api/hf-dataset/${datasetId}/download on your miner API`,
+                      'Settings → Datasets lists installed copies',
+                      'Stored under ~/.poh-miner/brain-data/hf-datasets/',
+                    ].join(' '),
                   }));
                 }
                 // datasetId is null — none of the candidates actually help; fall through to plain chat.
@@ -2586,6 +2811,37 @@ export class PohMinerNode {
 
       // ── Blockchain Explorer API ──────────────────────────────────────────────────
 
+      // GET /api/search/suggest?q=...&wallet=... — chat autocomplete from blockchain history
+      if (req.method === 'GET' && url.pathname === '/api/search/suggest') {
+        const q = url.searchParams.get('q') || '';
+        const wallet = url.searchParams.get('wallet') || url.searchParams.get('address') || '';
+        const limit = Math.min(20, parseInt(url.searchParams.get('limit') || '8', 10));
+        void (async () => {
+          if (this.chatHistorySearch?.enabled) await this.chatHistorySearch.init();
+          const result = this.chatHistorySearch?.enabled
+            ? await this.chatHistorySearch.suggest({ q, wallet: wallet || null, limit })
+            : { suggestions: [], engine: 'disabled' };
+          res.end(JSON.stringify(result));
+        })().catch(e => { res.statusCode = 500; res.end(JSON.stringify({ error: e.message })); });
+        return;
+      }
+
+      // GET /api/search/history-match?q=... — find prior reply for a repetitive prompt
+      if (req.method === 'GET' && url.pathname === '/api/search/history-match') {
+        const q = url.searchParams.get('q') || '';
+        const wallet = url.searchParams.get('wallet') || url.searchParams.get('address') || '';
+        const minScore = parseFloat(url.searchParams.get('minScore') || '0.82');
+        if (!q.trim()) { res.statusCode = 400; return res.end(JSON.stringify({ error: 'q required' })); }
+        void (async () => {
+          if (this.chatHistorySearch?.enabled) await this.chatHistorySearch.init();
+          const match = this.chatHistorySearch?.enabled
+            ? await this.chatHistorySearch.matchRepetitive({ q, wallet: wallet || null, minScore })
+            : null;
+          res.end(JSON.stringify({ match }));
+        })().catch(e => { res.statusCode = 500; res.end(JSON.stringify({ error: e.message })); });
+        return;
+      }
+
       // GET /api/explorer/blocks?page=0&limit=20 — recent blocks
       if (req.method === 'GET' && url.pathname === '/api/explorer/blocks') {
         const limit = Math.min(50, parseInt(url.searchParams.get('limit') || '20', 10));
@@ -2601,6 +2857,7 @@ export class PohMinerNode {
             timestamp: bj.timestamp,
             miner:     bj.minerWallet,
             txCount:   (bj.transactions || []).length,
+            jobCount:  (bj.scanResults || bj.skillResults || []).length,
             reward:    bj.coinbaseReward || 0,
           };
         });
@@ -2664,7 +2921,8 @@ export class PohMinerNode {
             ts:      e.ts,
             label:   e.delta > 0 ? (e.txHash?.startsWith('reward-') || e.txHash?.startsWith('coinbase') ? 'Mining reward' : 'Received') : 'Sent',
           }));
-        return res.end(JSON.stringify({ type: 'address', address: q, balance, entries }));
+        const jobCtx = this._getWalletJobContext(q, 10);
+        return res.end(JSON.stringify({ type: 'address', address: q, balance, entries, jobs: jobCtx.jobs, latestSkillMemory: jobCtx.latestSkillMemory }));
       }
 
       // ── Dataset serving (/api/dataset, /api/dataset/:file) ───────────────────
@@ -2751,19 +3009,28 @@ export class PohMinerNode {
       // Helper: verify that caller owns `address` by checking their ed25519 signature
       // over JSON.stringify({address, timestamp, ...actionFields}) using signingPublicKey.
       const verifyP2PAuth = (address, signingPublicKey, signature, payloadObj) => {
-        if (!address || !signingPublicKey || !signature) return { error: 'missing auth fields' };
-        if (!Wallet.isAddressBoundToSigningKey(address, signingPublicKey)) {
-          return { error: 'address does not match signing public key' };
-        }
+        if (!signingPublicKey || !signature) return { error: 'missing auth fields' };
+        const canonical = Wallet.deriveAddressFromSigningKey(signingPublicKey);
+        if (!canonical) return { error: 'invalid signing public key' };
+        const boundAddress = canonical;
         if (Math.abs(Date.now() - (payloadObj.timestamp || 0)) > 5 * 60 * 1000) return { error: 'request expired' };
-        const payloadStr = JSON.stringify(payloadObj);
-        if (!Wallet.verifySignature(signingPublicKey, payloadStr, signature)) return { error: 'invalid signature' };
-        const stored = this.walletManager.loadWallet(address);
-        if (!stored) return { error: 'wallet not found on this node; connect your wallet first' };
-        if (stored.signingPublicKey && stored.signingPublicKey !== signingPublicKey) {
+        const payloadStr = JSON.stringify({ ...payloadObj, address: boundAddress });
+        if (!Wallet.verifySignature(signingPublicKey, payloadStr, signature)) {
+          // Retry with the address the client actually sent (pre-migration wallets)
+          const altPayload = JSON.stringify({ ...payloadObj, address: address || boundAddress });
+          if (!Wallet.verifySignature(signingPublicKey, altPayload, signature)) {
+            return { error: 'invalid signature' };
+          }
+        }
+        const stored = this.walletManager.resolveWallet(boundAddress, signingPublicKey)
+          || (address ? this.walletManager.resolveWallet(address, signingPublicKey) : null);
+        if (!stored) return { error: 'wallet not found on this node; restart the miner to migrate your wallet' };
+        const storedKey = stored.signingPublicKey?.trim().replace(/\r\n/g, '\n');
+        const reqKey = signingPublicKey.trim().replace(/\r\n/g, '\n');
+        if (storedKey && storedKey !== reqKey) {
           return { error: 'signing key mismatch' };
         }
-        return true;
+        return { address: boundAddress };
       };
 
       // GET /api/p2p/currencies — list supported quote currencies
@@ -2801,18 +3068,19 @@ export class PohMinerNode {
           const { address, signingPublicKey, signature, timestamp, ...orderFields } = body;
           const auth = verifyP2PAuth(address, signingPublicKey, signature,
             { address, timestamp, action: 'create-order', side: orderFields.side, pohAmount: orderFields.pohAmount });
-          if (auth !== true) { res.statusCode = 401; return res.end(JSON.stringify(auth)); }
+          if (auth.error) { res.statusCode = 401; return res.end(JSON.stringify(auth)); }
+          const ownerAddress = auth.address;
 
           // For sell orders: lock POH in escrow now
           if (orderFields.side === 'sell') {
-            const lockResult = this.p2pEscrow.lock(this.walletManager, address, orderFields.pohAmount);
+            const lockResult = this.p2pEscrow.lock(this.walletManager, ownerAddress, orderFields.pohAmount);
             if (lockResult !== true) { res.statusCode = 400; return res.end(JSON.stringify(lockResult)); }
           }
 
-          const result = this.p2pOrderStore.createOrder({ maker: address, ...orderFields });
+          const result = this.p2pOrderStore.createOrder({ maker: ownerAddress, ...orderFields });
           if (result.error) {
             // Refund escrow if order creation failed after locking
-            if (orderFields.side === 'sell') this.p2pEscrow.release(this.walletManager, address, orderFields.pohAmount);
+            if (orderFields.side === 'sell') this.p2pEscrow.release(this.walletManager, ownerAddress, orderFields.pohAmount);
             res.statusCode = 400; return res.end(JSON.stringify(result));
           }
 
@@ -2836,11 +3104,12 @@ export class PohMinerNode {
             const { address, signingPublicKey, signature, timestamp } = body;
             const auth = verifyP2PAuth(address, signingPublicKey, signature,
               { address, timestamp, action: 'cancel-order', orderId });
-            if (auth !== true) { res.statusCode = 401; return res.end(JSON.stringify(auth)); }
+            if (auth.error) { res.statusCode = 401; return res.end(JSON.stringify(auth)); }
+            const ownerAddress = auth.address;
 
             const order = this.p2pOrderStore.getOrder(orderId);
             if (!order) { res.statusCode = 404; return res.end(JSON.stringify({ error: 'order not found' })); }
-            if (order.maker !== address) { res.statusCode = 403; return res.end(JSON.stringify({ error: 'not your order' })); }
+            if (order.maker !== ownerAddress && order.maker !== address) { res.statusCode = 403; return res.end(JSON.stringify({ error: 'not your order' })); }
 
             // Capture before cancelOrder mutates the object in-place via Object.assign
             const { side: orderSide, escrowLocked: wasEscrowLocked, pohAmount: orderPohAmount } = order;
@@ -2850,11 +3119,11 @@ export class PohMinerNode {
 
             // Refund escrow for sell orders
             if (orderSide === 'sell' && wasEscrowLocked) {
-              this.p2pEscrow.release(this.walletManager, address, orderPohAmount);
+              this.p2pEscrow.release(this.walletManager, ownerAddress, orderPohAmount);
             }
             // Refund escrow for buy orders where taker locked (handled in trade cancel)
             this._appliedP2PIds.add(`order-cancel-${orderId}`);
-            this.pendingBrainTransitions.push({ type: 'p2p-order-cancelled', orderId, maker: address, side: orderSide, escrowLocked: wasEscrowLocked, pohAmount: orderPohAmount, updatedAt: Date.now() });
+            this.pendingBrainTransitions.push({ type: 'p2p-order-cancelled', orderId, maker: ownerAddress, side: orderSide, escrowLocked: wasEscrowLocked, pohAmount: orderPohAmount, updatedAt: Date.now() });
             this.gossip.publish('p2p-order', result.order).catch(() => {});
             return res.end(JSON.stringify(result));
           }).catch(e => { res.statusCode = 400; res.end(JSON.stringify({ error: e.message })); });
@@ -2867,20 +3136,21 @@ export class PohMinerNode {
             const { address, signingPublicKey, signature, timestamp, pohAmount, quoteAmount } = body;
             const auth = verifyP2PAuth(address, signingPublicKey, signature,
               { address, timestamp, action: 'select-order', orderId, pohAmount, quoteAmount });
-            if (auth !== true) { res.statusCode = 401; return res.end(JSON.stringify(auth)); }
+            if (auth.error) { res.statusCode = 401; return res.end(JSON.stringify(auth)); }
+            const ownerAddress = auth.address;
 
             const order = this.p2pOrderStore.getOrder(orderId);
             if (!order) { res.statusCode = 404; return res.end(JSON.stringify({ error: 'order not found' })); }
 
             // For buy orders: taker is selling POH, so lock taker's POH in escrow
             if (order.side === 'buy') {
-              const lockResult = this.p2pEscrow.lock(this.walletManager, address, pohAmount);
+              const lockResult = this.p2pEscrow.lock(this.walletManager, ownerAddress, pohAmount);
               if (lockResult !== true) { res.statusCode = 400; return res.end(JSON.stringify(lockResult)); }
             }
 
-            const result = this.p2pOrderStore.selectOrder(orderId, { taker: address, pohAmount, quoteAmount });
+            const result = this.p2pOrderStore.selectOrder(orderId, { taker: ownerAddress, pohAmount, quoteAmount });
             if (result.error) {
-              if (order.side === 'buy') this.p2pEscrow.release(this.walletManager, address, pohAmount);
+              if (order.side === 'buy') this.p2pEscrow.release(this.walletManager, ownerAddress, pohAmount);
               res.statusCode = 400; return res.end(JSON.stringify(result));
             }
 
@@ -2923,16 +3193,19 @@ export class PohMinerNode {
           const { address, signingPublicKey, signature, timestamp, reason } = body;
           const auth = verifyP2PAuth(address, signingPublicKey, signature,
             { address, timestamp, action, tradeId });
-          if (auth !== true) { res.statusCode = 401; return res.end(JSON.stringify(auth)); }
+          if (auth.error) { res.statusCode = 401; return res.end(JSON.stringify(auth)); }
+          const ownerAddress = auth.address;
 
           const trade = this.p2pOrderStore.getTrade(tradeId);
           if (!trade) { res.statusCode = 404; return res.end(JSON.stringify({ error: 'trade not found' })); }
           const order = this.p2pOrderStore.getOrder(trade.orderId);
 
+          const _isAddr = (a) => a === ownerAddress || a === address;
+
           if (action === 'payment-sent') {
             // Only the taker (for sell orders) or maker (for buy orders) marks payment sent
             const payer = order?.side === 'sell' ? trade.taker : order?.maker;
-            if (address !== payer) { res.statusCode = 403; return res.end(JSON.stringify({ error: 'not the payer' })); }
+            if (!_isAddr(payer)) { res.statusCode = 403; return res.end(JSON.stringify({ error: 'not the payer' })); }
             const result = this.p2pOrderStore.markPaymentSent(tradeId);
             if (result.error) { res.statusCode = 400; return res.end(JSON.stringify(result)); }
             this._appliedP2PIds.add(`trade-${tradeId}-payment-sent`);
@@ -2947,7 +3220,7 @@ export class PohMinerNode {
             // Buy order: taker is seller, maker is buyer. Taker releases to maker.
             const releaser = order?.side === 'sell' ? order?.maker : trade.taker;
             const recipient = order?.side === 'sell' ? trade.taker : order?.maker;
-            if (address !== releaser) { res.statusCode = 403; return res.end(JSON.stringify({ error: 'not authorized to release' })); }
+            if (!_isAddr(releaser)) { res.statusCode = 403; return res.end(JSON.stringify({ error: 'not authorized to release' })); }
 
             // Referral fee: deduct from escrow before releasing to buyer
             const referrer = this.p2pReferral.getReferrer(recipient);
@@ -2970,7 +3243,7 @@ export class PohMinerNode {
           }
 
           if (action === 'cancel') {
-            const canCancel = address === trade.taker || (order && address === order.maker);
+            const canCancel = _isAddr(trade.taker) || (order && _isAddr(order.maker));
             if (!canCancel) { res.statusCode = 403; return res.end(JSON.stringify({ error: 'not a trade participant' })); }
 
             // Refund escrow to the party who locked.
@@ -2992,7 +3265,7 @@ export class PohMinerNode {
           }
 
           if (action === 'dispute') {
-            const canDispute = address === trade.taker || (order && address === order.maker);
+            const canDispute = _isAddr(trade.taker) || (order && _isAddr(order.maker));
             if (!canDispute) { res.statusCode = 403; return res.end(JSON.stringify({ error: 'not a trade participant' })); }
             const result = this.p2pOrderStore.disputeTrade(tradeId, { reason });
             if (result.error) { res.statusCode = 400; return res.end(JSON.stringify(result)); }
@@ -3033,7 +3306,8 @@ export class PohMinerNode {
       // Renderer calls this to get a signed auth token without needing the private key.
       if (req.method === 'POST' && url.pathname === '/api/p2p/local-auth') {
         readBody().then(body => {
-          const wallet = this.identityWallet;
+          let wallet = this.identityWallet;
+          if (wallet) wallet = this.walletManager.ensureCanonicalAddress(wallet);
           if (!wallet?.signingPublicKey || !wallet?.sign) {
             res.statusCode = 503;
             return res.end(JSON.stringify({ error: 'signing key not available' }));
@@ -3041,7 +3315,19 @@ export class PohMinerNode {
           const { action, ...extraFields } = body;
           if (!action) { res.statusCode = 400; return res.end(JSON.stringify({ error: 'action required' })); }
           const timestamp = Date.now();
-          const address = wallet.address;
+          const address = Wallet.deriveAddressFromSigningKey(wallet.signingPublicKey) || wallet.address;
+          if (address !== (this.config.wallet || this.config.pohWallet)) {
+            this.config.pohWallet = address;
+            this.config.wallet = address;
+            this.identityWallet = wallet;
+            try {
+              const cfgPath = path.join(os.homedir(), '.poh-miner', 'config.json');
+              const saved = fs.existsSync(cfgPath) ? JSON.parse(fs.readFileSync(cfgPath, 'utf8')) : {};
+              saved.pohWallet = address;
+              saved.wallet = address;
+              fs.writeFileSync(cfgPath, JSON.stringify(saved, null, 2));
+            } catch { /* non-fatal */ }
+          }
           const payloadObj = { address, timestamp, action, ...extraFields };
           const signature = wallet.sign(JSON.stringify(payloadObj));
           return res.end(JSON.stringify({
@@ -4248,6 +4534,42 @@ export class PohMinerNode {
     return this._appendBlock(block, from);
   }
 
+
+  _getWalletJobContext(requesterAddress, limit = 20) {
+    if (!requesterAddress) return { jobs: [], latestSkillMemory: null, chatTurns: [] };
+    const localRecords = this.jobResults ? Array.from(this.jobResults.values()) : [];
+    return buildWalletJobContext(this.chain, requesterAddress, { limit, localRecords, chatTurnLimit: 8 });
+  }
+
+  _indexJobInSearch(jobOrRecord) {
+    if (!this.chatHistorySearch?.enabled) return;
+    const job = jobOrRecord?.job || jobOrRecord;
+    const rec = jobOrRecord?.job ? jobOrRecord : (this.jobResults?.get(job?.id || job?.jobId));
+    if (!job?.id && !job?.jobId) return;
+    const merged = {
+      jobId: job.id || job.jobId,
+      jobType: job.type || job.jobType,
+      skillId: job.skillId,
+      requesterAddress: job.requesterAddress,
+      promptPreview: job.promptPreview || promptPreviewFromJob(job),
+      submittedAt: rec?.createdAt || rec?.updatedAt || Date.now(),
+      mined: false,
+      verdict: rec?.result?.verdict || null,
+      profile: rec?.result?.profile || null,
+      reasoning: rec?.result?.reasoning || null,
+      source: 'local',
+    };
+    const doc = jobToSearchDocument(merged);
+    if (doc) void this.chatHistorySearch.indexDocument(doc);
+  }
+
+  _indexBlockInSearch(block) {
+    if (!this.chatHistorySearch?.enabled || !block) return;
+    const localRecords = this.jobResults ? Array.from(this.jobResults.values()) : [];
+    const docs = buildAllSearchDocuments([block], localRecords);
+    for (const doc of docs) void this.chatHistorySearch.indexDocument(doc);
+  }
+
   _appendBlock(block, from) {
     const parent = this.chain[this.chain.length - 1] ?? null;
     if (block.height > 0) {
@@ -4268,6 +4590,7 @@ export class PohMinerNode {
     this.chain.push(block);
     this._advanceTxLedger(block);
     this.chainStore.saveBlock(block);
+    this._indexBlockInSearch(block);
     this.currentDifficulty = getNextDifficulty(this.chain);
     console.log(`[PoH-Miner] Accepted block #${block.height} chainWork=${block.chainWork} txs=${(block.transactions||[]).length} [sig:${block.minerSignature ? '✓' : 'none'}] from ${from?.slice(0,8)}`);
 
@@ -4935,9 +5258,13 @@ export class PohMinerNode {
           datasetUsed = dataset;
         }
 
-        // Prior conversation turns, if the client sent any — keeps Public-mode chat
-        // conversational instead of resetting context on every paid message.
-        const history = Array.isArray(job.payload?.history) ? job.payload.history : [];
+        // Prior conversation turns — client history plus on-chain public job context.
+        let history = Array.isArray(job.payload?.history) ? job.payload.history : [];
+        if (job.requesterAddress) {
+          const localRecords = this.jobResults ? Array.from(this.jobResults.values()) : [];
+          const chainCtx = buildWalletJobContext(this.chain, job.requesterAddress, { limit: 20, localRecords, chatTurnLimit: 8 });
+          history = _mergeHistoryWithChainTurns(history, chainCtx.chatTurns);
+        }
         for (const turn of history) {
           if (turn?.role && turn?.content && ['user', 'assistant', 'system'].includes(turn.role)) {
             messages.push({ role: turn.role, content: String(turn.content).slice(0, 8000) });
@@ -5113,6 +5440,7 @@ export class PohMinerNode {
       createdAt: Date.now(),
       updatedAt: Date.now(),
     });
+    this._indexJobInSearch(this.jobResults.get(job.id));
     if (this.jobQueue) {
       this.jobQueue.addJob(job);
     }
@@ -5123,6 +5451,7 @@ export class PohMinerNode {
     if (rec) {
       Object.assign(rec, patch);
       rec.updatedAt = Date.now();
+      if (patch.result || patch.status === 'done') this._indexJobInSearch(rec);
     }
   }
 

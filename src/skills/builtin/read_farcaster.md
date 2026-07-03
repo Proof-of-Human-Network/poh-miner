@@ -291,6 +291,7 @@ exports.run = async function(input) {
   const avgRecasts = casts.length ? Math.round((casts.reduce((s, c) => s + c.recasts, 0) / casts.length) * 10) / 10 : 0;
   const replies    = casts.filter(c => c.isReply).length;
   const originals  = casts.length - replies;
+  const replyRatio = casts.length ? Math.round((replies / casts.length) * 100) / 100 : 0;
 
   // Build natural language summary for chat display
   const _name = ud['USER_DATA_TYPE_DISPLAY'] || user.displayName || user.username || username;
@@ -299,7 +300,7 @@ exports.run = async function(input) {
   const _topicStr = _topWords.length ? `Posts about: ${_topWords.join(', ')}.` : '';
   const _sentStr = `Tone is ${analysis.sentiment.label}.`;
   const _chanStr = analysis.channels.length ? `Active in ${analysis.channels.slice(0, 3).join(', ')}.` : '';
-  const _engStr = analysis.replyRatio > 0.6 ? 'Highly conversational.' : analysis.replyRatio < 0.2 ? 'Mostly original posts.' : '';
+  const _engStr = replyRatio > 0.6 ? 'Highly conversational.' : replyRatio < 0.2 ? 'Mostly original posts.' : '';
   const _sample = casts[0]?.text?.trim();
   const _castStr = _sample ? `Recent: "${_sample.slice(0, 100)}${_sample.length > 100 ? '…' : ''}"` : '';
   const summary = [
@@ -321,7 +322,7 @@ exports.run = async function(input) {
       topics:          analysis.topics,
       sentiment:       analysis.sentiment,
       channels:        analysis.channels,
-      replyRatio:      casts.length ? Math.round((replies / casts.length) * 100) / 100 : 0,
+      replyRatio,
       originalPosts:   originals,
       replies,
       avgLikes,

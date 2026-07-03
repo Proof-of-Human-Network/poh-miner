@@ -433,6 +433,7 @@
     }
     .chat-clear-btn:hover { color: #888; }
     #chat-privacy-toggle { margin-left: 8px; }
+    #chat-model-select { flex: 1; max-width: 220px; min-width: 120px; }
     #chat-privacy-toggle.public { color: #60a5fa; }
     #chat-context-pill {
       font-family: monospace; font-size: 10px;
@@ -470,6 +471,49 @@
       transition: border-color 0.15s;
     }
     #chat-input:focus { border-color: #333; }
+    #chat-suggest-wrap {
+      position: relative;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+    }
+    #chat-suggest-box {
+      display: none;
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: calc(100% + 4px);
+      max-height: 200px;
+      overflow-y: auto;
+      background: #0d0d0d;
+      border: 1px solid #2a2a2a;
+      border-radius: 8px;
+      z-index: 20;
+      box-shadow: 0 -4px 16px rgba(0,0,0,0.4);
+    }
+    .chat-suggest-item {
+      padding: 8px 10px;
+      cursor: pointer;
+      border-bottom: 1px solid #1a1a1a;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .chat-suggest-item:hover { background: #1a1a1a; }
+    .chat-suggest-prompt { font-size: 12px; color: #ccc; line-height: 1.35; }
+    .chat-suggest-reply { font-size: 10px; color: #555; font-style: italic; line-height: 1.3; }
+    .chat-suggest-badge { font-size: 9px; color: #22c55e; font-family: monospace; }
+    #chat-history-banner {
+      display: none;
+      margin: 0 12px 6px;
+      padding: 8px 10px;
+      background: #0f1f14;
+      border: 1px solid #1e3a2a;
+      border-radius: 6px;
+      font-size: 11px;
+      color: #86efac;
+    }
     #chat-send-btn {
       background: #22c55e;
       color: #000;
@@ -1443,9 +1487,10 @@
 
       <!-- CHAT -->
       <div class="panel" id="chat-panel">
-        <!-- hidden select keeps model-loading logic intact; value is synced from global _activeModel -->
-        <select id="chat-model-select" style="display:none"></select>
         <div class="chat-toolbar">
+          <span class="chat-model-label">Model</span>
+          <select id="chat-model-select" onchange="onChatModelSelect(this.value)" title="Models from local Ollama and network peers"></select>
+          <span id="chat-queue-pill" style="display:none;font-size:10px;color:#60a5fa;font-family:monospace;"></span>
           <span id="chat-context-pill" title="Social context active — LLM knows recent activity for this address" style="display:none;"></span>
           <button class="chat-clear-btn" onclick="clearChat()" data-i18n="chat.clear">Clear</button>
           <button class="chat-clear-btn" onclick="clearChatContext()" id="chat-ctx-clear-btn" title="Clear social context" style="display:none; color:#374151;" data-i18n="chat.ctx">× context</button>
@@ -1469,15 +1514,19 @@
           <span id="chat-file-chip-name" style="font-family:monospace;background:#111;border:1px solid #2a2a2a;border-radius:4px;padding:2px 8px;"></span>
           <span onclick="removeChatFile()" style="cursor:pointer;color:#f87171;">×</span>
         </div>
+        <div id="chat-history-banner"></div>
         <div class="chat-input-row">
           <input type="file" id="chat-file-input" style="display:none"
                  accept=".txt,.md,.json,.csv,.log,.js,.jsx,.ts,.tsx,.py,.html,.css,.yaml,.yml,.xml,.sh"
                  onchange="handleChatFileUpload(event)" />
           <button id="chat-upload-btn" onclick="document.getElementById('chat-file-input').click()"
                   title="Attach a text file (max 100KB)" data-i18n="chat.attach">📎</button>
-          <textarea id="chat-input" rows="1" placeholder="Message the AI…"
-                    data-i18n-placeholder="chat.placeholder"
-                    onkeydown="chatKeydown(event)" oninput="autoResize(this)"></textarea>
+          <div id="chat-suggest-wrap">
+            <div id="chat-suggest-box"></div>
+            <textarea id="chat-input" rows="1" placeholder="Message the AI…"
+                      data-i18n-placeholder="chat.placeholder"
+                      onkeydown="chatKeydown(event)" oninput="chatInputChanged(this)"></textarea>
+          </div>
           <button id="chat-stop-btn" onclick="stopChatStream()" title="Stop generating" data-i18n="chat.stop">■ Stop</button>
           <button id="chat-send-btn" onclick="sendChatMessage()" data-i18n="chat.send">Send</button>
         </div>
@@ -1933,18 +1982,26 @@
           <div class="settings-subpage" id="settings-sub-mcp">
             <div>
               <div style="font-size:10px;color:#666;letter-spacing:0.1em;margin-bottom:8px;font-weight:600;">MCP SERVERS</div>
-              <div style="font-size:10px;color:#444;margin-bottom:8px;">Connect external MCP servers to extend the AI brain's tools and knowledge.</div>
+              <div style="font-size:10px;color:#444;margin-bottom:8px;">Standard MCP config format — same as Claude Desktop / Cursor (<code style="color:#666;">mcpServers</code> with <code style="color:#666;">command</code>, <code style="color:#666;">args</code>, <code style="color:#666;">env</code>).</div>
               <div id="mcp-servers-list" style="display:flex;flex-direction:column;gap:6px;margin-bottom:8px;"></div>
               <div style="background:#0a0a0a;border:1px solid #1a1a1a;border-radius:6px;padding:10px;display:flex;flex-direction:column;gap:6px;">
-                <input id="mcp-new-name" placeholder="Server name"
-                       style="width:100%;padding:5px;background:#111;color:#ddd;border:1px solid #2a2a2a;border-radius:4px;font-size:11px;box-sizing:border-box;">
-                <input id="mcp-new-url" placeholder="Server URL (https://...)"
+                <input id="mcp-new-name" placeholder="Server id (e.g. filesystem)"
                        style="width:100%;padding:5px;background:#111;color:#ddd;border:1px solid #2a2a2a;border-radius:4px;font-family:monospace;font-size:11px;box-sizing:border-box;">
-                <input id="mcp-new-key" type="password" placeholder="API key (optional)"
+                <input id="mcp-new-command" placeholder="command (e.g. npx)"
+                       style="width:100%;padding:5px;background:#111;color:#ddd;border:1px solid #2a2a2a;border-radius:4px;font-family:monospace;font-size:11px;box-sizing:border-box;">
+                <input id="mcp-new-args" placeholder='args JSON (e.g. ["-y","@modelcontextprotocol/server-filesystem","/path"])'
+                       style="width:100%;padding:5px;background:#111;color:#ddd;border:1px solid #2a2a2a;border-radius:4px;font-family:monospace;font-size:11px;box-sizing:border-box;">
+                <input id="mcp-new-env" placeholder='env JSON (optional, e.g. {"API_KEY":"..."})'
                        style="width:100%;padding:5px;background:#111;color:#ddd;border:1px solid #2a2a2a;border-radius:4px;font-family:monospace;font-size:11px;box-sizing:border-box;">
                 <button id="mcp-add-btn" style="padding:5px;background:#166534;color:white;border:none;border-radius:4px;cursor:pointer;font-size:11px;">Add MCP Server</button>
                 <div id="mcp-status" style="font-size:10px;color:#22c55e;min-height:12px;"></div>
               </div>
+              <details style="margin-top:8px;font-size:10px;color:#555;">
+                <summary style="cursor:pointer;color:#666;">Paste full mcpServers JSON</summary>
+                <textarea id="mcp-json-paste" rows="6" placeholder='{"filesystem":{"command":"npx","args":["-y","@modelcontextprotocol/server-filesystem","/home/user/Desktop"]}}'
+                  style="width:100%;margin-top:6px;padding:6px;background:#111;color:#ddd;border:1px solid #2a2a2a;border-radius:4px;font-family:monospace;font-size:10px;box-sizing:border-box;"></textarea>
+                <button id="mcp-import-btn" style="margin-top:4px;padding:4px 8px;background:#1a1a1a;color:#9ca3af;border:1px solid #2a2a2a;border-radius:4px;cursor:pointer;font-size:10px;">Import JSON</button>
+              </details>
             </div>
           </div>
 

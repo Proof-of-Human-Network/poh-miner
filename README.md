@@ -12,6 +12,8 @@ Download the latest `.deb` / `.AppImage` / Windows installer from [miner.proofof
 
 On all platforms, Ollama and the `qwen2.5:1.5b` model are downloaded and started automatically on first launch.
 
+The desktop app includes **Chat** (private sync / public async job queue, blockchain history autocomplete), **Explorer** (blocks, addresses, completed jobs), and **P2P** exchange tabs. MCP servers use the standard `mcpServers` JSON format (`command`, `args`, `env`) in Settings.
+
 > **No Ollama?** The miner still works — chat and skill queries fall back to peer miners on the network that have Ollama running.
 
 ### CLI
@@ -106,8 +108,8 @@ RPC endpoints can be configured per-chain under the `rpc` key — see `config.ex
 Each block contains:
 
 - `height`, `previousHash`, `timestamp`, `minerWallet`
-- `scanResults[]` — verified wallet verdicts (requestId, address, verdict, confidence, reasoning, signalsUsed, minerWallet, signature)
-- `stateTransitions[]` — balance/state changes applied by this block
+- `scanResults[]` — mined job results (verdict scans, skill outputs, compute replies): `requestId`, `verdict`, `profile`, `reasoning`, `minerWallet`, signature
+- `stateTransitions[]` — on-chain state deltas applied by this block: `job-submitted` (public job queue metadata + `promptPreview`), escrow, brain updates, `brain-state-root`
 - `transactions[]` — signed POH token transfers with nonces
 - `coinbaseReward` — 1 POH per block; if compute work exists: 60% to proposer, 40% split among workers; if no work but peers are active: 60% to proposer, 40% split among active peers; if no peers: 100% to proposer
 - `nonce`, `difficulty`, `chainWork` — PoW fields (chainWork is cumulative hex bigint)
@@ -161,10 +163,63 @@ Every miner exposes an HTTP API for the mobile wallet and external tools. Amount
 | `GET /api/wallet/nonce?address=<addr>` | Current nonce for transaction signing |
 | `GET /api/wallet/transactions?address=<addr>` | Transaction history |
 | `GET /api/wallet/history?address=<addr>` | Full history with block confirmations |
+| `GET /api/wallet/jobs?address=<addr>&limit=20` | Public job history for a wallet — joins `job-submitted` transitions with mined `scanResults`; returns `{jobs, latestSkillMemory, chatTurns}` |
 | `POST /api/wallet/send` | Transfer POH (`{from, to, amount, privateKey}`) |
 | `POST /api/wallet/register-key` | Register an ed25519 signing key for an address |
 | `POST /api/tx/submit` | Submit a pre-signed `PoHTransaction` |
 | `GET /api/tx/pending` | Inspect mempool |
+
+
+### Chat context (private vs public)
+
+| Mode | Context source |
+|------|----------------|
+| **Private** | In-memory chat history + `_skillMemory` from the last inline skill run on this device; chat runs synchronously |
+| **Public** | Same session memory **plus** on-chain job history for the paying wallet (`job-submitted` + mined `scanResults`), via `GET /api/wallet/jobs?address=...`; paid jobs are queued asynchronously |
+
+Public follow-ups (e.g. "give me the link") can resolve from chain-stored skill outputs when the session is new or on another device. Prompt text on chain is stored as `promptPreview` (max 500 chars) on each `job-submitted` transition. The desktop app's **Chat** tab shows a queue pill while public jobs are pending.
+
+### Blockchain Explorer
+
+Browse the local chain from the Electron **Explorer** tab or via HTTP:
+
+| Endpoint | Description |
+|---|---|
+| `GET /api/explorer/blocks?page=0&limit=20` | Recent blocks (newest first); each entry includes `jobCount` when the block contains mined results |
+| `GET /api/explorer/block/:height` | Full block JSON (`scanResults`, `stateTransitions`, `transactions`, hash, miner, reward) |
+| `GET /api/explorer/search?q=<query>` | Lookup by block height, tx/block hash, or wallet address |
+
+Address search returns balance, recent POH transfers, and **completed jobs** for that wallet. Block detail shows **completed jobs in block** (from `scanResults`) and any **job submissions** (`job-submitted` transitions not yet mined in the same block).
+
+### Chat history search (Meilisearch + local index)
+
+As you type in **Chat**, the miner searches indexed blockchain job history (`promptPreview`, replies, skill outputs) and suggests past questions. Repetitive prompts can return a cached on-chain reply without re-running compute.
+
+| Endpoint | Description |
+|---|---|
+| `GET /api/search/suggest?q=<prefix>&wallet=<addr>&limit=8` | Autocomplete — past prompts + reply snippets |
+| `GET /api/search/history-match?q=<message>&wallet=<addr>` | Full cached reply when the prompt closely matches history |
+
+`POST /chat/ask` also checks history automatically (similarity ≥ 0.86) and may return `{ fromChainHistory: true }`.
+
+**Indexing:** On startup, each new block, and when jobs complete. Local store: `~/.poh-miner/search/chat-history.ndjson`. Optional [Meilisearch](https://www.meilisearch.com/) for faster fuzzy search:
+
+```json
+"meilisearch": {
+  "enabled": true,
+  "host": "http://127.0.0.1:7700",
+  "apiKey": "",
+  "indexJobs": "poh-chat-history"
+}
+```
+
+```bash
+docker run -d -p 7700:7700 getmeili/meilisearch:latest
+```
+
+Works without Meilisearch — falls back to the local NDJSON index.
+
+The mobile **PoH Wallet** app uses the same APIs on the connected miner (`Ask AI` tab).
 
 ### Jobs (scan requests, skills, compute)
 
@@ -219,7 +274,7 @@ Skills are on-demand agent modules that extend what miners can compute. Builtin 
 | Endpoint | Description |
 |---|---|
 | `POST /chat/route` | Route a message to the best matching skill `{message, budget, wallet}` |
-| `POST /chat/ask` | Full AI reply — routes to a skill or falls back to free chat `{message, wallet}` |
+| `POST /chat/ask` | Full AI reply — routes to a skill or falls back to free chat `{message, wallet, requesterAddress, history}`; may return cached chain reply |
 
 ### LLM & Brain
 
@@ -317,7 +372,7 @@ npm run test:watch        # watch mode
 npm run test:integration  # end-to-end (requires dev/ checker)
 ```
 
-Tests cover: P2P gossip, block/result signatures, chainWork fork resolution, transactions + nonces, double-spend protection, PoW mining + abort, balance journal rollback, and job deduplication.
+Tests cover: P2P gossip, block/result signatures, chainWork fork resolution, transactions + nonces, double-spend protection, PoW mining + abort, balance journal rollback, job deduplication, on-chain job indexing (`chain-job-index`), and chat history search (`chat-history-search`).
 
 ---
 
@@ -382,6 +437,8 @@ The `.deb` postinst script installs Ollama and pulls `qwen2.5:1.5b` automaticall
 ```
 src/
   core/           block.js, scanRequest.js, transaction.js
+  chain/          chain-job-index.js (join job-submitted + scanResults for wallet/explorer)
+  search/         chat-history-search.js (Meilisearch + local chat autocomplete index)
   consensus/      pow.js, chain-selection.js
   network/        p2p-gossip.js
   signals/        methods-manager.js (canonical signal set sync)
@@ -407,8 +464,8 @@ src/
 
 electron/         GUI desktop app (Electron 31)
   renderer/
-    index.html    main UI (Dashboard, Logs, Chat, P2P tabs)
-    renderer.js   frontend logic
+    index.html    main UI (Home, Logs, Chat, Explorer, P2P, Settings tabs)
+    renderer.js   frontend logic (chat queue, history autocomplete, model selector, explorer)
     i18n.js       internationalization strings
   main.cjs        IPC + Ollama auto-install + window management
   preload.js      context bridge

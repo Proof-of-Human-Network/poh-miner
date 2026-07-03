@@ -1470,6 +1470,7 @@ initAiProvidersUI();
 async function initMcpServersUI() {
   const list = document.getElementById('mcp-servers-list');
   const addBtn = document.getElementById('mcp-add-btn');
+  const importBtn = document.getElementById('mcp-import-btn');
   const status = document.getElementById('mcp-status');
   if (!list || !addBtn || !window.pohMinerAPI?.mcp) return;
 
@@ -1479,17 +1480,18 @@ async function initMcpServersUI() {
 
     list.innerHTML = '';
     if (!servers.length) {
-      list.innerHTML = '<div style="font-size:10px;color:#444;">No MCP servers configured.</div>';
+      list.innerHTML = '<div style="font-size:10px;color:#444;">No MCP servers configured. Add one below or paste standard mcpServers JSON.</div>';
       return;
     }
 
     for (const s of servers) {
+      const cmdLine = [s.command, ...(s.args || [])].filter(Boolean).join(' ');
       const row = document.createElement('div');
       row.style.cssText = 'background:#0a0a0a;border:1px solid #1a1a1a;border-radius:6px;padding:8px 10px;display:flex;align-items:center;justify-content:space-between;gap:8px;';
       row.innerHTML = `
         <div style="min-width:0;">
-          <div style="font-size:11px;color:#ddd;">${s.name || '(unnamed)'} ${s.enabled ? '' : '<span style="color:#666;">(disabled)</span>'}</div>
-          <div style="font-size:10px;color:#666;font-family:monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${s.url || ''}</div>
+          <div style="font-size:11px;color:#ddd;">${s.name || s.id || '(unnamed)'} ${s.enabled ? '' : '<span style="color:#666;">(disabled)</span>'}</div>
+          <div style="font-size:10px;color:#666;font-family:monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${cmdLine || s.url || ''}</div>
         </div>
         <div style="display:flex;gap:4px;flex-shrink:0;">
           <button data-action="toggle" style="padding:4px 8px;background:#1a1a1a;color:#9ca3af;border:none;border-radius:4px;cursor:pointer;font-size:10px;">${s.enabled ? 'Disable' : 'Enable'}</button>
@@ -1510,27 +1512,52 @@ async function initMcpServersUI() {
 
   addBtn.addEventListener('click', async () => {
     const name = document.getElementById('mcp-new-name').value.trim();
-    const url  = document.getElementById('mcp-new-url').value.trim();
-    const apiKey = document.getElementById('mcp-new-key').value.trim();
+    const command = document.getElementById('mcp-new-command').value.trim();
+    const argsRaw = document.getElementById('mcp-new-args').value.trim();
+    const envRaw = document.getElementById('mcp-new-env').value.trim();
 
-    if (!name || !url) {
-      status.textContent = 'Name and URL are required';
+    if (!name || !command) {
+      status.textContent = 'Server id and command are required';
       status.style.color = '#f87171';
       return;
     }
 
+    let args = [];
+    let env = {};
+    try { if (argsRaw) args = JSON.parse(argsRaw); } catch { status.textContent = 'args must be valid JSON array'; status.style.color = '#f87171'; return; }
+    try { if (envRaw) env = JSON.parse(envRaw); } catch { status.textContent = 'env must be valid JSON object'; status.style.color = '#f87171'; return; }
+
     status.textContent = 'Adding...';
     status.style.color = '#888';
     try {
-      await window.pohMinerAPI.mcp.saveServer({ name, url, apiKey, enabled: true });
+      await window.pohMinerAPI.mcp.saveServer({ id: name, name, command, args, env, enabled: true });
       document.getElementById('mcp-new-name').value = '';
-      document.getElementById('mcp-new-url').value = '';
-      document.getElementById('mcp-new-key').value = '';
+      document.getElementById('mcp-new-command').value = '';
+      document.getElementById('mcp-new-args').value = '';
+      document.getElementById('mcp-new-env').value = '';
       status.textContent = 'MCP server added';
       status.style.color = '#22c55e';
       renderList();
     } catch {
       status.textContent = 'Failed to add server';
+      status.style.color = '#f87171';
+    }
+  });
+
+  importBtn?.addEventListener('click', async () => {
+    const paste = document.getElementById('mcp-json-paste')?.value?.trim();
+    if (!paste) { status.textContent = 'Paste mcpServers JSON first'; status.style.color = '#f87171'; return; }
+    status.textContent = 'Importing...';
+    status.style.color = '#888';
+    try {
+      const r = await window.pohMinerAPI.mcp.importJson(paste);
+      if (!r.success) throw new Error(r.error);
+      status.textContent = `Imported ${r.count} server(s)`;
+      status.style.color = '#22c55e';
+      document.getElementById('mcp-json-paste').value = '';
+      renderList();
+    } catch (e) {
+      status.textContent = e.message || 'Import failed';
       status.style.color = '#f87171';
     }
   });
@@ -1557,7 +1584,12 @@ async function refreshHfDatasetsSettings() {
 
   list.innerHTML = '';
   if (!datasets.length) {
-    list.innerHTML = '<div style="font-size:10px;color:#444;">No datasets installed yet.</div>';
+    list.innerHTML = `<div style="font-size:10px;color:#444;line-height:1.5;">No datasets installed yet.<br><br>
+      <strong style="color:#666;">How to install Hugging Face datasets:</strong><br>
+      1. In Chat, ask about a dataset (e.g. "search huggingface for IMDB reviews")<br>
+      2. Approve the download prompt when it appears<br>
+      3. Or run: <code style="color:#555;">POST /api/hf-dataset/{id}/download</code> on your miner API<br>
+      4. Requires internet; datasets are stored under ~/.poh-miner/brain-data/hf-datasets/</div>`;
     return;
   }
 
@@ -1598,7 +1630,7 @@ function switchTab(name) {
     if (btn)   btn.classList.toggle('active', key === name);
   });
   if (name === 'home')     { syncHomeBalance(); }
-  if (name === 'chat')     { loadChatModels(); document.getElementById('chat-input')?.focus(); }
+  if (name === 'chat')     { loadChatModels(true); document.getElementById('chat-input')?.focus(); }
   if (name === 'send')     { syncSendWallet(); showSendView(); }
   if (name === 'skills')   { loadSkills(); }
   if (name === 'settings') { loadSettingsPanel(); refreshHfDatasetsSettings(); }
@@ -1608,10 +1640,55 @@ function switchTab(name) {
 
 // ── Chat state ─────────────────────────────────────────────────────────────────
 
-const chatHistory = []; // { role: 'user'|'assistant', content: string }
-let chatStreaming = false;
+const chatHistory = []; // { role, content, _skillMemory? }
+let chatStreaming = false; // private mode: blocks next send while true
+let chatPublicJobs = 0;  // public mode: concurrent in-flight jobs
 let chatAbortController = null;
+const chatJobAbortControllers = new Map();
 let _brainSystemPrompt = null; // full brain state injected as system msg on every chat send
+
+function getLastSkillMemory() {
+  for (let i = chatHistory.length - 1; i >= 0; i--) {
+    if (chatHistory[i]._skillMemory) return chatHistory[i]._skillMemory;
+  }
+  return null;
+}
+
+function pushAssistantReply(content, extras = {}) {
+  chatHistory.push({ role: 'assistant', content, ...extras });
+}
+
+function _chatAskPayload(message, history, isPrivate, extra = {}) {
+  const payload = {
+    message,
+    history,
+    private: isPrivate,
+    model: getActiveModel(),
+    skillMemory: getLastSkillMemory(),
+    ...extra,
+  };
+  if (!isPrivate && window._localWallet) payload.requesterAddress = window._localWallet;
+  return payload;
+}
+
+const HF_DATASET_INSTALL_HINT = `**No Hugging Face datasets installed on this miner.**
+
+To install a dataset:
+1. Ask in Chat about a dataset (e.g. "search huggingface for squad")
+2. Approve the download prompt when it appears
+3. Or use **Settings → Datasets**, or call \`POST /api/hf-dataset/{datasetId}/download\` on your miner API (port ${window._minerApiPort || 3456})
+4. Requires internet; files are stored under \`~/.poh-miner/brain-data/hf-datasets/\``;
+
+function _updateChatQueuePill() {
+  const pill = document.getElementById('chat-queue-pill');
+  if (!pill) return;
+  if (window._chatPrivate || chatPublicJobs <= 0) {
+    pill.style.display = 'none';
+  } else {
+    pill.style.display = 'inline';
+    pill.textContent = `${chatPublicJobs} running`;
+  }
+}
 
 // ── Social context injection ──────────────────────────────────────────────────
 // Populated after a scan; prepended as system message to every chat send.
@@ -1772,13 +1849,15 @@ function clearChatContext() {
 
 function setChatStreaming(active) {
   chatStreaming = active;
-  document.getElementById('chat-send-btn').disabled = active;
+  const isPrivate = window._chatPrivate !== false;
+  document.getElementById('chat-send-btn').disabled = isPrivate && active;
   const stopBtn = document.getElementById('chat-stop-btn');
-  if (stopBtn) stopBtn.style.display = active ? 'block' : 'none';
+  if (stopBtn) stopBtn.style.display = (isPrivate && active) ? 'block' : 'none';
 }
 
 function stopChatStream() {
   if (chatAbortController) chatAbortController.abort();
+  for (const ctrl of chatJobAbortControllers.values()) ctrl.abort();
 }
 
 // ── Global active model ────────────────────────────────────────────────────────
@@ -1793,13 +1872,18 @@ function getActiveModel() {
 
 function setActiveModel(name) {
   window._activeModel = name;
-  // Keep hidden select in sync (used by legacy code that still reads it)
   const sel = document.getElementById('chat-model-select');
   if (sel) sel.value = name;
-  // Update sidebar button label
   const btn = document.getElementById('brain-model');
   if (btn) btn.textContent = name;
 }
+
+window.onChatModelSelect = function(name) {
+  window._modelUserPicked = true;
+  const entry = window._cachedModelEntries?.find(m => m.name === name);
+  window._activeModelIsNetwork = !!entry && !entry.local;
+  setActiveModel(name);
+};
 
 // ── Model picker modal ─────────────────────────────────────────────────────────
 
@@ -1898,29 +1982,50 @@ window.pickModel = function(name) {
 
 // ── Model loader (for backward compat + hidden select population) ──────────────
 
-async function loadChatModels() {
+async function loadChatModels(force = false) {
   const sel = document.getElementById('chat-model-select');
-  if (!sel || sel.dataset.loaded) return;
+  if (!sel) return;
+  if (!force && sel.dataset.loaded) return;
   try {
     const port = window._minerApiPort || 3456;
-    const res  = await fetch(`http://localhost:${port}/api/models`);
-    if (!res.ok) return;
-    const data = await res.json();
-    const models = (data.models || []).map(m => m.name || m.model).filter(Boolean);
-    window._cachedModels = models;
+    const [localRes, netRes] = await Promise.all([
+      fetch(`http://localhost:${port}/api/models`).catch(() => null),
+      fetch(`http://localhost:${port}/api/network-models`).catch(() => null),
+    ]);
+    const byName = new Map();
+    if (localRes?.ok) {
+      const data = await localRes.json();
+      for (const m of (data.models || [])) {
+        const name = m.name || m.model;
+        if (name) byName.set(name, { name, local: true, peerCount: 0 });
+      }
+    }
+    if (netRes?.ok) {
+      const data = await netRes.json();
+      for (const m of (data.models || [])) {
+        const existing = byName.get(m.name);
+        byName.set(m.name, { name: m.name, local: existing?.local || m.local, peerCount: m.peerCount || 0 });
+      }
+    }
+    window._cachedModelEntries = [...byName.values()];
+    window._cachedModels = window._cachedModelEntries.map(m => m.name);
     sel.innerHTML = '';
-    if (!models.length) {
+    if (!window._cachedModelEntries.length) {
       sel.innerHTML = '<option value="">No models found</option>';
       return;
     }
-    for (const m of models) {
+    for (const m of window._cachedModelEntries) {
       const opt = document.createElement('option');
-      opt.value = opt.textContent = m;
+      opt.value = m.name;
+      opt.textContent = m.local ? m.name : `${m.name} (network)`;
       sel.appendChild(opt);
     }
-    // Default to qwen if available, else first model
-    const qwen = models.find(m => m.includes('qwen')) || models[0];
-    if (qwen) setActiveModel(qwen);
+    if (!window._modelUserPicked) {
+      const qwen = window._cachedModels.find(m => m.includes('qwen')) || window._cachedModels[0];
+      if (qwen) setActiveModel(qwen);
+    } else {
+      setActiveModel(getActiveModel());
+    }
     sel.dataset.loaded = '1';
   } catch { /* Ollama not running */ }
 }
@@ -2028,39 +2133,49 @@ function renderMessage(role, content, streaming = false) {
   return bubble;
 }
 
-function appendToLastBubble(token) {
+function _resolveBubble(bubbleOrToken) {
+  if (bubbleOrToken && bubbleOrToken.classList?.contains('chat-bubble')) return bubbleOrToken;
   const msgs = document.getElementById('chat-messages');
-  const last = msgs.querySelector('.chat-msg.assistant:last-child .chat-bubble');
-  if (!last) return;
+  return msgs?.querySelector('.chat-msg.assistant:last-child .chat-bubble') || null;
+}
 
-  last._rawText = (last._rawText || '') + token;
-  last.innerHTML = _mdParse(last._rawText);
+function appendToBubble(bubble, token) {
+  const el = bubble?.classList?.contains('chat-bubble') ? bubble : _resolveBubble(null);
+  const tok = token ?? bubble;
+  if (!el || typeof tok !== 'string') return;
 
-  // Re-attach blinking cursor
+  el._rawText = (el._rawText || '') + tok;
+  el.innerHTML = _mdParse(el._rawText);
+
+  el.querySelector('.chat-cursor')?.remove();
   const cur = document.createElement('span');
   cur.className = 'chat-cursor';
-  cur.id = 'chat-cursor';
-  const lastEl = last.lastElementChild;
+  cur.id = el.dataset.jobId ? `chat-cursor-${el.dataset.jobId}` : 'chat-cursor';
+  const lastEl = el.lastElementChild;
   if (lastEl && ['P','LI','H1','H2','H3','H4','TD','BLOCKQUOTE'].includes(lastEl.tagName)) {
     lastEl.appendChild(cur);
   } else {
-    last.appendChild(cur);
+    el.appendChild(cur);
   }
-  // No auto-scroll — user may be scrolled up reading earlier messages
 }
 
-function finalizeLastBubble() {
-  const msgs = document.getElementById('chat-messages');
-  const last = msgs.querySelector('.chat-msg.assistant:last-child .chat-bubble');
-  if (!last) return;
+function appendToLastBubble(bubble, token) {
+  if (typeof bubble === 'string' && token === undefined) appendToBubble(null, bubble);
+  else appendToBubble(bubble, token);
+}
 
-  document.getElementById('chat-cursor')?.remove();
-
-  // Final render: full markdown + math
-  if (last._rawText) {
-    last.innerHTML = _mdParse(last._rawText);
-    _renderMath(last);
+function finalizeBubble(bubble) {
+  const el = bubble || _resolveBubble(null);
+  if (!el) return;
+  el.querySelector('.chat-cursor')?.remove();
+  if (el._rawText) {
+    el.innerHTML = _mdParse(el._rawText);
+    _renderMath(el);
   }
+}
+
+function finalizeLastBubble(bubble) {
+  finalizeBubble(bubble || null);
 }
 
 // ── Send + stream ──────────────────────────────────────────────────────────────
@@ -2198,51 +2313,58 @@ function _renderJobFeedbackStars(jobId) {
 }
 
 // ── Public mode: every message is a paid network compute job ───────────────────
-async function submitComputeJob(promptText) {
+async function submitComputeJob(promptText, jobCtx = {}) {
   const port  = window._minerApiPort || 3456;
   const model = getActiveModel();
   const budget = getChatBudget();
   const input = document.getElementById('chat-input');
-
-  function _finish() {
-    chatAbortController = null;
-    setChatStreaming(false);
-    if (input) { input.disabled = false; input.focus(); }
-  }
+  const isPrivate = window._chatPrivate !== false;
+  const { bubble: jobBubble, history: historyForJob, dataset } = jobCtx;
+  const hist = historyForJob || chatHistory.slice(0, -1);
+  const append = (t) => appendToBubble(jobBubble, t);
+  const finalize = () => finalizeBubble(jobBubble);
+  const showReply = (msg) => {
+    if (jobBubble) {
+      jobBubble._rawText = msg;
+      finalize();
+    } else {
+      renderMessage('assistant', msg);
+    }
+    pushAssistantReply(msg);
+  };
 
   if (!window._localWallet) {
-    renderMessage('assistant', 'No local wallet found — cannot submit a paid job in Public mode.');
-    chatHistory.push({ role: 'assistant', content: 'No local wallet found — cannot submit a paid job in Public mode.' });
-    _finish();
+    showReply('No local wallet found — cannot submit a paid job in Public mode.');
     return;
   }
 
-  renderMessage('assistant', 'Submitting paid compute job…', true);
-  chatAbortController = new AbortController();
+  if (!jobBubble) renderMessage('assistant', 'Submitting paid compute job…', true);
 
   try {
     const jobId = `job-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const { requesterAddress, txHash, signature } = await _signJobPayment(jobId, budget);
 
+    const jobBody = {
+      id: jobId,
+      type: 'compute',
+      model,
+      payload: { prompt: promptText, history: hist },
+      maxBudget: budget,
+      requesterAddress,
+      paymentTx: { txHash, signature },
+    };
+    if (dataset) jobBody.dataset = dataset;
+
     const jobRes = await fetch(`http://localhost:${port}/job`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        id: jobId,
-        type: 'compute',
-        model,
-        payload: { prompt: promptText, history: chatHistory.slice(0, -1) },
-        maxBudget: budget,
-        requesterAddress,
-        paymentTx: { txHash, signature },
-      }),
+      body: JSON.stringify(jobBody),
     });
     if (!jobRes.ok) {
       const err = await jobRes.json().catch(() => ({}));
       throw new Error(err.error || `Job submit failed (HTTP ${jobRes.status})`);
     }
 
-    // Poll for completion (same shape/timeout as skill jobs)
     let attempts = 0;
     const result = await new Promise(resolve => {
       const t = setInterval(async () => {
@@ -2256,7 +2378,7 @@ async function submitComputeJob(promptText) {
               resolve({ _jobError: data.status, error: data.message || data.error });
               return;
             }
-            if (attempts % 5 === 0) appendToLastBubble('.');
+            if (attempts % 5 === 0) append('.');
             if (attempts > 30) { clearInterval(t); resolve(null); }
             return;
           }
@@ -2267,49 +2389,65 @@ async function submitComputeJob(promptText) {
       }, 2000);
     });
 
-    finalizeLastBubble();
+    finalize();
 
     if (result?._jobError) {
-      const msg = `Compute job failed (${result.error || result._jobError}).`;
-      renderMessage('assistant', msg);
-      chatHistory.push({ role: 'assistant', content: msg });
+      showReply(`Compute job failed (${result.error || result._jobError}).`);
     } else if (result) {
       const reply = result.profile?.computeOutput || 'No response generated.';
-      renderMessage('assistant', reply);
-      chatHistory.push({ role: 'assistant', content: reply });
+      showReply(reply);
       _renderJobFeedbackStars(jobId);
     } else {
-      const msg = 'Compute job timed out waiting for a miner. It may still complete — check Explorer.';
-      renderMessage('assistant', msg);
-      chatHistory.push({ role: 'assistant', content: msg });
+      showReply('Compute job timed out waiting for a miner. It may still complete — check Explorer.');
     }
   } catch (e) {
-    finalizeLastBubble();
-    const msg = `Could not submit paid job: ${e.message}`;
-    renderMessage('assistant', msg);
-    chatHistory.push({ role: 'assistant', content: msg });
+    finalize();
+    showReply(`Could not submit paid job: ${e.message}`);
   } finally {
-    _finish();
+    if (isPrivate) {
+      chatAbortController = null;
+      setChatStreaming(false);
+      if (input) { input.disabled = false; input.focus(); }
+    }
   }
 }
 
 async function sendChatMessage() {
-  if (chatStreaming) return;
+  const isPrivate = window._chatPrivate !== false;
+  if (isPrivate && chatStreaming) return;
   const input = document.getElementById('chat-input');
   const text  = input.value.trim();
   const attachedFile = window._chatAttachedFile;
   if (!text && !attachedFile) return;
 
-  // Network-only (peer-served) models can't be used in Private mode — never silently leak.
-  if (window._chatPrivate && window._activeModelIsNetwork) {
+  if (isPrivate && window._activeModelIsNetwork) {
     alert(`"${getActiveModel()}" is only available on the network. Switch to Public mode or pick a local model.`);
     return;
   }
 
   input.value = '';
   input.style.height = '';
-  input.disabled = true;
-  setChatStreaming(true);
+  if (isPrivate) {
+    input.disabled = true;
+    setChatStreaming(true);
+  } else {
+    chatPublicJobs++;
+    _updateChatQueuePill();
+  }
+
+  const jobId = `chat-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const jobAbort = new AbortController();
+  chatJobAbortControllers.set(jobId, jobAbort);
+  if (isPrivate) chatAbortController = jobAbort;
+
+  let jobBubble = null;
+  const jobAppend = (t) => appendToBubble(jobBubble, t);
+  const jobFinalize = () => finalizeBubble(jobBubble);
+  const jobShowAssistant = (content, streaming = false) => {
+    jobBubble = renderMessage('assistant', content, streaming);
+    if (jobBubble) jobBubble.dataset.jobId = jobId;
+    return jobBubble;
+  };
 
   let llmText = text;
   if (attachedFile) {
@@ -2322,24 +2460,28 @@ async function sendChatMessage() {
 
   const model = getActiveModel();
   const port  = window._minerApiPort || 3456;
-  const isPrivate = window._chatPrivate !== false;
+  const historySnapshot = chatHistory.slice();
 
-  // ── Public mode: always a paid network compute job, no free path — even "hello" ──
-  if (!isPrivate) {
-    await submitComputeJob(llmText);
-    return;
+  function _endChatJob() {
+    chatJobAbortControllers.delete(jobId);
+    if (isPrivate) {
+      chatAbortController = null;
+      setChatStreaming(false);
+      if (input) { input.disabled = false; input.focus(); }
+    } else {
+      chatPublicJobs = Math.max(0, chatPublicJobs - 1);
+      _updateChatQueuePill();
+    }
   }
 
-  // ── Skill routing ──────────────────────────────────────────────────────────
+  // ── Skill routing (both Private and Public) ────────────────────────────────
   const ADDR_RE = /0x[0-9a-fA-F]{40}|[1-9A-HJ-NP-Za-km-z]{32,44}(?=[\s,!?"]|$)|(bc1|[13])[a-zA-HJ-NP-Z0-9]{25,62}|(EQ|UQ)[A-Za-z0-9+/_-]{46}|[\w-]+\.eth\b|[\w-]+\.sol\b|[\w-]+\.bnb\b/;
   const addrMatch = text.match(ADDR_RE);
 
   async function _submitSkillJob(skillId, payload) {
-    // This branch only runs in Private mode (Public mode short-circuits to
-    // submitComputeJob above) — so never attach a payment here, even if the
-    // budget slider has a leftover value from before it was hidden. Builtin
-    // skills are all private/free; a non-private skill would simply be
-    // rejected by the server with FEE_REQUIRED, which is correct in Private mode.
+    // Paid network skill job — only used in Public mode when /chat/ask cannot run
+    // the skill inline (community/non-private skills). Private mode runs skills
+    // locally via /chat/ask and never reaches here.
     const body = { type: 'skill', skillId, payload };
     if (!isPrivate) {
       const budget = getChatBudget();
@@ -2489,22 +2631,22 @@ async function sendChatMessage() {
         // Multi-skill cascade: delegate entirely to /chat/ask which runs all skills
         // inline and synthesizes the results with LLM — no paid job queue needed.
         const skillNames = route.jobs.map(j => j.skillId).join(' + ');
-        renderMessage('assistant', `Fetching data via \`${skillNames}\`…`, true);
+        jobShowAssistant(`Fetching data via \`${skillNames}\`…`, true);
         _bubbleShown = true;
-        chatAbortController = new AbortController();
+        chatAbortController = jobAbort;
         try {
           const cascadeRes = await fetch(`http://localhost:${port}/chat/ask`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ message: text, history: chatHistory, private: isPrivate }),
+            body: JSON.stringify(_chatAskPayload(text, historySnapshot, isPrivate)),
             signal: AbortSignal.timeout(60000),
           });
-          finalizeLastBubble();
+          jobFinalize();
           if (cascadeRes.ok) {
             const cascadeData = await cascadeRes.json();
             const reply = cascadeData.message || route.jobs.map(j => j.skillId).join(' + ') + ' returned no data.';
-            renderMessage('assistant', reply);
-            chatHistory.push({ role: 'assistant', content: reply });
+            jobShowAssistant(reply);
+            pushAssistantReply(reply, cascadeData.skillMemory ? { _skillMemory: cascadeData.skillMemory } : {});
           } else {
             const errData = await cascadeRes.json().catch(() => ({}));
             const msg = errData.error || `\`${skillNames}\` failed (HTTP ${cascadeRes.status}).`;
@@ -2528,21 +2670,21 @@ async function sendChatMessage() {
       if (!_skillDone && route.type === 'sequence') {
         // e.g. "create an ERC20 contract and audit it" — backend generates the code first,
         // then runs the matched skill's reference material against what was generated.
-        renderMessage('assistant', `Generating, then running \`${route.skillId}\`…`, true);
+        jobShowAssistant(`Generating, then running \`${route.skillId}\`…`, true);
         _bubbleShown = true;
-        chatAbortController = new AbortController();
+        chatAbortController = jobAbort;
         try {
           const seqRes = await fetch(`http://localhost:${port}/chat/ask`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ message: text, history: chatHistory, private: isPrivate }),
+            body: JSON.stringify(_chatAskPayload(text, historySnapshot, isPrivate)),
             signal: AbortSignal.timeout(120000),
           });
-          finalizeLastBubble();
+          jobFinalize();
           const seqData = await seqRes.json();
           const reply = seqData.message || `\`${route.skillId}\` returned no result.`;
-          renderMessage('assistant', reply);
-          chatHistory.push({ role: 'assistant', content: reply });
+          jobShowAssistant(reply);
+          pushAssistantReply(reply, seqData.skillMemory ? { _skillMemory: seqData.skillMemory } : {});
           _skillDone = true;
         } catch (e) {
           finalizeLastBubble();
@@ -2554,21 +2696,56 @@ async function sendChatMessage() {
         }
       }
 
+      if (!_skillDone && route.type === 'hf-model') {
+        // Media-generation request — search Hugging Face models and suggest matches.
+        jobShowAssistant('Searching Hugging Face models…', true);
+        _bubbleShown = true;
+        chatAbortController = jobAbort;
+        try {
+          const hfRes = await fetch(`http://localhost:${port}/chat/ask`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(_chatAskPayload(text, historySnapshot, isPrivate, { model })),
+            signal: AbortSignal.timeout(60000),
+          });
+          jobFinalize();
+          if (hfRes.ok) {
+            const data = await hfRes.json();
+            const reply = data.message || 'No Hugging Face models found for that request.';
+            jobShowAssistant(reply);
+            pushAssistantReply(reply);
+          } else {
+            const errData = await hfRes.json().catch(() => ({}));
+            const msg = errData.error || `Hugging Face model search failed (HTTP ${hfRes.status}).`;
+            renderMessage('assistant', msg);
+            chatHistory.push({ role: 'assistant', content: msg });
+          }
+          _skillDone = true;
+        } catch (e) {
+          finalizeLastBubble();
+          console.warn('[hf-model] /chat/ask failed:', e.message);
+          const msg = 'Could not search Hugging Face models. Please try again.';
+          renderMessage('assistant', msg);
+          chatHistory.push({ role: 'assistant', content: msg });
+          _skillDone = true;
+        }
+      }
+
       if (!_skillDone && route.type === 'dataset') {
         // No skill matched, but the message referenced a dataset — let the backend
         // search Hugging Face, disambiguate, and answer from a local/peer copy.
         // A 412 means nobody has it; show the download-approval modal.
-        renderMessage('assistant', 'Searching Hugging Face datasets…', true);
+        jobShowAssistant('Searching Hugging Face datasets…', true);
         _bubbleShown = true;
-        chatAbortController = new AbortController();
+        chatAbortController = jobAbort;
         try {
           const dsRes = await fetch(`http://localhost:${port}/chat/ask`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ message: text, history: chatHistory, private: isPrivate }),
+            body: JSON.stringify(_chatAskPayload(text, historySnapshot, isPrivate)),
             signal: AbortSignal.timeout(60000),
           });
-          finalizeLastBubble();
+          jobFinalize();
 
           if (dsRes.status === 412) {
             const info = await dsRes.json();
@@ -2582,14 +2759,14 @@ async function sendChatMessage() {
                 const retryRes = await fetch(`http://localhost:${port}/chat/ask`, {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ message: text, history: chatHistory, private: isPrivate, datasetId: info.datasetId }),
+                  body: JSON.stringify(_chatAskPayload(text, historySnapshot, isPrivate, { datasetId: info.datasetId })),
                   signal: AbortSignal.timeout(60000),
                 });
                 const retryData = await retryRes.json();
-                finalizeLastBubble();
+                jobFinalize();
                 const reply = retryData.message || 'Could not answer using the downloaded dataset.';
-                renderMessage('assistant', reply);
-                chatHistory.push({ role: 'assistant', content: reply });
+                jobShowAssistant(reply);
+                pushAssistantReply(reply);
                 refreshHfDatasetsSettings();
               } else {
                 const errData = await dlRes.json().catch(() => ({}));
@@ -2598,16 +2775,16 @@ async function sendChatMessage() {
                 chatHistory.push({ role: 'assistant', content: msg });
               }
             } else {
-              const msg = 'Download declined — let me know if you\'d like to try a different question.';
-              renderMessage('assistant', msg);
-              chatHistory.push({ role: 'assistant', content: msg });
+              const msg = `Download declined.\n\n${HF_DATASET_INSTALL_HINT}`;
+              jobShowAssistant(msg);
+              pushAssistantReply(msg);
             }
             _skillDone = true;
           } else if (dsRes.ok) {
             const data = await dsRes.json();
             const reply = data.message || 'No answer found.';
-            renderMessage('assistant', reply);
-            chatHistory.push({ role: 'assistant', content: reply });
+            jobShowAssistant(reply);
+            pushAssistantReply(reply);
             _skillDone = true;
           }
         } catch (e) {
@@ -2624,12 +2801,7 @@ async function sendChatMessage() {
       }
 
       if (!_skillDone && route.type === 'skill' && route.skillId) {
-        // We only get here in Private mode (Public mode submits a paid compute job
-        // before any skill routing happens). Builtin skills are all private/free;
-        // if this ever resolves to a genuinely paid community skill, the server
-        // rejects it with FEE_REQUIRED — caught below like any other job error.
-
-        // Check if skill is enabled locally before submitting
+        // Check if skill is enabled locally before running
         const skillInfo = window._skillsData?.[route.skillId];
         if (skillInfo && skillInfo.enabled === false) {
           const proceed = await showSkillDisabledModal(route.skillId);
@@ -2638,66 +2810,112 @@ async function sendChatMessage() {
             document.getElementById('chat-input').disabled = false;
             return;
           }
-          // User chose to proceed via community — continue (miner gate will skip, community picks up)
         }
 
-        // Show fetching indicator
-        renderMessage('assistant', `Fetching data via \`${route.skillId}\`…`, true);
+        jobShowAssistant(`Fetching data via \`${route.skillId}\`…`, true);
         _bubbleShown = true;
-        chatAbortController = new AbortController();
+        chatAbortController = jobAbort;
 
-        // Include the user's question so the miner can run LLM analysis server-side.
-        // Fee is only settled after the miner submits both the skill output and nlResponse.
-        const jobId = await _submitSkillJob(route.skillId, { ...(route.input || {}), question: text });
-        const jobResult = await _waitForSkillRawOutput(jobId);
-        finalizeLastBubble();
+        // Private mode: run skill locally via /chat/ask (inline sandbox + local LLM).
+        // Public mode: same path for builtin/private skills; community skills fall
+        // through to a paid /job submission below.
+        let needsPaidJob = false;
+        try {
+          const askRes = await fetch(`http://localhost:${port}/chat/ask`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(_chatAskPayload(text, historySnapshot, isPrivate, { model })),
+            signal: AbortSignal.timeout(120000),
+          });
+          jobFinalize();
 
-        if (jobResult?._jobError) {
-          const msg = `Skill failed (${jobResult.error || jobResult._jobError}).`;
-          renderMessage('assistant', msg);
-          chatHistory.push({ role: 'assistant', content: msg });
-          _skillDone = true;
-        } else if (jobResult && jobResult.verdict && jobResult.verdict !== 'SKILL_RESULT') {
-          // Verdict result (poh_identity) — display directly, no LLM needed
-          const pct = jobResult.confidence != null ? ` · ${(jobResult.confidence * 100).toFixed(0)}% confidence` : '';
-          const reply = `**${jobResult.verdict}${pct}**\n\n${jobResult.reasoning || ''}`;
-          renderMessage('assistant', reply);
-          chatHistory.push({ role: 'assistant', content: reply });
-          _skillDone = true;
-        } else if (jobResult) {
-          const skillOutput  = jobResult.profile?.skillOutput;
-          const nlResponse   = jobResult.profile?.nlResponse;
-
-          if (skillOutput === null && !nlResponse) {
-            const msg = 'No data found for this query.';
+          if (askRes.ok) {
+            const askData = await askRes.json();
+            if (askData.type === 'skill' && askData.skillId) {
+              if (isPrivate) {
+                const msg = `Could not run \`${askData.skillId}\` locally. Switch to Public mode for network skills.`;
+                jobShowAssistant(msg);
+                pushAssistantReply(msg);
+                _skillDone = true;
+              } else {
+                needsPaidJob = true;
+              }
+            } else {
+              const reply = askData.message || `\`${route.skillId}\` returned no data.`;
+              jobShowAssistant(reply);
+              pushAssistantReply(reply, askData.skillMemory ? { _skillMemory: askData.skillMemory } : {});
+              _skillDone = true;
+            }
+          } else if (!isPrivate) {
+            needsPaidJob = true;
+          } else {
+            const errData = await askRes.json().catch(() => ({}));
+            const msg = errData.error || `\`${route.skillId}\` failed (HTTP ${askRes.status}).`;
             renderMessage('assistant', msg);
             chatHistory.push({ role: 'assistant', content: msg });
-          } else if (nlResponse) {
-            // Miner already ran LLM analysis server-side — display directly
-            renderMessage('assistant', nlResponse);
-            chatHistory.push({ role: 'assistant', content: nlResponse });
-            _appendFeedbackButtons(jobId);
-          } else if (skillOutput?.analysis?.summary) {
-            // Summary field from the skill — natural language without LLM round-trip
-            const reply = skillOutput.analysis.summary;
+            _skillDone = true;
+          }
+        } catch (e) {
+          finalizeLastBubble();
+          if (!isPrivate) {
+            needsPaidJob = true;
+          } else {
+            const msg = `\`${route.skillId}\` failed: ${e.message}`;
+            renderMessage('assistant', msg);
+            chatHistory.push({ role: 'assistant', content: msg });
+            _skillDone = true;
+          }
+        }
+
+        if (needsPaidJob) {
+          jobShowAssistant(`Fetching data via \`${route.skillId}\`…`, true);
+          _bubbleShown = true;
+          chatAbortController = jobAbort;
+
+          const jobId = await _submitSkillJob(route.skillId, { ...(route.input || {}), question: text });
+          const jobResult = await _waitForSkillRawOutput(jobId);
+          finalizeLastBubble();
+
+          if (jobResult?._jobError) {
+            const msg = `Skill failed (${jobResult.error || jobResult._jobError}).`;
+            renderMessage('assistant', msg);
+            chatHistory.push({ role: 'assistant', content: msg });
+            _skillDone = true;
+          } else if (jobResult && jobResult.verdict && jobResult.verdict !== 'SKILL_RESULT') {
+            const pct = jobResult.confidence != null ? ` · ${(jobResult.confidence * 100).toFixed(0)}% confidence` : '';
+            const reply = `**${jobResult.verdict}${pct}**\n\n${jobResult.reasoning || ''}`;
             renderMessage('assistant', reply);
             chatHistory.push({ role: 'assistant', content: reply });
-            _appendFeedbackButtons(jobId);
+            _skillDone = true;
+          } else if (jobResult) {
+            const skillOutput  = jobResult.profile?.skillOutput;
+            const nlResponse   = jobResult.profile?.nlResponse;
+
+            if (skillOutput === null && !nlResponse) {
+              const msg = 'No data found for this query.';
+              renderMessage('assistant', msg);
+              chatHistory.push({ role: 'assistant', content: msg });
+            } else if (nlResponse) {
+              renderMessage('assistant', nlResponse);
+              chatHistory.push({ role: 'assistant', content: nlResponse });
+              _appendFeedbackButtons(jobId);
+            } else if (skillOutput?.analysis?.summary) {
+              const reply = skillOutput.analysis.summary;
+              renderMessage('assistant', reply);
+              chatHistory.push({ role: 'assistant', content: reply });
+              _appendFeedbackButtons(jobId);
+            } else {
+              renderMessage('assistant', '', true);
+              await _streamSkillAnalysis(route.skillContext || '', skillOutput, text);
+              _appendFeedbackButtons(jobId);
+            }
+            _skillDone = true;
           } else {
-            // Fallback: stream Ollama analysis client-side
-            renderMessage('assistant', '', true);
-            await _streamSkillAnalysis(route.skillContext || '', skillOutput, text);
-            _appendFeedbackButtons(jobId);
+            const msg = `\`${route.skillId}\` timed out waiting for a response. Please try again.`;
+            renderMessage('assistant', msg);
+            chatHistory.push({ role: 'assistant', content: msg });
+            _skillDone = true;
           }
-          _skillDone = true;
-        } else {
-          // jobResult is null — _waitForSkillRawOutput hit its 60s poll timeout.
-          // Must still mark _skillDone so we don't fall through to plain Ollama
-          // chat below and show a second, uninformed reply.
-          const msg = `\`${route.skillId}\` timed out waiting for a response. Please try again.`;
-          renderMessage('assistant', msg);
-          chatHistory.push({ role: 'assistant', content: msg });
-          _skillDone = true;
         }
       }
     }
@@ -2716,19 +2934,23 @@ async function sendChatMessage() {
   }
 
   if (_skillDone) {
-    chatAbortController = null;
-    setChatStreaming(false);
-    input.disabled = false;
-    input.focus();
+    _endChatJob();
     return;
   }
   // ── End skill routing ─────────────────────────────────────────────────────
-  // (Network-only models are blocked earlier in Private mode, and Public mode
-  // never reaches this point — it always submits a paid compute job instead.)
 
-  renderMessage('assistant', '', true); // empty bubble with cursor
+  // Public mode with no skill match: paid network compute job (async queue)
+  if (!isPrivate) {
+    jobShowAssistant('Submitting paid compute job…', true);
+    try {
+      await submitComputeJob(llmText, { bubble: jobBubble, history: historySnapshot });
+    } finally {
+      _endChatJob();
+    }
+    return;
+  }
 
-  chatAbortController = new AbortController();
+  jobShowAssistant('', true);
 
   try {
     // Merge brain + social context into a SINGLE system message
@@ -2765,14 +2987,14 @@ async function sendChatMessage() {
             const fbRes = await fetch(`http://localhost:${port}/chat/ask`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ message: text, history: chatHistory, model, private: false }),
+              body: JSON.stringify(_chatAskPayload(text, historySnapshot, false, { model })),
               signal: AbortSignal.timeout(50000),
             });
             const fbData = await fbRes.json();
             if (fbData?.message && !/local llm is unavailable/i.test(fbData.message)) {
-              finalizeLastBubble();
-              renderMessage('assistant', fbData.message);
-              chatHistory.push({ role: 'assistant', content: fbData.message });
+              jobFinalize();
+              jobShowAssistant(fbData.message);
+              pushAssistantReply(fbData.message, fbData.skillMemory ? { _skillMemory: fbData.skillMemory } : {});
               return;
             }
           } catch { /* fall through to local install attempt */ }
@@ -2850,10 +3072,7 @@ async function sendChatMessage() {
       chatHistory.push({ role: 'assistant', content: `[Error]` });
     }
   } finally {
-    chatAbortController = null;
-    setChatStreaming(false);
-    input.disabled = false;
-    input.focus();
+    _endChatJob();
   }
 }
 
@@ -2869,8 +3088,10 @@ function clearChat() {
 }
 
 function chatKeydown(e) {
+  if (e.key === 'Escape') { _hideChatSuggestions(); return; }
   if (e.key === 'Enter' && !e.shiftKey) {
     e.preventDefault();
+    _hideChatSuggestions();
     sendChatMessage();
   }
 }
@@ -2878,6 +3099,112 @@ function chatKeydown(e) {
 function autoResize(el) {
   el.style.height = 'auto';
   el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+}
+
+let _chatSuggestTimer = null;
+let _chatSuggestCache = null;
+
+async function _fetchChatSuggestions(q) {
+  const port = window._minerApiPort || 3456;
+  const wallet = window._localWallet || '';
+  const params = new URLSearchParams({ q, limit: '8' });
+  if (wallet) params.set('wallet', wallet);
+  const r = await fetch(`http://localhost:${port}/api/search/suggest?${params}`);
+  if (!r.ok) return { suggestions: [] };
+  return r.json();
+}
+
+function _hideChatSuggestions() {
+  const box = document.getElementById('chat-suggest-box');
+  if (box) { box.style.display = 'none'; box.innerHTML = ''; }
+}
+
+function _renderChatSuggestions(suggestions) {
+  const box = document.getElementById('chat-suggest-box');
+  if (!box) return;
+  if (!suggestions?.length) { _hideChatSuggestions(); return; }
+  const esc = (s) => String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
+  box.innerHTML = suggestions.map((s, i) => `
+    <div class="chat-suggest-item" data-idx="${i}">
+      <div class="chat-suggest-prompt">${esc(s.prompt)}</div>
+      ${s.replyPreview ? `<div class="chat-suggest-reply">${esc(s.replyPreview)}${s.replyPreview.length >= 120 ? '…' : ''}</div>` : ''}
+      ${s.fromChain ? '<span class="chat-suggest-badge">on-chain</span>' : ''}
+    </div>`).join('');
+  box.style.display = 'block';
+  box.querySelectorAll('.chat-suggest-item').forEach(el => {
+    el.onclick = () => {
+      const idx = parseInt(el.dataset.idx, 10);
+      const item = suggestions[idx];
+      if (!item) return;
+      const input = document.getElementById('chat-input');
+      if (input) { input.value = item.prompt || ''; autoResize(input); }
+      _hideChatSuggestions();
+      if (item.replyPreview) _showChatHistoryBanner(item);
+      input?.focus();
+    };
+  });
+}
+
+function _showChatHistoryBanner(item) {
+  const banner = document.getElementById('chat-history-banner');
+  if (!banner || !item?.replyPreview) return;
+  window._chatHistoryBannerItem = item;
+  const esc = (s) => String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;');
+  banner.style.display = 'block';
+  banner.innerHTML = `
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">
+      <div>
+        <div style="font-size:10px;color:#4ade80;margin-bottom:3px;">⛓ Similar question on blockchain</div>
+        <div style="color:#9ca3af;font-style:italic;line-height:1.35;">${esc(item.replyPreview)}…</div>
+      </div>
+      <button onclick="useChainHistoryReply()" style="flex-shrink:0;font-size:10px;padding:4px 8px;border-radius:4px;border:1px solid #22c55e;background:#166534;color:#22c55e;cursor:pointer;font-family:monospace;">Use reply</button>
+    </div>`;
+}
+
+async function useChainHistoryReply(jobId) {
+  const port = window._minerApiPort || 3456;
+  const input = document.getElementById('chat-input');
+  const q = input?.value?.trim();
+  if (!q) return;
+  try {
+    const wallet = window._localWallet || '';
+    const params = new URLSearchParams({ q });
+    if (wallet) params.set('wallet', wallet);
+    const r = await fetch(`http://localhost:${port}/api/search/history-match?${params}`);
+    const data = await r.json();
+    const reply = data.match?.reply;
+    if (reply) {
+      renderMessage('user', q);
+      chatHistory.push({ role: 'user', content: q });
+      renderMessage('assistant', reply);
+      pushAssistantReply(reply, { fromChainHistory: true, jobId: data.match.jobId });
+      if (input) { input.value = ''; autoResize(input); }
+      const banner = document.getElementById('chat-history-banner');
+      if (banner) banner.style.display = 'none';
+      _hideChatSuggestions();
+    }
+  } catch { /* ignore */ }
+}
+
+function chatInputChanged(el) {
+  autoResize(el);
+  const q = el.value.trim();
+  clearTimeout(_chatSuggestTimer);
+  if (q.length < 2) { _hideChatSuggestions(); return; }
+  _chatSuggestTimer = setTimeout(async () => {
+    try {
+      const data = await _fetchChatSuggestions(q);
+      _chatSuggestCache = data.suggestions || [];
+      _renderChatSuggestions(_chatSuggestCache);
+      const top = _chatSuggestCache[0];
+      if (top?.replyPreview && (top.prompt || '').toLowerCase().startsWith(q.toLowerCase().slice(0, 8))) {
+        _showChatHistoryBanner(top);
+      } else {
+        const banner = document.getElementById('chat-history-banner');
+        if (banner && q.length < 6) banner.style.display = 'none';
+      }
+    } catch { _hideChatSuggestions(); }
+  }, 280);
 }
 
 // ── Brain state (right panel) ──────────────────────────────────────────────────
@@ -4344,7 +4671,9 @@ async function _p2pLocalAuth(action, extraFields = {}) {
     body: JSON.stringify({ action, ...extraFields }),
   });
   if (!r.ok) { const d = await r.json().catch(() => ({})); throw new Error(d.error || 'auth failed'); }
-  return r.json();
+  const auth = await r.json();
+  if (auth.address) window._localWallet = auth.address;
+  return auth;
 }
 
 async function _p2pApiFetch(path, opts = {}) {
@@ -4847,6 +5176,103 @@ async function p2pApplyReferral() {
   }
 }
 
+
+function _explorerJobSnippet(jobOrResult) {
+  const profile = jobOrResult.profile || {};
+  if (profile.computeOutput) return String(profile.computeOutput).slice(0, 140);
+  if (profile.nlResponse) return String(profile.nlResponse).slice(0, 140);
+  if (profile.skillOutput) {
+    const s = profile.skillOutput;
+    if (s.analysis?.summary) return String(s.analysis.summary).slice(0, 140);
+    if (s.username) return `@${s.username} · ${(s.followerCount || 0)} followers`;
+    return 'Skill data returned';
+  }
+  if (jobOrResult.reasoning) return String(jobOrResult.reasoning).slice(0, 140);
+  return '';
+}
+
+function _explorerRenderJobCard(job, { blockMode = false } = {}) {
+  const jobId = job.jobId || job.requestId || '—';
+  const jobType = (job.jobType || job.verdict || 'job').toString().toLowerCase();
+  const verdict = job.verdict || (job.mined ? 'mined' : 'pending');
+  const prompt = job.promptPreview || job.skillId || job.address || '';
+  const snippet = _explorerJobSnippet(job);
+  const when = job.submittedAt || job.deliveredAt;
+  const timeStr = when ? new Date(when).toLocaleString() : '';
+  const blockH = job.resultBlockHeight || job.blockHeight;
+  const badgeColor = jobType.includes('compute') ? '#60a5fa' : jobType.includes('skill') ? '#a78bfa' : '#22c55e';
+  const statusColor = verdict === 'pending' || !job.mined ? '#facc15' : '#22c55e';
+  const esc = (s) => String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
+  return `<div style="background:#0a0a0a;border:1px solid #1a1a1a;border-radius:5px;padding:8px 10px;display:flex;flex-direction:column;gap:4px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:6px;">
+      <span style="font-size:9px;padding:2px 6px;border-radius:3px;background:#111;color:${badgeColor};font-family:monospace;text-transform:uppercase;">${esc(jobType)}</span>
+      <span style="font-size:9px;color:${statusColor};font-family:monospace;">${esc(verdict)}</span>
+    </div>
+    <div style="font-size:9px;color:#60a5fa;font-family:monospace;word-break:break-all;">${esc(jobId)}</div>
+    ${prompt ? `<div style="font-size:10px;color:#aaa;line-height:1.35;">${esc(prompt)}</div>` : ''}
+    ${snippet ? `<div style="font-size:9px;color:#666;line-height:1.35;font-style:italic;">${esc(snippet)}${snippet.length >= 140 ? '…' : ''}</div>` : ''}
+    <div style="display:flex;justify-content:space-between;font-size:9px;color:#555;font-family:monospace;">
+      <span>${timeStr || '—'}</span>
+      <span>${blockH != null ? '#' + blockH : (job.minerWallet ? job.minerWallet.slice(0,10)+'…' : '')}</span>
+    </div>
+  </div>`;
+}
+
+function _explorerRenderJobsSection(jobs, title = 'COMPLETED JOBS') {
+  if (!jobs?.length) return '';
+  const cards = jobs.map(j => _explorerRenderJobCard(j)).join('');
+  return `<div style="font-size:10px;color:#555;font-family:monospace;letter-spacing:0.1em;padding-bottom:2px;">${title} (${jobs.length})</div>
+    <div style="display:flex;flex-direction:column;gap:5px;">${cards}</div>`;
+}
+
+function _explorerNormalizeScanResult(r, blockHeight) {
+  const profile = r.profile || {};
+  return {
+    jobId: r.requestId,
+    requestId: r.requestId,
+    jobType: profile.skillId ? 'skill' : (profile.computeOutput != null ? 'compute' : (r.verdict || 'job')),
+    verdict: r.verdict || 'mined',
+    profile,
+    reasoning: r.reasoning,
+    minerWallet: r.minerWallet,
+    skillId: profile.skillId,
+    promptPreview: profile.promptPreview || profile.prompt || null,
+    resultBlockHeight: blockHeight,
+    mined: true,
+  };
+}
+
+function _explorerNormalizeJobSubmitted(t, blockHeight) {
+  return {
+    jobId: t.jobId,
+    jobType: t.jobType || 'job',
+    skillId: t.skillId,
+    address: t.address,
+    promptPreview: t.promptPreview,
+    model: t.model,
+    dataset: t.dataset,
+    requesterAddress: t.requesterAddress,
+    submittedAt: t.timestamp,
+    blockHeight,
+    verdict: 'submitted',
+    mined: false,
+  };
+}
+
+function _explorerBlockJobsHtml(data) {
+  const height = data.height;
+  const completed = (data.scanResults || data.skillResults || []).map(r => _explorerNormalizeScanResult(r, height));
+  const completedIds = new Set(completed.map(j => j.jobId).filter(Boolean));
+  const submissions = (data.stateTransitions || [])
+    .filter(t => t?.type === 'job-submitted')
+    .map(t => _explorerNormalizeJobSubmitted(t, height))
+    .filter(t => !completedIds.has(t.jobId));
+  const parts = [];
+  if (completed.length) parts.push(_explorerRenderJobsSection(completed, 'COMPLETED JOBS IN BLOCK'));
+  if (submissions.length) parts.push(_explorerRenderJobsSection(submissions, 'JOB SUBMISSIONS'));
+  return parts.join('');
+}
+
 // ── Blockchain Explorer ─────────────────────────────────────────────────────────
 
 let _explorerPage = 0;
@@ -4880,6 +5306,10 @@ function explorerShowTab(tab) {
 async function explorerInit() {
   _explorerPage = 0;
   await explorerLoadBlocks();
+  const input = document.getElementById('explorer-search-input');
+  if (input && !input.value && window._localWallet) {
+    input.placeholder = `Search or view your wallet: ${window._localWallet.slice(0, 12)}…`;
+  }
 }
 
 async function explorerLoadBlocks() {
@@ -4898,7 +5328,7 @@ async function explorerLoadBlocks() {
       card.innerHTML = `
         <div>
           <div style="font-size:11px;color:#22c55e;font-family:monospace;">#${b.height}</div>
-          <div style="font-size:9px;color:#555;font-family:monospace;margin-top:1px;">${b.miner?.slice(0,14)||'—'}… · ${b.txCount} tx</div>
+          <div style="font-size:9px;color:#555;font-family:monospace;margin-top:1px;">${b.miner?.slice(0,14)||'—'}… · ${b.txCount} tx${b.jobCount ? ` · ${b.jobCount} job${b.jobCount === 1 ? '' : 's'}` : ''}</div>
         </div>
         <div style="text-align:right;">
           <div style="font-size:10px;color:#aaa;font-family:monospace;">${b.reward > 0 ? '+' + (b.reward/POH).toFixed(2) + ' POH' : ''}</div>
@@ -4928,6 +5358,7 @@ async function explorerViewBlock(height) {
   try {
     const data = await _explorerFetch(`/api/explorer/block/${height}`);
     const txs  = data.transactions || [];
+    const jobsHtml = _explorerBlockJobsHtml(data);
     const POH  = 1e9;
     view.innerHTML = `
       <div style="background:#0a0a0a;border:1px solid #1e1e1e;border-radius:6px;padding:12px;display:flex;flex-direction:column;gap:5px;">
@@ -4938,6 +5369,7 @@ async function explorerViewBlock(height) {
         <div style="display:flex;justify-content:space-between;"><span style="font-size:10px;color:#555;font-family:monospace;">REWARD</span><span style="font-size:10px;color:#22c55e;font-family:monospace;">${data.coinbaseReward > 0 ? (data.coinbaseReward/POH).toFixed(4)+' POH' : '—'}</span></div>
         <div style="display:flex;justify-content:space-between;"><span style="font-size:10px;color:#555;font-family:monospace;">TXS</span><span style="font-size:10px;color:#aaa;font-family:monospace;">${txs.length}</span></div>
       </div>
+      ${jobsHtml}
       ${txs.length ? `<div style="font-size:10px;color:#555;font-family:monospace;padding-bottom:2px;letter-spacing:0.1em;">TRANSACTIONS</div>` + txs.map(tx => `
         <div style="background:#0a0a0a;border:1px solid #1a1a1a;border-radius:5px;padding:8px 10px;">
           <div style="font-size:9px;color:#60a5fa;font-family:monospace;word-break:break-all;margin-bottom:3px;">${tx.hash||tx.txHash||'—'}</div>
@@ -4992,12 +5424,15 @@ async function explorerSearch() {
           <span style="font-size:10px;color:${color};font-family:monospace;">${sign}${((e.delta||0)/POH).toFixed(4)} POH</span>
         </div>`;
       }).join('');
+      const completedJobs = (data.jobs || []).filter(j => j.mined || (j.verdict && j.verdict !== 'pending' && j.verdict !== 'submitted'));
+      const jobsHtml = _explorerRenderJobsSection(completedJobs);
       view.innerHTML = `
         <div style="background:#0a0a0a;border:1px solid #1e1e1e;border-radius:6px;padding:12px;display:flex;flex-direction:column;gap:5px;">
           <div style="font-size:10px;color:#555;font-family:monospace;letter-spacing:0.1em;margin-bottom:2px;">ADDRESS</div>
           <div style="font-size:10px;color:#aaa;font-family:monospace;word-break:break-all;">${data.address}</div>
           <div style="display:flex;justify-content:space-between;margin-top:4px;"><span style="font-size:10px;color:#555;font-family:monospace;">BALANCE</span><span style="font-size:14px;color:#22c55e;font-family:monospace;">${((data.balance||0)/POH).toFixed(4)} POH</span></div>
         </div>
+        ${jobsHtml}
         ${data.entries?.length ? `<div style="font-size:10px;color:#555;font-family:monospace;letter-spacing:0.1em;padding-bottom:2px;">RECENT TRANSACTIONS</div><div style="background:#0a0a0a;border:1px solid #1e1e1e;border-radius:6px;padding:8px 10px;">${txRows}</div>` : ''}
       `;
     } else {
