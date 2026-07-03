@@ -3877,11 +3877,13 @@ export class PohMinerNode {
       ]);
     }
 
+    const walletApiPort = this.config.walletApiPort || 3456;
+    const p2pPort = this.config.p2pPort || null;
     const baseInfo = {
       wallet: walletAddr,
       host: this._getPublicHost(),
-      walletApiPort: this.config.walletApiPort || 3456,
-      p2pPort: this.config.p2pPort || null,
+      walletApiPort,
+      p2pPort,
       region: this.myLocation?.country || null,
       timestamp: ts,
       methodsHash,
@@ -3896,6 +3898,8 @@ export class PohMinerNode {
         host: baseInfo.host,
         timestamp: ts,
         methodsHash,
+        walletApiPort,
+        p2pPort,
       });
       registerPayload.signingPublicKey = this.identityWallet.signingPublicKey;
       registerPayload.signature = this.identityWallet.sign(toSign);
@@ -3924,10 +3928,10 @@ export class PohMinerNode {
         const res = await fetch(`${base}peers`);
         if (res.ok) {
           const data = await res.json();
-          this.knownPeers = data.peers || [];
-
-          // Filter out ourselves
-          this.knownPeers = this.knownPeers.filter(p => p.wallet !== walletAddr);
+          this.knownPeers = (data.peers || []).filter(p =>
+            p.wallet !== walletAddr
+            && (!p.signingPublicKey || Wallet.isAddressBoundToSigningKey(p.wallet, p.signingPublicKey))
+          );
 
           console.log(`[PoH-Miner] Discovered ${this.knownPeers.length} peers from ${bootnode}`);
 
@@ -4738,9 +4742,10 @@ export class PohMinerNode {
         if (!r.ok) continue;
         const { peers: list } = await r.json();
         for (const p of (list || [])) {
-          if (p.host && p.walletApiPort && p.host !== 'localhost' && p.host !== '127.0.0.1') {
-            peers.push(`http://${p.host}:${p.walletApiPort}`);
-          }
+          if (!p.host || !p.walletApiPort) continue;
+          if (p.signingPublicKey && !Wallet.isAddressBoundToSigningKey(p.wallet, p.signingPublicKey)) continue;
+          if (p.host === 'localhost' || p.host === '127.0.0.1') continue;
+          peers.push(`http://${p.host}:${p.walletApiPort}`);
         }
         if (peers.length) break;
       } catch { /* bootnode unreachable */ }

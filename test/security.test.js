@@ -4,7 +4,13 @@ import { normalizeSkillId } from '../src/security/skill-id.js';
 import { skillsManager } from '../src/skills/manager.js';
 import { validateCoinbase } from '../src/consensus/coinbase-validator.js';
 import { BLOCK_REWARD_UPOH } from '../src/rewards/reward.js';
-import { verifyBrainEvent, verifyIpfsUpdate } from '../src/security/bootnode-auth.js';
+import {
+  verifyBrainEvent,
+  verifyIpfsUpdate,
+  verifyPeerRegistration,
+  buildPeerRegistrationMessage,
+  isPublicPeerHost,
+} from '../src/security/bootnode-auth.js';
 import { Wallet } from '../src/wallet/wallet.js';
 import { sealWalletData, unsealWalletData } from '../src/security/wallet-crypto.js';
 import { validateBlockChain } from '../src/consensus/block-validator.js';
@@ -103,6 +109,91 @@ describe('Bootnode auth', () => {
       signingPublicKey: wallet.signingPublicKey,
     });
     expect(result.ok).toBe(true);
+  });
+
+  it('rejects IPFS update when wallet does not match signing key', () => {
+    const wallet = Wallet.generate();
+    const ts = Date.now();
+    const payload = { chain: 'QmTest', minerWallet: 'pohdeadbeef', ts };
+    const signature = wallet.sign(JSON.stringify(payload));
+    const result = verifyIpfsUpdate({
+      ...payload,
+      signature,
+      signingPublicKey: wallet.signingPublicKey,
+    });
+    expect(result.ok).toBe(false);
+  });
+
+  it('rejects peer registration with mismatched wallet', () => {
+    const wallet = Wallet.generate();
+    const ts = Date.now();
+    const peerInfo = {
+      wallet: 'pohnotreal',
+      host: 'miner.example.com',
+      timestamp: ts,
+      walletApiPort: 3456,
+      p2pPort: null,
+      methodsHash: 'abc',
+      signingPublicKey: wallet.signingPublicKey,
+      signature: wallet.sign(buildPeerRegistrationMessage({
+        wallet: 'pohnotreal',
+        host: 'miner.example.com',
+        timestamp: ts,
+        walletApiPort: 3456,
+        p2pPort: null,
+        methodsHash: 'abc',
+      })),
+    };
+    expect(verifyPeerRegistration(peerInfo).ok).toBe(false);
+  });
+
+  it('rejects peer registration when ports are tampered after signing', () => {
+    const wallet = Wallet.generate();
+    const ts = Date.now();
+    const signed = {
+      wallet: wallet.address,
+      host: 'miner.example.com',
+      timestamp: ts,
+      walletApiPort: 3456,
+      p2pPort: null,
+      methodsHash: 'abc',
+    };
+    const peerInfo = {
+      ...signed,
+      walletApiPort: 9999,
+      signingPublicKey: wallet.signingPublicKey,
+      signature: wallet.sign(buildPeerRegistrationMessage(signed)),
+    };
+    expect(verifyPeerRegistration(peerInfo).ok).toBe(false);
+  });
+
+  it('accepts valid peer registration with bound wallet and signed ports', () => {
+    const wallet = Wallet.generate();
+    const ts = Date.now();
+    const peerInfo = {
+      wallet: wallet.address,
+      host: 'miner.example.com',
+      timestamp: ts,
+      walletApiPort: 3456,
+      p2pPort: 4001,
+      methodsHash: 'abc',
+      signingPublicKey: wallet.signingPublicKey,
+      signature: wallet.sign(buildPeerRegistrationMessage({
+        wallet: wallet.address,
+        host: 'miner.example.com',
+        timestamp: ts,
+        walletApiPort: 3456,
+        p2pPort: 4001,
+        methodsHash: 'abc',
+      })),
+    };
+    expect(verifyPeerRegistration(peerInfo).ok).toBe(true);
+  });
+
+  it('rejects private hosts unless explicitly allowed', () => {
+    expect(isPublicPeerHost('192.168.1.5')).toBe(false);
+    expect(isPublicPeerHost('192.168.1.5', { allowLocal: true })).toBe(true);
+    expect(isPublicPeerHost('bootnode.proofofhuman.ge')).toBe(true);
   });
 });
 

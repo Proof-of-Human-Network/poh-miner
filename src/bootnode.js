@@ -18,7 +18,15 @@ import { ChainStore } from './storage/chain-store.js';
 import { validateBlockExtended } from './consensus/block-validator.js';
 import { replayChainLedger } from './consensus/tx-ledger.js';
 import { computeChainWork } from './consensus/chain-selection.js';
-import { verifyBrainEvent, verifyIpfsUpdate } from './security/bootnode-auth.js';
+import {
+  verifyBrainEvent,
+  verifyIpfsUpdate,
+  verifyPeerRegistration,
+  readLimitedBody,
+  MAX_BODY_BYTES,
+  MAX_CHAIN_BLOCKS_RANGE,
+  MAX_SUBMIT_BLOCK_BATCH,
+} from './security/bootnode-auth.js';
 import { applyBootnodeCors } from './security/api-security.js';
 import { Wallet } from './wallet/wallet.js';
 import { IPFSStore } from './storage/ipfs-store.js';
@@ -27,8 +35,13 @@ const ipfsStore = new IPFSStore();
 
 const argv = process.argv.slice(2);
 const PORT = parseInt(argv.find(a => a.startsWith('--port='))?.split('=')[1] || '8080');
+const BIND_HOST = argv.find(a => a.startsWith('--bind='))?.split('=')[1]
+  || process.env.POH_BOOTNODE_BIND
+  || '127.0.0.1';
 const DATA_DIR = argv.find(a => a.startsWith('--data-dir='))?.split('=')[1] || path.join(process.env.HOME || '.', '.poh-bootnode');
 const PEER_SYNC_URL = argv.find(a => a.startsWith('--peer='))?.split('=').slice(1).join('=') || null;
+const ALLOW_LOCAL_HOSTS = argv.includes('--allow-local-hosts')
+  || process.env.POH_BOOTNODE_ALLOW_LOCAL === '1';
 
 const chainStore = new ChainStore(DATA_DIR);
 let chain = chainStore.loadChain().map(b => PohBlock.fromJSON ? PohBlock.fromJSON(b) : new PohBlock(b));
@@ -172,13 +185,15 @@ function schedulePeerDirectoryPin() {
     _pinDebounce = null;
     try {
       pruneStalePeers();
-      const peerList = Array.from(peers.values()).map(p => ({
+      const peerList = Array.from(peers.values())
+        .filter(p => p.signingPublicKey && Wallet.isAddressBoundToSigningKey(p.wallet, p.signingPublicKey))
+        .map(p => ({
         wallet:        p.wallet,
         host:          p.host,
         walletApiPort: p.walletApiPort,
         p2pPort:       p.p2pPort || null,
         region:        p.region  || null,
-        verified:      !!p.signingPublicKey,
+        verified:      true,
         methodsHash:   p.methodsHash || null,
         ts:            p.lastSeen,
       }));
@@ -291,6 +306,11 @@ const server = http.createServer(async (req, res) => {
   res.setHeader('Content-Type', 'application/json');
 
   try {
+    if (url.pathname === '/health' || url.pathname === '/healthz') {
+      res.end(JSON.stringify({ status: 'ok', service: 'poh-bootnode', height: chain.length - 1 }));
+      return;
+    }
+
     if (url.pathname === '/chain/tip') {
       const tip = chain[chain.length - 1];
       res.end(JSON.stringify({
@@ -303,8 +323,16 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (url.pathname === '/chain/blocks') {
-      const from = parseInt(url.searchParams.get('from') || '0');
-      const to = parseInt(url.searchParams.get('to') || chain.length - 1);
+      const from = parseInt(url.searchParams.get('from') || '0', 10);
+      let to = parseInt(url.searchParams.get('to') || String(chain.length - 1), 10);
+      if (!Number.isFinite(from) || !Number.isFinite(to) || from < 0 || to < from) {
+        res.statusCode = 400;
+        res.end(JSON.stringify({ error: 'invalid from/to range' }));
+        return;
+      }
+      if (to - from + 1 > MAX_CHAIN_BLOCKS_RANGE) {
+        to = from + MAX_CHAIN_BLOCKS_RANGE - 1;
+      }
 
       const blocks = chain
         .filter(b => b.height >= from && b.height <= to)
@@ -315,155 +343,137 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === 'POST' && url.pathname === '/submit-block') {
-      let body = '';
-      req.on('data', chunk => body += chunk);
-      req.on('end', async () => {
-        try {
-          const payload = JSON.parse(body);
-          // Accept either a single block or an array (batch catch-up)
-          const blocks = Array.isArray(payload) ? payload : [payload];
-          let accepted = 0;
+      try {
+        const raw = await readLimitedBody(req, MAX_BODY_BYTES);
+        const payload = JSON.parse(raw || 'null');
+        const blocks = Array.isArray(payload) ? payload : [payload];
+        if (blocks.length > MAX_SUBMIT_BLOCK_BATCH) {
+          res.statusCode = 400;
+          res.end(JSON.stringify({ error: `batch exceeds ${MAX_SUBMIT_BLOCK_BATCH} blocks` }));
+          return;
+        }
+        let accepted = 0;
 
-          for (const blockData of blocks) {
-            const block = PohBlock.fromJSON ? PohBlock.fromJSON(blockData) : new PohBlock(blockData);
+        for (const blockData of blocks) {
+          const block = PohBlock.fromJSON ? PohBlock.fromJSON(blockData) : new PohBlock(blockData);
 
-            const tip = chain[chain.length - 1];
-            const tipHash = tip.blockHash || await tip.getHash();
+          const tip = chain[chain.length - 1];
+          const tipHash = tip.blockHash || await tip.getHash();
 
-            if (block.height === tip.height + 1 && block.previousHash === tipHash) {
-              const check = validateBlockExtended(block, {
-                parent: tip, chainPrefix: chain, ledger: txLedger, strictTx: true,
-              });
-              if (!check.valid) {
-                console.warn(`[Bootnode] Rejected block #${block.height} (${check.reason})`);
-                break;
-              }
-              chain.push(block);
-              txLedger.applyBlock(block, { strict: false });
-              accepted++;
-              console.log(`[Bootnode] Accepted block #${block.height} from miner`);
-            } else if (block.height <= chain.length - 1) {
-              // Already have this block — skip silently
-            } else {
-              // Gap or fork — stop processing this batch
+          if (block.height === tip.height + 1 && block.previousHash === tipHash) {
+            const check = validateBlockExtended(block, {
+              parent: tip, chainPrefix: chain, ledger: txLedger, strictTx: true,
+            });
+            if (!check.valid) {
+              console.warn(`[Bootnode] Rejected block #${block.height} (${check.reason})`);
               break;
             }
+            chain.push(block);
+            txLedger.applyBlock(block, { strict: false });
+            accepted++;
+            console.log(`[Bootnode] Accepted block #${block.height} from miner`);
+          } else if (block.height <= chain.length - 1) {
+            // Already have this block — skip silently
+          } else {
+            break;
           }
-
-          if (accepted > 0) chainStore.saveChain(chain);
-          res.statusCode = 200;
-          res.end(JSON.stringify({ accepted, height: chain.length - 1 }));
-        } catch (e) {
-          res.statusCode = 400;
-          res.end(JSON.stringify({ error: e.message }));
         }
-      });
+
+        if (accepted > 0) chainStore.saveChain(chain);
+        res.statusCode = 200;
+        res.end(JSON.stringify({ accepted, height: chain.length - 1 }));
+      } catch (e) {
+        if (e.code === 'BODY_TOO_LARGE') {
+          res.statusCode = 413;
+          res.end(JSON.stringify({ error: 'request body too large' }));
+          return;
+        }
+        res.statusCode = 400;
+        res.end(JSON.stringify({ error: e.message }));
+      }
       return;
     }
 
     // === Node Discovery Endpoints ===
-    // Protected: requires proof that requester is a real poh-miner-network node
-    // (possesses the local wallet signing private key created by the miner software).
     if (req.method === 'POST' && url.pathname === '/register') {
-      let body = '';
-      req.on('data', chunk => body += chunk);
-      req.on('end', () => {
-        try {
-          const peerInfo = JSON.parse(body);
-          if (!peerInfo.wallet || !peerInfo.host) {
-            res.statusCode = 400;
-            res.end(JSON.stringify({ error: 'wallet and host are required' }));
-            return;
-          }
-
-          const ts = peerInfo.timestamp || 0;
-          const now = Date.now();
-          if (!ts || Math.abs(now - ts) > 5 * 60 * 1000) {
-            res.statusCode = 400;
-            res.end(JSON.stringify({ error: 'timestamp required and must be within 5 minutes (replay protection)' }));
-            return;
-          }
-
-          // Require signature proof for valid node
-          if (!peerInfo.signature || !peerInfo.signingPublicKey) {
-            res.statusCode = 400;
-            res.end(JSON.stringify({ error: 'signature and signingPublicKey required (run a real poh-miner-network node to register)' }));
-            return;
-          }
-
-          const msg = JSON.stringify({
-            wallet: peerInfo.wallet,
-            host: peerInfo.host,
-            timestamp: ts,
-            methodsHash: peerInfo.methodsHash || '',
-          });
-          const ok = Wallet.verifySignature(peerInfo.signingPublicKey, msg, peerInfo.signature);
-          if (!ok) {
-            res.statusCode = 403;
-            res.end(JSON.stringify({ error: 'invalid signature - proof of valid poh-miner node failed' }));
-            return;
-          }
-
-          const peer = {
-            wallet: peerInfo.wallet,
-            host: peerInfo.host,
-            walletApiPort: peerInfo.walletApiPort || 3456,
-            p2pPort: peerInfo.p2pPort || null,
-            region: peerInfo.region || null,
-            lastSeen: Date.now(),
-            signingPublicKey: peerInfo.signingPublicKey,
-            methodsHash: peerInfo.methodsHash || null,
-            tflops: typeof peerInfo.tflops === 'number' ? peerInfo.tflops : null,
-            registeredAt: ts,
-          };
-
-          peers.set(peer.wallet, peer);
-          console.log(`[Bootnode] Registered VERIFIED peer: ${peer.wallet} @ ${peer.host}:${peer.walletApiPort} (methods=${peer.methodsHash?.slice(0,8)||'?'})`);
-          schedulePeerDirectoryPin(); // debounced — pins updated directory to IPFS
-          res.statusCode = 200;
-          res.end(JSON.stringify({ registered: true, peersKnown: peers.size, verified: true, peersCid: ipfsRegistry.peers?.cid || null }));
-        } catch (e) {
-          res.statusCode = 400;
-          res.end(JSON.stringify({ error: e.message }));
+      try {
+        const raw = await readLimitedBody(req, 64 * 1024);
+        const peerInfo = JSON.parse(raw || '{}');
+        const auth = verifyPeerRegistration(peerInfo, { allowLocalHosts: ALLOW_LOCAL_HOSTS });
+        if (!auth.ok) {
+          res.statusCode = auth.error.includes('signature') ? 403 : 400;
+          res.end(JSON.stringify({ error: auth.error }));
+          return;
         }
-      });
+
+        const peer = {
+          wallet: peerInfo.wallet,
+          host: peerInfo.host,
+          walletApiPort: auth.walletApiPort,
+          p2pPort: auth.p2pPort,
+          region: peerInfo.region || null,
+          lastSeen: Date.now(),
+          signingPublicKey: peerInfo.signingPublicKey,
+          methodsHash: peerInfo.methodsHash || null,
+          tflops: typeof peerInfo.tflops === 'number' ? peerInfo.tflops : null,
+          registeredAt: auth.ts,
+        };
+
+        peers.set(peer.wallet, peer);
+        console.log(`[Bootnode] Registered VERIFIED peer: ${peer.wallet} @ ${peer.host}:${peer.walletApiPort} (methods=${peer.methodsHash?.slice(0,8)||'?'})`);
+        schedulePeerDirectoryPin();
+        res.statusCode = 200;
+        res.end(JSON.stringify({ registered: true, peersKnown: peers.size, verified: true, peersCid: ipfsRegistry.peers?.cid || null }));
+      } catch (e) {
+        if (e.code === 'BODY_TOO_LARGE') {
+          res.statusCode = 413;
+          res.end(JSON.stringify({ error: 'request body too large' }));
+          return;
+        }
+        res.statusCode = 400;
+        res.end(JSON.stringify({ error: e.message }));
+      }
       return;
     }
 
     // ── Brain event accumulation ──────────────────────────────────────────────
     if (req.method === 'POST' && url.pathname === '/brain/events') {
-      let body = '';
-      req.on('data', chunk => body += chunk);
-      req.on('end', () => {
-        try {
-          const event = JSON.parse(body);
-          if (!event.eventHash || !event.type || !event.data) {
-            res.statusCode = 400;
-            return res.end(JSON.stringify({ error: 'eventHash, type, data required' }));
-          }
-          const auth = verifyBrainEvent(event);
-          if (!auth.ok) {
-            res.statusCode = 403;
-            return res.end(JSON.stringify({ error: auth.error }));
-          }
-          if (brainEventHashes.has(event.eventHash)) {
-            return res.end(JSON.stringify({ ok: true, duplicate: true }));
-          }
-          brainEvents.push({ ...event, receivedAt: Date.now() });
-          brainEventHashes.add(event.eventHash);
-          // Rolling window
-          if (brainEvents.length > MAX_BRAIN_EVENTS) {
-            const trimmed = brainEvents.slice(-MAX_BRAIN_EVENTS);
-            brainEventHashes = new Set(trimmed.map(e => e.eventHash));
-            brainEvents = trimmed;
-          }
-          saveBrainEvents();
-          res.end(JSON.stringify({ ok: true, total: brainEvents.length }));
-        } catch (e) {
+      try {
+        const raw = await readLimitedBody(req, 512 * 1024);
+        const event = JSON.parse(raw || '{}');
+        if (!event.eventHash || !event.type || !event.data) {
           res.statusCode = 400;
-          res.end(JSON.stringify({ error: e.message }));
+          res.end(JSON.stringify({ error: 'eventHash, type, data required' }));
+          return;
         }
-      });
+        const auth = verifyBrainEvent(event);
+        if (!auth.ok) {
+          res.statusCode = 403;
+          res.end(JSON.stringify({ error: auth.error }));
+          return;
+        }
+        if (brainEventHashes.has(event.eventHash)) {
+          res.end(JSON.stringify({ ok: true, duplicate: true }));
+          return;
+        }
+        brainEvents.push({ ...event, receivedAt: Date.now() });
+        brainEventHashes.add(event.eventHash);
+        if (brainEvents.length > MAX_BRAIN_EVENTS) {
+          const trimmed = brainEvents.slice(-MAX_BRAIN_EVENTS);
+          brainEventHashes = new Set(trimmed.map(e => e.eventHash));
+          brainEvents = trimmed;
+        }
+        saveBrainEvents();
+        res.end(JSON.stringify({ ok: true, total: brainEvents.length }));
+      } catch (e) {
+        if (e.code === 'BODY_TOO_LARGE') {
+          res.statusCode = 413;
+          res.end(JSON.stringify({ error: 'request body too large' }));
+          return;
+        }
+        res.statusCode = 400;
+        res.end(JSON.stringify({ error: e.message }));
+      }
       return;
     }
 
@@ -499,46 +509,51 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === 'POST' && url.pathname === '/ipfs/update') {
-      let body = '';
-      req.on('data', chunk => body += chunk);
-      req.on('end', () => {
-        try {
-          const data = JSON.parse(body);
-          const auth = verifyIpfsUpdate(data);
-          if (!auth.ok) {
-            res.statusCode = 403;
-            return res.end(JSON.stringify({ error: auth.error }));
-          }
-          const ts = data.ts || Date.now();
-
-          for (const [type, cid] of [['chain', data.chain], ['brain', data.brain], ['selfPeer', data.selfPeer]]) {
-            if (!cid) continue;
-            const entry = { cid, minerWallet: data.minerWallet, ts };
-            if (!ipfsRegistry[type] || ts > (ipfsRegistry[type].ts || 0)) {
-              ipfsRegistry[type] = entry;
-            }
-            ipfsRegistry.history = [...(ipfsRegistry.history || []), { type, ...entry }].slice(-20);
-          }
-          saveIPFSRegistry();
-          res.end(JSON.stringify({ ok: true }));
-        } catch (e) {
-          res.statusCode = 400;
-          res.end(JSON.stringify({ error: e.message }));
+      try {
+        const raw = await readLimitedBody(req, 64 * 1024);
+        const data = JSON.parse(raw || '{}');
+        const auth = verifyIpfsUpdate(data);
+        if (!auth.ok) {
+          res.statusCode = 403;
+          res.end(JSON.stringify({ error: auth.error }));
+          return;
         }
-      });
+        const ts = data.ts || Date.now();
+
+        for (const [type, cid] of [['chain', data.chain], ['brain', data.brain], ['selfPeer', data.selfPeer]]) {
+          if (!cid) continue;
+          const entry = { cid, minerWallet: data.minerWallet, ts };
+          if (!ipfsRegistry[type] || ts > (ipfsRegistry[type].ts || 0)) {
+            ipfsRegistry[type] = entry;
+          }
+          ipfsRegistry.history = [...(ipfsRegistry.history || []), { type, ...entry }].slice(-20);
+        }
+        saveIPFSRegistry();
+        res.end(JSON.stringify({ ok: true }));
+      } catch (e) {
+        if (e.code === 'BODY_TOO_LARGE') {
+          res.statusCode = 413;
+          res.end(JSON.stringify({ error: 'request body too large' }));
+          return;
+        }
+        res.statusCode = 400;
+        res.end(JSON.stringify({ error: e.message }));
+      }
       return;
     }
 
     if (url.pathname === '/peers') {
       pruneStalePeers(); // ensure fresh list
-      const peerList = Array.from(peers.values()).map(p => ({
+      const peerList = Array.from(peers.values())
+        .filter(p => p.signingPublicKey && Wallet.isAddressBoundToSigningKey(p.wallet, p.signingPublicKey))
+        .map(p => ({
         wallet: p.wallet,
         host: p.host,
         walletApiPort: p.walletApiPort,
         p2pPort: p.p2pPort,
         region: p.region,
         lastSeen: p.lastSeen,
-        verified: !!p.signingPublicKey,
+        verified: true,
         signingPublicKey: p.signingPublicKey || null,
         methodsHash: p.methodsHash || null,
         tflops: p.tflops || null,
@@ -563,11 +578,13 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
-server.listen(PORT, () => {
-  console.log(`\n🚀 PoH Bootnode running on port ${PORT}`);
+server.listen(PORT, BIND_HOST, () => {
+  console.log(`\n🚀 PoH Bootnode running on ${BIND_HOST}:${PORT}`);
   console.log(`   Data dir: ${DATA_DIR}`);
+  console.log(`   Local hosts: ${ALLOW_LOCAL_HOSTS ? 'allowed' : 'rejected'}`);
   console.log(`   Current chain height: ${chain.length - 1}`);
   console.log(`\nEndpoints:`);
+  console.log(`   GET  /health`);
   console.log(`   GET  /chain/tip`);
   console.log(`   GET  /chain/blocks?from=0&to=100`);
   console.log(`   POST /submit-block`);

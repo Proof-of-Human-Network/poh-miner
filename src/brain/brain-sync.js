@@ -76,6 +76,7 @@ export class BrainSync {
 
   _verifyEvent(event) {
     if (!event?.signature || !event?.signingPublicKey || !event?.minerWallet) return false;
+    if (!Wallet.isAddressBoundToSigningKey(event.minerWallet, event.signingPublicKey)) return false;
     const canonical = JSON.stringify({
       type: event.type,
       data: event.data,

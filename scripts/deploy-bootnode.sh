@@ -108,6 +108,9 @@ if [ "$1" = "--dry-run" ]; then
         --include 'src/bootnode.js' \
         --include 'src/core/**' \
         --include 'src/storage/**' \
+        --include 'src/security/**' \
+        --include 'src/wallet/**' \
+        --include 'src/consensus/**' \
         --include 'package.json' \
         --exclude '*' \
         "$LOCAL_SRC_DIR/" "$REMOTE_HOST:$REMOTE_DIR/"
@@ -122,6 +125,9 @@ rsync -avz --delete --progress \
     --include 'src/bootnode.js' \
     --include 'src/core/**' \
     --include 'src/storage/**' \
+    --include 'src/security/**' \
+    --include 'src/wallet/**' \
+    --include 'src/consensus/**' \
     --include 'package.json' \
     --exclude '*' \
     "$LOCAL_SRC_DIR/" "$REMOTE_HOST:$REMOTE_DIR/"
@@ -155,7 +161,7 @@ After=network.target
 Type=simple
 User=root
 WorkingDirectory=/opt/poh-bootnode
-ExecStart=/usr/bin/node src/bootnode.js --port 8080 --data-dir /var/lib/poh-bootnode
+ExecStart=/usr/bin/node src/bootnode.js --port 8080 --bind=127.0.0.1 --data-dir /var/lib/poh-bootnode
 Restart=always
 RestartSec=10
 StandardOutput=journal
