@@ -3990,7 +3990,7 @@ export class PohMinerNode {
   _getPublicHost() {
     // In production this should be the externally reachable IP/hostname.
     // For now we use a reasonable default that works in most LAN + cloud setups.
-    return process.env.POH_PUBLIC_HOST || 'localhost';
+    return process.env.POH_PUBLIC_HOST || this.config.publicHost || 'localhost';
   }
 
   _initBrainSync() {
