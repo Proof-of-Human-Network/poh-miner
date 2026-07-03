@@ -50,7 +50,10 @@
   "onboarded": false,
 
   "meilisearch": {
-    "enabled": true,
+    "mandatory": true,
+    "autoStart": true,
+    "port": 7700,
+    "bindHost": "127.0.0.1",
     "host": "http://127.0.0.1:7700",
     "apiKey": "",
     "indexJobs": "poh-chat-history"

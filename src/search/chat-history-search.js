@@ -1,6 +1,7 @@
 /**
- * Blockchain chat history search — Meilisearch + local NDJSON fallback.
+ * Blockchain chat history search — Meilisearch (required) + local NDJSON mirror.
  * Indexes promptPreview, replies, and skill results for autocomplete and repeat detection.
+ * Clients query via miner HTTP API (/api/search/*), not Meilisearch port directly.
  */
 
 import fs from 'fs';
@@ -51,6 +52,7 @@ function prefixScore(query, prompt) {
 export class ChatHistorySearch {
   constructor(opts = {}) {
     this.enabled = opts.enabled !== false;
+    this.requireMeilisearch = opts.requireMeilisearch !== false;
     this.host = opts.host || DEFAULT_HOST;
     this.apiKey = opts.apiKey || '';
     this.indexName = opts.indexName || DEFAULT_INDEX;
@@ -98,24 +100,33 @@ export class ChatHistorySearch {
   }
 
   async _connectMeilisearch() {
-    try {
-      const { MeiliSearch } = await import('meilisearch');
-      this._meiliClient = new MeiliSearch({ host: this.host, apiKey: this.apiKey || undefined });
+    const attempts = this.requireMeilisearch ? 40 : 1;
+    let lastErr = null;
+    for (let i = 0; i < attempts; i++) {
       try {
-        await this._meiliClient.createIndex(this.indexName, { primaryKey: 'id' });
-      } catch { /* exists */ }
-      this._meiliIndex = this._meiliClient.index(this.indexName);
-      await this._meiliIndex.updateSettings({
-        searchableAttributes: ['promptPreview', 'replyText', 'replySnippet', 'skillId'],
-        filterableAttributes: ['requesterAddress', 'mined', 'skillId', 'jobType'],
-        sortableAttributes: ['submittedAt'],
-      });
-      this._meiliReady = true;
-      console.log(`[PoH-Search] Meilisearch connected at ${this.host} (index: ${this.indexName})`);
-    } catch (e) {
-      this._meiliReady = false;
-      console.log(`[PoH-Search] Meilisearch unavailable (${e.message}) — using local index (${this.docs.size} docs)`);
+        const { MeiliSearch } = await import('meilisearch');
+        this._meiliClient = new MeiliSearch({ host: this.host, apiKey: this.apiKey || undefined });
+        try {
+          await this._meiliClient.createIndex(this.indexName, { primaryKey: 'id' });
+        } catch { /* exists */ }
+        this._meiliIndex = this._meiliClient.index(this.indexName);
+        await this._meiliIndex.updateSettings({
+          searchableAttributes: ['promptPreview', 'replyText', 'replySnippet', 'skillId'],
+          filterableAttributes: ['requesterAddress', 'mined', 'skillId', 'jobType'],
+          sortableAttributes: ['submittedAt'],
+        });
+        this._meiliReady = true;
+        console.log(`[PoH-Search] Meilisearch connected at ${this.host} (index: ${this.indexName})`);
+        return;
+      } catch (e) {
+        lastErr = e;
+        if (i < attempts - 1) await new Promise(r => setTimeout(r, 500));
+      }
     }
+    this._meiliReady = false;
+    const msg = `[PoH-Search] Meilisearch unavailable (${lastErr?.message})`;
+    if (this.requireMeilisearch) throw new Error(msg);
+    console.log(`${msg} — using local index (${this.docs.size} docs)`);
   }
 
   async indexDocument(doc) {
@@ -173,7 +184,11 @@ export class ChatHistorySearch {
   async suggest({ q = '', wallet = null, limit = 8 } = {}) {
     if (!this.enabled) return { suggestions: [], engine: 'disabled' };
     const query = String(q).trim();
-    if (query.length < 2) return { suggestions: [], engine: this._meiliReady ? 'meilisearch' : 'local' };
+    if (query.length < 2) return { suggestions: [], engine: 'meilisearch' };
+
+    if (!this._meiliReady && this.requireMeilisearch) {
+      await this._connectMeilisearch();
+    }
 
     if (this._meiliReady) {
       try {
@@ -193,7 +208,13 @@ export class ChatHistorySearch {
           fromChain: !!h.mined,
         }));
         return { suggestions, engine: 'meilisearch' };
-      } catch { /* fall through to local */ }
+      } catch (e) {
+        if (this.requireMeilisearch) throw e;
+      }
+    }
+
+    if (this.requireMeilisearch && !this._meiliReady) {
+      throw new Error('[PoH-Search] Meilisearch required but not connected');
     }
 
     const ranked = this._filterWallet([...this.docs.values()], wallet)

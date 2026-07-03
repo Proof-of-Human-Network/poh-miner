@@ -195,12 +195,18 @@ export function getDefaultConfig() {
     // { "serverId": { "command": "npx", "args": ["-y", "pkg"], "env": {} } }
     mcpServers: {},
 
-    // Blockchain chat history search (Meilisearch + local fallback)
+    // Blockchain chat history search — Meilisearch auto-starts with the node (mandatory).
+    // Clients use GET /api/search/* on walletApiPort; Meilisearch stays on localhost:7700.
     meilisearch: {
-      enabled: true,
+      mandatory: true,
+      autoStart: true,
+      port: 7700,
+      bindHost: "127.0.0.1",
       host: "http://127.0.0.1:7700",
       apiKey: "",
       indexJobs: "poh-chat-history",
+      dataDir: "",
+      startupTimeoutMs: 90000,
     },
 
     // Populated by the GUI onboarding flow

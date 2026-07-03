@@ -13,7 +13,7 @@ describe('chat-history-search', () => {
 
   beforeEach(() => {
     tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'poh-search-'));
-    search = new ChatHistorySearch({ enabled: true, dataDir: tmpDir, host: 'http://127.0.0.1:1' });
+    search = new ChatHistorySearch({ enabled: true, requireMeilisearch: false, dataDir: tmpDir, host: 'http://127.0.0.1:1' });
   });
 
   afterEach(() => {

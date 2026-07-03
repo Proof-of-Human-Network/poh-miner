@@ -191,9 +191,13 @@ Browse the local chain from the Electron **Explorer** tab or via HTTP:
 
 Address search returns balance, recent POH transfers, and **completed jobs** for that wallet. Block detail shows **completed jobs in block** (from `scanResults`) and any **job submissions** (`job-submitted` transitions not yet mined in the same block).
 
-### Chat history search (Meilisearch + local index)
+### Chat history search (Meilisearch — bundled, auto-starts)
+
+**Meilisearch is mandatory** and starts automatically with every miner node (like Ollama). On first run the binary is downloaded to `~/.poh-miner/bin/meilisearch`; data lives in `~/.poh-miner/meilisearch-data`. If port 7700 is already in use (e.g. your own Docker container), the node reuses that instance.
 
 As you type in **Chat**, the miner searches indexed blockchain job history (`promptPreview`, replies, skill outputs) and suggests past questions. Repetitive prompts can return a cached on-chain reply without re-running compute.
+
+**Remote clients** (mobile wallet, other UIs) call the miner **wallet API** — not Meilisearch directly:
 
 | Endpoint | Description |
 |---|---|
@@ -202,24 +206,21 @@ As you type in **Chat**, the miner searches indexed blockchain job history (`pro
 
 `POST /chat/ask` also checks history automatically (similarity ≥ 0.86) and may return `{ fromChainHistory: true }`.
 
-**Indexing:** On startup, each new block, and when jobs complete. Local store: `~/.poh-miner/search/chat-history.ndjson`. Optional [Meilisearch](https://www.meilisearch.com/) for faster fuzzy search:
+**Indexing:** On startup, each new block, and when jobs complete. NDJSON mirror: `~/.poh-miner/search/chat-history.ndjson`.
 
 ```json
 "meilisearch": {
-  "enabled": true,
-  "host": "http://127.0.0.1:7700",
-  "apiKey": "",
+  "mandatory": true,
+  "autoStart": true,
+  "port": 7700,
+  "bindHost": "127.0.0.1",
   "indexJobs": "poh-chat-history"
 }
 ```
 
-```bash
-docker run -d -p 7700:7700 getmeili/meilisearch:latest
-```
+Meilisearch listens on **localhost only**; expose search to the network via `walletApiPort` (default 3456) with `localOnly: false`.
 
-Works without Meilisearch — falls back to the local NDJSON index.
-
-The mobile **PoH Wallet** app uses the same APIs on the connected miner (`Ask AI` tab).
+The mobile **PoH Wallet** app uses the same APIs on any connected miner (`Ask AI` tab).
 
 ### Jobs (scan requests, skills, compute)
 
@@ -438,7 +439,7 @@ The `.deb` postinst script installs Ollama and pulls `qwen2.5:1.5b` automaticall
 src/
   core/           block.js, scanRequest.js, transaction.js
   chain/          chain-job-index.js (join job-submitted + scanResults for wallet/explorer)
-  search/         chat-history-search.js (Meilisearch + local chat autocomplete index)
+  search/         meilisearch-server.js (auto-start), chat-history-search.js
   consensus/      pow.js, chain-selection.js
   network/        p2p-gossip.js
   signals/        methods-manager.js (canonical signal set sync)

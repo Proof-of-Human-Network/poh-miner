@@ -1,0 +1,183 @@
+/**
+ * Managed Meilisearch process for PoH Miner — mandatory chat history backend.
+ * Uses an existing instance on the configured port (e.g. Docker) or spawns a
+ * bundled/downloaded binary under ~/.poh-miner/bin/.
+ */
+
+import { spawn, execSync } from 'child_process';
+import fs from 'fs';
+import path from 'path';
+import os from 'os';
+import https from 'https';
+import { pipeline } from 'stream/promises';
+
+export const MEILI_VERSION = 'v1.12.8';
+const DEFAULT_PORT = 7700;
+const DEFAULT_BIND = '127.0.0.1';
+
+function platformAsset() {
+  const { platform, arch } = process;
+  if (platform === 'linux') return arch === 'arm64' ? 'meilisearch-linux-aarch64' : 'meilisearch-linux-amd64';
+  if (platform === 'darwin') return arch === 'arm64' ? 'meilisearch-macos-aarch64' : 'meilisearch-macos-amd64';
+  if (platform === 'win32') return 'meilisearch-windows-amd64.exe';
+  return null;
+}
+
+function binDir() {
+  return path.join(os.homedir(), '.poh-miner', 'bin');
+}
+
+function defaultBinaryPath() {
+  const asset = platformAsset();
+  if (!asset) return null;
+  const name = process.platform === 'win32' ? 'meilisearch.exe' : 'meilisearch';
+  return path.join(binDir(), name);
+}
+
+export function resolveMeilisearchUrl(cfg = {}) {
+  const port = cfg.port || DEFAULT_PORT;
+  const bind = cfg.bindHost || DEFAULT_BIND;
+  if (cfg.host) return cfg.host.replace(/\/$/, '');
+  return `http://${bind}:${port}`;
+}
+
+export async function meilisearchHealthy(hostUrl, timeoutMs = 2000) {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    const r = await fetch(`${hostUrl}/health`, { signal: ctrl.signal });
+    if (!r.ok) return false;
+    const j = await r.json().catch(() => ({}));
+    return j.status === 'available';
+  } catch {
+    return false;
+  } finally {
+    clearTimeout(t);
+  }
+}
+
+function meilisearchInPath() {
+  try {
+    execSync(process.platform === 'win32' ? 'where meilisearch' : 'which meilisearch', { stdio: 'ignore' });
+    return 'meilisearch';
+  } catch {
+    return null;
+  }
+}
+
+function downloadFile(url, dest) {
+  return new Promise((resolve, reject) => {
+    const file = fs.createWriteStream(dest);
+    const req = https.get(url, res => {
+      if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+        file.close();
+        fs.unlinkSync(dest);
+        return downloadFile(res.headers.location, dest).then(resolve, reject);
+      }
+      if (res.statusCode !== 200) {
+        file.close();
+        fs.unlinkSync(dest);
+        return reject(new Error(`HTTP ${res.statusCode} downloading ${url}`));
+      }
+      pipeline(res, file).then(resolve).catch(reject);
+    });
+    req.on('error', reject);
+  });
+}
+
+export async function ensureMeilisearchBinary(customPath) {
+  if (customPath && fs.existsSync(customPath)) return customPath;
+  const local = defaultBinaryPath();
+  if (local && fs.existsSync(local)) return local;
+  const inPath = meilisearchInPath();
+  if (inPath) return inPath;
+
+  const asset = platformAsset();
+  if (!asset) throw new Error(`Meilisearch binary not supported on ${process.platform}/${process.arch}`);
+
+  const dir = binDir();
+  fs.mkdirSync(dir, { recursive: true });
+  const dest = local;
+  const tmp = `${dest}.download`;
+  const url = `https://github.com/meilisearch/meilisearch/releases/download/${MEILI_VERSION}/${asset}`;
+
+  console.log(`[PoH-Meili] Downloading Meilisearch ${MEILI_VERSION} (${asset})…`);
+  await downloadFile(url, tmp);
+  fs.renameSync(tmp, dest);
+  if (process.platform !== 'win32') fs.chmodSync(dest, 0o755);
+  console.log(`[PoH-Meili] Installed binary → ${dest}`);
+  return dest;
+}
+
+export class MeilisearchServer {
+  constructor(opts = {}) {
+    this.port = opts.port || DEFAULT_PORT;
+    this.bindHost = opts.bindHost || DEFAULT_BIND;
+    this.dataDir = opts.dataDir || path.join(os.homedir(), '.poh-miner', 'meilisearch-data');
+    this.binaryPath = opts.binaryPath || null;
+    this.hostUrl = resolveMeilisearchUrl({ host: opts.host, port: this.port, bindHost: this.bindHost });
+    this._proc = null;
+    this._managed = false;
+  }
+
+  async ensureRunning({ maxWaitMs = 60_000 } = {}) {
+    if (await meilisearchHealthy(this.hostUrl)) {
+      console.log(`[PoH-Meili] Using existing Meilisearch at ${this.hostUrl}`);
+      return this;
+    }
+
+    const bin = await ensureMeilisearchBinary(this.binaryPath);
+    fs.mkdirSync(this.dataDir, { recursive: true });
+
+    const args = ['--db-path', this.dataDir, '--http-addr', `${this.bindHost}:${this.port}`];
+    console.log(`[PoH-Meili] Starting Meilisearch (${bin}) on ${this.hostUrl}`);
+
+    this._proc = spawn(bin, args, {
+      stdio: 'ignore',
+      detached: false,
+      env: { ...process.env, MEILI_ENV: process.env.MEILI_ENV || 'production' },
+    });
+    this._managed = true;
+    this._proc.on('error', err => console.error('[PoH-Meili] Process error:', err.message));
+    this._proc.on('exit', (code, sig) => {
+      if (code != null && code !== 0) console.warn(`[PoH-Meili] Exited code=${code} signal=${sig}`);
+      this._proc = null;
+      this._managed = false;
+    });
+
+    const deadline = Date.now() + maxWaitMs;
+    while (Date.now() < deadline) {
+      if (await meilisearchHealthy(this.hostUrl, 3000)) {
+        console.log(`[PoH-Meili] Ready at ${this.hostUrl}`);
+        return this;
+      }
+      await new Promise(r => setTimeout(r, 400));
+    }
+    throw new Error(`Meilisearch did not become healthy at ${this.hostUrl} within ${maxWaitMs}ms`);
+  }
+
+  stop() {
+    if (this._proc && !this._proc.killed) {
+      try { this._proc.kill('SIGTERM'); } catch { /* */ }
+      this._proc = null;
+      this._managed = false;
+    }
+  }
+
+  get managed() { return this._managed; }
+}
+
+export async function ensureMeilisearch(cfg = {}) {
+  if (process.env.POH_SKIP_MEILI === '1' || process.env.VITEST) {
+    return null;
+  }
+  const server = new MeilisearchServer({
+    port: cfg.port,
+    bindHost: cfg.bindHost,
+    host: cfg.host,
+    dataDir: cfg.dataDir,
+    binaryPath: cfg.binaryPath,
+  });
+  await server.ensureRunning({ maxWaitMs: cfg.startupTimeoutMs || 90_000 });
+  return server;
+}

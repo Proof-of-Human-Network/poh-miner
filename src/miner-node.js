@@ -63,6 +63,7 @@ import { applyCorsHeaders, rejectNonLocalStateChange } from './security/api-secu
 import { normalizeSkillId } from './security/skill-id.js';
 import { buildWalletJobContext, promptPreviewFromJob, jobToSearchDocument, buildAllSearchDocuments, PROMPT_PREVIEW_MAX } from './chain/chain-job-index.js';
 import { ChatHistorySearch } from './search/chat-history-search.js';
+import { ensureMeilisearch, resolveMeilisearchUrl } from './search/meilisearch-server.js';
 
 // Returns true when a message segment clearly signals it needs live internet data.
 // Prevents web_search from firing on general knowledge questions the LLM already knows.
@@ -357,12 +358,15 @@ export class PohMinerNode {
     );
     this.chainStore = new ChainStore();
     const msCfg = this.config.meilisearch || {};
+    const msHost = resolveMeilisearchUrl(msCfg);
     this.chatHistorySearch = new ChatHistorySearch({
-      enabled: msCfg.enabled !== false,
-      host: msCfg.host,
+      enabled: msCfg.mandatory !== false && msCfg.enabled !== false,
+      requireMeilisearch: msCfg.mandatory !== false,
+      host: msHost,
       apiKey: msCfg.apiKey,
-      indexName: msCfg.indexJobs,
+      indexName: msCfg.indexJobs || 'poh-chat-history',
     });
+    this._meilisearchServer = null;
     this.walletManager = new WalletManager();
     this.txMempool = new TxMempool(this.walletManager);
     this.txLedger = null; // canonical coinbase+tx replay; rebuilt from chain
@@ -846,14 +850,27 @@ export class PohMinerNode {
     // 3. Bootstrap / sync the chain
     await this.syncChain();
 
-    // 3a. Index blockchain chat history for autocomplete / repeat detection
-    try {
-      await this.chatHistorySearch.init();
-      const localRecords = this.jobResults ? Array.from(this.jobResults.values()) : [];
-      await this.chatHistorySearch.reindexAll(this.chain, localRecords);
-    } catch (e) {
-      console.warn('[PoH-Miner] Chat history search init failed:', e.message);
+    // 3a. Meilisearch (mandatory) + blockchain chat history index
+    const msCfg = this.config.meilisearch || {};
+    if (msCfg.autoStart !== false) {
+      this._meilisearchServer = await ensureMeilisearch({
+        host: resolveMeilisearchUrl(msCfg),
+        port: msCfg.port,
+        bindHost: msCfg.bindHost,
+        dataDir: msCfg.dataDir || undefined,
+        binaryPath: msCfg.binaryPath,
+        startupTimeoutMs: msCfg.startupTimeoutMs,
+      });
+      if (this._meilisearchServer) {
+        const stopMeili = () => { try { this._meilisearchServer?.stop(); } catch { /* */ } };
+        process.on('exit', stopMeili);
+        process.on('SIGINT', stopMeili);
+        process.on('SIGTERM', stopMeili);
+      }
     }
+    await this.chatHistorySearch.init();
+    const localRecords = this.jobResults ? Array.from(this.jobResults.values()) : [];
+    await this.chatHistorySearch.reindexAll(this.chain, localRecords);
 
     // 3. Connect to the P2P network
     await this.connectToNetwork();
