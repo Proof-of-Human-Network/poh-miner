@@ -49,6 +49,7 @@
 
   "onboarded": false,
 
+  "_comment_skills": "Public skill deploy fee: 100 POH (escrowed for code_audit). Graduation staking threshold: 1,000 POH total.",
   "meilisearch": {
     "mandatory": true,
     "autoStart": true,

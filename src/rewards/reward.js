@@ -77,6 +77,14 @@ export const POH_DECIMALS = 1_000_000_000; // 1 POH = 1e9 micro-POH
 export const BLOCK_REWARD_POH = 1; // human-readable display value
 export const BLOCK_REWARD_UPOH = BLOCK_REWARD_POH * POH_DECIMALS; // 1_000_000_000 μPOH
 
+/** Public skill deploy / proposal fee (escrowed for network code audit). */
+export const SKILL_PROPOSE_FEE_POH = 100;
+export const SKILL_PROPOSE_FEE_UPOH = SKILL_PROPOSE_FEE_POH * POH_DECIMALS;
+
+/** Community stake required before a proposed skill graduates to active. */
+export const SKILL_GRADUATION_THRESHOLD_POH = 1000;
+export const SKILL_GRADUATION_THRESHOLD_UPOH = SKILL_GRADUATION_THRESHOLD_POH * POH_DECIMALS;
+
 /**
  * @param validWorkSubmissions  Array of { nodeId|minerWallet, proofHash|requestId }
  * @param blockHeight           Current block height

@@ -264,11 +264,14 @@ The SDKs build and sign `paymentTx` for you — see `runCompute()` /
 
 Skills are on-demand agent modules that extend what miners can compute. Builtin skills include `poh_identity`, `read_farcaster`, `read_zora`, `read_paragraph`, `code_audit`, and `web_search`.
 
+**Economics:** deploy a public skill for **100 POH** (escrowed for network `code_audit`); the community stakes toward a **1,000 POH** graduation threshold before the skill goes live on all nodes.
+
 | Endpoint | Description |
 |---|---|
-| `GET /api/skills` | List available skills with context summaries |
+| `GET /api/skills` | List available skills with context summaries and `economics` (`proposeFeePoh`, `graduationThresholdPoh`) |
 | `GET /api/skills/prefs` | Skill staking preferences for an address |
-| `POST /api/skills/propose` | Propose a new skill `{manifest, code, private}` |
+| `POST /api/skills/propose` | Propose a new skill `{manifest, code, private}` — **100 POH** for public proposals |
+| `POST /api/skills/:id/stake` | Stake POH toward graduation (**1,000 POH** total activates the skill) |
 
 ### Chat & Skill Routing
 

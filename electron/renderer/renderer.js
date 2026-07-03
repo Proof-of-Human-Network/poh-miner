@@ -4399,7 +4399,8 @@ function showSkillDetail(id) {
   }
 
   // Staking section
-  const STAKE_THRESHOLD = 10000 * 1e9;
+  const gradPoh = window._skillEconomics?.graduationThresholdPoh || 1000;
+  const STAKE_THRESHOLD = gradPoh * 1e9;
   const staked    = s.totalStaked || 0;
   const myStake   = s.myStake || 0;
   const pct       = Math.min(100, Math.round((staked / STAKE_THRESHOLD) * 100));
@@ -4409,7 +4410,7 @@ function showSkillDetail(id) {
   document.getElementById('skill-detail-stake-bar').style.width = `${pct}%`;
   document.getElementById('skill-detail-stake-pct').textContent = pct > 0 ? `${pct}%` : '';
   document.getElementById('skill-detail-stake-info').textContent =
-    `${stakedPoh} / 10,000 POH staked${myStake > 0 ? ` · yours: ${myPoh} POH` : ''}`;
+    `${stakedPoh} / ${gradPoh.toLocaleString()} POH staked${myStake > 0 ? ` · yours: ${myPoh} POH` : ''}`;
   document.getElementById('skill-stake-amount').value = '';
   const resultEl = document.getElementById('skill-stake-result');
   resultEl.style.display = 'none';
@@ -4481,8 +4482,9 @@ async function loadSkills() {
     const wallet = window._localWallet || '';
     const res = await fetch(`http://localhost:${port}/api/skills?wallet=${encodeURIComponent(wallet)}`);
     if (!res.ok) return;
-    const { skills, stakeVault } = await res.json();
+    const { skills, stakeVault, economics } = await res.json();
     if (stakeVault) window._stakeVault = stakeVault;
+    if (economics) window._skillEconomics = economics;
     const activeEl   = document.getElementById('skills-active-list');
     const proposedEl = document.getElementById('skills-proposed-list');
     const emptyEl    = document.getElementById('skills-empty');
@@ -4499,7 +4501,8 @@ async function loadSkills() {
     window._skillsData = {};
     skills.forEach(s => { window._skillsData[s.id] = s; });
 
-    const STAKE_THRESHOLD = 10000 * 1e9; // 10,000 POH in μPOH
+    const gradPoh = window._skillEconomics?.graduationThresholdPoh || 1000;
+    const STAKE_THRESHOLD = gradPoh * 1e9;
     const card = (s) => {
       const staked = s.totalStaked || 0;
       const pct = Math.min(100, Math.round((staked / STAKE_THRESHOLD) * 100));
@@ -4565,17 +4568,17 @@ async function pollSkillAuditResult(jobId, skillId, resultEl, attempt = 0) {
     const stillPending = !data || ['queued', 'running', 'computing', 'ignored'].includes(data.status);
     if (stillPending) {
       const dots = '.'.repeat((attempt % 3) + 1);
-      resultEl.textContent = `Auditing skill code on network${dots} (1,000 POH escrowed)`;
+      resultEl.textContent = `Auditing skill code on network${dots} (${window._skillEconomics?.proposeFeePoh || 100} POH escrowed)`;
       pollSkillAuditResult(jobId, skillId, resultEl, attempt + 1);
       return;
     }
     if (data.rejected || data.verdict === 'REJECTED') {
       showAuditRejectionModal(data.reason || 'Dangerous code detected', data.issues || []);
       resultEl.style.color = '#ef4444';
-      resultEl.textContent = 'Skill rejected by network audit · 1,000 POH refunded';
+      resultEl.textContent = `Skill rejected by network audit · ${window._skillEconomics?.proposeFeePoh || 100} POH refunded`;
     } else if (data.status === 'done' || data.verdict === 'SKILL_RESULT') {
       resultEl.style.color = '#22c55e';
-      resultEl.textContent = `Proposed: ${skillId} · audit passed · 1,000 POH paid to auditing miner`;
+      resultEl.textContent = `Proposed: ${skillId} · audit passed · ${window._skillEconomics?.proposeFeePoh || 100} POH paid to auditing miner`;
       skillsView('browse');
     } else {
       // Error or unexpected state
@@ -4619,11 +4622,11 @@ async function submitSkill() {
     } else if (data.pending && data.jobId) {
       // Skill submitted for network audit — poll until the auditing miner returns a result
       resultEl.style.color = '#f59e0b';
-      resultEl.textContent = 'Auditing skill code on network… 1,000 POH escrowed';
+      resultEl.textContent = `Auditing skill code on network… ${window._skillEconomics?.proposeFeePoh || 100} POH escrowed`;
       pollSkillAuditResult(data.jobId, id, resultEl);
     } else if (data.ok) {
       resultEl.style.color = '#22c55e';
-      resultEl.textContent = `Proposed: ${id} · 1,000 POH deducted`;
+      resultEl.textContent = `Proposed: ${id} · ${window._skillEconomics?.proposeFeePoh || 100} POH deducted`;
       skillsView('browse');
     } else {
       resultEl.style.color = '#ef4444';

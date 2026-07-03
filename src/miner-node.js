@@ -19,7 +19,15 @@ import { detectMyCountry, getCountryProximityMultiplier } from './jobs/geo.js';
 import { getMethodsManager } from './signals/methods-manager.js';
 import { P2PGossip } from './network/p2p-gossip.js';
 import { validateResultWork } from './validation/result-validator.js';
-import { calculateBlockRewards, BLOCK_REWARD_POH, POH_DECIMALS } from './rewards/reward.js';
+import {
+  calculateBlockRewards,
+  BLOCK_REWARD_POH,
+  POH_DECIMALS,
+  SKILL_PROPOSE_FEE_UPOH,
+  SKILL_GRADUATION_THRESHOLD_UPOH,
+  SKILL_PROPOSE_FEE_POH,
+  SKILL_GRADUATION_THRESHOLD_POH,
+} from './rewards/reward.js';
 import { computeChainWork, compareChainWork, getTipChainWork } from './consensus/chain-selection.js';
 import { mineBlock, getNextDifficulty } from './consensus/pow.js';
 import {
@@ -2134,7 +2142,14 @@ export class PohMinerNode {
           const myStake = walletParam ? (stakeInfo.stakers?.get(walletParam) || 0) : 0;
           return { ...s, totalStaked: stakeInfo.total || 0, myStake, enabled: this.isSkillEnabled(s.id) };
         });
-        return res.end(JSON.stringify({ skills, stakeVault: this.SKILL_STAKE_VAULT }));
+        return res.end(JSON.stringify({
+          skills,
+          stakeVault: this.SKILL_STAKE_VAULT,
+          economics: {
+            proposeFeePoh: SKILL_PROPOSE_FEE_POH,
+            graduationThresholdPoh: SKILL_GRADUATION_THRESHOLD_POH,
+          },
+        }));
       }
 
       // ── Skill prefs: GET /api/skills/prefs ───────────────────────────────────
@@ -2591,12 +2606,12 @@ export class PohMinerNode {
             const isPrivate = !!payload.private;
             if (!manifest?.id) { res.statusCode = 400; return res.end(JSON.stringify({ error: 'manifest.id required' })); }
 
-            // Public proposals cost 1,000 POH
-            const PROPOSE_FEE = 1_000 * 1_000_000_000; // 1000 POH (9 decimals: 1 POH = 1e9)
+            // Public proposals cost SKILL_PROPOSE_FEE_POH (escrowed for code_audit)
+            const PROPOSE_FEE = SKILL_PROPOSE_FEE_UPOH;
             if (!isPrivate) {
               if (!requesterAddress) {
                 res.statusCode = 402;
-                return res.end(JSON.stringify({ error: 'requesterAddress required to pay the 1,000 POH proposal fee' }));
+                return res.end(JSON.stringify({ error: `requesterAddress required to pay the ${SKILL_PROPOSE_FEE_POH} POH proposal fee` }));
               }
               const balance = this.walletManager.getBalance(requesterAddress);
               if (balance < PROPOSE_FEE) {
@@ -2617,7 +2632,7 @@ export class PohMinerNode {
             }
 
             // Public proposal with code: publish as a code_audit network job so any miner can
-            // run the audit and earn the 1,000 POH fee.  The skill is only broadcast after the
+            // run the audit and earn the proposal fee.  The skill is only broadcast after the
             // auditing miner returns a safe verdict.
             if (code) {
               const auditJobId = `audit-${manifest.id}-${Date.now()}`;
@@ -2642,7 +2657,7 @@ export class PohMinerNode {
               this._pendingProposals.set(auditJobId, { manifest, code, context, authorSignature, proposerAddress: requesterAddress });
               // Fire local compute in background (this node competes too)
               setImmediate(() => this._processJobInBackground(auditJob).catch(() => {}));
-              return res.end(JSON.stringify({ pending: true, jobId: auditJobId, skillId: manifest.id, message: 'Skill submitted for network security audit. 1,000 POH escrowed. Result will be broadcast once an auditing miner completes the job.' }));
+              return res.end(JSON.stringify({ pending: true, jobId: auditJobId, skillId: manifest.id, message: `Skill submitted for network security audit. ${SKILL_PROPOSE_FEE_POH} POH escrowed. Result will be broadcast once an auditing miner completes the job.` }));
             }
 
             // No sandboxed code (context-only skill) — publish immediately
@@ -2712,8 +2727,7 @@ export class PohMinerNode {
             entry.stakers.set(stakerAddress, (entry.stakers.get(stakerAddress) || 0) + amountRaw);
             entry.total = (entry.total || 0) + amountRaw;
 
-            const GRADUATION_THRESHOLD = 10000 * POH_DECIMALS;
-            if (entry.total >= GRADUATION_THRESHOLD) {
+            if (entry.total >= SKILL_GRADUATION_THRESHOLD_UPOH) {
               const skill = skillsManager.getAllSkills().find(s => s.id === skillId);
               if (skill && skill.status !== 'active') {
                 const transition = { type: 'skill-graduated', skillId };
@@ -4195,8 +4209,7 @@ export class PohMinerNode {
       entry.total = (entry.total || 0) + amount;
       if (txHash) this._appliedStakeTxs.add(txHash);
       this._saveSkillStakes();
-      const GRADUATION_THRESHOLD = 10000 * POH_DECIMALS;
-      if (entry.total >= GRADUATION_THRESHOLD) {
+      if (entry.total >= SKILL_GRADUATION_THRESHOLD_UPOH) {
         const skill = skillsManager.getAllSkills().find(s => s.id === skillId);
         if (skill && skill.status !== 'active') {
           const transition = { type: 'skill-graduated', skillId };
@@ -6245,8 +6258,7 @@ export class PohMinerNode {
       entry.stakers.set(staker, (entry.stakers.get(staker) || 0) + amount);
       entry.total = (entry.total || 0) + amount;
       if (txHash) this._appliedStakeTxs.add(txHash);
-      const GRADUATION_THRESHOLD = 10000 * POH_DECIMALS;
-      if (entry.total >= GRADUATION_THRESHOLD) {
+      if (entry.total >= SKILL_GRADUATION_THRESHOLD_UPOH) {
         const skill = skillsManager.getAllSkills().find(s => s.id === skillId);
         if (skill && skill.status !== 'active') {
           const grad = { type: 'skill-graduated', skillId };

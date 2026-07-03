@@ -1,7 +1,7 @@
 ---
 id: code_audit
 version: 1.0.0
-description: Analyzes proposed skill code for safety and alignment with its manifest description. Enabled by default on all nodes. Deploy fee (1000 POH) goes to the miner who runs this job.
+description: Analyzes proposed skill code for safety and alignment with its manifest description. Enabled by default on all nodes. Deploy fee (100 POH) goes to the miner who runs this job.
 allowedEndpoints:
   - '*'
 triggers:
