@@ -978,23 +978,16 @@
       return n.toLocaleString();
     }
 
-    const BOOTNODES = [
-      'https://miner.proofofhuman.ge',
-      'https://bootnode.proofofhuman.ge',
-    ];
+    const MINER_API = 'https://miner.proofofhuman.ge';
 
-    async function fetchFromAnyBootnode(path) {
+    async function fetchMinerApi(path) {
       const controller = new AbortController();
       const timer = setTimeout(() => controller.abort(), 6000);
       try {
-        const results = await Promise.any(
-          BOOTNODES.map(b => fetch(b + path, { cache: 'no-store', signal: controller.signal }).then(r => {
-            if (!r.ok) throw new Error(r.status);
-            return r;
-          }))
-        );
+        const res = await fetch(MINER_API + path, { cache: 'no-store', signal: controller.signal });
         clearTimeout(timer);
-        return results;
+        if (!res.ok) return null;
+        return res;
       } catch {
         clearTimeout(timer);
         return null;
@@ -1004,8 +997,8 @@
     async function loadRealStats() {
       // Run all fetches in parallel
       const [peersRes, statusRes] = await Promise.allSettled([
-        fetchFromAnyBootnode('/peers'),
-        fetch('https://miner.proofofhuman.ge/status', { cache: 'no-store' }),
+        fetchMinerApi('/peers'),
+        fetch(MINER_API + '/status', { cache: 'no-store' }),
       ]);
 
       // ACTIVE COMPUTE NODES + NETWORK SPEED (from bootnode /peers)
@@ -1292,7 +1285,7 @@
 
     async function loadChartHistory() {
       try {
-        const res = await fetchFromAnyBootnode('/network/history');
+        const res = await fetchMinerApi('/network/history');
         if (!res) return;
         const data = await res.json();
         // Support both new tiered format and legacy { history: [...] }
@@ -1327,8 +1320,8 @@
     async function tickChart() {
       try {
         const [peersRes, statusRes] = await Promise.allSettled([
-          fetchFromAnyBootnode('/peers'),
-          fetch('https://miner.proofofhuman.ge/status', { cache: 'no-store' }),
+          fetchMinerApi('/peers'),
+          fetch(MINER_API + '/status', { cache: 'no-store' }),
         ]);
 
         // Peers → nodes + TFLOPS
