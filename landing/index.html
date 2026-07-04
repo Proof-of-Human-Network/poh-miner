@@ -57,6 +57,8 @@
     /* Prevent tiny legal / meta text from exploding */
     .text-xs, .text-\[10px\], .text-\[15px\] { font-size: 0.92rem !important; }
 
+    .footer-text { font-size: 1.25rem !important; }
+
     /* ── Mobile nav ─────────────────────────────────── */
     .nav-links { display: none; }
     @media (min-width: 1024px) { .nav-links { display: flex; } }
@@ -876,10 +878,11 @@
     </div>
   </div>
 
-  <footer class="border-t border-white/10 py-8 text-xs text-white/50">
+  <footer class="border-t border-white/10 py-8 footer-text text-white/50">
     <div class="max-w-7xl mx-auto px-4 sm:px-8 flex flex-col sm:flex-row gap-2 sm:justify-between">
       <div>PoH Miner Network — Decentralized AI compute, powered by local LLMs</div>
       <div class="flex gap-4">
+        <a href="docs/" class="hover:text-white">Docs</a>
         <a href="https://proofofhuman.ge" class="hover:text-white">proofofhuman.ge</a>
         <a href="https://github.com/Proof-of-Human-Network" target="_blank" class="hover:text-white">GitHub</a>
       </div>

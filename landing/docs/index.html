@@ -1,0 +1,499 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PoH Miner API Docs</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Iceland&display=swap" rel="stylesheet">
+  <link rel="icon" type="image/svg+xml" href="../poh-miner.svg">
+  <link rel="icon" type="image/png" sizes="32x32" href="../favicon-32.png">
+  <link rel="shortcut icon" href="../favicon.ico">
+  <style>
+    body {
+      font-family: 'Iceland', sans-serif;
+      background: #000;
+      color: #fff;
+      line-height: 1.5;
+    }
+    h1, h2, h3 { font-family: 'Iceland', sans-serif; font-weight: 400; }
+    .neon { color: #22c55e; }
+    .glass { background: rgba(10,10,10,0.85); border: 1px solid #1f1f1f; }
+    .code-block {
+      background: #0a0a0a;
+      border: 1px solid #1f1f1f;
+      border-radius: 4px;
+      padding: 1rem 1.25rem;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 0.82rem;
+      color: #a3a3a3;
+      overflow-x: auto;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .method {
+      display: inline-block;
+      min-width: 3.5rem;
+      font-family: ui-monospace, monospace;
+      font-size: 0.78rem;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+    }
+    .method-get { color: #22c55e; }
+    .method-post { color: #60a5fa; }
+    .endpoint-card {
+      border: 1px solid #1f1f1f;
+      border-radius: 6px;
+      padding: 1.25rem 1.5rem;
+      margin-bottom: 1rem;
+    }
+    .endpoint-card:hover { border-color: #2a2a2a; }
+    .toc a { color: #737373; text-decoration: none; display: block; padding: 0.35rem 0; font-size: 1.1rem; }
+    .toc a:hover { color: #22c55e; }
+    .toc a.active { color: #22c55e; }
+    html { scroll-behavior: smooth; }
+    @media (min-width: 1024px) {
+      .toc { position: sticky; top: 6rem; max-height: calc(100vh - 8rem); overflow-y: auto; }
+    }
+  </style>
+</head>
+<body class="bg-black text-white">
+
+  <nav class="border-b border-white/10 bg-black/80 backdrop-blur-xl fixed w-full z-50">
+    <div class="max-w-7xl mx-auto px-4 sm:px-8 h-16 sm:h-20 flex items-center justify-between">
+      <a href="../" class="flex items-center gap-3 hover:opacity-80 transition">
+        <img src="../poh-miner.svg" alt="PoH" width="36" height="36" class="sm:w-12 sm:h-12" />
+        <span class="text-[28px] sm:text-[40px] leading-none">Miner API</span>
+      </a>
+      <div class="flex items-center gap-6 text-[18px] sm:text-[20px]">
+        <a href="../" class="text-white/60 hover:text-white transition">← Landing</a>
+        <a href="https://github.com/Proof-of-Human-Network/poh-miner" target="_blank" class="text-white/60 hover:text-white transition">GitHub</a>
+      </div>
+    </div>
+  </nav>
+
+  <main class="max-w-7xl mx-auto px-4 sm:px-8 pt-28 sm:pt-32 pb-20">
+    <div class="lg:grid lg:grid-cols-[220px_1fr] lg:gap-12">
+
+      <aside class="toc mb-10 lg:mb-0">
+        <div class="text-white/40 text-sm uppercase tracking-widest mb-4">Contents</div>
+        <a href="#overview">Overview</a>
+        <a href="#chain-wallet">Chain &amp; Wallet</a>
+        <a href="#jobs">Jobs</a>
+        <a href="#chat">Chat &amp; Routing</a>
+        <a href="#search">History Search</a>
+        <a href="#explorer">Explorer</a>
+        <a href="#skills">Skills</a>
+        <a href="#llm-brain">LLM &amp; Brain</a>
+        <a href="#p2p">P2P Exchange</a>
+        <a href="#push">Push</a>
+        <a href="#errors">Errors &amp; Auth</a>
+      </aside>
+
+      <div>
+
+        <section id="overview" class="mb-16">
+          <h1 class="text-[40px] sm:text-[52px] mb-4">Wallet API Reference</h1>
+          <p class="text-white/60 text-[20px] mb-6 max-w-3xl">
+            Every PoH miner exposes an HTTP API on <span class="neon">walletApiPort</span> (default <strong>3456</strong>).
+            Amounts are in <strong>μPOH</strong> — 1 POH = 1&nbsp;000&nbsp;000&nbsp;000 μPOH.
+          </p>
+          <div class="glass rounded-md p-5 mb-6">
+            <div class="text-white/40 text-sm mb-2">Base URL</div>
+            <div class="code-block" id="base-url">http://127.0.0.1:3456</div>
+          </div>
+          <p class="text-white/50 text-[18px]">
+            Public miners (e.g. <a href="https://miner.proofofhuman.ge" class="neon hover:underline">miner.proofofhuman.ge</a>)
+            expose the same routes over HTTPS. CORS is open for browser clients.
+          </p>
+        </section>
+
+        <!-- Chain & Wallet -->
+        <section id="chain-wallet" class="mb-16">
+          <h2 class="text-[32px] mb-6 neon">Chain &amp; Wallet</h2>
+
+          <div class="endpoint-card">
+            <div class="mb-2"><span class="method method-get">GET</span> <code class="text-white/90">/status</code></div>
+            <p class="text-white/55 text-[18px]">Node status — chain height, sync state, reputation.</p>
+            <div class="code-block mt-3">curl http://127.0.0.1:3456/status</div>
+          </div>
+
+          <div class="endpoint-card">
+            <div class="mb-2"><span class="method method-get">GET</span> <code class="text-white/90">/api/miner/info</code></div>
+            <p class="text-white/55 text-[18px]">Version, uptime, peer count, wallet address.</p>
+          </div>
+
+          <div class="endpoint-card">
+            <div class="mb-2"><span class="method method-get">GET</span> <code class="text-white/90">/api/wallet/balance?address=&lt;addr&gt;</code></div>
+            <p class="text-white/55 text-[18px]">Balance in μPOH for a PoH wallet address.</p>
+            <div class="code-block mt-3">curl "http://127.0.0.1:3456/api/wallet/balance?address=poh..."</div>
+          </div>
+
+          <div class="endpoint-card">
+            <div class="mb-2"><span class="method method-get">GET</span> <code class="text-white/90">/api/wallet/nonce?address=&lt;addr&gt;</code></div>
+            <p class="text-white/55 text-[18px]">Current nonce for transaction / payment signing.</p>
+          </div>
+
+          <div class="endpoint-card">
+            <div class="mb-2"><span class="method method-get">GET</span> <code class="text-white/90">/api/wallet/transactions?address=&lt;addr&gt;</code></div>
+            <p class="text-white/55 text-[18px]">POH transfer history.</p>
+          </div>
+
+          <div class="endpoint-card">
+            <div class="mb-2"><span class="method method-get">GET</span> <code class="text-white/90">/api/wallet/history?address=&lt;addr&gt;</code></div>
+            <p class="text-white/55 text-[18px]">Full history with block confirmations.</p>
+          </div>
+
+          <div class="endpoint-card">
+            <div class="mb-2"><span class="method method-get">GET</span> <code class="text-white/90">/api/wallet/jobs?address=&lt;addr&gt;&amp;limit=20</code></div>
+            <p class="text-white/55 text-[18px]">Public job history — joins <code>job-submitted</code> transitions with mined <code>scanResults</code>. Returns <code>{ jobs, latestSkillMemory, chatTurns }</code>.</p>
+          </div>
+
+          <div class="endpoint-card">
+            <div class="mb-2"><span class="method method-post">POST</span> <code class="text-white/90">/api/wallet/register-key</code></div>
+            <p class="text-white/55 text-[18px]">Register an ed25519 signing key for an address. Required before signed job payments.</p>
+            <div class="code-block mt-3">{
+  "address": "poh...",
+  "publicKey": "base64...",
+  "signature": "base64..."
+}</div>
+          </div>
+
+          <div class="endpoint-card">
+            <div class="mb-2"><span class="method method-post">POST</span> <code class="text-white/90">/api/wallet/send</code></div>
+            <p class="text-white/55 text-[18px]">Transfer POH between wallets.</p>
+            <div class="code-block mt-3">{
+  "from": "poh...",
+  "to": "poh...",
+  "amount": 1000000000,
+  "privateKey": "hex..."
+}</div>
+          </div>
+
+          <div class="endpoint-card">
+            <div class="mb-2"><span class="method method-post">POST</span> <code class="text-white/90">/api/tx/submit</code></div>
+            <p class="text-white/55 text-[18px]">Submit a pre-signed <code>PoHTransaction</code> to the mempool.</p>
+          </div>
+
+          <div class="endpoint-card">
+            <div class="mb-2"><span class="method method-get">GET</span> <code class="text-white/90">/api/tx/pending</code></div>
+            <p class="text-white/55 text-[18px]">Inspect pending mempool transactions.</p>
+          </div>
+
+          <div class="endpoint-card">
+            <div class="mb-2"><span class="method method-get">GET</span> <code class="text-white/90">/api/chain/supply-audit</code></div>
+            <p class="text-white/55 text-[18px]">Chain supply audit — total issued vs. accounted balances.</p>
+          </div>
+        </section>
+
+        <!-- Jobs -->
+        <section id="jobs" class="mb-16">
+          <h2 class="text-[32px] mb-6 neon">Jobs</h2>
+          <p class="text-white/55 text-[18px] mb-6">
+            Submit compute work to the network. Types: <code>verdict</code> (identity scan), <code>skill</code>, <code>compute</code>.
+            Skill and compute jobs require a signed payment proof (<code>maxBudget</code> in μPOH).
+          </p>
+
+          <div class="endpoint-card">
+            <div class="mb-2"><span class="method method-post">POST</span> <code class="text-white/90">/job</code></div>
+            <p class="text-white/55 text-[18px]">Submit a job. Returns <code>{ jobId, statusUrl, resultUrl }</code>.</p>
+            <div class="code-block mt-3">{
+  "type": "compute",
+  "model": "llama3.1:8b",
+  "payload": { "prompt": "Summarize the dataset" },
+  "maxBudget": 500000000,
+  "requesterAddress": "poh...",
+  "paymentTx": { "txHash": "...", "signature": "..." }
+}</div>
+          </div>
+
+          <div class="endpoint-card">
+            <div class="mb-2"><span class="method method-get">GET</span> <code class="text-white/90">/job/:id/status</code></div>
+            <p class="text-white/55 text-[18px]">Poll job state: <code>queued</code>, <code>computing</code>, <code>done</code>, <code>error</code>.</p>
+          </div>
+
+          <div class="endpoint-card">
+            <div class="mb-2"><span class="method method-get">GET</span> <code class="text-white/90">/job/:id/result</code></div>
+            <p class="text-white/55 text-[18px]">Full result when the job is done.</p>
+          </div>
+
+          <div class="endpoint-card">
+            <div class="mb-2"><span class="method method-get">GET</span> <code class="text-white/90">/jobs</code></div>
+            <p class="text-white/55 text-[18px]">List active jobs on this node.</p>
+          </div>
+
+          <div class="endpoint-card">
+            <div class="mb-2"><span class="method method-post">POST</span> <code class="text-white/90">/gossip</code></div>
+            <p class="text-white/55 text-[18px]">Receive P2P gossip envelopes from peer miners.</p>
+          </div>
+        </section>
+
+        <!-- Chat -->
+        <section id="chat" class="mb-16">
+          <h2 class="text-[32px] mb-6 neon">Chat &amp; Routing</h2>
+
+          <div class="endpoint-card">
+            <div class="mb-2"><span class="method method-post">POST</span> <code class="text-white/90">/chat/route</code></div>
+            <p class="text-white/55 text-[18px]">Route a message to the best matching skill.</p>
+            <div class="code-block mt-3">{ "message": "audit this skill code", "budget": 0, "wallet": "poh..." }</div>
+          </div>
+
+          <div class="endpoint-card">
+            <div class="mb-2"><span class="method method-post">POST</span> <code class="text-white/90">/chat/ask</code></div>
+            <p class="text-white/55 text-[18px]">Full AI reply — routes to a skill or free chat. May return <code>{ fromChainHistory: true }</code> for cached on-chain replies.</p>
+            <div class="code-block mt-3">{
+  "message": "What is my on-chain reputation?",
+  "wallet": "poh...",
+  "requesterAddress": "poh...",
+  "history": []
+}</div>
+          </div>
+
+          <div class="glass rounded-md p-5 mt-4 text-[17px] text-white/50">
+            <strong class="text-white/70">Private vs public context</strong><br>
+            Private chat uses in-memory session history. Public (paid) jobs also pull on-chain history via
+            <code>/api/wallet/jobs</code> so follow-ups work across devices.
+          </div>
+        </section>
+
+        <!-- Search -->
+        <section id="search" class="mb-16">
+          <h2 class="text-[32px] mb-6 neon">Chat History Search</h2>
+          <p class="text-white/55 text-[18px] mb-6">
+            Meilisearch runs locally on each miner (port 7700). Remote clients call these wallet API routes — not Meilisearch directly.
+          </p>
+
+          <div class="endpoint-card">
+            <div class="mb-2"><span class="method method-get">GET</span> <code class="text-white/90">/api/search/suggest?q=&lt;prefix&gt;&amp;wallet=&lt;addr&gt;&amp;limit=8</code></div>
+            <p class="text-white/55 text-[18px]">Autocomplete from indexed blockchain job history — past prompts and reply snippets.</p>
+          </div>
+
+          <div class="endpoint-card">
+            <div class="mb-2"><span class="method method-get">GET</span> <code class="text-white/90">/api/search/history-match?q=&lt;message&gt;&amp;wallet=&lt;addr&gt;</code></div>
+            <p class="text-white/55 text-[18px]">Return a full cached reply when the prompt closely matches prior on-chain history (similarity ≥ 0.86).</p>
+          </div>
+        </section>
+
+        <!-- Explorer -->
+        <section id="explorer" class="mb-16">
+          <h2 class="text-[32px] mb-6 neon">Blockchain Explorer</h2>
+
+          <div class="endpoint-card">
+            <div class="mb-2"><span class="method method-get">GET</span> <code class="text-white/90">/api/explorer/blocks?page=0&amp;limit=20</code></div>
+            <p class="text-white/55 text-[18px]">Recent blocks (newest first). Each entry includes <code>jobCount</code> when the block contains mined results.</p>
+          </div>
+
+          <div class="endpoint-card">
+            <div class="mb-2"><span class="method method-get">GET</span> <code class="text-white/90">/api/explorer/block/:height</code></div>
+            <p class="text-white/55 text-[18px]">Full block JSON — <code>scanResults</code>, <code>stateTransitions</code>, hash, miner, reward.</p>
+          </div>
+
+          <div class="endpoint-card">
+            <div class="mb-2"><span class="method method-get">GET</span> <code class="text-white/90">/api/explorer/search?q=&lt;query&gt;</code></div>
+            <p class="text-white/55 text-[18px]">Lookup by block height, tx/block hash, or wallet address. Address search returns balance, transfers, and completed jobs.</p>
+          </div>
+        </section>
+
+        <!-- Skills -->
+        <section id="skills" class="mb-16">
+          <h2 class="text-[32px] mb-6 neon">Skills</h2>
+          <p class="text-white/55 text-[18px] mb-6">
+            On-demand agent modules. Deploy a public skill for <strong>100 POH</strong>; community staking reaches <strong>1,000 POH</strong> to graduate a skill network-wide.
+          </p>
+
+          <div class="endpoint-card">
+            <div class="mb-2"><span class="method method-get">GET</span> <code class="text-white/90">/api/skills</code></div>
+            <p class="text-white/55 text-[18px]">List skills with staking totals and <code>economics: { proposeFeePoh, graduationThresholdPoh }</code>.</p>
+            <div class="code-block mt-3">curl https://miner.proofofhuman.ge/api/skills</div>
+          </div>
+
+          <div class="endpoint-card">
+            <div class="mb-2"><span class="method method-get">GET</span> <code class="text-white/90">/api/skills/prefs?address=&lt;addr&gt;</code></div>
+            <p class="text-white/55 text-[18px]">Skill enable/disable and staking preferences for a wallet.</p>
+          </div>
+
+          <div class="endpoint-card">
+            <div class="mb-2"><span class="method method-post">POST</span> <code class="text-white/90">/api/skills/propose</code></div>
+            <p class="text-white/55 text-[18px]">Propose a new skill. Public proposals cost 100 POH (escrowed for <code>code_audit</code>).</p>
+            <div class="code-block mt-3">{ "manifest": { ... }, "code": "...", "private": false }</div>
+          </div>
+
+          <div class="endpoint-card">
+            <div class="mb-2"><span class="method method-post">POST</span> <code class="text-white/90">/api/skills/:id/stake</code></div>
+            <p class="text-white/55 text-[18px]">Stake POH toward skill graduation.</p>
+            <div class="code-block mt-3">{ "address": "poh...", "amount": 1000000000 }</div>
+          </div>
+
+          <div class="endpoint-card">
+            <div class="mb-2"><span class="method method-post">POST</span> <code class="text-white/90">/api/skills/:id/unstake</code></div>
+            <p class="text-white/55 text-[18px]">Withdraw staked POH from a proposed skill.</p>
+          </div>
+
+          <div class="endpoint-card">
+            <div class="mb-2"><span class="method method-post">POST</span> <code class="text-white/90">/api/skills/:id/enable</code> &nbsp;|&nbsp; <code class="text-white/90">/disable</code></div>
+            <p class="text-white/55 text-[18px]">Toggle whether this node runs a skill.</p>
+          </div>
+        </section>
+
+        <!-- LLM & Brain -->
+        <section id="llm-brain" class="mb-16">
+          <h2 class="text-[32px] mb-6 neon">LLM &amp; Brain</h2>
+          <p class="text-white/55 text-[18px] mb-6">Ollama is proxied through the miner. Brain state stores human feedback and signal weights.</p>
+
+          <div class="endpoint-card">
+            <div class="mb-2"><span class="method method-post">POST</span> <code class="text-white/90">/api/chat</code></div>
+            <p class="text-white/55 text-[18px]">Streaming chat with local Ollama (OpenAI-compatible body).</p>
+          </div>
+
+          <div class="endpoint-card">
+            <div class="mb-2"><span class="method method-post">POST</span> <code class="text-white/90">/api/generate</code></div>
+            <p class="text-white/55 text-[18px]">Ollama generate endpoint (proxied).</p>
+          </div>
+
+          <div class="endpoint-card">
+            <div class="mb-2"><span class="method method-get">GET</span> <code class="text-white/90">/api/models</code></div>
+            <p class="text-white/55 text-[18px]">Models available on this node's Ollama instance.</p>
+          </div>
+
+          <div class="endpoint-card">
+            <div class="mb-2"><span class="method method-get">GET</span> <code class="text-white/90">/api/network-models</code></div>
+            <p class="text-white/55 text-[18px]">Aggregated model list from connected peers.</p>
+          </div>
+
+          <div class="endpoint-card">
+            <div class="mb-2"><span class="method method-get">GET</span> <code class="text-white/90">/api/brain/state</code></div>
+            <p class="text-white/55 text-[18px]">Weights count, feedback count, model info.</p>
+          </div>
+
+          <div class="endpoint-card">
+            <div class="mb-2"><span class="method method-get">GET</span> <code class="text-white/90">/api/brain/weights</code></div>
+            <p class="text-white/55 text-[18px]">Full <code>weights.json</code> for the identity brain.</p>
+          </div>
+
+          <div class="endpoint-card">
+            <div class="mb-2"><span class="method method-post">POST</span> <code class="text-white/90">/api/brain/feedback</code></div>
+            <p class="text-white/55 text-[18px]">Submit a human correction to improve signal weights.</p>
+            <div class="code-block mt-3">{
+  "address": "poh...",
+  "aiVerdict": "human",
+  "correction": "bot",
+  "comment": "obvious bot pattern",
+  "signals": [{ "methodId": "...", "result": true }]
+}</div>
+          </div>
+
+          <div class="endpoint-card">
+            <div class="mb-2"><span class="method method-post">POST</span> <code class="text-white/90">/api/brain/vote</code></div>
+            <p class="text-white/55 text-[18px]">Vote on signal weight adjustments.</p>
+          </div>
+        </section>
+
+        <!-- P2P -->
+        <section id="p2p" class="mb-16">
+          <h2 class="text-[32px] mb-6 neon">P2P Exchange</h2>
+          <p class="text-white/55 text-[18px] mb-6">Peer-to-peer POH trading with on-chain escrow.</p>
+
+          <div class="endpoint-card">
+            <div class="mb-2"><span class="method method-get">GET</span> <code class="text-white/90">/api/p2p/currencies</code></div>
+            <p class="text-white/55 text-[18px]">Supported quote currencies.</p>
+          </div>
+
+          <div class="endpoint-card">
+            <div class="mb-2"><span class="method method-get">GET</span> <code class="text-white/90">/api/p2p/orders</code></div>
+            <p class="text-white/55 text-[18px]">Open order book. Filters: <code>side</code>, <code>quoteCurrency</code>.</p>
+          </div>
+
+          <div class="endpoint-card">
+            <div class="mb-2"><span class="method method-get">GET</span> <code class="text-white/90">/api/p2p/orders/my?address=&lt;addr&gt;</code></div>
+            <p class="text-white/55 text-[18px]">Orders created by this address.</p>
+          </div>
+
+          <div class="endpoint-card">
+            <div class="mb-2"><span class="method method-post">POST</span> <code class="text-white/90">/api/p2p/orders</code></div>
+            <p class="text-white/55 text-[18px]">Create a buy or sell order.</p>
+          </div>
+
+          <div class="endpoint-card">
+            <div class="mb-2"><span class="method method-post">POST</span> <code class="text-white/90">/api/p2p/orders/:id/cancel</code></div>
+            <p class="text-white/55 text-[18px]">Cancel an open order.</p>
+          </div>
+
+          <div class="endpoint-card">
+            <div class="mb-2"><span class="method method-post">POST</span> <code class="text-white/90">/api/p2p/orders/:id/select</code></div>
+            <p class="text-white/55 text-[18px]">Taker selects an order to begin a trade.</p>
+          </div>
+
+          <div class="endpoint-card">
+            <div class="mb-2"><span class="method method-get">GET</span> <code class="text-white/90">/api/p2p/trades/my?address=&lt;addr&gt;</code></div>
+            <p class="text-white/55 text-[18px]">Active and completed trades for an address.</p>
+          </div>
+
+          <div class="endpoint-card">
+            <div class="mb-2"><span class="method method-post">POST</span> <code class="text-white/90">/api/p2p/trades/:id/:action</code></div>
+            <p class="text-white/55 text-[18px]">Advance trade: <code>payment-sent</code>, <code>release</code>, <code>cancel</code>, <code>dispute</code>.</p>
+          </div>
+        </section>
+
+        <!-- Push -->
+        <section id="push" class="mb-16">
+          <h2 class="text-[32px] mb-6 neon">Push Notifications</h2>
+
+          <div class="endpoint-card">
+            <div class="mb-2"><span class="method method-post">POST</span> <code class="text-white/90">/api/push/register</code></div>
+            <p class="text-white/55 text-[18px]">Register an Expo push token for a wallet address.</p>
+            <div class="code-block mt-3">{ "address": "poh...", "token": "ExponentPushToken[...]" }</div>
+          </div>
+
+          <div class="endpoint-card">
+            <div class="mb-2"><span class="method method-post">POST</span> <code class="text-white/90">/api/push/send</code></div>
+            <p class="text-white/55 text-[18px]">Send a push notification. Optional <code>address</code> filter.</p>
+          </div>
+        </section>
+
+        <!-- Errors -->
+        <section id="errors" class="mb-8">
+          <h2 class="text-[32px] mb-6 neon">Errors &amp; Auth</h2>
+          <div class="glass rounded-md p-6 text-[18px] text-white/55 space-y-4">
+            <p>Responses are JSON. Errors return <code>{ "error": "message" }</code> with an appropriate HTTP status (400, 401, 402, 404, 500).</p>
+            <p><strong class="text-white/80">Payment-required (402):</strong> skill/compute jobs without a valid signed <code>paymentTx</code> are rejected before execution.</p>
+            <p><strong class="text-white/80">Signing:</strong> register your ed25519 key via <code>/api/wallet/register-key</code>, then sign payment proofs binding <code>jobId + minerWallet + maxBudget + nonce</code>.</p>
+            <p><strong class="text-white/80">SDKs:</strong> use <code>runCompute()</code> / <code>submitJob()</code> in <a href="https://github.com/Proof-of-Human-Network/poh-miner" class="neon hover:underline">poh-miner SDK</a> to handle signing automatically.</p>
+          </div>
+        </section>
+
+      </div>
+    </div>
+  </main>
+
+  <footer class="border-t border-white/10 py-8 text-white/50" style="font-size: 1.25rem;">
+    <div class="max-w-7xl mx-auto px-4 sm:px-8 flex flex-col sm:flex-row gap-2 sm:justify-between">
+      <div>PoH Miner Network API — port 3456 by default</div>
+      <div class="flex gap-4">
+        <a href="../" class="hover:text-white">Landing</a>
+        <a href="https://proofofhuman.ge" class="hover:text-white">proofofhuman.ge</a>
+        <a href="https://github.com/Proof-of-Human-Network/poh-miner" target="_blank" class="hover:text-white">GitHub</a>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    // Highlight active TOC section on scroll
+    const sections = document.querySelectorAll('section[id]');
+    const tocLinks = document.querySelectorAll('.toc a');
+    const observer = new IntersectionObserver(entries => {
+      entries.forEach(e => {
+        if (e.isIntersecting) {
+          tocLinks.forEach(a => a.classList.toggle('active', a.getAttribute('href') === '#' + e.target.id));
+        }
+      });
+    }, { rootMargin: '-20% 0px -70% 0px' });
+    sections.forEach(s => observer.observe(s));
+
+    // Use current host as base URL hint when not localhost
+    const base = document.getElementById('base-url');
+    if (location.hostname && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
+      base.textContent = location.origin.replace(/:\d+$/, ':3456');
+    }
+  </script>
+</body>
+</html>
