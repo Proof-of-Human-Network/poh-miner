@@ -19,12 +19,19 @@ console.log('   Serve compute → Earn POH');
 console.log('====================================\n');
 
 const DEFAULT_MODEL  = process.env.OLLAMA_MODEL || 'qwen2.5:1.5b';
-const OLLAMA_URL     = process.env.OLLAMA_URL   || 'http://localhost:11434';
+const OLLAMA_URL     = process.env.OLLAMA_URL   || 'http://127.0.0.1:11434';
 const OLLAMA_PORT    = parseInt(new URL(OLLAMA_URL).port || '11434', 10);
+// Ollama binds IPv4 only on many Linux installs — "localhost" → ::1 causes false negatives.
+const OLLAMA_HOST    = (() => {
+  try {
+    const h = new URL(OLLAMA_URL).hostname || '127.0.0.1';
+    return h === 'localhost' ? '127.0.0.1' : h;
+  } catch { return '127.0.0.1'; }
+})();
 
 function ollamaRunning() {
   return new Promise(resolve => {
-    const req = http.request({ hostname: 'localhost', port: OLLAMA_PORT, path: '/api/tags', method: 'GET', timeout: 3000 }, res => resolve(res.statusCode === 200));
+    const req = http.request({ hostname: OLLAMA_HOST, port: OLLAMA_PORT, path: '/api/tags', method: 'GET', timeout: 3000 }, res => resolve(res.statusCode === 200));
     req.on('error', () => resolve(false));
     req.on('timeout', () => { req.destroy(); resolve(false); });
     req.end();
@@ -33,7 +40,7 @@ function ollamaRunning() {
 
 function ollamaModels() {
   return new Promise(resolve => {
-    const req = http.request({ hostname: 'localhost', port: OLLAMA_PORT, path: '/api/tags', method: 'GET', timeout: 5000 }, res => {
+    const req = http.request({ hostname: OLLAMA_HOST, port: OLLAMA_PORT, path: '/api/tags', method: 'GET', timeout: 5000 }, res => {
       let buf = '';
       res.on('data', d => buf += d);
       res.on('end', () => {
@@ -68,7 +75,7 @@ function pullModel(model) {
   return new Promise((resolve, reject) => {
     console.log(`   Pulling ${model} — this may take a few minutes on first run...`);
     const req = http.request(
-      { hostname: 'localhost', port: OLLAMA_PORT, path: '/api/pull', method: 'POST', headers: { 'Content-Type': 'application/json' } },
+      { hostname: OLLAMA_HOST, port: OLLAMA_PORT, path: '/api/pull', method: 'POST', headers: { 'Content-Type': 'application/json' } },
       res => {
         let buf = '';
         let lastPct = -1;
