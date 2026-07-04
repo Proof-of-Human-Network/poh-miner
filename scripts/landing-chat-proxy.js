@@ -291,16 +291,26 @@ function loadSponsorConfig() {
 
 async function main() {
   const config = loadSponsorConfig();
-  const minerAddress = process.env.LANDING_CHAT_WALLET || config.wallet || config.pohWallet;
+  const sponsorAddress = process.env.LANDING_CHAT_SPONSOR
+    || config.landingChat?.sponsorWallet
+    || config.landingChat?.sponsor
+    || config.sponsorWallet;
+  if (!sponsorAddress) {
+    console.error('[LandingChat] Set landingChat.sponsorWallet in ~/.poh-miner/config.json or LANDING_CHAT_SPONSOR');
+    process.exit(1);
+  }
+
+  const minerInfo = await minerFetch('/api/miner/info', { timeout: 10_000 });
+  const minerAddress = minerInfo.json?.minerAddress || process.env.LANDING_CHAT_MINER_WALLET;
   if (!minerAddress) {
-    console.error('[LandingChat] No wallet in config — set wallet in ~/.poh-miner/config.json');
+    console.error('[LandingChat] Could not resolve miner address from /api/miner/info');
     process.exit(1);
   }
 
   const wm = new WalletManager();
-  let wallet = wm.loadWallet(minerAddress);
+  let wallet = wm.loadWallet(sponsorAddress);
   if (!wallet?.signingPrivateKey) {
-    console.error(`[LandingChat] Wallet ${minerAddress} has no signing key on this machine`);
+    console.error(`[LandingChat] Sponsor wallet ${sponsorAddress} has no signing key on this machine`);
     process.exit(1);
   }
   wallet = wm.ensureCanonicalAddress(wallet);
@@ -309,14 +319,14 @@ async function main() {
   const ctx = {
     sponsorWallet: wallet,
     sponsorAddress: wallet.address,
-    minerAddress: config.wallet || wallet.address,
+    minerAddress,
     model,
   };
 
   const server = createServer(ctx);
   server.listen(PORT, '127.0.0.1', () => {
     console.log(`[LandingChat] Proxy listening on http://127.0.0.1:${PORT}`);
-    console.log(`[LandingChat] Miner: ${MINER_URL} · sponsor: ${ctx.sponsorAddress.slice(0, 16)}…`);
+    console.log(`[LandingChat] Miner: ${MINER_URL} (${ctx.minerAddress.slice(0, 16)}…) · sponsor: ${ctx.sponsorAddress.slice(0, 16)}…`);
     console.log(`[LandingChat] Fee: ${FEE_UPOH / 1e9} POH/msg · max ${MAX_MESSAGES}/IP`);
   });
 }
