@@ -85,8 +85,12 @@ function corsHeaders(origin) {
   const allowed = [
     'https://miner.proofofhuman.ge',
     'http://miner.proofofhuman.ge',
+    'https://proofofhuman.ge',
+    'http://proofofhuman.ge',
     'http://localhost:4321',
     'http://127.0.0.1:4321',
+    'http://localhost:5173',
+    'http://127.0.0.1:5173',
   ];
   const h = {
     'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
