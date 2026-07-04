@@ -71,7 +71,7 @@ import { applyCorsHeaders, rejectNonLocalStateChange } from './security/api-secu
 import { normalizeSkillId } from './security/skill-id.js';
 import { buildWalletJobContext, promptPreviewFromJob, jobToSearchDocument, buildAllSearchDocuments, PROMPT_PREVIEW_MAX } from './chain/chain-job-index.js';
 import { ChatHistorySearch } from './search/chat-history-search.js';
-import { ensureMeilisearch, resolveMeilisearchUrl } from './search/meilisearch-server.js';
+import { ensureMeilisearch, getMeilisearchMasterKey, resolveMeilisearchUrl } from './search/meilisearch-server.js';
 
 // Returns true when a message segment clearly signals it needs live internet data.
 // Prevents web_search from firing on general knowledge questions the LLM already knows.
@@ -875,6 +875,8 @@ export class PohMinerNode {
         process.on('SIGINT', stopMeili);
         process.on('SIGTERM', stopMeili);
       }
+      const meiliKey = getMeilisearchMasterKey(msCfg) || this._meilisearchServer?.masterKey;
+      if (meiliKey) this.chatHistorySearch.apiKey = meiliKey;
     }
     await this.chatHistorySearch.init();
     const localRecords = this.jobResults ? Array.from(this.jobResults.values()) : [];

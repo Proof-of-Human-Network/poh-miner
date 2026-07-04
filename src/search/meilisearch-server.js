@@ -5,6 +5,7 @@
  */
 
 import { spawn, execSync } from 'child_process';
+import crypto from 'crypto';
 import fs from 'fs';
 import net from 'net';
 import path from 'path';
@@ -15,6 +16,40 @@ import { pipeline } from 'stream/promises';
 export const MEILI_VERSION = 'v1.12.8';
 const DEFAULT_PORT = 7700;
 const DEFAULT_BIND = '127.0.0.1';
+const MASTER_KEY_MIN_LEN = 16;
+const MASTER_KEY_FILE = 'meilisearch-master-key';
+
+export function meilisearchMasterKeyPath() {
+  return path.join(os.homedir(), '.poh-miner', MASTER_KEY_FILE);
+}
+
+/** Read configured master key (config, env, or persisted file). Does not generate. */
+export function getMeilisearchMasterKey(cfg = {}) {
+  const fromCfg = String(cfg.apiKey || cfg.masterKey || '').trim();
+  if (fromCfg.length >= MASTER_KEY_MIN_LEN) return fromCfg;
+  const fromEnv = String(process.env.MEILI_MASTER_KEY || '').trim();
+  if (fromEnv.length >= MASTER_KEY_MIN_LEN) return fromEnv;
+  const keyPath = meilisearchMasterKeyPath();
+  try {
+    if (fs.existsSync(keyPath)) {
+      const stored = fs.readFileSync(keyPath, 'utf8').trim();
+      if (stored.length >= MASTER_KEY_MIN_LEN) return stored;
+    }
+  } catch { /* */ }
+  return null;
+}
+
+/** Create and persist a master key when spawning a managed Meilisearch instance. */
+export function ensureMeilisearchMasterKey(cfg = {}) {
+  const existing = getMeilisearchMasterKey(cfg);
+  if (existing) return existing;
+  const key = crypto.randomBytes(32).toString('base64url');
+  const keyPath = meilisearchMasterKeyPath();
+  fs.mkdirSync(path.dirname(keyPath), { recursive: true });
+  fs.writeFileSync(keyPath, `${key}\n`, { mode: 0o600 });
+  console.log(`[PoH-Meili] Generated master key → ${keyPath}`);
+  return key;
+}
 
 function platformAsset() {
   const { platform, arch } = process;
@@ -145,6 +180,7 @@ export class MeilisearchServer {
     this.bindHost = opts.bindHost || DEFAULT_BIND;
     this.dataDir = opts.dataDir || path.join(os.homedir(), '.poh-miner', 'meilisearch-data');
     this.binaryPath = opts.binaryPath || null;
+    this.masterKey = opts.masterKey || null;
     this.hostUrl = resolveMeilisearchUrl({ host: opts.host, port: this.port, bindHost: this.bindHost });
     this._proc = null;
     this._managed = false;
@@ -177,14 +213,23 @@ export class MeilisearchServer {
     const bin = await ensureMeilisearchBinary(this.binaryPath);
     fs.mkdirSync(this.dataDir, { recursive: true });
 
+    if (!this.masterKey) {
+      this.masterKey = ensureMeilisearchMasterKey();
+    }
+
     const args = ['--db-path', this.dataDir, '--http-addr', `${this.bindHost}:${this.port}`];
+    if (this.masterKey) args.push('--master-key', this.masterKey);
     console.log(`[PoH-Meili] Starting Meilisearch (${bin}) on ${this.hostUrl}`);
 
     let stderr = '';
     this._proc = spawn(bin, args, {
       stdio: ['ignore', 'ignore', 'pipe'],
       detached: false,
-      env: { ...process.env, MEILI_ENV: process.env.MEILI_ENV || 'production' },
+      env: {
+        ...process.env,
+        MEILI_ENV: process.env.MEILI_ENV || 'production',
+        ...(this.masterKey ? { MEILI_MASTER_KEY: this.masterKey } : {}),
+      },
     });
     this._managed = true;
     this._proc.stderr?.on('data', chunk => {
@@ -238,6 +283,7 @@ export async function ensureMeilisearch(cfg = {}) {
     host: cfg.host,
     dataDir: cfg.dataDir,
     binaryPath: cfg.binaryPath,
+    masterKey: getMeilisearchMasterKey(cfg),
   });
   await server.ensureRunning({ maxWaitMs: cfg.startupTimeoutMs || 90_000 });
   return server;

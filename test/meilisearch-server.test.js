@@ -4,6 +4,7 @@ import {
   resolveMeilisearchUrl,
   isPortListening,
   meilisearchHealthy,
+  getMeilisearchMasterKey,
 } from '../src/search/meilisearch-server.js';
 
 describe('meilisearch-server', () => {
@@ -26,5 +27,11 @@ describe('meilisearch-server', () => {
 
   it('reports unhealthy for unreachable host', async () => {
     expect(await meilisearchHealthy('http://127.0.0.1:1', 200)).toBe(false);
+  });
+
+  it('reads master key from config apiKey', () => {
+    const key = 'a'.repeat(32);
+    expect(getMeilisearchMasterKey({ apiKey: key })).toBe(key);
+    expect(getMeilisearchMasterKey({ apiKey: 'short' })).toBeNull();
   });
 });
