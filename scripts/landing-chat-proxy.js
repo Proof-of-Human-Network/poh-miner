@@ -118,6 +118,15 @@ async function minerFetch(pathname, opts = {}) {
   return { ok: r.ok, status: r.status, json };
 }
 
+async function resolveMinerAddress(cached) {
+  try {
+    const info = await minerFetch('/api/miner/info', { timeout: 8000 });
+    return info.json?.minerAddress || cached;
+  } catch {
+    return cached;
+  }
+}
+
 async function signJobPayment(wallet, minerAddress, jobId, amount) {
   const requesterAddress = wallet.address;
   const nonceRes = await minerFetch(`/api/wallet/nonce?address=${encodeURIComponent(requesterAddress)}`);
@@ -157,6 +166,7 @@ async function handleChat(body, sponsorWallet, minerAddress, model) {
 
   const history = Array.isArray(body.history) ? body.history.slice(-12) : [];
   const requesterAddress = sponsorWallet.address;
+  minerAddress = await resolveMinerAddress(minerAddress);
 
   // Chain history match (free, no job fee)
   try {
