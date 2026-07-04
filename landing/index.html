@@ -86,6 +86,75 @@
     }
     .mobile-drawer a:last-child { border-bottom: none; }
     @media (min-width: 1024px) { .mobile-drawer { display: none !important; } }
+
+    /* ── Landing chat ─────────────────────────────────────────────── */
+    .lp-chat {
+      border-top: 1px solid rgba(255,255,255,0.08);
+      background: linear-gradient(180deg, #030303 0%, #000 100%);
+    }
+    .lp-chat-inner { max-width: 720px; margin: 0 auto; }
+    .lp-chat-messages {
+      min-height: 280px; max-height: 420px; overflow-y: auto;
+      display: flex; flex-direction: column; gap: 12px;
+      padding: 8px 4px 16px;
+    }
+    .lp-chat-msg {
+      max-width: 88%; padding: 12px 16px; border-radius: 8px;
+      font-size: 1.05rem; line-height: 1.55; word-break: break-word;
+    }
+    .lp-chat-msg.user {
+      align-self: flex-end; background: #141414; border: 1px solid #2a2a2a; color: #e5e5e5;
+    }
+    .lp-chat-msg.assistant {
+      align-self: flex-start; background: #0a1a0f; border: 1px solid #1a3a27; color: #d1fae5;
+    }
+    .lp-chat-msg.system { align-self: center; color: #666; font-size: 0.9rem; border: none; background: transparent; }
+    .lp-chat-input-wrap { position: relative; }
+    .lp-chat-input {
+      width: 100%; min-height: 52px; max-height: 140px; resize: none;
+      background: #0a0a0a; border: 1px solid #2a2a2a; border-radius: 6px;
+      color: #fff; padding: 14px 52px 14px 16px; font-family: inherit; font-size: 1.1rem;
+      outline: none;
+    }
+    .lp-chat-input:focus { border-color: #22c55e; }
+    .lp-chat-send {
+      position: absolute; right: 10px; bottom: 10px;
+      background: #22c55e; color: #000; border: none; border-radius: 4px;
+      width: 36px; height: 36px; cursor: pointer; font-size: 18px;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .lp-chat-send:disabled { opacity: 0.4; cursor: not-allowed; }
+    .lp-chat-suggest {
+      display: none; position: absolute; left: 0; right: 0; bottom: 100%;
+      margin-bottom: 4px; background: #0d0d0d; border: 1px solid #2a2a2a;
+      border-radius: 6px; max-height: 200px; overflow-y: auto; z-index: 20;
+    }
+    .lp-chat-suggest.open { display: block; }
+    .lp-chat-suggest-item {
+      padding: 10px 14px; cursor: pointer; border-bottom: 1px solid #1a1a1a;
+      font-size: 0.95rem;
+    }
+    .lp-chat-suggest-item:hover { background: #141414; }
+    .lp-chat-suggest-prompt { color: #fff; }
+    .lp-chat-suggest-reply { color: #666; font-size: 0.85rem; margin-top: 2px; }
+    .lp-chat-modal {
+      display: none; position: fixed; inset: 0; z-index: 200;
+      background: rgba(0,0,0,0.85); align-items: center; justify-content: center; padding: 24px;
+    }
+    .lp-chat-modal.open { display: flex; }
+    .lp-chat-modal-box {
+      max-width: 440px; width: 100%; background: #0a0a0a; border: 1px solid #2a2a2a;
+      border-radius: 8px; padding: 32px 28px; text-align: center;
+    }
+    .lp-chat-modal-btns { display: flex; gap: 12px; margin-top: 24px; flex-wrap: wrap; justify-content: center; }
+    .lp-chat-modal-btn {
+      flex: 1; min-width: 140px; padding: 14px 20px; border-radius: 4px;
+      font-family: inherit; font-size: 1.15rem; cursor: pointer; text-decoration: none;
+      display: inline-flex; align-items: center; justify-content: center;
+    }
+    .lp-chat-modal-btn.primary { background: #22c55e; color: #000; border: none; }
+    .lp-chat-modal-btn.secondary { background: transparent; color: #fff; border: 1px solid #444; }
+    .lp-chat-typing { color: #22c55e; font-size: 0.9rem; padding: 4px 0; }
   </style>
 </head>
 <body class="bg-black text-white overflow-x-hidden">
@@ -141,6 +210,44 @@
            class="inline-flex items-center justify-center px-8 py-3 border border-white/30 hover:bg-white/5 text-[18px] sm:text-[24px] md:text-[30px] rounded-[4px] transition">
           See the live mesh
         </a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Landing chat (sponsored compute jobs via /landing-api proxy) -->
+  <section id="lp-chat" class="lp-chat py-14 md:py-20 px-4 sm:px-8">
+    <div class="lp-chat-inner">
+      <div class="text-center mb-8">
+        <div class="uppercase tracking-[3px] text-xs text-[#22c55e] mb-2">TRY THE NETWORK</div>
+        <h2 class="font-display text-[36px] sm:text-[48px] leading-none mb-3">Ask the AI brain</h2>
+        <p class="text-white/50 text-[18px] max-w-lg mx-auto">
+          10 free messages per visit — powered by the PoH miner mesh. Autocomplete learns from on-chain chat history.
+        </p>
+      </div>
+
+      <div class="lp-chat-messages" id="lp-chat-messages">
+        <div class="lp-chat-msg system">Ask anything — identity checks, skills, or general questions.</div>
+      </div>
+      <div class="lp-chat-typing" id="lp-chat-typing" style="display:none">Thinking…</div>
+
+      <div class="lp-chat-input-wrap mt-3">
+        <div class="lp-chat-suggest" id="lp-chat-suggest"></div>
+        <textarea id="lp-chat-input" class="lp-chat-input" rows="1" placeholder="Message the network…" maxlength="4000"></textarea>
+        <button type="button" class="lp-chat-send" id="lp-chat-send" title="Send">↑</button>
+      </div>
+      <div class="text-center text-white/30 text-sm mt-3" id="lp-chat-quota">10 messages remaining</div>
+    </div>
+  </section>
+
+  <div class="lp-chat-modal" id="lp-chat-modal">
+    <div class="lp-chat-modal-box">
+      <h3 class="font-display text-[28px] mb-3">Free trial used</h3>
+      <p class="text-white/60 text-[18px] leading-relaxed">
+        You've used your 10 complimentary messages. Run your own miner node to chat without limits and earn POH.
+      </p>
+      <div class="lp-chat-modal-btns">
+        <a href="wallet/" class="lp-chat-modal-btn primary">Mobile</a>
+        <a href="/" class="lp-chat-modal-btn secondary">Desktop</a>
       </div>
     </div>
   </div>
@@ -1478,6 +1585,152 @@
       setInterval(loadChartHistory, 10 * 60 * 1000);
       window.addEventListener('resize', () => { drawNetChart(); });
     };
+
+    // ── Landing chat (sponsored jobs via /landing-api proxy) ───────────────
+    const CHAT_API = (location.hostname === 'localhost' || location.hostname === '127.0.0.1')
+      ? 'http://127.0.0.1:3457'
+      : '/landing-api';
+    const lpChatHistory = [];
+    let lpChatBusy = false;
+    let lpSuggestTimer = null;
+
+    function lpEsc(s) {
+      return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
+    }
+
+    function lpAppendMsg(role, text) {
+      const box = document.getElementById('lp-chat-messages');
+      if (!box) return;
+      const el = document.createElement('div');
+      el.className = 'lp-chat-msg ' + role;
+      el.textContent = text;
+      box.appendChild(el);
+      box.scrollTop = box.scrollHeight;
+    }
+
+    function lpUpdateQuota(remaining, used, max) {
+      const el = document.getElementById('lp-chat-quota');
+      if (!el) return;
+      if (remaining <= 0) {
+        el.textContent = 'No messages remaining';
+        el.classList.add('text-[#f97316]');
+      } else {
+        el.textContent = remaining + ' message' + (remaining === 1 ? '' : 's') + ' remaining';
+      }
+    }
+
+    async function lpRefreshQuota() {
+      try {
+        const r = await fetch(CHAT_API + '/api/rate-limit');
+        if (!r.ok) return;
+        const d = await r.json();
+        lpUpdateQuota(d.remaining, d.used, d.max);
+        if (d.remaining <= 0) document.getElementById('lp-chat-modal')?.classList.add('open');
+      } catch { /* proxy offline */ }
+    }
+
+    function lpHideSuggest() {
+      const box = document.getElementById('lp-chat-suggest');
+      if (box) { box.classList.remove('open'); box.innerHTML = ''; }
+    }
+
+    function lpRenderSuggest(items) {
+      const box = document.getElementById('lp-chat-suggest');
+      if (!box) return;
+      if (!items?.length) { lpHideSuggest(); return; }
+      box.innerHTML = items.map((s, i) => `
+        <div class="lp-chat-suggest-item" data-idx="${i}">
+          <div class="lp-chat-suggest-prompt">${lpEsc(s.prompt)}</div>
+          ${s.replyPreview ? `<div class="lp-chat-suggest-reply">${lpEsc(s.replyPreview)}${s.replyPreview.length >= 80 ? '…' : ''}</div>` : ''}
+        </div>`).join('');
+      box.classList.add('open');
+      box.querySelectorAll('.lp-chat-suggest-item').forEach(el => {
+        el.onclick = () => {
+          const item = items[parseInt(el.dataset.idx, 10)];
+          const input = document.getElementById('lp-chat-input');
+          if (input && item) { input.value = item.prompt || ''; input.focus(); }
+          lpHideSuggest();
+        };
+      });
+    }
+
+    async function lpFetchSuggest(q) {
+      try {
+        const r = await fetch(CHAT_API + '/api/search/suggest?q=' + encodeURIComponent(q) + '&limit=6');
+        if (!r.ok) return;
+        const d = await r.json();
+        lpRenderSuggest(d.suggestions || []);
+      } catch { lpHideSuggest(); }
+    }
+
+    async function lpSendChat() {
+      if (lpChatBusy) return;
+      const input = document.getElementById('lp-chat-input');
+      const sendBtn = document.getElementById('lp-chat-send');
+      const typing = document.getElementById('lp-chat-typing');
+      const text = input?.value?.trim();
+      if (!text) return;
+
+      lpChatBusy = true;
+      if (sendBtn) sendBtn.disabled = true;
+      if (typing) typing.style.display = 'block';
+      lpHideSuggest();
+      lpAppendMsg('user', text);
+      if (input) { input.value = ''; input.style.height = 'auto'; }
+      lpChatHistory.push({ role: 'user', content: text });
+
+      try {
+        const r = await fetch(CHAT_API + '/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message: text, history: lpChatHistory.slice(-10) }),
+        });
+        const data = await r.json().catch(() => ({}));
+
+        if (r.status === 429 || data.code === 'RATE_LIMIT') {
+          document.getElementById('lp-chat-modal')?.classList.add('open');
+          lpUpdateQuota(0, data.used || 10, data.max || 10);
+          return;
+        }
+        if (!r.ok) throw new Error(data.error || 'Request failed');
+
+        const reply = data.message || '[no response]';
+        lpAppendMsg('assistant', reply);
+        lpChatHistory.push({ role: 'assistant', content: reply });
+        if (data.remaining != null) lpUpdateQuota(data.remaining, data.used, 10);
+        else lpRefreshQuota();
+      } catch (e) {
+        lpAppendMsg('system', 'Error: ' + (e.message || 'Could not reach chat proxy'));
+      } finally {
+        lpChatBusy = false;
+        if (sendBtn) sendBtn.disabled = false;
+        if (typing) typing.style.display = 'none';
+        input?.focus();
+      }
+    }
+
+    (function initLpChat() {
+      const input = document.getElementById('lp-chat-input');
+      const sendBtn = document.getElementById('lp-chat-send');
+      if (!input) return;
+
+      input.addEventListener('input', () => {
+        input.style.height = 'auto';
+        input.style.height = Math.min(input.scrollHeight, 140) + 'px';
+        const q = input.value.trim();
+        clearTimeout(lpSuggestTimer);
+        if (q.length < 2) { lpHideSuggest(); return; }
+        lpSuggestTimer = setTimeout(() => lpFetchSuggest(q), 280);
+      });
+
+      input.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') lpHideSuggest();
+        if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); lpSendChat(); }
+      });
+
+      sendBtn?.addEventListener('click', lpSendChat);
+      lpRefreshQuota();
+    })();
 
     // Mobile hamburger nav
     const hamburger = document.getElementById('hamburger');
