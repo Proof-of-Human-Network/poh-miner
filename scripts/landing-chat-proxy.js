@@ -281,9 +281,17 @@ function createServer(ctx) {
   });
 }
 
+function loadSponsorConfig() {
+  const globalPath = path.join(os.homedir(), '.poh-miner', 'config.json');
+  if (fs.existsSync(globalPath)) {
+    try { return JSON.parse(fs.readFileSync(globalPath, 'utf8')); } catch { /* */ }
+  }
+  return loadConfig();
+}
+
 async function main() {
-  const config = loadConfig();
-  const minerAddress = config.wallet || config.pohWallet;
+  const config = loadSponsorConfig();
+  const minerAddress = process.env.LANDING_CHAT_WALLET || config.wallet || config.pohWallet;
   if (!minerAddress) {
     console.error('[LandingChat] No wallet in config — set wallet in ~/.poh-miner/config.json');
     process.exit(1);
