@@ -6,6 +6,7 @@
 
 import { spawn, execSync } from 'child_process';
 import fs from 'fs';
+import net from 'net';
 import path from 'path';
 import os from 'os';
 import https from 'https';
@@ -54,6 +55,35 @@ export async function meilisearchHealthy(hostUrl, timeoutMs = 2000) {
   } finally {
     clearTimeout(t);
   }
+}
+
+function sleep(ms) {
+  return new Promise(r => setTimeout(r, ms));
+}
+
+/** True when something is already bound on host:port (e.g. Docker Meilisearch). */
+export function isPortListening(host, port, timeoutMs = 1000) {
+  return new Promise(resolve => {
+    const sock = net.createConnection({ host, port });
+    const done = ok => {
+      sock.removeAllListeners();
+      try { sock.destroy(); } catch { /* */ }
+      resolve(ok);
+    };
+    sock.setTimeout(timeoutMs);
+    sock.once('connect', () => done(true));
+    sock.once('timeout', () => done(false));
+    sock.once('error', () => done(false));
+  });
+}
+
+async function waitForHealthy(hostUrl, maxWaitMs, intervalMs = 400) {
+  const deadline = Date.now() + maxWaitMs;
+  while (Date.now() < deadline) {
+    if (await meilisearchHealthy(hostUrl, 3000)) return true;
+    await sleep(intervalMs);
+  }
+  return false;
 }
 
 function meilisearchInPath() {
@@ -126,32 +156,63 @@ export class MeilisearchServer {
       return this;
     }
 
+    // Existing instance (Docker, prior run) may still be starting — wait before spawning.
+    const warmUpMs = Math.min(15_000, maxWaitMs);
+    if (await waitForHealthy(this.hostUrl, warmUpMs)) {
+      console.log(`[PoH-Meili] Using existing Meilisearch at ${this.hostUrl}`);
+      return this;
+    }
+
+    if (await isPortListening(this.bindHost, this.port)) {
+      const remaining = Math.max(5_000, maxWaitMs - warmUpMs);
+      if (await waitForHealthy(this.hostUrl, remaining)) {
+        console.log(`[PoH-Meili] Using existing Meilisearch at ${this.hostUrl} (port ${this.port} in use)`);
+        return this;
+      }
+      throw new Error(
+        `Port ${this.bindHost}:${this.port} is in use but Meilisearch is not healthy at ${this.hostUrl}`,
+      );
+    }
+
     const bin = await ensureMeilisearchBinary(this.binaryPath);
     fs.mkdirSync(this.dataDir, { recursive: true });
 
     const args = ['--db-path', this.dataDir, '--http-addr', `${this.bindHost}:${this.port}`];
     console.log(`[PoH-Meili] Starting Meilisearch (${bin}) on ${this.hostUrl}`);
 
+    let stderr = '';
     this._proc = spawn(bin, args, {
-      stdio: 'ignore',
+      stdio: ['ignore', 'ignore', 'pipe'],
       detached: false,
       env: { ...process.env, MEILI_ENV: process.env.MEILI_ENV || 'production' },
     });
     this._managed = true;
+    this._proc.stderr?.on('data', chunk => {
+      stderr = (stderr + chunk.toString()).slice(-2000);
+    });
     this._proc.on('error', err => console.error('[PoH-Meili] Process error:', err.message));
     this._proc.on('exit', (code, sig) => {
-      if (code != null && code !== 0) console.warn(`[PoH-Meili] Exited code=${code} signal=${sig}`);
       this._proc = null;
       this._managed = false;
+      if (code == null || code === 0) return;
+      meilisearchHealthy(this.hostUrl, 1500).then(ok => {
+        if (ok) {
+          console.log(`[PoH-Meili] Using existing Meilisearch at ${this.hostUrl} (managed process exited code=${code})`);
+          return;
+        }
+        const detail = stderr.trim().split('\n').filter(Boolean).pop() || '';
+        console.warn(
+          `[PoH-Meili] Exited code=${code} signal=${sig}${detail ? ` — ${detail}` : ''}`,
+        );
+      });
     });
 
-    const deadline = Date.now() + maxWaitMs;
-    while (Date.now() < deadline) {
-      if (await meilisearchHealthy(this.hostUrl, 3000)) {
+    const remaining = Math.max(5_000, maxWaitMs - warmUpMs);
+    if (await waitForHealthy(this.hostUrl, remaining)) {
+      if (this._managed && this._proc) {
         console.log(`[PoH-Meili] Ready at ${this.hostUrl}`);
-        return this;
       }
-      await new Promise(r => setTimeout(r, 400));
+      return this;
     }
     throw new Error(`Meilisearch did not become healthy at ${this.hostUrl} within ${maxWaitMs}ms`);
   }
