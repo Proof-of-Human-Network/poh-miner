@@ -18,6 +18,7 @@ import { ChainStore } from './storage/chain-store.js';
 import { validateBlockExtended } from './consensus/block-validator.js';
 import { replayChainLedger } from './consensus/tx-ledger.js';
 import { computeChainWork } from './consensus/chain-selection.js';
+import { blocksOnTipPath } from './consensus/chain-path.js';
 import {
   verifyBrainEvent,
   verifyIpfsUpdate,
@@ -334,8 +335,7 @@ const server = http.createServer(async (req, res) => {
         to = from + MAX_CHAIN_BLOCKS_RANGE - 1;
       }
 
-      const blocks = chain
-        .filter(b => b.height >= from && b.height <= to)
+      const blocks = blocksOnTipPath(chain, from, to)
         .map(b => b.toJSON ? b.toJSON() : b);
 
       res.end(JSON.stringify(blocks));

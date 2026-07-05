@@ -29,6 +29,7 @@ import {
   SKILL_GRADUATION_THRESHOLD_POH,
 } from './rewards/reward.js';
 import { computeChainWork, compareChainWork, getTipChainWork } from './consensus/chain-selection.js';
+import { blockId, blocksOnTipPath, selectPeerBlockOnTip } from './consensus/chain-path.js';
 import { mineBlock, getNextDifficulty } from './consensus/pow.js';
 import {
   validateBlock,
@@ -309,47 +310,6 @@ function computeJobPaymentHash({ jobId, requesterAddress, minerAddress, amount, 
   return crypto.createHash('sha256')
     .update(JSON.stringify({ jobId, requesterAddress, minerAddress, amount, nonce }))
     .digest('hex');
-}
-
-/** Stable block id — prefer stored blockHash (set at mining time). */
-function blockId(block) {
-  if (!block) return null;
-  return block.blockHash || (typeof block.getHashSync === 'function' ? block.getHashSync() : null);
-}
-
-/** Walk the active tip path; return blocks for [from, to] in ascending height order. */
-function blocksOnTipPath(chain, from, to) {
-  if (!chain?.length) return [];
-  let cur = chain[chain.length - 1];
-  const path = new Map();
-  while (cur && cur.height >= from) {
-    path.set(cur.height, cur);
-    if (cur.height === 0) break;
-    cur = chain.find(b => blockId(b) === cur.previousHash) ?? null;
-  }
-  const out = [];
-  for (let h = from; h <= to; h++) {
-    if (path.has(h)) out.push(path.get(h));
-  }
-  return out;
-}
-
-/**
- * Peers may return >1 block at the same height (stale fork entries in their array).
- * Prefer the parent of block height+1 on the peer's tip branch.
- */
-function selectPeerBlockOnTip(rawBlocks, height) {
-  if (!rawBlocks?.length) return null;
-  const atHeight = rawBlocks.filter(b => b.height === height);
-  if (atHeight.length <= 1) return atHeight[0] ?? rawBlocks[0];
-  const child = rawBlocks.find(b => b.height === height + 1);
-  if (child?.previousHash) {
-    for (const b of atHeight) {
-      const parsed = b instanceof PohBlock ? b : (PohBlock.fromJSON ? PohBlock.fromJSON(b) : new PohBlock(b));
-      if (blockId(parsed) === child.previousHash) return b;
-    }
-  }
-  return atHeight[atHeight.length - 1];
 }
 
 // Well-known production bootnodes. Used when no bootnodes are configured
@@ -3714,7 +3674,7 @@ export class PohMinerNode {
         const r = await fetch(`${bestBase}/chain/blocks?from=${forkCheckHeight}&to=${forkTo}`, { signal: AbortSignal.timeout(30000) });
         if (r.ok) {
           const blocks = await r.json();
-          const peerRaw = selectPeerBlockOnTip(blocks, forkCheckHeight);
+          const peerRaw = selectPeerBlockOnTip(blocks, forkCheckHeight, PohBlock);
           if (peerRaw) {
             const peerBlock  = PohBlock.fromJSON ? PohBlock.fromJSON(peerRaw) : new PohBlock(peerRaw);
             const peerHash   = peerBlock.blockHash || peerBlock.getHashSync();
