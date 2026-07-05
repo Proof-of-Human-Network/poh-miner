@@ -61,7 +61,15 @@ async function main() {
     console.log(`Config: ${configPath}${locationNote}\n`);
 
     const node = new PohMinerNode(config);
-    await node.start();
+    try {
+      await node.start();
+    } catch (e) {
+      if (e?.code === 'MINER_LOCK_CONFLICT') {
+        console.error(`❌ ${e.message}`);
+        process.exit(1);
+      }
+      throw e;
+    }
 
     // Keep process alive
     process.stdin.resume();

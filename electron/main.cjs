@@ -12,6 +12,12 @@ const crypto = require('crypto');
 app.commandLine.appendSwitch('no-sandbox');
 app.commandLine.appendSwitch('disable-setuid-sandbox');
 
+// Linux VMs / headless / Iris-Xe-only setups often fail GPU process init
+// ("GPU process isn't usable. Goodbye.") — disable HW acceleration entirely.
+app.disableHardwareAcceleration();
+app.commandLine.appendSwitch('disable-gpu');
+app.commandLine.appendSwitch('disable-gpu-sandbox');
+
 // Block a second instance of the app — running two miners against the same
 // wallet/chain data dir at once causes port conflicts and can corrupt the
 // chain/wallet files on disk (two processes writing the same JSON files).
@@ -227,7 +233,10 @@ async function startMiner() {
     sendStatusUpdate();
 
   } catch (err) {
-    sendLog('Failed to start miner: ' + err.message);
+    const hint = err?.code === 'MINER_LOCK_CONFLICT'
+      ? ' Stop any other miner (CLI or a previous app instance) and try again.'
+      : '';
+    sendLog('Failed to start miner: ' + err.message + hint);
     console.error(err);
     // Reset so a future retry can work (e.g. after killing the conflicting process)
     minerNode = null;

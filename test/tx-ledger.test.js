@@ -97,6 +97,23 @@ describe('TxLedgerState — spent-tx dedup', () => {
     expect(inv.ok).toBe(true);
     expect(inv.totalMinted).toBe(BLOCK_REWARD_UPOH * 3);
     expect(inv.totalBalances).toBe(BLOCK_REWARD_UPOH * 3);
+    expect(inv.coinbaseDust).toBe(0);
+  });
+
+  it('supply invariant accounts for historical coinbase rounding dust', () => {
+    const miner = Wallet.generate().address;
+    const dusty = coinbaseBlock(1, miner);
+    dusty.coinbaseReward = {
+      blockHeight: 1,
+      proposerReward: Math.floor(BLOCK_REWARD_UPOH * 0.6),
+      workerRewards: [{ workerId: Wallet.generate().address, amount: Math.floor((BLOCK_REWARD_UPOH * 0.4) / 2), workProofHash: 'w0' }],
+      totalNewSupply: BLOCK_REWARD_UPOH,
+    };
+    const ledger = replayChainLedger([dusty]);
+    const inv = ledger.checkSupplyInvariant();
+    expect(inv.ok).toBe(true);
+    expect(inv.coinbaseDust).toBeGreaterThan(0);
+    expect(inv.totalBalances + inv.coinbaseDust).toBe(inv.totalMinted);
   });
 
   it('validateBlockLedger rejects blocks with replayed txs at tip', () => {

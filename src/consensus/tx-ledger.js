@@ -19,6 +19,8 @@ export class TxLedgerState {
     this.signingKeys = new Map();
     this.spentTxHashes = new Set();
     this.totalMinted = 0;
+    /** μPOH minted in coinbase but not credited due to historical floor-division splits */
+    this.coinbaseDust = 0;
   }
 
   clone() {
@@ -28,6 +30,7 @@ export class TxLedgerState {
     copy.signingKeys = new Map(this.signingKeys);
     copy.spentTxHashes = new Set(this.spentTxHashes);
     copy.totalMinted = this.totalMinted;
+    copy.coinbaseDust = this.coinbaseDust;
     return copy;
   }
 
@@ -56,17 +59,22 @@ export class TxLedgerState {
     const coinbase = block.coinbaseReward;
     if (!coinbase || !block.minerWallet) return;
 
+    let credited = 0;
     if (coinbase.totalNewSupply > 0) {
       this.totalMinted += coinbase.totalNewSupply;
     }
     if (coinbase.proposerReward > 0) {
       this._credit(block.minerWallet, coinbase.proposerReward);
+      credited += coinbase.proposerReward;
     }
     for (const worker of (coinbase.workerRewards || [])) {
       if (worker.workerId && worker.amount > 0) {
         this._credit(worker.workerId, worker.amount);
+        credited += worker.amount;
       }
     }
+    const dust = (coinbase.totalNewSupply || 0) - credited;
+    if (dust > 0) this.coinbaseDust += dust;
   }
 
   /**
@@ -200,16 +208,17 @@ export class TxLedgerState {
   }
 
   /**
-   * Supply invariant: total balances must equal total coinbase minted.
+   * Supply invariant: credited balances + historical coinbase dust === total minted.
    * Transfers and fees are zero-sum; P2P escrow moves funds between accounts.
    */
   checkSupplyInvariant() {
     const totalBalances = this.totalBalances();
-    const ok = totalBalances === this.totalMinted;
+    const ok = totalBalances + this.coinbaseDust === this.totalMinted;
     return {
       ok,
       totalMinted: this.totalMinted,
       totalBalances,
+      coinbaseDust: this.coinbaseDust,
       delta: totalBalances - this.totalMinted,
     };
   }

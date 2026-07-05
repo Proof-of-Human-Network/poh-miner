@@ -311,6 +311,47 @@ function computeJobPaymentHash({ jobId, requesterAddress, minerAddress, amount, 
     .digest('hex');
 }
 
+/** Stable block id — prefer stored blockHash (set at mining time). */
+function blockId(block) {
+  if (!block) return null;
+  return block.blockHash || (typeof block.getHashSync === 'function' ? block.getHashSync() : null);
+}
+
+/** Walk the active tip path; return blocks for [from, to] in ascending height order. */
+function blocksOnTipPath(chain, from, to) {
+  if (!chain?.length) return [];
+  let cur = chain[chain.length - 1];
+  const path = new Map();
+  while (cur && cur.height >= from) {
+    path.set(cur.height, cur);
+    if (cur.height === 0) break;
+    cur = chain.find(b => blockId(b) === cur.previousHash) ?? null;
+  }
+  const out = [];
+  for (let h = from; h <= to; h++) {
+    if (path.has(h)) out.push(path.get(h));
+  }
+  return out;
+}
+
+/**
+ * Peers may return >1 block at the same height (stale fork entries in their array).
+ * Prefer the parent of block height+1 on the peer's tip branch.
+ */
+function selectPeerBlockOnTip(rawBlocks, height) {
+  if (!rawBlocks?.length) return null;
+  const atHeight = rawBlocks.filter(b => b.height === height);
+  if (atHeight.length <= 1) return atHeight[0] ?? rawBlocks[0];
+  const child = rawBlocks.find(b => b.height === height + 1);
+  if (child?.previousHash) {
+    for (const b of atHeight) {
+      const parsed = b instanceof PohBlock ? b : (PohBlock.fromJSON ? PohBlock.fromJSON(b) : new PohBlock(b));
+      if (blockId(parsed) === child.previousHash) return b;
+    }
+  }
+  return atHeight[atHeight.length - 1];
+}
+
 // Well-known production bootnodes. Used when no bootnodes are configured
 // (e.g. fresh GUI onboarding). Individual users can override via config.bootnodes.
 const DEFAULT_BOOTNODES = [
@@ -811,8 +852,11 @@ export class PohMinerNode {
           let alive = false;
           try { process.kill(existingPid, 0); alive = true; } catch { alive = false; }
           if (alive) {
-            console.error(`[PoH-Miner] Another miner instance is already running (PID ${existingPid}) against this data directory. Refusing to start a second one — stop it first.`);
-            process.exit(1);
+            const msg = `Another miner instance is already running (PID ${existingPid}) against this data directory. Refusing to start a second one — stop it first.`;
+            console.error(`[PoH-Miner] ${msg}`);
+            const err = new Error(msg);
+            err.code = 'MINER_LOCK_CONFLICT';
+            throw err;
           }
           console.log(`[PoH-Miner] Found a stale lock from PID ${existingPid} (process no longer running) — taking over.`);
         }
@@ -2843,8 +2887,7 @@ export class PohMinerNode {
         }
         const limit = 500;
         if (to - from + 1 > limit) to = from + limit - 1;
-        const blocks = this.chain
-          .filter(b => b.height >= from && b.height <= to)
+        const blocks = blocksOnTipPath(this.chain, from, to)
           .map(b => b.toJSON ? b.toJSON() : b);
         res.end(JSON.stringify(blocks));
         return;
@@ -3453,7 +3496,7 @@ export class PohMinerNode {
         }
       }
       console.log(`[PoH-Miner] Loaded ${this.chain.length} blocks from disk (${this.minedRequestIds.size} known request IDs)`);
-      this._refreshTxLedger();
+      // Ledger replay is deferred — eager replay of 50k blocks OOMs the Electron shell.
     }
 
     // 2. If still empty, create genesis
@@ -3521,8 +3564,17 @@ export class PohMinerNode {
     }
 
     // 4. Sync from bootnodes (production-ready path)
+    this._balancesRebuiltThisSync = false;
     if (this.config.bootnodes && this.config.bootnodes.length > 0) {
       await this.syncFromBootnodes();
+    }
+    // Reconcile wallets when the chain grew or was replaced (e.g. after scp/fork recovery).
+    // Skip when already rebuilt for this tip — replaying 50k blocks inside Electron OOMs.
+    if (this.chain.length > 0 && !this._balancesRebuiltThisSync && this._needsBalanceRebuild()) {
+      this._rebuildBalancesFromChain();
+      this._balancesRebuiltThisSync = true;
+    } else if (this.chain.length > 0 && !this.txLedger) {
+      this._refreshTxLedger();
     }
 
     // 5. Layer 4: cold-start brain sync — find latest state-snapshot in chain and apply
@@ -3629,7 +3681,7 @@ export class PohMinerNode {
 
     await Promise.allSettled(candidates.map(async c => {
       try {
-        const r = await fetch(`${c.base}/chain/tip`, { signal: AbortSignal.timeout(5000) });
+        const r = await fetch(`${c.base}/chain/tip`, { signal: AbortSignal.timeout(15000) });
         if (!r.ok) { console.log(`[PoH-Miner] [Sync] ${c.base} tip → non-ok ${r.status}`); return; }
         const tip = await r.json();
         const work = tip.chainWork || '0';
@@ -3658,11 +3710,13 @@ export class PohMinerNode {
     if (bestBase && bestHeight >= 1 && localChainHeight >= 1) {
       forkCheckHeight = Math.min(localChainHeight, bestHeight);
       try {
-        const r = await fetch(`${bestBase}/chain/blocks?from=${forkCheckHeight}&to=${forkCheckHeight}`, { signal: AbortSignal.timeout(5000) });
+        const forkTo = bestHeight > forkCheckHeight ? forkCheckHeight + 1 : forkCheckHeight;
+        const r = await fetch(`${bestBase}/chain/blocks?from=${forkCheckHeight}&to=${forkTo}`, { signal: AbortSignal.timeout(30000) });
         if (r.ok) {
           const blocks = await r.json();
-          if (Array.isArray(blocks) && blocks.length > 0) {
-            const peerBlock  = PohBlock.fromJSON ? PohBlock.fromJSON(blocks[0]) : new PohBlock(blocks[0]);
+          const peerRaw = selectPeerBlockOnTip(blocks, forkCheckHeight);
+          if (peerRaw) {
+            const peerBlock  = PohBlock.fromJSON ? PohBlock.fromJSON(peerRaw) : new PohBlock(peerRaw);
             const peerHash   = peerBlock.blockHash || peerBlock.getHashSync();
             const localBlock = this.chain.find(b => b.height === forkCheckHeight)
               ?? this.chain[forkCheckHeight - chainOffset];
@@ -3682,25 +3736,31 @@ export class PohMinerNode {
       const localGenesis     = this.chain.find(b => b.height === 0) ?? this.chain[0];
       const localGenesisHash = localGenesis?.getHashSync();
       if (localGenesisHash) {
-        try {
-          const r = await fetch(`${bestBase}/chain/blocks?from=0&to=0`, { signal: AbortSignal.timeout(5000) });
-          if (r.ok) {
-            const blocks = await r.json();
-            if (Array.isArray(blocks) && blocks.length > 0) {
-              const peerGenesis     = PohBlock.fromJSON ? PohBlock.fromJSON(blocks[0]) : new PohBlock(blocks[0]);
-              const peerGenesisHash = peerGenesis.getHashSync();
-              if (peerGenesisHash !== localGenesisHash) {
-                console.error(`[PoH-Miner] ⛔ GENESIS MISMATCH — peer ${bestLabel} is on a different network!`);
-                console.error(`[PoH-Miner]    local genesis: ${localGenesisHash}`);
-                console.error(`[PoH-Miner]    peer  genesis: ${peerGenesisHash}`);
-                console.error(`[PoH-Miner]    Refusing to sync. Wipe ~/.poh-miner/chain if you intend to join a new network.`);
-                return;
+        let genesisVerified = false;
+        for (let attempt = 1; attempt <= 3 && !genesisVerified; attempt++) {
+          try {
+            const r = await fetch(`${bestBase}/chain/blocks?from=0&to=0`, { signal: AbortSignal.timeout(30000) });
+            if (r.ok) {
+              const blocks = await r.json();
+              if (Array.isArray(blocks) && blocks.length > 0) {
+                const peerGenesis     = PohBlock.fromJSON ? PohBlock.fromJSON(blocks[0]) : new PohBlock(blocks[0]);
+                const peerGenesisHash = peerGenesis.getHashSync();
+                if (peerGenesisHash !== localGenesisHash) {
+                  console.error(`[PoH-Miner] ⛔ GENESIS MISMATCH — peer ${bestLabel} is on a different network!`);
+                  console.error(`[PoH-Miner]    local genesis: ${localGenesisHash}`);
+                  console.error(`[PoH-Miner]    peer  genesis: ${peerGenesisHash}`);
+                  console.error(`[PoH-Miner]    Refusing to sync. Wipe ~/.poh-miner/chain if you intend to join a new network.`);
+                  return;
+                }
+                console.log(`[PoH-Miner] [Sync] Genesis hash verified ✓ (${localGenesisHash.slice(0, 12)}…)`);
+                genesisVerified = true;
               }
-              console.log(`[PoH-Miner] [Sync] Genesis hash verified ✓ (${localGenesisHash.slice(0, 12)}…)`);
+            }
+          } catch (e) {
+            if (attempt === 3) {
+              console.warn(`[PoH-Miner] [Sync] Could not verify genesis hash against ${bestLabel}: ${e.message}`);
             }
           }
-        } catch (e) {
-          console.warn(`[PoH-Miner] [Sync] Could not verify genesis hash against ${bestLabel}: ${e.message}`);
         }
       }
     }
@@ -3770,7 +3830,7 @@ export class PohMinerNode {
       const from = localHeight + 1;
       const to   = Math.min(from + CHUNK - 1, bestHeight);
       try {
-        const r = await fetch(`${bestBase}/chain/blocks?from=${from}&to=${to}`, { signal: AbortSignal.timeout(30000) });
+        const r = await fetch(`${bestBase}/chain/blocks?from=${from}&to=${to}`, { signal: AbortSignal.timeout(60000) });
         if (!r.ok) break;
         const blocks = await r.json();
         if (!Array.isArray(blocks) || blocks.length === 0) break;
@@ -3800,9 +3860,19 @@ export class PohMinerNode {
             }
           }
           if (!added) {
+            const first = PohBlock.fromJSON ? PohBlock.fromJSON(blocks[0]) : new PohBlock(blocks[0]);
+            const prev  = this.chain[this.chain.length - 1];
+            const prevHash = prev?.blockHash || prev?.getHashSync();
+            if (prevHash && first.previousHash !== prevHash) {
+              console.warn(
+                `[PoH-Miner] Fork at tip: block #${first.height} parent ${first.previousHash.slice(0, 8)}… ` +
+                `≠ local tip ${prevHash.slice(0, 8)}… at #${prev.height}`
+              );
+            }
             if (!isFreshStart && compareChainWork(bestWork, localWork) > 0) {
               console.warn(`[PoH-Miner] Incremental sync stalled at height ${localChainHeight} — full resync from ${bestLabel}`);
               isFreshStart = true;
+              isFork = true;
               localHeight = -1;
               anchorHeight = -1;
               downloadedBlocks.length = 0;
@@ -3841,7 +3911,7 @@ export class PohMinerNode {
             const from = h + 1;
             const to   = Math.min(from + CHUNK - 1, bestHeight);
             try {
-              const r2 = await fetch(`${bestBase}/chain/blocks?from=${from}&to=${to}`, { signal: AbortSignal.timeout(30000) });
+              const r2 = await fetch(`${bestBase}/chain/blocks?from=${from}&to=${to}`, { signal: AbortSignal.timeout(60000) });
               if (!r2.ok) break;
               const bs = await r2.json();
               if (!Array.isArray(bs) || bs.length === 0) break;
@@ -3885,6 +3955,7 @@ export class PohMinerNode {
     // Replay canonical balances from chain on every startup (dedupes replay inflation).
     if (this.chain.length > 0) {
       this._rebuildBalancesFromChain();
+      this._balancesRebuiltThisSync = true;
     } else {
       this._refreshTxLedger();
     }
@@ -4481,11 +4552,45 @@ export class PohMinerNode {
       blockCount: this.chain.length,
       totalMinted: inv.totalMinted,
       totalBalances: inv.totalBalances,
+      coinbaseDust: inv.coinbaseDust,
       supplyOk: inv.ok,
       delta: inv.delta,
       activeWallets: ledger.activeWalletCount(),
       spentTxCount: ledger.spentTxHashes.size,
     };
+  }
+
+  _balanceRebuildStatePath() {
+    return path.join(os.homedir(), '.poh-miner', 'chain', 'balance-rebuild.json');
+  }
+
+  _getLastRebuiltHeight() {
+    try {
+      const raw = JSON.parse(fs.readFileSync(this._balanceRebuildStatePath(), 'utf8'));
+      return Number(raw.height) || -1;
+    } catch {
+      return -1;
+    }
+  }
+
+  _setLastRebuiltHeight(height) {
+    try {
+      fs.mkdirSync(path.dirname(this._balanceRebuildStatePath()), { recursive: true });
+      fs.writeFileSync(this._balanceRebuildStatePath(), JSON.stringify({ height, at: Date.now() }));
+    } catch (e) {
+      console.warn('[PoH-Miner] Could not persist balance-rebuild state:', e.message);
+    }
+  }
+
+  _chainTipHeight() {
+    return this.chain.length > 0 ? (this.chain[this.chain.length - 1].height ?? this.chain.length - 1) : -1;
+  }
+
+  /** True when wallet files may be stale (chain grew or was replaced since last rebuild). */
+  _needsBalanceRebuild() {
+    const tip = this._chainTipHeight();
+    const last = this._getLastRebuiltHeight();
+    return tip > last;
   }
 
   // Rebuild all wallet balances from scratch by replaying the current chain.
@@ -4554,10 +4659,12 @@ export class PohMinerNode {
     this._appliedStateTransitionHeights.clear();
 
     const audit = ledger.checkSupplyInvariant();
+    this._setLastRebuiltHeight(this._chainTipHeight());
     console.log(
       `[PoH-Miner] Balance rebuild complete — ${this.chain.length} blocks, ` +
       `supply ${audit.ok ? 'OK' : 'MISMATCH'} ` +
-      `(minted ${audit.totalMinted}, balances ${audit.totalBalances})`
+      `(minted ${audit.totalMinted}, balances ${audit.totalBalances}` +
+      `${audit.coinbaseDust ? `, dust ${audit.coinbaseDust}` : ''})`
     );
   }
 
@@ -6455,5 +6562,8 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const node = new PohMinerNode({
     wallet: process.env.POH_WALLET || 'test-miner-wallet',
   });
-  node.start();
+  node.start().catch((e) => {
+    console.error(e?.message || e);
+    process.exit(e?.code === 'MINER_LOCK_CONFLICT' ? 1 : 1);
+  });
 }
