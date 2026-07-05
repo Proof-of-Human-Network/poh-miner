@@ -3663,9 +3663,10 @@ export class PohMinerNode {
           const blocks = await r.json();
           if (Array.isArray(blocks) && blocks.length > 0) {
             const peerBlock  = PohBlock.fromJSON ? PohBlock.fromJSON(blocks[0]) : new PohBlock(blocks[0]);
-            const peerHash   = peerBlock.getHashSync();
-            const localBlock = this.chain[forkCheckHeight - chainOffset];
-            const localHash  = localBlock?.getHashSync();
+            const peerHash   = peerBlock.blockHash || peerBlock.getHashSync();
+            const localBlock = this.chain.find(b => b.height === forkCheckHeight)
+              ?? this.chain[forkCheckHeight - chainOffset];
+            const localHash  = localBlock?.blockHash || localBlock?.getHashSync();
             if (localHash && peerHash !== localHash) {
               isFork = true;
               console.warn(`[PoH-Miner] Fork detected at block ${forkCheckHeight} (local: ${localHash.slice(0, 8)}… vs peer: ${peerHash.slice(0, 8)}…) — wiping local chain and resyncing`);
@@ -3744,7 +3745,7 @@ export class PohMinerNode {
     //   - incremental: peer is simply ahead (or we only have genesis), append new blocks
     //   - partial reorg: competing tip (fork at local tip only), keep common prefix and download tail
     //   - full fresh start: deep fork only (genesis-only local chain is handled incrementally now)
-    const isFreshStart = isFork; // no longer treat genesis-only as fresh-start
+    let isFreshStart = isFork; // no longer treat genesis-only as fresh-start
     let localHeight = -1;
     if (!isFreshStart) {
       localHeight = localChainHeight;  // incremental from actual tip height (or 0 if genesis-only)
@@ -3756,7 +3757,7 @@ export class PohMinerNode {
     }
     // else: full fresh start (localHeight stays -1, downloads from genesis)
     // Save before the download loop mutates localHeight — used for anchor lookup after download.
-    const anchorHeight = localHeight;
+    let anchorHeight = localHeight;
 
     // Nothing to do: peer not taller and not a fork
     if (bestHeight <= localChainHeight && !isFork && compareChainWork(bestWork, localWork) <= 0) return;
@@ -3798,7 +3799,17 @@ export class PohMinerNode {
               added++;
             }
           }
-          if (!added) break;
+          if (!added) {
+            if (!isFreshStart && compareChainWork(bestWork, localWork) > 0) {
+              console.warn(`[PoH-Miner] Incremental sync stalled at height ${localChainHeight} — full resync from ${bestLabel}`);
+              isFreshStart = true;
+              localHeight = -1;
+              anchorHeight = -1;
+              downloadedBlocks.length = 0;
+              continue;
+            }
+            break;
+          }
         }
         localHeight = to;
       } catch (e) {
