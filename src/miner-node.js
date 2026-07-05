@@ -2834,11 +2834,19 @@ export class PohMinerNode {
       }
 
       if (req.method === 'GET' && url.pathname === '/chain/blocks') {
-        const from  = Math.max(0, parseInt(url.searchParams.get('from') || '0'));
-        const to    = Math.min(this.chain.length - 1, parseInt(url.searchParams.get('to') || String(this.chain.length - 1)));
-        const limit = 500; // cap per request to avoid OOM
-        const slice = this.chain.slice(from, Math.min(to + 1, from + limit));
-        res.end(JSON.stringify(slice.map(b => b.toJSON ? b.toJSON() : b)));
+        const from = parseInt(url.searchParams.get('from') || '0', 10);
+        let to = parseInt(url.searchParams.get('to') || String(this.chain[this.chain.length - 1]?.height ?? 0), 10);
+        if (!Number.isFinite(from) || !Number.isFinite(to) || from < 0 || to < from) {
+          res.statusCode = 400;
+          res.end(JSON.stringify({ error: 'invalid from/to range' }));
+          return;
+        }
+        const limit = 500;
+        if (to - from + 1 > limit) to = from + limit - 1;
+        const blocks = this.chain
+          .filter(b => b.height >= from && b.height <= to)
+          .map(b => b.toJSON ? b.toJSON() : b);
+        res.end(JSON.stringify(blocks));
         return;
       }
 
