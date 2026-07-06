@@ -55,17 +55,26 @@ export class ChainStore {
     }
   }
 
-  // Full rewrite — used for reorgs, batch sync saves, and genesis init
+  // Full rewrite — used for reorgs and fresh-start sync.
+  // Writes ndjson only (canonical source). chain.json is no longer maintained
+  // because at 49k+ blocks it is 280MB+ and the synchronous JSON.stringify+writeFileSync
+  // blocks the event loop for 10-30 seconds on every call.
   saveChain(chain) {
     try {
-      const toSave = chain;
-      // Rewrite ndjson (canonical source)
-      const lines = toSave.map(b => JSON.stringify(b.toJSON ? b.toJSON() : b)).join('\n');
+      const lines = chain.map(b => JSON.stringify(b.toJSON ? b.toJSON() : b)).join('\n');
       fs.writeFileSync(this.appendFile, lines + (lines ? '\n' : ''));
-      // Keep chain.json as a human-readable backup
-      fs.writeFileSync(this.chainFile, JSON.stringify(toSave, null, 2));
     } catch (err) {
       console.error('[ChainStore] Failed to save chain:', err.message);
+    }
+  }
+
+  // Async version — use after fresh-start sync to avoid blocking the event loop.
+  async saveChainAsync(chain) {
+    try {
+      const lines = chain.map(b => JSON.stringify(b.toJSON ? b.toJSON() : b)).join('\n');
+      await fs.promises.writeFile(this.appendFile, lines + (lines ? '\n' : ''));
+    } catch (err) {
+      console.error('[ChainStore] Failed to save chain (async):', err.message);
     }
   }
 }

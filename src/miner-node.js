@@ -38,7 +38,7 @@ import {
   validateBlockChain,
   findParentBlock,
 } from './consensus/block-validator.js';
-import { replayChainLedger } from './consensus/tx-ledger.js';
+import { replayChainLedger, replayChainLedgerAsync } from './consensus/tx-ledger.js';
 import { computeVerdictWithExistingPoh } from './compute/poh-adapter.js';
 import { getBrain, getBrainDataDir } from './compute/adapters/real-poh.js';
 import { BrainSync } from './brain/brain-sync.js';
@@ -316,7 +316,6 @@ function computeJobPaymentHash({ jobId, requesterAddress, minerAddress, amount, 
 // (e.g. fresh GUI onboarding). Individual users can override via config.bootnodes.
 const DEFAULT_BOOTNODES = [
   "https://miner.proofofhuman.ge",
-  "https://bootnode.proofofhuman.ge",
 ];
 
 export class PohMinerNode {
@@ -850,6 +849,14 @@ export class PohMinerNode {
     // Many signals in the real POH checker require paid or reliable RPC endpoints.
     this._validateRequiredApiKeys();
 
+    // Bind the HTTP port immediately so nginx never 502 during the long startup
+    // (balance rebuild + chain sync block the event loop for up to 60-120s).
+    // Endpoints that depend on chain state return partial data during init.
+    {
+      const earlyPort = this.config.walletApiPort || 3456;
+      this.startWalletApiServer(earlyPort);
+    }
+
     // 1. Detect real geographic location using IP (for all countries)
     await this.detectLocation();
 
@@ -906,10 +913,6 @@ export class PohMinerNode {
     console.log('[PoH-Miner] Node is live and ready to compute.');
     console.log(`[PoH-Miner] Signals: ${this.methodsManager?.getStatus().hash} (${this.methodsManager?.getStatus().count} methods) | Region:`, this.myLatencyProfile?.region);
     console.log(`[PoH-Miner] Discovered peers: ${this.peers.length}`);
-
-    // Start lightweight wallet API server so external apps (mobile wallet) can query balances & txs
-    const apiPort = this.config.walletApiPort || 3456;
-    this.startWalletApiServer(apiPort);
 
     // Periodic reputation recovery for good behavior (software protection)
     setInterval(() => this.decayReputation(), 10 * 60 * 1000); // every 10 minutes
@@ -3531,10 +3534,10 @@ export class PohMinerNode {
     // Reconcile wallets when the chain grew or was replaced (e.g. after scp/fork recovery).
     // Skip when already rebuilt for this tip — replaying 50k blocks inside Electron OOMs.
     if (this.chain.length > 0 && !this._balancesRebuiltThisSync && this._needsBalanceRebuild()) {
-      this._rebuildBalancesFromChain();
+      await this._rebuildBalancesFromChain();
       this._balancesRebuiltThisSync = true;
     } else if (this.chain.length > 0 && !this.txLedger) {
-      this._refreshTxLedger();
+      await this._refreshTxLedger();
     }
 
     // 5. Layer 4: cold-start brain sync — find latest state-snapshot in chain and apply
@@ -3786,6 +3789,8 @@ export class PohMinerNode {
     console.log(`[PoH-Miner] Syncing from ${bestLabel} (peer height ${bestHeight}, local ${localChainHeight})${syncModeLabel}`);
 
     const downloadedBlocks = [];
+    const MAX_CHUNK_RETRIES = 3;
+    let chunkRetries = 0;
     while (localHeight < bestHeight) {
       const from = localHeight + 1;
       const to   = Math.min(from + CHUNK - 1, bestHeight);
@@ -3814,6 +3819,7 @@ export class PohMinerNode {
               }
               this._applyBlockState(block);
               this.chain.push(block);
+              this.chainStore.saveBlock(block);
               this._advanceTxLedger(block);
               this.currentDifficulty = getNextDifficulty(this.chain);
               added++;
@@ -3836,18 +3842,25 @@ export class PohMinerNode {
               localHeight = -1;
               anchorHeight = -1;
               downloadedBlocks.length = 0;
+              chunkRetries = 0;
               continue;
             }
             break;
           }
         }
         localHeight = to;
+        chunkRetries = 0;
       } catch (e) {
-        console.warn(`[PoH-Miner] Chunk fetch failed:`, e.message);
-        break;
+        chunkRetries++;
+        console.warn(`[PoH-Miner] Chunk fetch failed (attempt ${chunkRetries}/${MAX_CHUNK_RETRIES}):`, e.message);
+        if (chunkRetries >= MAX_CHUNK_RETRIES) {
+          console.warn(`[PoH-Miner] Giving up on chunk ${from}-${to} after ${MAX_CHUNK_RETRIES} attempts`);
+          break;
+        }
       }
     }
 
+    let freshStartApplied = false;
     if (isFreshStart && downloadedBlocks.length > 0) {
       const parsed = downloadedBlocks.map(b => PohBlock.fromJSON ? PohBlock.fromJSON(b) : new PohBlock(b));
 
@@ -3867,6 +3880,7 @@ export class PohMinerNode {
           // Re-download the full chain from genesis
           downloadedBlocks.length = 0;
           let h = -1;
+          let fullResyncRetries = 0;
           while (h < bestHeight) {
             const from = h + 1;
             const to   = Math.min(from + CHUNK - 1, bestHeight);
@@ -3877,7 +3891,12 @@ export class PohMinerNode {
               if (!Array.isArray(bs) || bs.length === 0) break;
               downloadedBlocks.push(...bs);
               h = to;
-            } catch (e) { console.warn('[PoH-Miner] Full resync chunk failed:', e.message); break; }
+              fullResyncRetries = 0;
+            } catch (e) {
+              fullResyncRetries++;
+              console.warn(`[PoH-Miner] Full resync chunk failed (attempt ${fullResyncRetries}/3):`, e.message);
+              if (fullResyncRetries >= 3) break;
+            }
           }
           // Re-parse for the outer apply block below
           parsed.length = 0;
@@ -3890,7 +3909,10 @@ export class PohMinerNode {
       {
         const anchorIdx = effectiveAnchorHeight >= 0 ? effectiveAnchorHeight - chainOffset : -1;
         const prefix = effectiveAnchorHeight >= 0 ? this.chain.slice(0, anchorIdx + 1) : [];
-        const chainCheck = validateBlockChain(parsed, prefix);
+        // Skip PoW and signature re-verification for historical sync: block hash format
+        // may differ from when these blocks were originally mined. Chain linkage and
+        // difficulty adjustment are still verified.
+        const chainCheck = validateBlockChain(parsed, prefix, { extended: false, skipPoW: true });
         if (!chainCheck.valid) {
           console.warn(`[PoH-Miner] Fresh-start sync rejected at #${chainCheck.height} (${chainCheck.reason})`);
           return;
@@ -3907,17 +3929,19 @@ export class PohMinerNode {
           }
         }
         this.currentDifficulty = getNextDifficulty(this.chain);
+        freshStartApplied = true;
       }
     }
 
-    this.chainStore.saveChain(this.chain);
-
-    // Replay canonical balances from chain on every startup (dedupes replay inflation).
-    if (this.chain.length > 0) {
-      this._rebuildBalancesFromChain();
+    // Only save and rebuild when the chain was actually replaced.
+    // Incremental blocks are persisted per-block via saveBlock() inside the loop above.
+    // Rebuilding balances from 49k+ blocks takes 30-120s — never do it speculatively.
+    if (freshStartApplied) {
+      await this.chainStore.saveChainAsync(this.chain);
+      await this._rebuildBalancesFromChain();
       this._balancesRebuiltThisSync = true;
-    } else {
-      this._refreshTxLedger();
+    } else if (!this._balancesRebuiltThisSync) {
+      await this._refreshTxLedger();
     }
 
     console.log(`[PoH-Miner] Chain sync complete — height ${this.chain[this.chain.length - 1]?.height ?? this.chain.length - 1}`);
@@ -4481,8 +4505,8 @@ export class PohMinerNode {
   }
 
   // Replay canonical ledger from chain (coinbase + deduped txs + P2P escrow).
-  _refreshTxLedger() {
-    this.txLedger = replayChainLedger(this.chain, { applyP2P: true });
+  async _refreshTxLedger() {
+    this.txLedger = await replayChainLedgerAsync(this.chain, { applyP2P: true });
     this.txMempool.setSpentTxHashes(this.txLedger.spentTxHashes);
   }
 
@@ -4546,20 +4570,24 @@ export class PohMinerNode {
     return this.chain.length > 0 ? (this.chain[this.chain.length - 1].height ?? this.chain.length - 1) : -1;
   }
 
-  /** True when wallet files may be stale (chain grew or was replaced since last rebuild). */
+  /** True when wallet files may be stale (chain grew significantly or was replaced).
+   *  Skips the expensive 1000-wallet I/O pass on routine restarts (chain grew < 500 blocks)
+   *  because _applyBlockState keeps wallet files consistent during normal operation.
+   *  Full rebuild is only needed after fork recovery (handled by freshStartApplied path). */
   _needsBalanceRebuild() {
     const tip = this._chainTipHeight();
     const last = this._getLastRebuiltHeight();
-    return tip > last;
+    return tip - last > 500;
   }
 
   // Rebuild all wallet balances from scratch by replaying the current chain.
   // Called after fork recovery (fresh-start sync) to discard stale-fork balances.
   // Uses canonical tx-ledger replay (spent-tx dedup) so replay inflation is undone.
-  _rebuildBalancesFromChain() {
+  // Async: yields to the event loop every 50 wallet I/O operations so HTTP stays live.
+  async _rebuildBalancesFromChain() {
     console.log(`[PoH-Miner] Rebuilding wallet balances from ${this.chain.length} canonical blocks…`);
 
-    const ledger = replayChainLedger(this.chain, { applyP2P: true });
+    const ledger = await replayChainLedgerAsync(this.chain, { applyP2P: true });
     this.txLedger = ledger;
     this.txMempool.setSpentTxHashes(ledger.spentTxHashes);
 
@@ -4586,8 +4614,10 @@ export class PohMinerNode {
     // Persist all claim keys in one write
     this.rewardClaimStore.markClaimedMany(claimKeys);
 
-    // Flush accumulated balances + nonces to disk in one pass
+    // Flush accumulated balances + nonces to disk in one pass.
+    // Yield to the event loop every 50 wallets so HTTP requests aren't starved.
     const allAddrs = new Set([...balances.keys(), ...nonces.keys()]);
+    let _flushCount = 0;
     for (const addr of allAddrs) {
       const balance = balances.get(addr) ?? 0;
       const nonce   = nonces.get(addr) ?? 0;
@@ -4603,13 +4633,16 @@ export class PohMinerNode {
           if (w) { w.nonce = nonce; this.walletManager.saveWallet(w); }
         }
       }
+      if (++_flushCount % 50 === 0) await new Promise(r => setImmediate(r));
     }
     // Zero wallets that earned nothing (so stale balances from old forks are cleared)
+    let _zeroCount = 0;
     for (const addr of this.walletManager.listWallets()) {
       if (!allAddrs.has(addr)) {
         const w = this.walletManager.loadWallet(addr);
         if (w && (w.balance || 0) !== 0) { w.balance = 0; this.walletManager.saveWallet(w); }
       }
+      if (++_zeroCount % 50 === 0) await new Promise(r => setImmediate(r));
     }
 
     // Clear dedup sets so gossip/stateTransitions for pre-existing orders

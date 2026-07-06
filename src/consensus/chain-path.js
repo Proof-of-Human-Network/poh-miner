@@ -4,19 +4,18 @@ export function blockId(block) {
   return block.blockHash || (typeof block.getHashSync === 'function' ? block.getHashSync() : null);
 }
 
-/** Walk the active tip path; return blocks for [from, to] in ascending height order. */
+/** Return blocks for [from, to] in ascending height order.
+ *  Uses O(1) height-indexed lookup — the chain array is sequential. */
 export function blocksOnTipPath(chain, from, to) {
   if (!chain?.length) return [];
-  let cur = chain[chain.length - 1];
-  const path = new Map();
-  while (cur && cur.height >= from) {
-    path.set(cur.height, cur);
-    if (cur.height === 0) break;
-    cur = chain.find(b => blockId(b) === cur.previousHash) ?? null;
-  }
+  const offset = chain[0]?.height ?? 0;
   const out = [];
   for (let h = from; h <= to; h++) {
-    if (path.has(h)) out.push(path.get(h));
+    const idx = h - offset;
+    const block = (idx >= 0 && idx < chain.length && chain[idx]?.height === h)
+      ? chain[idx]
+      : chain.find(b => b.height === h);
+    if (block) out.push(block);
   }
   return out;
 }

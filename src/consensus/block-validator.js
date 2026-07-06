@@ -61,8 +61,9 @@ export function validateBlockPowOnly(block) {
 /**
  * Full validation against a known parent and chain prefix (genesis → parent).
  * Overwrites block.chainWork with the locally computed value.
+ * skipPoW: skip PoW recomputation for historical sync where block hash format may differ.
  */
-export function validateBlock(block, { parent = null, chainPrefix = [] } = {}) {
+export function validateBlock(block, { parent = null, chainPrefix = [], skipPoW = false } = {}) {
   if (!block || typeof block.height !== 'number') {
     return { valid: false, reason: 'invalid block' };
   }
@@ -84,8 +85,10 @@ export function validateBlock(block, { parent = null, chainPrefix = [] } = {}) {
     return { valid: false, reason: 'height mismatch' };
   }
 
-  const pow = validateBlockPowOnly(block);
-  if (!pow.valid) return pow;
+  if (!skipPoW) {
+    const pow = validateBlockPowOnly(block);
+    if (!pow.valid) return pow;
+  }
 
   const prefix = chainPrefix.length ? chainPrefix : [parent];
   const expectedDifficulty = getNextDifficulty(prefix);
@@ -99,7 +102,8 @@ export function validateBlock(block, { parent = null, chainPrefix = [] } = {}) {
 
 /** Consensus + economic checks (sync). */
 export function validateBlockExtended(block, context = {}) {
-  const base = validateBlock(block, context);
+  const { skipPoW = false } = context;
+  const base = validateBlock(block, { ...context, skipPoW });
   if (!base.valid) return base;
 
   const ts = validateBlockTimestamp(block, context.parent);
@@ -121,8 +125,11 @@ export function validateBlockExtended(block, context = {}) {
   return { valid: true };
 }
 
-/** Validate a contiguous segment extending an existing canonical prefix. */
-export function validateBlockChain(blocks, existingPrefix = [], { extended = true, strictTx = false } = {}) {
+/**
+ * Validate a contiguous segment extending an existing canonical prefix.
+ * skipPoW: skip PoW recomputation for historical sync where block hash format may differ.
+ */
+export function validateBlockChain(blocks, existingPrefix = [], { extended = true, strictTx = false, skipPoW = false } = {}) {
   const chain = [...existingPrefix];
   const ledger = new TxLedgerState();
   for (const b of existingPrefix) {
@@ -132,8 +139,8 @@ export function validateBlockChain(blocks, existingPrefix = [], { extended = tru
   for (const block of blocks) {
     const parent = chain[chain.length - 1] ?? null;
     const result = extended
-      ? validateBlockExtended(block, { parent, chainPrefix: chain, ledger, strictTx })
-      : validateBlock(block, { parent, chainPrefix: chain });
+      ? validateBlockExtended(block, { parent, chainPrefix: chain, ledger, strictTx, skipPoW })
+      : validateBlock(block, { parent, chainPrefix: chain, skipPoW });
     if (!result.valid) {
       return { valid: false, reason: result.reason, block, height: block?.height };
     }

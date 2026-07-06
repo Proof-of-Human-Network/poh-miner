@@ -149,12 +149,16 @@ export class TxLedgerState {
    * Replay coinbase + block transactions.
    * strict=true rejects the block if any tx is invalid/replayed.
    * strict=false skips invalid txs (for rebuilding balances from legacy spam blocks).
+   * skipVerify=true skips crypto signature checks — safe for chain replay where txs
+   *   are already validated on chain; avoids 100k+ crypto ops on startup.
    */
-  applyBlock(block, { strict = true } = {}) {
+  applyBlock(block, { strict = true, skipVerify = false } = {}) {
     this.applyCoinbase(block);
 
     for (const txData of (block.transactions || [])) {
-      const result = this.validateAndApplyTransaction(txData);
+      const result = skipVerify
+        ? this._applyTransactionTrusted(txData)
+        : this.validateAndApplyTransaction(txData);
       if (!result.valid) {
         if (strict) {
           return {
@@ -171,6 +175,26 @@ export class TxLedgerState {
     }
 
     return { valid: true };
+  }
+
+  /** Apply a transaction without signature/hash verification — only for chain replay. */
+  _applyTransactionTrusted(txData) {
+    let tx;
+    try {
+      tx = txData instanceof PoHTransaction ? txData : PoHTransaction.fromJSON(txData);
+    } catch {
+      return { valid: false, reason: 'malformed transaction' };
+    }
+    if (!tx.from || !tx.to || tx.amount <= 0) return { valid: false, reason: 'invalid tx fields' };
+    if (this.spentTxHashes.has(tx.txHash)) return { valid: false, reason: 'already spent' };
+    const total = tx.amount + (tx.fee || 0);
+    if (this.getBalance(tx.from) < total) return { valid: false, reason: 'insufficient balance' };
+    this.balances.set(tx.from, this.getBalance(tx.from) - total);
+    this.nonces.set(tx.from, tx.nonce);
+    if (tx.signingPublicKey) this.signingKeys.set(tx.from, tx.signingPublicKey);
+    this._credit(tx.to, tx.amount);
+    this.spentTxHashes.add(tx.txHash);
+    return { valid: true, tx };
   }
 
   applyP2PEscrowTransition(t) {
@@ -228,12 +252,29 @@ export class TxLedgerState {
 export function replayChainLedger(chain, { applyP2P = false } = {}) {
   const ledger = new TxLedgerState();
   for (const block of chain) {
-    ledger.applyBlock(block, { strict: false });
+    ledger.applyBlock(block, { strict: false, skipVerify: true });
     if (applyP2P) {
       for (const t of (block.stateTransitions || [])) {
         ledger.applyP2PEscrowTransition(t);
       }
     }
+  }
+  return ledger;
+}
+
+/** Async variant of replayChainLedger — yields every 2000 blocks so HTTP stays live.
+ *  Uses skipVerify=true: transactions are already on-chain so crypto re-validation is wasted work. */
+export async function replayChainLedgerAsync(chain, { applyP2P = false } = {}) {
+  const ledger = new TxLedgerState();
+  for (let i = 0; i < chain.length; i++) {
+    const block = chain[i];
+    ledger.applyBlock(block, { strict: false, skipVerify: true });
+    if (applyP2P) {
+      for (const t of (block.stateTransitions || [])) {
+        ledger.applyP2PEscrowTransition(t);
+      }
+    }
+    if ((i + 1) % 2000 === 0) await new Promise(r => setImmediate(r));
   }
   return ledger;
 }

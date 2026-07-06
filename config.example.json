@@ -10,7 +10,6 @@
   "region": "auto",
 
   "bootnodes": [
-    "https://bootnode.proofofhuman.ge",
     "https://miner.proofofhuman.ge"
   ],
 
