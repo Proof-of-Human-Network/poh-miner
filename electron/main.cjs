@@ -706,6 +706,28 @@ ipcMain.handle('onboarding:get-status', async () => {
   };
 });
 
+// Hardware-aware model options for the first-run "which LLM to download" step.
+ipcMain.handle('onboarding:get-model-options', async () => {
+  const { getModelOptions, describeHardware } = await import(
+    pathToFileURL(path.join(__dirname, '../src/setup/model-picker.js')).href);
+  const opts = getModelOptions();
+  return {
+    hardwareSummary: describeHardware(opts.hardware),
+    hardware: opts.hardware,
+    recommended: opts.recommended,
+    // Unique, smallest → largest (tiers can collapse on small machines).
+    options: [opts.small, opts.medium, opts.large].filter(
+      (t, i, arr) => arr.findIndex(x => x.name === t.name) === i),
+  };
+});
+
+// Persist the chosen model and mark the picker done.
+ipcMain.handle('onboarding:set-model', async (_event, model) => {
+  if (!model || typeof model !== 'string') return { ok: false, error: 'invalid model' };
+  saveConfig({ model, modelSelected: true });
+  return { ok: true, model };
+});
+
 ipcMain.handle('onboarding:create-poh-wallet', async () => {
   // Dynamic import because src/wallet/wallet.js is an ES Module
   const { WalletManager } = await import('../src/wallet/wallet.js');

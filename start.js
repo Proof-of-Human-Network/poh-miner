@@ -51,6 +51,49 @@ async function warmUpQvac(model) {
   }
 }
 
+// First-run model picker: ask which LLM to download, with three options graded
+// relative to the detected hardware (a "large" model on an 8 GB laptop differs
+// from "large" on a 128 GB workstation). No-op once chosen or without a TTY.
+async function chooseModelFirstRun(config, configPath) {
+  if (config.modelSelected || !process.stdin.isTTY) return config.model || 'qwen3-1.7b';
+  try {
+    const readline = await import('node:readline');
+    const { saveConfig } = await import('./src/config.js');
+    const { getModelOptions, describeHardware } = await import('./src/setup/model-picker.js');
+    const opts = getModelOptions();
+
+    // Unique models, smallest → largest (tiers can collapse on small machines).
+    const ordered = [opts.small, opts.medium, opts.large];
+    const choices = [];
+    const seen = new Set();
+    for (const t of ordered) { if (!seen.has(t.name)) { seen.add(t.name); choices.push(t); } }
+    const recIdx = Math.max(0, choices.findIndex(c => c.name === opts.recommended));
+
+    console.log('\nWhich AI model should the miner download and run?');
+    console.log('  Detected: ' + describeHardware(opts.hardware) + '\n');
+    choices.forEach((c, i) => {
+      const rec = i === recIdx ? '  ← recommended' : '';
+      console.log(`  ${i + 1}) ${c.tier.toUpperCase().padEnd(6)} ${c.label.padEnd(12)} ~${c.approxDownloadGB} GB${rec}`);
+      console.log(`       ${c.blurb}`);
+    });
+
+    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+    const answer = await new Promise(r => rl.question(`\nSelect 1-${choices.length} [default ${recIdx + 1}]: `, r));
+    rl.close();
+    const pick = parseInt(answer.trim(), 10);
+    const chosen = (pick >= 1 && pick <= choices.length) ? choices[pick - 1] : choices[recIdx];
+
+    config.model = chosen.name;
+    config.modelSelected = true;
+    try { saveConfig(config, configPath); } catch { /* non-fatal */ }
+    console.log(`\n✓ Using ${chosen.label} (${chosen.name}). Change it later in config.json ("model") or Settings.\n`);
+    return chosen.name;
+  } catch (e) {
+    console.warn(`   ⚠️  Model picker skipped (${e.message}); using ${config.model || 'qwen3-1.7b'}.`);
+    return config.model || 'qwen3-1.7b';
+  }
+}
+
 async function startProject() {
   const { PohMinerNode } = await import('./src/miner-node.js');
   const { loadConfig }   = await import('./src/config.js');
@@ -67,7 +110,8 @@ async function startProject() {
   const locationNote = source.includes('local') ? ' (local project config)' : '';
   console.log(`Using config: ${configPath}${locationNote}\n`);
 
-  await warmUpQvac(config.model || 'qwen3-1.7b');
+  const chosenModel = await chooseModelFirstRun(config, configPath);
+  await warmUpQvac(chosenModel || config.model || 'qwen3-1.7b');
 
   const node = new PohMinerNode(config);
   await node.start();

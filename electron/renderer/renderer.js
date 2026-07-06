@@ -486,21 +486,81 @@ async function runAiSetupStep() {
 
   // 1. Check current state (which QVAC model, and whether it's already loaded)
   const state = await window.pohMinerAPI.setup.check();
-  const MODEL = state.model || 'qwen3-1.7b';
 
   if (state.ready) {
     if (modelIcon) modelIcon.textContent = '✅';
-    if (modelStatus) modelStatus.textContent = `Ready (${MODEL})`;
+    if (modelStatus) modelStatus.textContent = `Ready (${state.model || 'qwen3-1.7b'})`;
     if (continueBtn) continueBtn.disabled = false;
     showOnboardingStep('welcome');
     return;
   }
 
-  // 2. Warm up the model (downloads on first run, then loads into memory).
-  if (modelIcon) modelIcon.textContent = '⬇️';
+  // 2. First-run picker: choose a model graded for this machine, then warm it up.
+  const MODEL = await promptModelChoice(state.model || 'qwen3-1.7b');
+
+  const picker   = document.getElementById('model-picker');
+  const progress = document.getElementById('model-progress');
+  if (picker)   picker.classList.add('hidden');
+  if (progress) progress.classList.remove('hidden');
+
   if (modelStatus) modelStatus.textContent = `Preparing ${MODEL} (first run downloads it)…`;
+  if (modelIcon) modelIcon.textContent = '⬇️';
   if (progressWrap) progressWrap.classList.remove('hidden');
   await window.pohMinerAPI.setup.pullModel(MODEL);
+}
+
+// Render three hardware-graded model options and resolve with the user's pick
+// (also persists it via onboarding.setModel). Falls back to the default model
+// if the options can't be loaded.
+async function promptModelChoice(fallback) {
+  const picker   = document.getElementById('model-picker');
+  const progress = document.getElementById('model-progress');
+  const hwEl     = document.getElementById('model-hw-summary');
+  const optsEl   = document.getElementById('model-options');
+  const btn      = document.getElementById('model-download-btn');
+  if (!picker || !optsEl || !btn) return fallback;
+
+  if (progress) progress.classList.add('hidden');
+  picker.classList.remove('hidden');
+
+  let data;
+  try { data = await window.pohMinerAPI.onboarding.getModelOptions(); }
+  catch { return fallback; }
+  if (!data?.options?.length) return fallback;
+
+  if (hwEl) hwEl.textContent = data.hardwareSummary || '';
+  const tierLabel = { small: 'Small', medium: 'Medium', large: 'Large' };
+  let selected = data.recommended || data.options[0].name;
+
+  const paint = () => optsEl.querySelectorAll('label').forEach(l => {
+    const on = l.getAttribute('data-model') === selected;
+    l.classList.toggle('border-[#22c55e]', on);
+    l.classList.toggle('bg-[#22c55e]/10', on);
+    l.classList.toggle('border-white/10', !on);
+  });
+
+  optsEl.innerHTML = data.options.map(o => `
+    <label data-model="${o.name}" class="flex items-start gap-3 p-3 rounded-2xl border cursor-pointer">
+      <input type="radio" name="model-choice" value="${o.name}" ${o.name === selected ? 'checked' : ''} class="mt-1 accent-[#22c55e]">
+      <div class="flex-1">
+        <div class="text-sm font-medium">${tierLabel[o.tier] || o.tier} · ${o.label}
+          <span class="text-xs text-zinc-500">~${o.approxDownloadGB} GB${o.name === data.recommended ? ' · recommended' : ''}</span></div>
+        <div class="text-xs text-zinc-500">${o.blurb}</div>
+      </div>
+    </label>`).join('');
+  paint();
+
+  optsEl.querySelectorAll('input[name="model-choice"]').forEach(r =>
+    r.addEventListener('change', () => { selected = r.value; paint(); }));
+
+  btn.disabled = false;
+  return await new Promise(resolve => {
+    btn.onclick = async () => {
+      btn.disabled = true;
+      try { await window.pohMinerAPI.onboarding.setModel(selected); } catch { /* non-fatal */ }
+      resolve(selected);
+    };
+  });
 }
 
 function showOnboardingStep(step) {
