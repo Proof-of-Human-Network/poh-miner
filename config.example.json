@@ -59,6 +59,15 @@
     "indexJobs": "poh-chat-history"
   },
 
+  "_comment_ipfs": "Local IPFS (Kubo) auto-starts to back up chain + brain state. Binary auto-downloads to ~/.poh-miner/bin on first run; repo in ~/.poh-miner/ipfs. Gateway is 8081 to avoid the bootnode's 8080. Set autoStart:false or env POH_SKIP_IPFS=1 to disable.",
+  "ipfs": {
+    "autoStart": true,
+    "apiPort": 5001,
+    "gatewayPort": 8081,
+    "bindHost": "127.0.0.1",
+    "startupTimeoutMs": 60000
+  },
+
   "_comment_genesisAlloc": "Optional: pre-fund addresses at block 0 on a clean network start. Amounts in raw POH (1 POH = 1000000000 raw). Only applied once when chain is empty.",
   "genesisAlloc": {
     "poh_YOUR_WALLET_HERE": 1000000000000

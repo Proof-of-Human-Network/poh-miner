@@ -15,10 +15,10 @@
  * No npm dependency required — all I/O via the built-in fetch API (Node 18+).
  */
 
-const KUBO_API      = 'http://127.0.0.1:5001/api/v0';
-const KUBO_GATEWAY  = 'http://127.0.0.1:8080/ipfs/';
-const PUBLIC_GATEWAYS = [
-  KUBO_GATEWAY,
+// Local Kubo gateway defaults to 8081 (NOT 8080 — the PoH bootnode owns 8080).
+const DEFAULT_KUBO_API_BASE     = 'http://127.0.0.1:5001';
+const DEFAULT_KUBO_GATEWAY_BASE = 'http://127.0.0.1:8081';
+const REMOTE_GATEWAYS = [
   'https://ipfs.io/ipfs/',
   'https://cloudflare-ipfs.com/ipfs/',
   'https://gateway.pinata.cloud/ipfs/',
@@ -26,10 +26,15 @@ const PUBLIC_GATEWAYS = [
 const TIMEOUT_MS = 10_000;
 
 export class IPFSStore {
-  constructor({ apiUrl, apiKey } = {}) {
+  constructor({ apiUrl, apiKey, kuboApiBase, kuboGatewayBase } = {}) {
     // Explicit override > env vars
     this.apiUrl = apiUrl || process.env.IPFS_API_URL || null;
     this.apiKey = apiKey || process.env.IPFS_API_KEY || null;
+    // Local Kubo endpoints — kept in sync with the managed daemon's ports.
+    const apiBase = (kuboApiBase || process.env.KUBO_API_BASE || DEFAULT_KUBO_API_BASE).replace(/\/$/, '');
+    const gwBase  = (kuboGatewayBase || process.env.KUBO_GATEWAY_BASE || DEFAULT_KUBO_GATEWAY_BASE).replace(/\/$/, '');
+    this.kuboApi   = `${apiBase}/api/v0`;
+    this.gateways  = [`${gwBase}/ipfs/`, ...REMOTE_GATEWAYS];
     this._kuboAvailable = null; // null = unknown, true/false after first probe
   }
 
@@ -38,7 +43,7 @@ export class IPFSStore {
   async _probeKubo() {
     if (this._kuboAvailable !== null) return this._kuboAvailable;
     try {
-      const res = await fetch(`${KUBO_API}/version`, {
+      const res = await fetch(`${this.kuboApi}/version`, {
         method: 'POST',
         signal: AbortSignal.timeout(2000),
       });
@@ -81,7 +86,7 @@ export class IPFSStore {
     try {
       const form = new FormData();
       form.append('file', new Blob([body]), filename);
-      const res = await fetch(`${KUBO_API}/add?pin=true&quieter=true`, {
+      const res = await fetch(`${this.kuboApi}/add?pin=true&quieter=true`, {
         method: 'POST',
         body: form,
         signal: AbortSignal.timeout(TIMEOUT_MS),
@@ -119,7 +124,7 @@ export class IPFSStore {
    * Returns the raw text, or null if unreachable.
    */
   async get(cid) {
-    for (const gw of PUBLIC_GATEWAYS) {
+    for (const gw of this.gateways) {
       try {
         const res = await fetch(`${gw}${cid}`, {
           signal: AbortSignal.timeout(TIMEOUT_MS),

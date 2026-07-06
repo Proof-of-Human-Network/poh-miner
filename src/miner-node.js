@@ -45,6 +45,7 @@ import { BrainSync } from './brain/brain-sync.js';
 import { PoHTransaction, TxMempool } from './core/transaction.js';
 import { BalanceJournal } from './storage/balance-journal.js';
 import { IPFSSync } from './storage/ipfs-sync.js';
+import { ensureKubo, kuboApiUrl, kuboGatewayUrl } from './storage/kubo-server.js';
 import fs from 'fs';
 import path from 'path';
 import { execSync as _execSync } from 'child_process';
@@ -490,11 +491,18 @@ export class PohMinerNode {
     this._skillPrefs         = new Set(); // explicitly enabled skillIds
     this._explicitDisabled   = new Set(); // user-turned-off skills from the default-on set
 
-    // IPFSSync — durability layer for chain + brain state
+    // IPFSSync — durability layer for chain + brain state.
+    // Point the store at the locally-managed Kubo daemon's ports (config.ipfs)
+    // so pins (API) and reads (gateway) hit our node, not the default 8080.
+    const ipfsCfg = this.config.ipfs || {};
     this.ipfsSync = new IPFSSync({
       chain:          this.chain,          // live reference
       bootnodes:      this.config.bootnodes,
       identityWallet: this.identityWallet,
+      storeOpts: {
+        kuboApiBase:     kuboApiUrl(ipfsCfg),
+        kuboGatewayBase: kuboGatewayUrl(ipfsCfg),
+      },
     });
 
     // Load built-in skills from src/skills/builtin/ and user skills from brain data dir
@@ -865,6 +873,21 @@ export class PohMinerNode {
     this.methodsManager = await getMethodsManager();
     const status = this.methodsManager.getStatus();
     console.log(`[PoH-Miner] Active signals: ${status.count} (hash=${status.hash}, source=${status.source})`);
+
+    // 2c. Local IPFS (Kubo) — the write backend that makes chain/brain backups
+    // work out of the box. Best-effort: if it can't start, pinning is skipped
+    // and the node keeps running. Started before syncChain so chain bootstrap
+    // from an IPFS snapshot can also use it.
+    {
+      const ipfsCfg = this.config.ipfs || {};
+      this._kuboDaemon = await ensureKubo(ipfsCfg);
+      if (this._kuboDaemon) {
+        const stopKubo = () => { try { this._kuboDaemon?.stop(); } catch { /* */ } };
+        process.on('exit', stopKubo);
+        process.on('SIGINT', stopKubo);
+        process.on('SIGTERM', stopKubo);
+      }
+    }
 
     // 3. Bootstrap / sync the chain
     await this.syncChain();

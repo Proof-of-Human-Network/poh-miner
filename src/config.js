@@ -209,6 +209,19 @@ export function getDefaultConfig() {
       startupTimeoutMs: 90000,
     },
 
+    // Local IPFS (Kubo) — auto-starts with the node to back up chain + brain
+    // state and let peers bootstrap from snapshots. Zero-config: the binary is
+    // downloaded on first run to ~/.poh-miner/bin and the repo lives in
+    // ~/.poh-miner/ipfs. Gateway is 8081 to avoid the bootnode's 8080.
+    // Set autoStart:false (or env POH_SKIP_IPFS=1) to disable.
+    ipfs: {
+      autoStart: true,
+      apiPort: 5001,
+      gatewayPort: 8081,
+      bindHost: "127.0.0.1",
+      startupTimeoutMs: 60000,
+    },
+
     // Populated by the GUI onboarding flow
     pohWallet: "",
     solanaAddress: "",
