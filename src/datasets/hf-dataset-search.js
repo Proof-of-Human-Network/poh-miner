@@ -51,7 +51,7 @@ export async function searchDatasets(query, limit = 10) {
  * Ask the local LLM which (if any) of the candidate datasets helps answer
  * the question. Returns a dataset id string, or null if none apply.
  */
-export async function disambiguateDataset(question, candidates, { ollamaUrl, model }) {
+export async function disambiguateDataset(question, candidates, { model } = {}) {
   if (!candidates?.length) return null;
 
   const list = candidates.map((c, i) =>
@@ -71,20 +71,11 @@ export async function disambiguateDataset(question, candidates, { ollamaUrl, mod
   ].join('\n');
 
   try {
-    const res = await fetch(`${ollamaUrl}/api/chat`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model,
-        messages: [{ role: 'user', content: prompt }],
-        stream: false,
-        options: { temperature: 0 },
-      }),
-      signal: AbortSignal.timeout(20_000),
-    });
-    if (!res.ok) return null;
-    const data = await res.json();
-    const reply = (data.message?.content || '').trim().replace(/["'.]/g, '').toLowerCase();
+    const { getQvacModels } = await import('../compute/adapters/real-poh.js');
+    const qvac = await getQvacModels();
+    if (!qvac || !qvac.ENABLED) return null;
+    const raw = await qvac.complete(prompt, { model, timeLimit: 20_000 });
+    const reply = (raw || '').trim().replace(/["'.]/g, '').toLowerCase();
     if (!reply || reply === 'none') return null;
 
     const match = candidates.find(c =>

@@ -88,7 +88,7 @@ export async function searchModelsWithFallback(message, limit = 12) {
  * Ask the local LLM to pick up to `max` relevant models from candidates.
  * Falls back to top models by downloads when the LLM call fails.
  */
-export async function pickRelevantModels(question, candidates, { ollamaUrl, model }, max = 3) {
+export async function pickRelevantModels(question, candidates, { model } = {}, max = 3) {
   if (!candidates?.length) return [];
 
   const sorted = [...candidates].sort((a, b) => (b.downloads || 0) - (a.downloads || 0));
@@ -111,20 +111,11 @@ export async function pickRelevantModels(question, candidates, { ollamaUrl, mode
   ].join('\n');
 
   try {
-    const res = await fetch(`${ollamaUrl}/api/chat`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model,
-        messages: [{ role: 'user', content: prompt }],
-        stream: false,
-        options: { temperature: 0 },
-      }),
-      signal: AbortSignal.timeout(20_000),
-    });
-    if (!res.ok) return pool.slice(0, max);
-    const data = await res.json();
-    const lines = (data.message?.content || '').trim().split('\n').map(l => l.replace(/^[\d.\s-]+/, '').trim().replace(/["'.]/g, ''));
+    const { getQvacModels } = await import('../compute/adapters/real-poh.js');
+    const qvac = await getQvacModels();
+    if (!qvac || !qvac.ENABLED) return pool.slice(0, max);
+    const raw = await qvac.complete(prompt, { model, timeLimit: 20_000 });
+    const lines = (raw || '').trim().split('\n').map(l => l.replace(/^[\d.\s-]+/, '').trim().replace(/["'.]/g, ''));
     const picked = [];
     for (const line of lines) {
       if (!line || line.toLowerCase() === 'none') continue;

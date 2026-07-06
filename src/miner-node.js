@@ -1960,22 +1960,19 @@ export class PohMinerNode {
         return;
       }
 
-      // ── Ollama chat/generate proxy (/api/chat, /api/generate, /api/models) ──
-      // Restricted: localhost-only by default. Set config.llmApiKey to allow
-      // external access authenticated with "Authorization: Bearer <key>".
-      const ollamaBase = this.config.ollamaUrl || 'http://localhost:11434';
-      const ollamaProxyPaths = ['/api/chat', '/api/generate', '/api/embeddings'];
-      const isOllamaProxy = ollamaProxyPaths.includes(url.pathname) ||
-        url.pathname === '/api/models';
-
-      if (isOllamaProxy) {
+      // ── QVAC LLM endpoints (/api/chat, /api/generate, /api/models) ──
+      // Ollama-compatible response shapes so existing clients keep working, but
+      // inference runs in-process on QVAC. Restricted: localhost-only by default;
+      // set config.llmApiKey to allow external access via "Authorization: Bearer".
+      const llmPaths = ['/api/chat', '/api/generate', '/api/embeddings', '/api/models'];
+      if (llmPaths.includes(url.pathname)) {
         const remote = req.socket.remoteAddress || '';
         const isLocalRequest = remote === '127.0.0.1' || remote === '::1' || remote === '::ffff:127.0.0.1';
         const llmApiKey = this.config.llmApiKey;
         if (!isLocalRequest) {
           if (!llmApiKey) {
             res.statusCode = 403;
-            return res.end(JSON.stringify({ error: 'LLM proxy is restricted to localhost. Set llmApiKey in config to allow external access.' }));
+            return res.end(JSON.stringify({ error: 'LLM API is restricted to localhost. Set llmApiKey in config to allow external access.' }));
           }
           const provided = (req.headers['authorization'] || '').replace(/^Bearer\s+/i, '').trim();
           if (provided !== llmApiKey) {
@@ -1983,28 +1980,52 @@ export class PohMinerNode {
             return res.end(JSON.stringify({ error: 'Invalid API key' }));
           }
         }
-        const targetPath = url.pathname === '/api/models'
-          ? '/api/tags'
-          : url.pathname;
-        const targetUrl = new URL(targetPath, ollamaBase);
-        const proxyReq = http.request({
-          hostname: targetUrl.hostname,
-          port: parseInt(targetUrl.port) || 11434,
-          path: targetUrl.pathname + (targetUrl.search || ''),
-          method: req.method,
-          headers: { 'Content-Type': 'application/json' },
-        }, (proxyRes) => {
-          res.removeHeader('Content-Type');
-          Object.entries(proxyRes.headers).forEach(([k, v]) => res.setHeader(k, v));
-          res.statusCode = proxyRes.statusCode;
-          proxyRes.pipe(res);
+
+        const sendJson = (code, obj) => { res.statusCode = code; res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify(obj)); };
+
+        // GET /api/models — built-in + loaded + registry models (Ollama /api/tags shape).
+        if (url.pathname === '/api/models') {
+          (async () => {
+            try {
+              const qvac = await getQvacModels();
+              const list = qvac ? await qvac.listModels() : [];
+              sendJson(200, { models: list.map(m => ({ name: m.name, model: m.name, label: m.label, loaded: m.loaded })) });
+            } catch (e) {
+              sendJson(502, { error: 'QVAC unavailable: ' + e.message });
+            }
+          })();
+          return;
+        }
+
+        // POST endpoints — buffer body then run through QVAC.
+        let body = '';
+        req.on('data', c => body += c);
+        req.on('end', async () => {
+          try {
+            const payload = body ? JSON.parse(body) : {};
+            const qvac = await getQvacModels();
+            if (!qvac || !qvac.ENABLED) return sendJson(503, { error: 'Inference backend (QVAC) is unavailable' });
+            const model = payload.model || this.config.model || 'qwen3-1.7b';
+
+            if (url.pathname === '/api/embeddings') {
+              return sendJson(501, { error: 'Embeddings are not available in QVAC-only mode' });
+            }
+
+            if (url.pathname === '/api/chat') {
+              const messages = Array.isArray(payload.messages) ? payload.messages : [];
+              const reply = await qvac.chat(messages, { model, timeLimit: 90_000 });
+              if (reply == null) return sendJson(503, { error: `Model "${model}" produced no output (QVAC unavailable)` });
+              return sendJson(200, { model, created_at: new Date().toISOString(), message: { role: 'assistant', content: reply }, done: true });
+            }
+
+            // /api/generate
+            const reply = await qvac.complete(String(payload.prompt || ''), { model, timeLimit: 90_000, systemPrompt: payload.system });
+            if (reply == null) return sendJson(503, { error: `Model "${model}" produced no output (QVAC unavailable)` });
+            return sendJson(200, { model, created_at: new Date().toISOString(), response: reply, done: true });
+          } catch (e) {
+            return sendJson(400, { error: e.message });
+          }
         });
-        proxyReq.on('error', (e) => {
-          res.statusCode = 502;
-          res.setHeader('Content-Type', 'application/json');
-          res.end(JSON.stringify({ error: 'Ollama unavailable: ' + e.message }));
-        });
-        req.pipe(proxyReq);
         return;
       }
 
@@ -2043,8 +2064,8 @@ export class PohMinerNode {
             weightsCount: Object.keys(weights).length,
             feedbackCount,
             stateSummary,
-            model: this.config.model || process.env.OLLAMA_MODEL || 'qwen2.5:1.5b',
-            ollamaUrl: ollamaBase,
+            model: this.config.model || 'qwen3-1.7b',
+            backend: 'qvac',
           }));
         } catch (e) {
           res.statusCode = 500;
@@ -2294,8 +2315,7 @@ export class PohMinerNode {
               if (skillEntry?.private === true && skillEntry?.code) {
                 try {
                   const { output } = await skillsManager.runSkill(route.skillId, route.input, this.config);
-                  const ollamaBase = this.config.ollamaUrl || 'http://localhost:11434';
-                  const selModel   = reqModel || this.config.model || 'qwen2.5:1.5b';
+                  const selModel   = reqModel || this.config.model;
                   const systemContent = _skillLlmSystemPrompt(route.skillId, skillEntry.context);
                   const dataLimit = SOCIAL_SKILL_IDS.has(route.skillId) ? 12000 : 6000;
                   const dataStr = JSON.stringify(output, null, 2).slice(0, dataLimit);
@@ -2305,14 +2325,10 @@ export class PohMinerNode {
                     `Fetched data:\n${dataStr}`,
                     `\nUser question: ${message}`,
                   ].filter(Boolean).join('\n');
-                  const llmRes = await fetch(`${ollamaBase}/api/chat`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ model: selModel, messages: [{ role: 'system', content: systemContent }, { role: 'user', content: userContent }], stream: false, options: { temperature: 0.7 } }),
-                    signal: AbortSignal.timeout(40_000),
-                  });
-                  const llmData = await llmRes.json();
-                  const llmReply = llmData.message?.content || '';
+                  const llmReply = await this._llmChat(
+                    [{ role: 'system', content: systemContent }, { role: 'user', content: userContent }],
+                    { model: selModel, timeoutMs: 40_000 },
+                  );
                   const reply = llmReply.trim() || _formatSkillOutputFallback(route.skillId, output);
                   return res.end(JSON.stringify({
                     type: 'chat', message: reply, skill: route.skillId,
@@ -2329,8 +2345,7 @@ export class PohMinerNode {
               // No fetch, no job queue, no fee — it's pure local reference material.
               if (skillEntry?.private === true && !skillEntry?.code && skillEntry?.context) {
                 try {
-                  const ollamaBase = this.config.ollamaUrl || 'http://localhost:11434';
-                  const selModel   = reqModel || this.config.model || 'qwen2.5:1.5b';
+                  const selModel   = reqModel || this.config.model;
                   const systemContent = [
                     'You are a helpful assistant with access to specialized reference documentation.',
                     'Answer the user\'s question using the reference material below. Be specific and practical.',
@@ -2338,14 +2353,10 @@ export class PohMinerNode {
                     'if the material references one, explain the underlying concept instead.',
                     `\nReference documentation (${route.skillId}):\n${skillEntry.context.slice(0, 8000)}`,
                   ].join('\n');
-                  const llmRes = await fetch(`${ollamaBase}/api/chat`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ model: selModel, messages: [{ role: 'system', content: systemContent }, { role: 'user', content: message }], stream: false, options: { temperature: 0.5 } }),
-                    signal: AbortSignal.timeout(40_000),
-                  });
-                  const llmData = await llmRes.json();
-                  const llmReply = (llmData.message?.content || '').trim();
+                  const llmReply = (await this._llmChat(
+                    [{ role: 'system', content: systemContent }, { role: 'user', content: message }],
+                    { model: selModel, timeoutMs: 40_000 },
+                  )).trim();
                   if (llmReply) return res.end(JSON.stringify({ type: 'chat', message: llmReply, skill: route.skillId }));
                 } catch (e) {
                   console.warn('[chat/ask] inline knowledge-skill error:', e.message);
@@ -2363,26 +2374,16 @@ export class PohMinerNode {
             // context for a second LLM call. Falls through to plain chat if generation fails.
             if (route.type === 'sequence') {
               try {
-                const ollamaBase = this.config.ollamaUrl || 'http://localhost:11434';
-                const selModel   = reqModel || this.config.model || 'qwen2.5:1.5b';
+                const selModel   = reqModel || this.config.model;
 
                 // Step 1 — generate the artifact the skill will analyze.
-                const genRes = await fetch(`${ollamaBase}/api/chat`, {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({
-                    model: selModel,
-                    messages: [
-                      { role: 'system', content: 'You write complete, correct code. Respond with a one-line description, then the code in a fenced code block. Do not explain at length — the code is the answer.' },
-                      { role: 'user', content: route.creationQuery },
-                    ],
-                    stream: false,
-                    options: { temperature: 0.4 },
-                  }),
-                  signal: AbortSignal.timeout(60_000),
-                });
-                const genData    = await genRes.json();
-                const generated  = (genData.message?.content || '').trim();
+                const generated  = (await this._llmChat(
+                  [
+                    { role: 'system', content: 'You write complete, correct code. Respond with a one-line description, then the code in a fenced code block. Do not explain at length — the code is the answer.' },
+                    { role: 'user', content: route.creationQuery },
+                  ],
+                  { model: selModel, timeoutMs: 60_000 },
+                )).trim();
 
                 if (!generated) {
                   return res.end(JSON.stringify({ type: 'chat', message: `Could not generate a response for: "${route.creationQuery}"` }));
@@ -2396,19 +2397,10 @@ export class PohMinerNode {
                   `\nReference documentation (${route.skillId}):\n${(skillEntry?.context || '').slice(0, 8000)}`,
                 ].join('\n');
                 const userContent = `Generated content:\n${generated}\n\nTask: ${route.input?.query || route.input?.message || message}`;
-                const skillRes = await fetch(`${ollamaBase}/api/chat`, {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({
-                    model: selModel,
-                    messages: [{ role: 'system', content: systemContent }, { role: 'user', content: userContent }],
-                    stream: false,
-                    options: { temperature: 0.5 },
-                  }),
-                  signal: AbortSignal.timeout(40_000),
-                });
-                const skillData = await skillRes.json();
-                const analysis  = (skillData.message?.content || '').trim();
+                const analysis  = (await this._llmChat(
+                  [{ role: 'system', content: systemContent }, { role: 'user', content: userContent }],
+                  { model: selModel, timeoutMs: 40_000 },
+                )).trim();
 
                 const reply = `${generated}\n\n---\n\n${analysis || `(${route.skillId} analysis unavailable)`}`;
                 return res.end(JSON.stringify({ type: 'chat', message: reply, sequence: { skillId: route.skillId } }));
@@ -2421,10 +2413,9 @@ export class PohMinerNode {
             // ── Hugging Face model suggestion (video/image/audio generation) ───────
             if (route.type === 'hf-model') {
               try {
-                const ollamaBase = this.config.ollamaUrl || 'http://localhost:11434';
-                const selModel   = reqModel || this.config.model || 'qwen2.5:1.5b';
+                const selModel   = reqModel || this.config.model;
                 const candidates = await searchModelsWithFallback(route.query);
-                const models     = await pickRelevantModels(route.query, candidates, { ollamaUrl: ollamaBase, model: selModel });
+                const models     = await pickRelevantModels(route.query, candidates, { model: selModel });
                 const reply      = formatModelSuggestions(route.query, models);
                 return res.end(JSON.stringify({ type: 'chat', message: reply, hfModels: models.map(m => m.id) }));
               } catch (e) {
@@ -2440,14 +2431,13 @@ export class PohMinerNode {
             // Falls through to plain chat below if no relevant dataset is found.
             if (route.type === 'dataset') {
               try {
-                const ollamaBase   = this.config.ollamaUrl || 'http://localhost:11434';
-                const selModel     = reqModel || this.config.model || 'qwen2.5:1.5b';
+                const selModel     = reqModel || this.config.model;
                 const brainDataDir = getBrainDataDir();
 
                 // A peer relay (see _relayToPeerForDataset) already knows which dataset to
                 // use — skip the search+disambiguation round-trip and use it directly.
                 const candidates = forcedDatasetId ? [] : await searchDatasets(route.query);
-                const datasetId  = forcedDatasetId || await disambiguateDataset(route.query, candidates, { ollamaUrl: ollamaBase, model: selModel });
+                const datasetId  = forcedDatasetId || await disambiguateDataset(route.query, candidates, { model: selModel });
 
                 if (datasetId && brainDataDir && hfDatasetManager.isInstalled(brainDataDir, datasetId)) {
                   const slice = hfDatasetManager.loadRelevantSlice(brainDataDir, datasetId, route.query);
@@ -2456,14 +2446,10 @@ export class PohMinerNode {
                     'Use the dataset rows below to answer the user\'s question. Write in clear, human-readable Markdown.',
                     `\nDataset: ${datasetId}\nRelevant rows:\n${slice || '(no matching rows found in the installed dataset)'}`,
                   ].join('\n');
-                  const llmRes = await fetch(`${ollamaBase}/api/chat`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ model: selModel, messages: [{ role: 'system', content: systemContent }, { role: 'user', content: message }], stream: false, options: { temperature: 0.5 } }),
-                    signal: AbortSignal.timeout(40_000),
-                  });
-                  const llmData = await llmRes.json();
-                  const reply = (llmData.message?.content || '').trim();
+                  const reply = (await this._llmChat(
+                    [{ role: 'system', content: systemContent }, { role: 'user', content: message }],
+                    { model: selModel, timeoutMs: 40_000 },
+                  )).trim();
                   return res.end(JSON.stringify({ type: 'chat', message: reply || `No answer could be generated from dataset "${datasetId}".`, dataset: datasetId }));
                 }
 
@@ -2517,21 +2503,17 @@ export class PohMinerNode {
                 output: r.status === 'fulfilled' ? r.value.output : { error: r.reason?.message || 'skill failed' },
               }));
 
-              const ollamaBase = this.config.ollamaUrl || 'http://localhost:11434';
-              const selModel   = reqModel || this.config.model || 'qwen2.5:1.5b';
+              const selModel   = reqModel || this.config.model;
               const resultsBlock = results.map(r =>
                 `[${r.skillId}]:\n${JSON.stringify(r.output, null, 2).slice(0, 1500)}`
               ).join('\n\n---\n\n');
               const synthPrompt = `The user asked: "${message.slice(0, 400)}"\n\nYou ran ${results.length} parallel skill lookups. Results:\n\n${resultsBlock}\n\nSynthesize all results into a clear, complete answer. Be concise and direct.`;
               try {
-                const synthRes = await fetch(`${ollamaBase}/api/chat`, {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ model: selModel, messages: [{ role: 'user', content: synthPrompt }], stream: false, options: { temperature: 0.7 } }),
-                  signal: AbortSignal.timeout(40_000),
-                });
-                const synthData = await synthRes.json();
-                const reply = synthData.message?.content || results.map(r => JSON.stringify(r.output)).join('\n\n');
+                const synthReply = await this._llmChat(
+                  [{ role: 'user', content: synthPrompt }],
+                  { model: selModel, timeoutMs: 40_000 },
+                );
+                const reply = synthReply || results.map(r => JSON.stringify(r.output)).join('\n\n');
                 return res.end(JSON.stringify({ type: 'chat', message: reply, cascade: true, jobs: results }));
               } catch {
                 return res.end(JSON.stringify({ type: 'chat', message: results.map(r => JSON.stringify(r.output, null, 2)).join('\n\n'), cascade: true, jobs: results }));
@@ -2554,17 +2536,9 @@ export class PohMinerNode {
             }
 
             // Free LLM answer (non-streaming so any client can use it)
-            const ollamaBase = this.config.ollamaUrl || 'http://localhost:11434';
-            const selModel   = reqModel || this.config.model || 'qwen2.5:1.5b';
+            const selModel   = reqModel || this.config.model;
             const messages   = [...history, { role: 'user', content: message }];
-            const ollamaRes  = await fetch(`${ollamaBase}/api/chat`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ model: selModel, messages, stream: false, options: { temperature: 0.7 } }),
-              signal: AbortSignal.timeout(40_000),
-            });
-            const data  = await ollamaRes.json();
-            const reply = data.message?.content || '';
+            const reply = await this._llmChat(messages, { model: selModel, timeoutMs: 40_000 });
 
             // 2nd-pass web search: if LLM says it can't access internet, run web_search and retry
             const LLM_NO_WEB_RE = /(?:don['']t|do not|cannot|can['']t|no|lack|without).{0,40}(?:internet|web|real.?time|online|access|current|browse|search)/i;
@@ -2574,21 +2548,13 @@ export class PohMinerNode {
               try {
                 const { output: searchOut } = await skillsManager.runSkill('web_search', { query: message, message }, this.config);
                 const dataStr = JSON.stringify(searchOut, null, 2).slice(0, 5000);
-                const retry = await fetch(`${ollamaBase}/api/chat`, {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({
-                    model: selModel,
-                    messages: [
-                      { role: 'system', content: 'You are a helpful assistant. Answer using the web search results provided. Write in clear Markdown. Be specific and cite sources.' },
-                      { role: 'user', content: `Web search results:\n${dataStr}\n\nUser question: ${message}` },
-                    ],
-                    stream: false, options: { temperature: 0.7 },
-                  }),
-                  signal: AbortSignal.timeout(40_000),
-                });
-                const retryData = await retry.json();
-                const retryReply = retryData.message?.content || reply;
+                const retryReply = (await this._llmChat(
+                  [
+                    { role: 'system', content: 'You are a helpful assistant. Answer using the web search results provided. Write in clear Markdown. Be specific and cite sources.' },
+                    { role: 'user', content: `Web search results:\n${dataStr}\n\nUser question: ${message}` },
+                  ],
+                  { model: selModel, timeoutMs: 40_000 },
+                )) || reply;
                 return res.end(JSON.stringify({ type: 'chat', message: retryReply, skill: 'web_search' }));
               } catch { /* fall through to original reply */ }
             }
@@ -3438,8 +3404,8 @@ export class PohMinerNode {
       console.log(`   Check status: curl http://localhost:${port}/job/<jobId>/status`);
       console.log(`   Verdict+profile: curl http://localhost:${port}/job/<jobId>/result`);
       console.log(`   Node info: curl http://localhost:${port}/status`);
-      console.log(`   Ollama chat: POST http://localhost:${port}/api/chat`);
-      console.log(`   Ollama generate: POST http://localhost:${port}/api/generate`);
+      console.log(`   LLM chat: POST http://localhost:${port}/api/chat`);
+      console.log(`   LLM generate: POST http://localhost:${port}/api/generate`);
       console.log(`   Models: GET http://localhost:${port}/api/models`);
       console.log(`   Brain state: GET http://localhost:${port}/api/brain/state`);
       console.log(`   Brain weights: GET http://localhost:${port}/api/brain/weights`);
@@ -4914,6 +4880,19 @@ export class PohMinerNode {
   // Local models come from Ollama's full tag list; peer models come from their
   // self-reported `/status` (each peer only advertises the one model it's actively
   // running — peers don't expose their full local Ollama catalog to the network).
+  // Run a chat completion on the local QVAC backend. `messages` may include a
+  // leading system message. Returns the assistant text ('' if none). Throws if
+  // QVAC is disabled/unavailable so callers can fall back or surface an error.
+  async _llmChat(messages, { model, timeoutMs = 60_000 } = {}) {
+    const qvac = await getQvacModels();
+    if (!qvac || !qvac.ENABLED) throw new Error('Inference backend (QVAC) is unavailable');
+    const reply = await qvac.chat(messages, {
+      model: model || this.config.model || 'qwen3-1.7b',
+      timeLimit: timeoutMs,
+    });
+    return reply || '';
+  }
+
   async _getNetworkModels() {
     const now = Date.now();
     if (this._networkModelsCache && (now - this._networkModelsCache.ts) < 60_000) {
@@ -4922,19 +4901,15 @@ export class PohMinerNode {
 
     const byName = new Map(); // name → { name, local, peerCount }
 
-    // 1. Local Ollama catalog — fully usable, no network round-trip
+    // 1. Local QVAC catalog (built-in + loaded + registry) — fully usable
     try {
-      const ollamaBase = this.config.ollamaUrl || 'http://localhost:11434';
-      const r = await fetch(`${ollamaBase}/api/tags`, { signal: AbortSignal.timeout(4000) });
-      if (r.ok) {
-        const data = await r.json();
-        for (const m of (data.models || [])) {
-          const name = m.name || m.model;
-          if (!name) continue;
-          byName.set(name, { name, local: true, peerCount: 0 });
-        }
+      const qvac = await getQvacModels();
+      const list = qvac ? await qvac.listModels() : [];
+      for (const m of list) {
+        if (!m.name) continue;
+        byName.set(m.name, { name: m.name, local: true, peerCount: 0 });
       }
-    } catch { /* ollama unavailable locally */ }
+    } catch { /* QVAC unavailable locally */ }
 
     // 2. Models peers are actively running — discovered via their /status
     try {
@@ -5291,7 +5266,6 @@ export class PohMinerNode {
         const userQuestion = job.payload?.question;
         if (userQuestion && output !== null && output !== undefined && !job.payload?._isProposalAudit) {
           try {
-            const ollamaBase = this.config.ollamaUrl || 'http://localhost:11434';
             const skillEntry = skillsManager.getSkill(job.skillId);
             const skillCtx = skillEntry?.context || '';
             const systemContent = [
@@ -5301,25 +5275,14 @@ export class PohMinerNode {
             ].join('');
             const dataStr = JSON.stringify(output, null, 2).slice(0, 10000);
             const userContent = `Fetched data:\n\`\`\`json\n${dataStr}\n\`\`\`\n\nUser question: ${userQuestion}`;
-            const ollamaRes = await fetch(`${ollamaBase}/api/chat`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                model: this.config.model || 'qwen2.5:1.5b',
-                messages: [
-                  { role: 'system', content: systemContent },
-                  { role: 'user', content: userContent },
-                ],
-                stream: false,
-                options: { temperature: 0.5 },
-              }),
-              signal: AbortSignal.timeout(30000),
-            });
-            if (ollamaRes.ok) {
-              const d = await ollamaRes.json();
-              nlResponse = d.message?.content || d.response || null;
-              if (nlResponse) console.log(`[PoH-Miner] LLM analysis done for job ${job.id} (${nlResponse.length} chars)`);
-            }
+            nlResponse = (await this._llmChat(
+              [
+                { role: 'system', content: systemContent },
+                { role: 'user', content: userContent },
+              ],
+              { timeoutMs: 30_000 },
+            )) || null;
+            if (nlResponse) console.log(`[PoH-Miner] LLM analysis done for job ${job.id} (${nlResponse.length} chars)`);
           } catch (e) {
             console.warn(`[PoH-Miner] LLM analysis skipped for job ${job.id}:`, e.message);
           }
