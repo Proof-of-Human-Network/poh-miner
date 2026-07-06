@@ -24,6 +24,10 @@ echo "Detected: $OS on $ARCH"
 # (default qwen3-1.7b) is fetched automatically on first use.
 echo "→ Inference: QVAC (in-process, no Ollama). Model downloads on first run."
 
+# QVAC's llama.cpp backend needs the Vulkan runtime. On GPU-less hosts (e.g. a
+# headless VPS) this installs the loader + a CPU software driver so QVAC runs.
+bash "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/scripts/ensure-vulkan.sh" || true
+
 # 3. Create working directory
 INSTALL_DIR="$HOME/.poh-miner"
 mkdir -p "$INSTALL_DIR"
