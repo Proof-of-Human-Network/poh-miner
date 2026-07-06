@@ -328,10 +328,9 @@ export class PohMinerNode {
       // Spread raw config first so explicit defaults below take precedence
       ...config,
       wallet: config.wallet,
-      ollamaUrl: config.ollamaUrl || 'http://localhost:11434',
       computeEnabled: config.computeEnabled !== false,
       inferenceMode: config.inferenceMode || 'auto',
-      model: config.model || 'qwen2.5:1.5b',
+      model: config.model || 'qwen3-1.7b',
       region: config.region || null,
       // Fall back to well-known bootnodes when none are configured (e.g. fresh GUI install)
       bootnodes: config.bootnodes?.length ? config.bootnodes : DEFAULT_BOOTNODES,
@@ -531,12 +530,12 @@ export class PohMinerNode {
       } else if (mode === 'gpu') {
         console.log(`[PoH-Miner] → GPU acceleration requested`);
         if (!actualGpu.available) {
-          console.log(`[PoH-Miner] ⚠️  WARNING: No GPU detected. Ollama will fall back to CPU.`);
+          console.log(`[PoH-Miner] ⚠️  WARNING: No GPU detected. QVAC will fall back to CPU.`);
         } else {
           console.log(`[PoH-Miner] → Detected: ${actualGpu.type}`);
         }
       } else {
-        console.log(`[PoH-Miner] → Auto mode: Ollama will use GPU if available`);
+        console.log(`[PoH-Miner] → Auto mode: QVAC will use GPU if available`);
         if (actualGpu.available) {
           console.log(`[PoH-Miner] → Detected GPU: ${actualGpu.type}`);
         }

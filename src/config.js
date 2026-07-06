@@ -153,8 +153,9 @@ export function loadConfig() {
 export function getDefaultConfig() {
   return {
     wallet: 'YOUR_SOLANA_ADDRESS_HERE',
-    ollamaUrl: 'http://localhost:11434',
-    model: 'qwen2.5:1.5b',
+    // Inference runs in-process on QVAC. `model` is a QVAC model id/alias
+    // (qwen3-1.7b, qwen3-8b, …) or a GGUF URL — no Ollama, no ollamaUrl.
+    model: 'qwen3-1.7b',
     inferenceMode: 'auto', // "auto" | "gpu" | "cpu"
     autoStart: true,
 
@@ -187,7 +188,7 @@ export function getDefaultConfig() {
     // (Etherscan, Basescan, Arbiscan, Polygonscan, BscScan, etc. usually accept the same key)
     etherscanApiKey: "",
 
-    // === External AI providers (cloud fallback when local Ollama + peers are unavailable) ===
+    // === External AI providers (cloud fallback when local QVAC + peers are unavailable) ===
     // Keyed by provider id: "anthropic" | "openai" | "xai" | "custom"
     aiProviders: {},
 

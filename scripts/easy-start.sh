@@ -36,23 +36,15 @@ INSTALL_DIR="${HOME}/.poh-miner"
 mkdir -p "$INSTALL_DIR"
 cd "$INSTALL_DIR"
 
-# 1. Ensure Ollama is installed
-if ! command -v ollama >/dev/null 2>&1; then
-    echo "→ Ollama not found. Installing..."
-    curl -fsSL https://ollama.com/install.sh | sh
-else
-    echo "✓ Ollama is already installed"
-fi
+# 1. Inference engine — QVAC runs in-process (@qvac/sdk). No Ollama to install.
+echo "✓ Inference: QVAC (in-process). The model downloads automatically on first run."
 
-# 2. Choose best model for the hardware
-MODEL="qwen2.5:1.5b"
+# 2. Default model (QVAC model id/alias) for the hardware
+MODEL="qwen3-1.7b"
 
 if [[ "$OS" == "darwin" && "$ARCH" == "arm64" ]]; then
     echo "→ Apple Silicon Mac detected — Metal acceleration will be used automatically."
 fi
-
-echo "→ Pulling model: $MODEL ..."
-ollama pull "$MODEL" || true
 
 # 3. Detect GPU capability
 echo ""
@@ -81,7 +73,6 @@ CONFIG_FILE="$INSTALL_DIR/config.json"
 if [ ! -f "$CONFIG_FILE" ]; then
     cat > "$CONFIG_FILE" << EOF
 {
-  "ollamaUrl": "http://localhost:11434",
   "model": "$MODEL",
   "inferenceMode": "$INFERENCE_MODE",
   "autoStart": true,
@@ -188,9 +179,9 @@ echo "  (A PoH wallet is created automatically on first run)"
 echo ""
 
 if [ "$INFERENCE_MODE" = "cpu" ]; then
-  echo "CPU mode tip: run Ollama with  OLLAMA_NUM_GPU=0 ollama serve"
+  echo "CPU mode: QVAC runs the model on CPU (first run downloads it; expect slower replies)."
 else
-  echo "GPU mode tip: run Ollama with  ollama serve"
+  echo "GPU mode: QVAC will use your GPU automatically for inference."
 fi
 
 echo ""

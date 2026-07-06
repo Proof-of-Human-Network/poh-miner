@@ -167,26 +167,6 @@ let loaded  = false;
 let methodsManager = null;
 let qvacModels = null;
 
-async function ensureOllamaModel(model, baseUrl = 'http://localhost:11434') {
-  try {
-    const axios = (await import('axios')).default;
-    const url = `${baseUrl.replace(/\/$/, '')}/api/tags`;
-    const res = await axios.get(url, { timeout: 5000 });
-    const tags = res.data?.models || [];
-    const names = tags.map(t => t.name || t.model || '').filter(Boolean);
-    const has = names.some(n => n === model || n.startsWith(model + ':') || model.startsWith(n.split(':')[0]));
-    if (!has) {
-      console.warn(`[RealPOH] ⚠️  Ollama model "${model}" not found locally.`);
-      console.warn(`[RealPOH] Run this to fix brain timeouts/404s:   ollama pull ${model}`);
-      console.warn(`[RealPOH] Current tags: ${names.slice(0, 6).join(', ') || '(none)'}`);
-    }
-    return has;
-  } catch (e) {
-    // Ollama may be down; brain calls will surface the error
-    return false;
-  }
-}
-
 async function loadRealPohModules() {
   if (loaded) return;
 
@@ -226,18 +206,16 @@ export async function computeWithRealPoh(job, config) {
   const start = Date.now();
   const address = job.payload?.address || job.address;
 
-  // === CRITICAL: Force safe small/fast model env vars BEFORE loading brain/checker ===
-  // brain.js captures EVALUATOR_FAST/HEAVY etc as consts at require() time.
-  // Setting after require (as before) had no effect → escalated to 32b → 404/timeout.
-  const safeModel = (config && (config.model || config.ollamaModel)) || process.env.OLLAMA_MODEL || process.env.EVALUATOR_FAST_MODEL || 'qwen2.5:1.5b';
-  const safeOllamaUrl = (config && config.ollamaUrl) || process.env.OLLAMA_URL || 'http://localhost:11434';
-  process.env.OLLAMA_URL = safeOllamaUrl;
-  process.env.OLLAMA_MODEL = safeModel;
-  process.env.EVALUATOR_FAST_MODEL = safeModel;
-  process.env.EVALUATOR_HEAVY_MODEL = safeModel; // never escalate to unpulled 32b
-  process.env.EVALUATOR_MODEL = safeModel;
-  process.env.COMPILER_MODEL = safeModel;
-  process.env.LEARNER_MODEL = safeModel;
+  // Pin the QVAC model the brain should use, BEFORE loading brain/checker
+  // (brain.js reads these role env vars as consts at require() time). With one
+  // shared model they all point at the configured default.
+  const qvacModel = (config && config.model) || process.env.QVAC_DEFAULT_MODEL || 'qwen3-1.7b';
+  process.env.QVAC_DEFAULT_MODEL = qvacModel;
+  process.env.EVALUATOR_MODEL = qvacModel;
+  process.env.EVALUATOR_FAST_MODEL = qvacModel;
+  process.env.EVALUATOR_HEAVY_MODEL = qvacModel;
+  process.env.COMPILER_MODEL = qvacModel;
+  process.env.LEARNER_MODEL = qvacModel;
 
   // Ensure RPC endpoints + Etherscan key (new config shape or legacy) are visible to checker/evm/signals/txGraph etc.
   // Full PohMinerNode does this early, but standalone compute / tests / early jobs need it too to avoid
@@ -270,9 +248,6 @@ export async function computeWithRealPoh(job, config) {
     console.warn('[RealPOH] runFullCheck not available from checker module. Using simulation.');
     return simulateVerdict(job, config, methodsManager);
   }
-
-  // Warn early if the model we will use is not present (prevents long timeouts + 404s)
-  await ensureOllamaModel(safeModel, safeOllamaUrl).catch(() => {});
 
   // Make sure we have the latest managed methods before running
   const activeMethods = methodsManager ? methodsManager.getActiveMethods() : [];
@@ -393,7 +368,7 @@ export async function computeWithRealPoh(job, config) {
       confidence: fullResult.confidence || 0.5,
       reasoning: fullResult.reasoning || 'Computed with real POH brain + signals',
       signalsUsed: resultsArray,
-      modelUsed: safeModel,
+      modelUsed: qvacModel,
       computationTimeMs: Date.now() - start,
       realPohUsed: true,
       profile,

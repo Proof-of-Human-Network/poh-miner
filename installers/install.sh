@@ -19,21 +19,10 @@ ARCH="$(uname -m)"
 
 echo "Detected: $OS on $ARCH"
 
-# 1. Install Ollama if missing (best universal way to run LLMs locally)
-if ! command -v ollama &> /dev/null; then
-    echo "→ Installing Ollama (recommended inference engine)..."
-    curl -fsSL https://ollama.com/install.sh | sh
-else
-    echo "✓ Ollama already installed"
-fi
-
-# 2. Pull a good small model
-echo "→ Pulling efficient model for this hardware..."
-if [[ "$ARCH" == "arm64" && "$OS" == "Darwin" ]]; then
-    ollama pull qwen2.5:1.5b || ollama pull phi3:mini
-else
-    ollama pull qwen2.5:1.5b
-fi
+# 1. Inference engine — QVAC runs in-process via the @qvac/sdk npm dependency.
+# There is no separate engine to install and no model to pull here: the model
+# (default qwen3-1.7b) is fetched automatically on first use.
+echo "→ Inference: QVAC (in-process, no Ollama). Model downloads on first run."
 
 # 3. Create working directory
 INSTALL_DIR="$HOME/.poh-miner"

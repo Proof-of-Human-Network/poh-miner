@@ -49,18 +49,9 @@ function Download-File {
 $InstallDir = "$env:USERPROFILE\.poh-miner"
 New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
 
-# 1. Install Ollama if missing
-if (-not (Get-Command ollama -ErrorAction SilentlyContinue)) {
-    Write-Host "→ Installing Ollama..."
-    Invoke-WebRequest -Uri "https://ollama.com/download/OllamaSetup.exe" -OutFile "$env:TEMP\OllamaSetup.exe"
-    Start-Process -FilePath "$env:TEMP\OllamaSetup.exe" -Wait
-} else {
-    Write-Host "✓ Ollama already installed"
-}
-
-# 2. Pull a good default model
-Write-Host "→ Pulling recommended model..."
-ollama pull qwen2.5:1.5b
+# 1. Inference engine — QVAC runs in-process via @qvac/sdk. No Ollama to install,
+# and no model to pull here: the model (default qwen3-1.7b) downloads on first run.
+Write-Host "✓ Inference: QVAC (in-process). The model downloads automatically on first run."
 
 # 3. Download main installer script (so future updates come from IPFS too)
 Download-File -Path "scripts/easy-start.sh" -Destination "$InstallDir\easy-start.sh"
