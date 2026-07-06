@@ -30,7 +30,7 @@ import {
 } from './rewards/reward.js';
 import { computeChainWork, compareChainWork, getTipChainWork } from './consensus/chain-selection.js';
 import { blockId, blocksOnTipPath, selectPeerBlockOnTip } from './consensus/chain-path.js';
-import { mineBlock, getNextDifficulty } from './consensus/pow.js';
+import { mineBlock, getNextDifficulty, MIN_BLOCK_SPACING_MS } from './consensus/pow.js';
 import {
   validateBlock,
   validateBlockExtended,
@@ -5860,6 +5860,16 @@ export class PohMinerNode {
   async proposeBlock(abortSignal) {
     if (this._syncInProgress) return null;
     const previous = this.chain[this.chain.length - 1];
+
+    // Pace the chain to at most one block per minute (MIN_BLOCK_SPACING_MS).
+    // Wait until the spacing has elapsed since the parent before producing, aborting
+    // if a new block arrives or a sync starts so we restart on the fresh tip. This is
+    // the hard cadence floor that quantized PoW difficulty cannot provide on its own.
+    const earliest = (previous.timestamp || 0) + MIN_BLOCK_SPACING_MS;
+    while (Date.now() < earliest) {
+      if (abortSignal?.aborted || this._syncInProgress) return null;
+      await new Promise(r => setTimeout(r, Math.min(1000, earliest - Date.now())));
+    }
 
     // === Fixed 1 POH per block + Strict Work Quality Filter ===
     // Only results that passed validateResultWork are allowed in blocks.

@@ -10,11 +10,17 @@
  * incoming gossip blocks and scan jobs are never blocked.
  *
  * Difficulty target: hash must start with `difficulty` zero hex chars.
- * Difficulty adjustment targets 10-second average block time.
+ * Difficulty adjustment targets a 60-second average block time.
  */
 
 const YIELD_EVERY = 2000;         // yield to event loop this often
-const TARGET_BLOCK_TIME_MS = 10_000;
+const TARGET_BLOCK_TIME_MS = 60_000;
+// Hard floor on block cadence: miners never finalize a block sooner than this
+// after its parent. PoW difficulty is quantized (16× per hex-zero step) so it
+// cannot pin an exact cadence on its own; this gate holds the network to at most
+// one block per minute regardless of hashrate. Enforced miner-side (pacing), not
+// as a validation rule, so historical blocks are never retroactively rejected.
+export const MIN_BLOCK_SPACING_MS = 60_000;
 const ADJUSTMENT_WINDOW = 10;    // blocks
 export const MIN_DIFFICULTY = 5;        // 5 leading hex zeros ≈ 1M hashes avg (~5-15 s in JS)
 export const MAX_DIFFICULTY = 20;
