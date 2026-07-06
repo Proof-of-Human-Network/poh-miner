@@ -2007,7 +2007,18 @@
 
           <!-- DATASETS -->
           <div class="settings-subpage" id="settings-sub-datasets">
-            <div>
+            <div style="margin-bottom:12px;">
+              <div style="font-size:10px;color:#666;letter-spacing:0.1em;margin-bottom:8px;font-weight:600;">INSTALL DATASET</div>
+              <div style="display:flex;gap:6px;margin-bottom:6px;">
+                <input id="hf-dataset-install-id" type="text" placeholder="Dataset ID (e.g. imdb or rajpurkar/squad)"
+                       onkeydown="if(event.key==='Enter')installHfDataset()"
+                       style="flex:1;background:#0a0a0a;border:1px solid #1a1a1a;border-radius:4px;padding:5px 8px;color:#ccc;font-size:11px;outline:none;min-width:0;">
+                <button id="hf-dataset-install-btn" onclick="installHfDataset()"
+                        style="padding:5px 10px;background:rgba(37,99,235,0.15);color:#60a5fa;border:none;border-radius:4px;cursor:pointer;font-size:10px;white-space:nowrap;flex-shrink:0;">Install</button>
+              </div>
+              <div id="hf-dataset-install-status" style="font-size:10px;min-height:14px;color:#666;"></div>
+            </div>
+            <div style="border-top:1px solid #1a1a1a;padding-top:12px;">
               <div style="font-size:10px;color:#666;letter-spacing:0.1em;margin-bottom:8px;font-weight:600;">INSTALLED DATASETS</div>
               <div style="font-size:10px;color:#444;margin-bottom:8px;">Hugging Face datasets downloaded to answer chat questions. Remove any you no longer need.</div>
               <div id="hf-datasets-list" style="display:flex;flex-direction:column;gap:6px;"></div>

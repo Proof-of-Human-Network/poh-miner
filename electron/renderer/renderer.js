@@ -1584,12 +1584,7 @@ async function refreshHfDatasetsSettings() {
 
   list.innerHTML = '';
   if (!datasets.length) {
-    list.innerHTML = `<div style="font-size:10px;color:#444;line-height:1.5;">No datasets installed yet.<br><br>
-      <strong style="color:#666;">How to install Hugging Face datasets:</strong><br>
-      1. In Chat, ask about a dataset (e.g. "search huggingface for IMDB reviews")<br>
-      2. Approve the download prompt when it appears<br>
-      3. Or run: <code style="color:#555;">POST /api/hf-dataset/{id}/download</code> on your miner API<br>
-      4. Requires internet; datasets are stored under ~/.poh-miner/brain-data/hf-datasets/</div>`;
+    list.innerHTML = `<div style="font-size:10px;color:#444;">No datasets installed yet.</div>`;
     return;
   }
 
@@ -1611,6 +1606,40 @@ async function refreshHfDatasetsSettings() {
       refreshHfDatasetsSettings();
     });
     list.appendChild(row);
+  }
+}
+
+async function installHfDataset() {
+  const input  = document.getElementById('hf-dataset-install-id');
+  const status = document.getElementById('hf-dataset-install-status');
+  const btn    = document.getElementById('hf-dataset-install-btn');
+  if (!input || !status || !btn) return;
+
+  const id = input.value.trim();
+  if (!id) { status.style.color = '#f87171'; status.textContent = 'Enter a dataset ID'; return; }
+
+  const port = window._minerApiPort || 3456;
+  btn.disabled = true;
+  status.style.color = '#facc15';
+  status.textContent = 'Downloading… (this may take a few minutes)';
+
+  try {
+    const r = await fetch(`http://localhost:${port}/api/hf-dataset/${encodeURIComponent(id)}/download`, { method: 'POST' });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok || !data.ok) {
+      status.style.color = '#f87171';
+      status.textContent = `Error: ${data.error || 'download failed'}`;
+    } else {
+      status.style.color = '#4ade80';
+      status.textContent = `Installed "${id}" successfully`;
+      input.value = '';
+      refreshHfDatasetsSettings();
+    }
+  } catch (e) {
+    status.style.color = '#f87171';
+    status.textContent = `Error: ${e.message}`;
+  } finally {
+    btn.disabled = false;
   }
 }
 

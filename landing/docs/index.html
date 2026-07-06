@@ -84,6 +84,7 @@
         <a href="#search">History Search</a>
         <a href="#explorer">Explorer</a>
         <a href="#skills">Skills</a>
+        <a href="#hf-datasets">HF Datasets</a>
         <a href="#llm-brain">LLM &amp; Brain</a>
         <a href="#p2p">P2P Exchange</a>
         <a href="#push">Push</a>
@@ -96,7 +97,8 @@
           <h1 class="text-[40px] sm:text-[52px] mb-4">Wallet API Reference</h1>
           <p class="text-white/60 text-[20px] mb-6 max-w-3xl">
             Every PoH miner exposes an HTTP API on <span class="neon">walletApiPort</span> (default <strong>3456</strong>).
-            Amounts are in <strong>μPOH</strong> — 1 POH = 1&nbsp;000&nbsp;000&nbsp;000 μPOH.
+            <strong>Balance responses</strong> are in <strong>μPOH</strong> (raw) — 1 POH = 1&nbsp;000&nbsp;000&nbsp;000 μPOH.
+            <strong>Input amounts</strong> for <code>/api/wallet/send</code> and staking endpoints are in <strong>POH</strong> (the server converts internally).
           </p>
           <div class="glass rounded-md p-5 mb-6">
             <div class="text-white/40 text-sm mb-2">Base URL</div>
@@ -161,12 +163,12 @@
 
           <div class="endpoint-card">
             <div class="mb-2"><span class="method method-post">POST</span> <code class="text-white/90">/api/wallet/send</code></div>
-            <p class="text-white/55 text-[18px]">Transfer POH between wallets.</p>
+            <p class="text-white/55 text-[18px]">Transfer POH between wallets. The sender wallet must be stored on this node (loaded via <code>walletManager</code>). Amount is in <strong>POH</strong> (not μPOH). Optional <code>fee</code> and <code>memo</code> fields.</p>
             <div class="code-block mt-3">{
   "from": "poh...",
   "to": "poh...",
-  "amount": 1000000000,
-  "privateKey": "hex..."
+  "amount": 1,
+  "memo": "optional"
 }</div>
           </div>
 
@@ -190,20 +192,20 @@
         <section id="jobs" class="mb-16">
           <h2 class="text-[32px] mb-6 neon">Jobs</h2>
           <p class="text-white/55 text-[18px] mb-6">
-            Submit compute work to the network. Types: <code>verdict</code> (identity scan), <code>skill</code>, <code>compute</code>.
-            Skill and compute jobs require a signed payment proof (<code>maxBudget</code> in μPOH).
+            Submit compute work to the network. Types: <code>verdict</code> (identity scan, free), <code>skill</code>, <code>compute</code>.
+            <code>skill</code> and <code>compute</code> jobs require a signed payment proof (<code>maxBudget</code> in μPOH).
           </p>
 
           <div class="endpoint-card">
             <div class="mb-2"><span class="method method-post">POST</span> <code class="text-white/90">/job</code></div>
-            <p class="text-white/55 text-[18px]">Submit a job. Returns <code>{ jobId, statusUrl, resultUrl }</code>.</p>
+            <p class="text-white/55 text-[18px]">Submit a job. Returns <code>{ jobId, statusUrl, resultUrl }</code>. <code>paymentTx.txHash</code> is a SHA-256 of <code>{ jobId, requesterAddress, minerAddress, amount, nonce }</code> — not a blockchain transaction hash.</p>
             <div class="code-block mt-3">{
   "type": "compute",
   "model": "llama3.1:8b",
   "payload": { "prompt": "Summarize the dataset" },
   "maxBudget": 500000000,
   "requesterAddress": "poh...",
-  "paymentTx": { "txHash": "...", "signature": "..." }
+  "paymentTx": { "txHash": "&lt;computeJobPaymentHash&gt;", "signature": "base64..." }
 }</div>
           </div>
 
@@ -320,8 +322,8 @@
 
           <div class="endpoint-card">
             <div class="mb-2"><span class="method method-post">POST</span> <code class="text-white/90">/api/skills/:id/stake</code></div>
-            <p class="text-white/55 text-[18px]">Stake POH toward skill graduation.</p>
-            <div class="code-block mt-3">{ "address": "poh...", "amount": 1000000000 }</div>
+            <p class="text-white/55 text-[18px]">Stake POH toward skill graduation. Amount is in <strong>POH</strong> (not μPOH). Uses the node's own wallet.</p>
+            <div class="code-block mt-3">{ "amount": 1000 }</div>
           </div>
 
           <div class="endpoint-card">
@@ -332,6 +334,31 @@
           <div class="endpoint-card">
             <div class="mb-2"><span class="method method-post">POST</span> <code class="text-white/90">/api/skills/:id/enable</code> &nbsp;|&nbsp; <code class="text-white/90">/disable</code></div>
             <p class="text-white/55 text-[18px]">Toggle whether this node runs a skill.</p>
+          </div>
+        </section>
+
+        <!-- HF Datasets -->
+        <section id="hf-datasets" class="mb-16">
+          <h2 class="text-[32px] mb-6 neon">HF Datasets</h2>
+          <p class="text-white/55 text-[18px] mb-6">
+            Hugging Face datasets installed on this node. Compute jobs can reference them by ID. Chat will suggest installs when a dataset is missing.
+            Datasets are stored under <code>~/.poh-miner/brain-data/hf-datasets/</code>.
+          </p>
+
+          <div class="endpoint-card">
+            <div class="mb-2"><span class="method method-get">GET</span> <code class="text-white/90">/api/hf-dataset</code></div>
+            <p class="text-white/55 text-[18px]">List installed datasets. Returns <code>{ datasets: [{ id, files, rowCount, source }] }</code>.</p>
+          </div>
+
+          <div class="endpoint-card">
+            <div class="mb-2"><span class="method method-post">POST</span> <code class="text-white/90">/api/hf-dataset/:id/download</code></div>
+            <p class="text-white/55 text-[18px]">Install a dataset by Hugging Face ID. Falls back to pulling from a peer miner if HF is unreachable. Returns <code>{ ok: true, manifest }</code> on success.</p>
+            <div class="code-block mt-3">curl -X POST http://127.0.0.1:3456/api/hf-dataset/imdb/download</div>
+          </div>
+
+          <div class="endpoint-card">
+            <div class="mb-2"><span class="method method-get">DELETE</span> <code class="text-white/90">/api/hf-dataset/:id</code></div>
+            <p class="text-white/55 text-[18px]">Remove an installed dataset from this node.</p>
           </div>
         </section>
 
