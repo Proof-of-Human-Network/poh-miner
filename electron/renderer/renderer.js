@@ -73,7 +73,7 @@ function updateStatus(status) {
   }
   if (status.model || status.inferenceMode) {
     const mode  = (status.inferenceMode || 'AUTO').toUpperCase();
-    const model = status.model || 'qwen2.5:1.5b';
+    const model = status.model || 'qwen3-1.7b';
     set('sidebar-inference', `${mode} · ${model}`);
     // Seed the active model from miner config on first load (before user picks one)
     if (!window._modelUserPicked) setActiveModel(model);
@@ -446,8 +446,8 @@ async function checkAndStartOnboarding() {
 async function runAiSetupStep() {
   showOnboardingStep('ai-setup');
 
-  const ollamaIcon   = document.getElementById('setup-ollama-icon');
-  const ollamaStatus = document.getElementById('setup-ollama-status');
+  const engineIcon   = document.getElementById('setup-ollama-icon');
+  const engineStatus = document.getElementById('setup-ollama-status');
   const modelIcon    = document.getElementById('setup-model-icon');
   const modelStatus  = document.getElementById('setup-model-status');
   const progressWrap = document.getElementById('setup-progress-wrap');
@@ -455,16 +455,21 @@ async function runAiSetupStep() {
   const progressPct  = document.getElementById('setup-progress-pct');
   const logEl        = document.getElementById('setup-log');
   const continueBtn  = document.getElementById('setup-continue-btn');
-  const MODEL        = 'qwen2.5:1.5b';
 
-  // Listen for streaming progress from main process
+  // Inference engine is QVAC, in-process — nothing to install.
+  if (engineIcon) engineIcon.textContent = '✅';
+  if (engineStatus) engineStatus.textContent = 'QVAC (in-process)';
+
+  // Listen for streaming warm-up progress from the main process.
   window.pohMinerAPI.setup.onProgress((msg) => {
     if (logEl) logEl.textContent = msg.message || '';
-    if (msg.status === 'pulling' && msg.pct != null) {
-      if (progressWrap) progressWrap.classList.remove('hidden');
-      if (progressBar) progressBar.style.width = msg.pct + '%';
-      if (progressPct) progressPct.textContent = msg.pct + '%';
-      if (modelStatus) modelStatus.textContent = `Downloading… ${msg.pct}%`;
+    if (msg.status === 'pulling') {
+      if (msg.pct != null) {
+        if (progressWrap) progressWrap.classList.remove('hidden');
+        if (progressBar) progressBar.style.width = msg.pct + '%';
+        if (progressPct) progressPct.textContent = msg.pct + '%';
+      }
+      if (modelStatus) modelStatus.textContent = msg.pct != null ? `Downloading… ${msg.pct}%` : 'Preparing…';
     }
     if (msg.status === 'ready') {
       if (modelIcon) modelIcon.textContent = '✅';
@@ -473,67 +478,29 @@ async function runAiSetupStep() {
       if (continueBtn) continueBtn.disabled = false;
     }
     if (msg.status === 'error') {
-      if (modelIcon) modelIcon.textContent = '❌';
+      if (modelIcon) modelIcon.textContent = '⚠️';
       if (modelStatus) modelStatus.textContent = msg.message;
+      if (continueBtn) continueBtn.disabled = false; // non-fatal — loads on first job
     }
   });
 
-  // 1. Check current state
+  // 1. Check current state (which QVAC model, and whether it's already loaded)
   const state = await window.pohMinerAPI.setup.check();
+  const MODEL = state.model || 'qwen3-1.7b';
 
-  // Ollama status
-  if (state.running) {
-    if (ollamaIcon) ollamaIcon.textContent = '✅';
-    if (ollamaStatus) ollamaStatus.textContent = 'Running';
-  } else if (state.inPath) {
-    if (ollamaIcon) ollamaIcon.textContent = '⚙️';
-    if (ollamaStatus) ollamaStatus.textContent = 'Installed but not running — starting...';
-  } else {
-    if (ollamaIcon) ollamaIcon.textContent = '⬇️';
-    if (ollamaStatus) ollamaStatus.textContent = 'Not installed — installing...';
-  }
-
-  // Model status
-  const hasModel = state.models && state.models.some(m => m.startsWith('qwen2.5:1.5b') || m === MODEL);
-  if (hasModel) {
+  if (state.ready) {
     if (modelIcon) modelIcon.textContent = '✅';
-    if (modelStatus) modelStatus.textContent = 'Ready';
-  } else {
-    if (modelIcon) modelIcon.textContent = '⬇️';
-    if (modelStatus) modelStatus.textContent = 'Will download (~900 MB)';
-  }
-
-  // If everything is fine, skip to welcome
-  if (state.running && hasModel) {
+    if (modelStatus) modelStatus.textContent = `Ready (${MODEL})`;
     if (continueBtn) continueBtn.disabled = false;
     showOnboardingStep('welcome');
     return;
   }
 
-  // 2. Install / start Ollama if needed
-  if (!state.running) {
-    const result = await window.pohMinerAPI.setup.install();
-    if (result.ok) {
-      if (ollamaIcon) ollamaIcon.textContent = '✅';
-      if (ollamaStatus) ollamaStatus.textContent = 'Running';
-    } else {
-      if (ollamaIcon) ollamaIcon.textContent = '❌';
-      if (ollamaStatus) ollamaStatus.textContent = result.error || 'Failed';
-      if (logEl) logEl.textContent = 'Install Ollama manually from https://ollama.com then restart.';
-      if (continueBtn) continueBtn.disabled = false;
-      return;
-    }
-  }
-
-  // 3. Pull model if missing
-  if (!hasModel) {
-    if (modelStatus) modelStatus.textContent = 'Downloading qwen2.5:1.5b (~900 MB)...';
-    if (progressWrap) progressWrap.classList.remove('hidden');
-    await window.pohMinerAPI.setup.pullModel(MODEL);
-  } else {
-    if (continueBtn) continueBtn.disabled = false;
-    showOnboardingStep('welcome');
-  }
+  // 2. Warm up the model (downloads on first run, then loads into memory).
+  if (modelIcon) modelIcon.textContent = '⬇️';
+  if (modelStatus) modelStatus.textContent = `Preparing ${MODEL} (first run downloads it)…`;
+  if (progressWrap) progressWrap.classList.remove('hidden');
+  await window.pohMinerAPI.setup.pullModel(MODEL);
 }
 
 function showOnboardingStep(step) {
@@ -1089,7 +1056,7 @@ async function loadSettingsPanel() {
           miningModelSel.innerHTML = '<option value="">No models installed</option>';
         }
       }
-    } catch { miningModelSel.innerHTML = '<option value="">Ollama not running</option>'; }
+    } catch { miningModelSel.innerHTML = '<option value="">No models available</option>'; }
   }
 }
 
@@ -1892,11 +1859,11 @@ function stopChatStream() {
 // ── Global active model ────────────────────────────────────────────────────────
 // Single source of truth for the model used by scan, chat, and skills.
 
-window._activeModel  = 'qwen2.5:1.5b';
+window._activeModel  = 'qwen3-1.7b';
 window._cachedModels = [];
 
 function getActiveModel() {
-  return window._activeModel || 'qwen2.5:1.5b';
+  return window._activeModel || 'qwen3-1.7b';
 }
 
 function setActiveModel(name) {
@@ -1969,7 +1936,7 @@ function _paintModelList(entries) {
   if (!listEl) return;
 
   if (!entries.length) {
-    listEl.innerHTML = '<div class="mp-empty">No models found.<br>Make sure Ollama is running and has models installed.</div>';
+    listEl.innerHTML = '<div class="mp-empty">No models found.<br>The QVAC model downloads on first use.</div>';
     return;
   }
 
@@ -2615,7 +2582,7 @@ async function sendChatMessage() {
       }),
     });
 
-    if (!res.ok) throw new Error(`Ollama ${res.status}`);
+    if (!res.ok) throw new Error(`LLM ${res.status}`);
 
     const reader = res.body.getReader();
     const decoder = new TextDecoder();
@@ -3007,10 +2974,10 @@ async function sendChatMessage() {
       const errText = await res.text().catch(() => res.statusText);
       let errMsg = errText;
       try { errMsg = JSON.parse(errText)?.error || errText; } catch { /* keep raw */ }
-      const isOllamaDown = errMsg.toLowerCase().includes('ollama unavailable') || errMsg.toLowerCase().includes('econnrefused');
-      if (isOllamaDown) {
+      const isInferenceDown = errMsg.toLowerCase().includes('qvac') || errMsg.toLowerCase().includes('inference') || errMsg.toLowerCase().includes('unavailable') || errMsg.toLowerCase().includes('econnrefused');
+      if (isInferenceDown) {
         // Public mode: try a peer miner or a configured cloud AI provider before
-        // bothering the user with a local-install flow.
+        // telling the user the local model isn't ready yet.
         if (!isPrivate) {
           try {
             const fbRes = await fetch(`http://localhost:${port}/chat/ask`, {
@@ -3026,26 +2993,13 @@ async function sendChatMessage() {
               pushAssistantReply(fbData.message, fbData.skillMemory ? { _skillMemory: fbData.skillMemory } : {});
               return;
             }
-          } catch { /* fall through to local install attempt */ }
+          } catch { /* fall through to the message below */ }
         }
-        appendToLastBubble('Ollama is not running. Attempting to start it…');
+        // QVAC loads the model in-process on first use — no service to start.
+        const msg = 'The AI model is still loading (it downloads on first use). Please wait a moment and resend your message.';
+        appendToLastBubble(msg);
         finalizeLastBubble();
-        chatHistory.push({ role: 'assistant', content: '[Ollama not running — attempting restart]' });
-        // Ask main process to install/start Ollama
-        const api = window.pohMinerAPI?.setup;
-        if (api?.install) {
-          api.install().then(r => {
-            const msg = r?.ok
-              ? 'Ollama is now running. Please resend your message.'
-              : `Could not start Ollama: ${r?.error || 'unknown error'}. Try running "ollama serve" manually.`;
-            renderMessage('assistant', msg);
-            chatHistory.push({ role: 'assistant', content: msg });
-          }).catch(() => {
-            renderMessage('assistant', 'Could not start Ollama automatically. Run "ollama serve" in a terminal, then try again.');
-          });
-        } else {
-          renderMessage('assistant', 'Ollama is not running. Run "ollama serve" in a terminal, then try again.');
-        }
+        chatHistory.push({ role: 'assistant', content: `[Model not ready — ${msg}]` });
       } else {
         appendToLastBubble(`Error: ${errMsg}`);
         finalizeLastBubble();
@@ -3070,7 +3024,7 @@ async function sendChatMessage() {
         try {
           const evt = JSON.parse(line);
           if (evt.error) {
-            appendToLastBubble(`[Ollama error: ${evt.error}]`);
+            appendToLastBubble(`[Error: ${evt.error}]`);
             fullResponse += `[Error: ${evt.error}]`;
             break;
           }
@@ -3084,7 +3038,7 @@ async function sendChatMessage() {
       }
     }
 
-    if (!fullResponse) appendToLastBubble('[No response — is Ollama running with the selected model?]');
+    if (!fullResponse) appendToLastBubble('[No response — the model may still be loading. Try again.]');
     finalizeLastBubble();
     chatHistory.push({ role: 'assistant', content: fullResponse || '[no response]' });
   } catch (err) {
@@ -3271,7 +3225,7 @@ async function loadBrainState() {
       const dot = document.getElementById('brain-ollama-dot');
       const lbl = document.getElementById('brain-ollama-status');
       if (dot) dot.className = 'bdot on';
-      if (lbl) lbl.textContent = 'Ollama running';
+      if (lbl) lbl.textContent = 'Inference: QVAC';
       const sdot = document.getElementById('brain-sync-dot');
       if (sdot) sdot.className = 'bdot on';
     }

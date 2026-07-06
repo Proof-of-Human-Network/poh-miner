@@ -70,7 +70,7 @@ contextBridge.exposeInMainWorld('pohMinerAPI', {
     reset: () => ipcRenderer.invoke('onboarding:reset'),
   },
 
-  // Ollama / AI setup
+  // AI setup (QVAC, in-process)
   setup: {
     check: () => ipcRenderer.invoke('setup:check'),
     install: () => ipcRenderer.invoke('setup:install'),

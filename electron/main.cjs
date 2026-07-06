@@ -123,10 +123,10 @@ function createWindow() {
       sendLog(`[Startup] onboarded=${!!config.onboarded}, hasPohWallet=${hasPohWallet} → isOnboarded=${isOnboarded}`);
 
       if (isOnboarded) {
-        // Ensure Ollama is installed, running, and has the required model BEFORE starting the miner.
-        // We block on this — there's no point launching the miner without a working LLM.
-        const model = config.model || 'qwen2.5:1.5b';
-        await ensureOllamaAndModel(model);
+        // Warm up the QVAC model before starting the miner (best-effort; it also
+        // loads lazily on the first job). QVAC runs in-process — no Ollama.
+        const model = config.model || 'qwen3-1.7b';
+        await warmUpQvacModel(model);
 
         startMiner();
         // Tell the renderer to show the main miner UI (authoritative from main process)
@@ -850,311 +850,54 @@ function sendSetupProgress(msg) {
   }
 }
 
-async function isOllamaRunning() {
-  return new Promise((resolve) => {
-    const req = require('http').request(
-      { hostname: 'localhost', port: 11434, path: '/api/tags', method: 'GET', timeout: 3000 },
-      (res) => resolve(res.statusCode === 200)
-    );
-    req.on('error', () => resolve(false));
-    req.on('timeout', () => { req.destroy(); resolve(false); });
-    req.end();
-  });
-}
-
-// Known Ollama install locations per platform (checked when PATH lookup fails)
-function getKnownOllamaPaths() {
-  if (process.platform === 'win32') {
-    const localAppData = process.env.LOCALAPPDATA || '';
-    return [path.join(localAppData, 'Programs', 'Ollama', 'ollama.exe')];
-  }
-  if (process.platform === 'darwin') {
-    return [
-      '/usr/local/bin/ollama',
-      '/opt/homebrew/bin/ollama',       // Apple Silicon Homebrew
-      '/Applications/Ollama.app/Contents/Resources/ollama', // .dmg app bundle
-    ];
-  }
-  // Linux (.deb / tarball)
-  return ['/usr/local/bin/ollama', '/usr/bin/ollama', '/opt/ollama/ollama'];
-}
-
-// Returns the full path to the ollama binary, or null if not found anywhere
-function resolveOllamaPath() {
-  for (const p of getKnownOllamaPaths()) {
-    if (fs.existsSync(p)) return p;
-  }
-  return null;
-}
-
-// Build an env for subprocesses that includes all common binary dirs so
-// ollama and other tools are findable even when launched from a packaged app.
-function subprocEnv() {
-  const extraPaths = process.platform === 'darwin'
-    ? ['/usr/local/bin', '/opt/homebrew/bin', '/usr/bin', '/bin', '/usr/sbin', '/sbin']
-    : ['/usr/local/bin', '/usr/bin', '/bin', '/usr/sbin', '/sbin'];
-  const current = process.env.PATH || '';
-  const merged  = [...new Set([...extraPaths, ...current.split(path.delimiter)])].join(path.delimiter);
-  return { ...process.env, PATH: merged };
-}
-
-function ollamaInPath() {
-  return new Promise((resolve) => {
-    // First: check known install paths directly (works even when PATH is stripped)
-    if (resolveOllamaPath()) return resolve(true);
-    // Second: try which/where with an augmented PATH
-    const cmd = process.platform === 'win32' ? 'where' : 'which';
-    execFile(cmd, ['ollama'], { env: subprocEnv() }, (err) => resolve(!err));
-  });
-}
-
-function getOllamaExePath() {
-  return resolveOllamaPath() || 'ollama';
-}
-
-function startOllamaService() {
-  return new Promise((resolve) => {
-    const ollamaExe = getOllamaExePath();
-    const proc = spawnProc(ollamaExe, ['serve'], {
-      detached: true, stdio: 'ignore',
-      env: subprocEnv(),
-    });
-    proc.on('error', () => {}); // swallow spawn errors — isOllamaRunning() will detect failure
-    proc.unref();
-    // Give it 5 seconds to start (Windows service startup can be slower)
-    setTimeout(resolve, 5000);
-  });
-}
-
-async function installOllama() {
-  sendSetupProgress({ status: 'installing', message: 'Downloading Ollama...' });
-  const platform = process.platform;
-
-  if (platform === 'linux' || platform === 'darwin') {
-    await new Promise((resolve, reject) => {
-      const proc = spawnProc('sh', ['-c', 'curl -fsSL https://ollama.com/install.sh | sh'], {
-        stdio: ['ignore', 'pipe', 'pipe'],
-        env: subprocEnv(),
-      });
-      proc.stdout.on('data', d => sendSetupProgress({ status: 'installing', message: d.toString().trim() }));
-      proc.stderr.on('data', d => sendSetupProgress({ status: 'installing', message: d.toString().trim() }));
-      proc.on('error', reject);
-      proc.on('close', (code) => (code === 0 ? resolve() : reject(new Error(`Ollama install exited ${code}`))));
-    });
-    return;
-  }
-
-  if (platform === 'win32') {
-    const setupPath = path.join(os.tmpdir(), 'OllamaSetup.exe');
-    sendSetupProgress({ status: 'installing', message: 'Downloading OllamaSetup.exe...' });
-    // The installer is large; a single request often drops on a flaky link.
-    // Retry with range-resume so each attempt continues from where it stopped.
-    // downloadWithResume() already follows redirects (CDN edge → blob storage).
-    try {
-      await withRetry(
-        () => downloadWithResume('https://ollama.com/download/OllamaSetup.exe', setupPath, {
-          onProgress: (pct) => sendSetupProgress({ status: 'installing', message: `Downloading Ollama... ${pct}%` }),
-        }).then(() => true),
-        {
-          attempts: 10, baseMs: 1500, maxMs: 20000,
-          isSuccess: (r) => r === true,
-          onRetry: ({ attempt }) => sendSetupProgress({ status: 'installing', message: `Download interrupted (attempt ${attempt}) — resuming...` }),
-        },
-      );
-    } catch (e) {
-      try { fs.unlinkSync(setupPath); } catch {}
-      throw new Error(`Could not download the Ollama installer: ${e.message}. Install it manually with "winget install Ollama.Ollama" or from https://ollama.com/download, then restart.`);
-    }
-    sendSetupProgress({ status: 'installing', message: 'Running Ollama installer...' });
-    await new Promise((resolve, reject) => {
-      const proc = spawnProc(setupPath, ['/SILENT'], { stdio: 'ignore', windowsHide: true });
-      proc.on('error', reject);
-      proc.on('close', (code) => (code === 0 ? resolve() : reject(new Error(`OllamaSetup.exe exited ${code}`))));
-    });
-    return;
-  }
-
-  throw new Error('Auto-install not supported on this OS. Download from https://ollama.com');
-}
-
-// Ensure Ollama is installed, running, and has the required model — called at startup.
-async function ensureOllamaAndModel(model = 'qwen2.5:1.5b') {
-  sendLog(`[Setup] Checking Ollama + model (${model})...`);
-
-  // 1. Install if missing (all platforms)
-  const inPath = await ollamaInPath();
-  if (!inPath) {
-    sendLog('[Setup] Ollama not found — installing...');
-    try { await installOllama(); } catch (e) {
-      sendLog(`[Setup] ✗ Ollama install failed: ${e.message}. Please install from https://ollama.com`);
-      return;
-    }
-    sendLog('[Setup] ✓ Ollama installed.');
-  }
-
-  // 2. Start service if not running
-  let running = await isOllamaRunning();
-  if (!running) {
-    sendLog('[Setup] Ollama not running — starting service...');
-    await startOllamaService();
-    running = await isOllamaRunning();
-    if (!running) {
-      sendLog('[Setup] ✗ Ollama did not start. Run "ollama serve" manually and restart.');
-      return;
-    }
-    sendLog('[Setup] ✓ Ollama service started.');
-  } else {
-    sendLog('[Setup] ✓ Ollama running.');
-  }
-
-  // 3. Pull model if not present
-  let models = [];
+// Warm up the QVAC model in-process. The miner node runs in this same process
+// (imported by startMiner), so this loads the weights the miner will use. The
+// qvac-models loader logs download progress via console → captured to the UI.
+// Non-fatal: on failure the model loads lazily on the first job.
+async function warmUpQvacModel(model = 'qwen3-1.7b') {
+  sendSetupProgress({ status: 'pulling', message: `Preparing model ${model}…`, model });
+  sendLog(`[Setup] Preparing QVAC model (${model})...`);
   try {
-    const res = await fetch('http://localhost:11434/api/tags');
-    const data = await res.json();
-    models = (data.models || []).map(m => m.name || m.model || '').filter(Boolean);
-  } catch {}
-
-  const base = model.split(':')[0];
-  const hasModel = models.some(m => m === model || m.startsWith(base + ':'));
-  if (!hasModel) {
-    sendLog(`[Setup] Model ${model} not found — pulling now...`);
-    sendSetupProgress({ status: 'pulling', message: `Pulling ${model}...`, model });
-    // `ollama pull` resumes partial blobs across runs, so retrying a dropped
-    // download is cheap and eventually succeeds on a flaky connection.
-    try {
-      await withRetry(() => pullModelOnce(model), {
-        attempts: 12, baseMs: 1500, maxMs: 20000,
-        isSuccess: (r) => r && r.ok,
-        onRetry: ({ attempt, error }) =>
-          sendLog(`[Setup] Pull attempt ${attempt} failed (${error ? error.message : 'interrupted'}) — resuming...`),
-      });
-      sendSetupProgress({ status: 'ready', message: `${model} ready.`, model });
-      sendLog(`[Setup] ✓ ${model} ready.`);
-    } catch (e) {
-      const msg = `Failed to download model ${model} after several attempts. Check your connection and restart — the download resumes where it left off.`;
-      sendSetupProgress({ status: 'error', message: msg, model });
-      sendLog(`[Setup] ✗ ${msg} (${e ? e.message : 'unknown error'})`);
+    process.env.QVAC_DEFAULT_MODEL = model;
+    const realPohUrl = pathToFileURL(path.join(__dirname, '../src/compute/adapters/real-poh.js')).href;
+    const { getQvacModels } = await import(realPohUrl);
+    const qvac = await getQvacModels();
+    if (!qvac || !qvac.ENABLED) {
+      sendSetupProgress({ status: 'ready', message: 'Inference ready (QVAC).', model });
+      return { ok: true };
     }
-  } else {
-    sendLog(`[Setup] ✓ Model ${model} available.`);
-  }
-}
-
-/**
- * Run a single `ollama pull` over the streaming HTTP API.
- * Resolves with { ok, error }: ok is true only when the stream reported
- * `status: "success"` and no error line. A dropped connection resolves with
- * ok:false so the caller can retry (the partial blobs are kept by Ollama).
- */
-function pullModelOnce(model) {
-  return new Promise((resolve) => {
-    let sawSuccess = false;
-    let sawError = null;
-    const req = require('http').request(
-      { hostname: 'localhost', port: 11434, path: '/api/pull', method: 'POST', headers: { 'Content-Type': 'application/json' } },
-      (res) => {
-        let buf = '';
-        res.on('data', chunk => {
-          buf += chunk.toString();
-          const lines = buf.split('\n');
-          buf = lines.pop();
-          for (const line of lines) {
-            if (!line.trim()) continue;
-            try {
-              const evt = JSON.parse(line);
-              if (evt.error) sawError = evt.error;
-              if (evt.status === 'success') sawSuccess = true;
-              const pct = evt.total ? Math.round((evt.completed / evt.total) * 100) : null;
-              const label = evt.status || (evt.error ? `error: ${evt.error}` : '');
-              sendSetupProgress({ status: 'pulling', message: label, model, pct });
-              sendLog(`[Setup] ${model}: ${label}${pct != null ? ` ${pct}%` : ''}`);
-            } catch {}
-          }
-        });
-        res.on('end', () => resolve({ ok: sawSuccess && !sawError, error: sawError ? new Error(sawError) : null }));
-        res.on('error', (e) => resolve({ ok: false, error: e }));
-      }
-    );
-    req.on('error', (e) => resolve({ ok: false, error: e }));
-    req.write(JSON.stringify({ name: model, stream: true }));
-    req.end();
-  });
-}
-
-// Check Ollama + model status without installing anything
-ipcMain.handle('setup:check', async () => {
-  const running = await isOllamaRunning();
-  const inPath = await ollamaInPath();
-  let models = [];
-  if (running) {
-    try {
-      const res = await fetch('http://localhost:11434/api/tags');
-      const data = await res.json();
-      models = (data.models || []).map(m => m.name || m.model).filter(Boolean);
-    } catch (_) {}
-  }
-  return { running, inPath, models };
-});
-
-// Install Ollama if missing, then start it
-ipcMain.handle('setup:install', async () => {
-  try {
-    const inPath = await ollamaInPath();
-    if (!inPath) {
-      await installOllama();
-      sendSetupProgress({ status: 'installed', message: 'Ollama installed.' });
-    }
-    const running = await isOllamaRunning();
-    if (!running) {
-      sendSetupProgress({ status: 'starting', message: 'Starting Ollama service...' });
-      await startOllamaService();
-    }
-    const nowRunning = await isOllamaRunning();
-    return { ok: nowRunning, error: nowRunning ? null : 'Ollama did not start — try running "ollama serve" manually' };
+    await qvac.getModelId(model);
+    sendSetupProgress({ status: 'ready', message: `${model} ready.`, model });
+    sendLog(`[Setup] ✓ QVAC model ${model} ready.`);
+    return { ok: true };
   } catch (e) {
+    sendSetupProgress({ status: 'error', message: `Model warm-up failed: ${e.message} (retries on first job)`, model });
+    sendLog(`[Setup] ⚠️ QVAC warm-up failed: ${e.message}`);
     return { ok: false, error: e.message };
   }
+}
+
+// ── QVAC AI-setup IPC (no Ollama; model loads in-process) ────────────────────
+
+// Report inference readiness. Nothing to install — QVAC runs in-process — so we
+// just say whether the default model is already loaded.
+ipcMain.handle('setup:check', async () => {
+  try {
+    const model = process.env.QVAC_DEFAULT_MODEL || 'qwen3-1.7b';
+    const realPohUrl = pathToFileURL(path.join(__dirname, '../src/compute/adapters/real-poh.js')).href;
+    const { getQvacModels } = await import(realPohUrl);
+    const qvac = await getQvacModels();
+    const st = qvac && typeof qvac.status === 'function' ? qvac.status() : { loaded: [] };
+    return { running: true, inPath: true, ready: (st.loaded || []).length > 0, model, models: st.loaded || [] };
+  } catch (e) {
+    return { running: true, inPath: true, ready: false, models: [], error: e.message };
+  }
 });
 
-// Pull a model with streaming progress
-ipcMain.handle('setup:pull-model', async (_event, model = 'qwen2.5:1.5b') => {
-  return new Promise((resolve) => {
-    sendSetupProgress({ status: 'pulling', message: `Pulling ${model}...`, model });
-    const req = require('http').request(
-      {
-        hostname: 'localhost', port: 11434, path: '/api/pull',
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-      },
-      (res) => {
-        let buf = '';
-        res.on('data', (chunk) => {
-          buf += chunk.toString();
-          const lines = buf.split('\n');
-          buf = lines.pop();
-          for (const line of lines) {
-            if (!line.trim()) continue;
-            try {
-              const evt = JSON.parse(line);
-              const pct = evt.total ? Math.round((evt.completed / evt.total) * 100) : null;
-              sendSetupProgress({ status: 'pulling', message: evt.status, model, pct, total: evt.total, completed: evt.completed });
-              if (evt.status === 'success') {
-                resolve({ ok: true });
-              }
-            } catch (_) {}
-          }
-        });
-        res.on('end', () => {
-          sendSetupProgress({ status: 'ready', message: `${model} ready.`, model });
-          resolve({ ok: true });
-        });
-      }
-    );
-    req.on('error', (e) => {
-      sendSetupProgress({ status: 'error', message: e.message });
-      resolve({ ok: false, error: e.message });
-    });
-    req.write(JSON.stringify({ name: model, stream: true }));
-    req.end();
-  });
+// Nothing to install — QVAC is an in-process npm dependency.
+ipcMain.handle('setup:install', async () => ({ ok: true }));
+
+// "Pull" == warm up the QVAC model (download + load) with progress.
+ipcMain.handle('setup:pull-model', async (_event, model = 'qwen3-1.7b') => {
+  return warmUpQvacModel(model);
 });

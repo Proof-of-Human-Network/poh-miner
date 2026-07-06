@@ -901,7 +901,7 @@
   <div id="onboarding" class="hidden fixed inset-0 bg-black z-50 flex items-center justify-center p-6">
     <div class="w-full max-w-[720px]">
       
-      <!-- AI Setup Screen (shown when Ollama / model not ready) -->
+      <!-- AI Setup Screen (shown when the QVAC model is not ready) -->
       <div id="step-ai-setup" class="onboarding-step hidden">
         <div class="text-center mb-8">
           <div class="inline-flex items-center gap-x-3 mb-4">
@@ -917,7 +917,7 @@
           <div class="flex items-center gap-3">
             <span id="setup-ollama-icon" class="text-xl">⏳</span>
             <div class="flex-1">
-              <div class="text-sm font-medium">Ollama inference engine</div>
+              <div class="text-sm font-medium">QVAC inference engine</div>
               <div id="setup-ollama-status" class="text-xs text-zinc-500">Checking...</div>
             </div>
           </div>
@@ -944,7 +944,7 @@
           </button>
           <div class="mt-3">
             <button onclick="goToStep('welcome')" class="text-xs text-zinc-600 hover:text-zinc-400 underline">
-              Skip (Ollama required to mine — set up manually later)
+              Skip (the model loads automatically on first use)
             </button>
           </div>
         </div>
@@ -1489,7 +1489,7 @@
       <div class="panel" id="chat-panel">
         <div class="chat-toolbar">
           <span class="chat-model-label">Model</span>
-          <select id="chat-model-select" onchange="onChatModelSelect(this.value)" title="Models from local Ollama and network peers"></select>
+          <select id="chat-model-select" onchange="onChatModelSelect(this.value)" title="Models from local QVAC and network peers"></select>
           <span id="chat-queue-pill" style="display:none;font-size:10px;color:#60a5fa;font-family:monospace;"></span>
           <span id="chat-context-pill" title="Social context active — LLM knows recent activity for this address" style="display:none;"></span>
           <button class="chat-clear-btn" onclick="clearChat()" data-i18n="chat.clear">Clear</button>
@@ -1904,7 +1904,7 @@
               <select id="settings-mining-model" style="width:100%;background:#0a0a0a;border:1px solid #1a1a1a;border-radius:6px;padding:8px 10px;font-family:monospace;font-size:11px;color:#e5e7eb;box-sizing:border-box;">
                 <option value="">Loading models…</option>
               </select>
-              <div style="font-size:10px;color:#444;margin-top:3px;" data-i18n="settings.model_hint">Select from locally installed Ollama models</div>
+              <div style="font-size:10px;color:#444;margin-top:3px;" data-i18n="settings.model_hint">Select the QVAC model</div>
             </div>
 
             <!-- Language -->
@@ -1973,7 +1973,7 @@
           <div class="settings-subpage" id="settings-sub-ai">
             <div>
               <div style="font-size:10px;color:#666;letter-spacing:0.1em;margin-bottom:8px;font-weight:600;">AI PROVIDERS</div>
-              <div style="font-size:10px;color:#444;margin-bottom:8px;">Connect cloud AI providers as a fallback when local Ollama and peer miners are unavailable.</div>
+              <div style="font-size:10px;color:#444;margin-bottom:8px;">Connect cloud AI providers as a fallback when local QVAC and peer miners are unavailable.</div>
               <div id="ai-providers-list" style="display:flex;flex-direction:column;gap:8px;"></div>
             </div>
           </div>
@@ -2130,7 +2130,7 @@
         <div class="mp-empty" data-i18n="picker.loading">Loading models…</div>
       </div>
       <div class="mp-footer">
-        <div style="margin-bottom:6px;">Locally installed Ollama models · used for scan, chat &amp; skills</div>
+        <div style="margin-bottom:6px;">QVAC models · used for scan, chat &amp; skills</div>
         <div style="color:#4b5563;line-height:1.6;">
           To add a model, run in terminal:<br>
           <code style="background:#1a1a1a;border:1px solid #252525;border-radius:4px;padding:2px 6px;font-size:10px;color:#9ca3af;user-select:all;">ollama pull &lt;model-name&gt;</code><br>
