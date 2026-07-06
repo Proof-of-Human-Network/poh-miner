@@ -253,13 +253,17 @@ async function syncFromPeer(peerUrl) {
     if (!tipRes.ok) throw new Error(`tip fetch failed: ${tipRes.status}`);
     const tip = await tipRes.json();
     const peerHeight = tip.height ?? tip.block?.height ?? 0;
-    if (peerHeight <= chain.length - 1) {
-      console.log(`[Bootnode] Peer at height ${peerHeight}, we have ${chain.length - 1} — nothing to sync`);
+    // Local height must come from the tip block's own height, not the array
+    // length: the chain array may be a windowed tail (chain[0].height > 0),
+    // in which case chain.length - 1 is NOT the block height.
+    const localHeight = chain.length ? (chain[chain.length - 1].height ?? chain.length - 1) : -1;
+    if (peerHeight <= localHeight) {
+      console.log(`[Bootnode] Peer at height ${peerHeight}, we have ${localHeight} — nothing to sync`);
       return;
     }
-    console.log(`[Bootnode] Syncing chain from ${peerUrl} (peer height ${peerHeight}, local ${chain.length - 1})…`);
+    console.log(`[Bootnode] Syncing chain from ${peerUrl} (peer height ${peerHeight}, local ${localHeight})…`);
     const BATCH = 200;
-    let from = chain.length;
+    let from = localHeight + 1;
     while (from <= peerHeight) {
       const to = Math.min(from + BATCH - 1, peerHeight);
       const r = await fetch(`${peerUrl}/chain/blocks?from=${from}&to=${to}`, { signal: AbortSignal.timeout(30000) });
@@ -283,7 +287,7 @@ async function syncFromPeer(peerUrl) {
     }
     chainStore.saveChain(chain);
     refreshTxLedger();
-    console.log(`[Bootnode] Sync complete — chain height now ${chain.length - 1}`);
+    console.log(`[Bootnode] Sync complete — chain height now ${chain[chain.length - 1]?.height ?? chain.length - 1}`);
   } catch (e) {
     console.warn(`[Bootnode] Peer sync failed: ${e.message}`);
   }
@@ -308,7 +312,7 @@ const server = http.createServer(async (req, res) => {
 
   try {
     if (url.pathname === '/health' || url.pathname === '/healthz') {
-      res.end(JSON.stringify({ status: 'ok', service: 'poh-bootnode', height: chain.length - 1 }));
+      res.end(JSON.stringify({ status: 'ok', service: 'poh-bootnode', height: chain[chain.length - 1]?.height ?? chain.length - 1 }));
       return;
     }
 
@@ -325,7 +329,7 @@ const server = http.createServer(async (req, res) => {
 
     if (url.pathname === '/chain/blocks') {
       const from = parseInt(url.searchParams.get('from') || '0', 10);
-      let to = parseInt(url.searchParams.get('to') || String(chain.length - 1), 10);
+      let to = parseInt(url.searchParams.get('to') || String(chain[chain.length - 1]?.height ?? chain.length - 1), 10);
       if (!Number.isFinite(from) || !Number.isFinite(to) || from < 0 || to < from) {
         res.statusCode = 400;
         res.end(JSON.stringify({ error: 'invalid from/to range' }));
@@ -369,19 +373,19 @@ const server = http.createServer(async (req, res) => {
               break;
             }
             chain.push(block);
+            chainStore.saveBlock(block); // O(1) append; never rewrite the full ndjson on the hot path
             txLedger.applyBlock(block, { strict: false });
             accepted++;
             console.log(`[Bootnode] Accepted block #${block.height} from miner`);
-          } else if (block.height <= chain.length - 1) {
+          } else if (block.height <= tip.height) {
             // Already have this block — skip silently
           } else {
             break;
           }
         }
 
-        if (accepted > 0) chainStore.saveChain(chain);
         res.statusCode = 200;
-        res.end(JSON.stringify({ accepted, height: chain.length - 1 }));
+        res.end(JSON.stringify({ accepted, height: chain[chain.length - 1]?.height ?? chain.length - 1 }));
       } catch (e) {
         if (e.code === 'BODY_TOO_LARGE') {
           res.statusCode = 413;
@@ -582,7 +586,7 @@ server.listen(PORT, BIND_HOST, () => {
   console.log(`\n🚀 PoH Bootnode running on ${BIND_HOST}:${PORT}`);
   console.log(`   Data dir: ${DATA_DIR}`);
   console.log(`   Local hosts: ${ALLOW_LOCAL_HOSTS ? 'allowed' : 'rejected'}`);
-  console.log(`   Current chain height: ${chain.length - 1}`);
+  console.log(`   Current chain height: ${chain[chain.length - 1]?.height ?? chain.length - 1}`);
   console.log(`\nEndpoints:`);
   console.log(`   GET  /health`);
   console.log(`   GET  /chain/tip`);
