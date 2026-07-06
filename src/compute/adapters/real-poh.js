@@ -165,6 +165,7 @@ let checker = null;
 let brain   = null;
 let loaded  = false;
 let methodsManager = null;
+let qvacModels = null;
 
 async function ensureOllamaModel(model, baseUrl = 'http://localhost:11434') {
   try {
@@ -201,8 +202,9 @@ async function loadRealPohModules() {
     const require = createRequire(import.meta.url);
 
     const checkerPath = path.join(__dirname, '../../checker/index.js');
-    checker = require(checkerPath);
-    brain   = require(path.join(__dirname, '../../checker/utils/brain.js'));
+    checker    = require(checkerPath);
+    brain      = require(path.join(__dirname, '../../checker/utils/brain.js'));
+    qvacModels = require(path.join(__dirname, '../../checker/utils/qvac-models.js'));
 
     methodsManager = await getMethodsManager();
     const originalGetMethods = checker.getMethods || (() => []);
@@ -414,6 +416,12 @@ export async function computeWithRealPoh(job, config) {
 export async function getBrain() {
   await loadRealPohModules();
   return brain;
+}
+
+// QVAC model manager — the shared inference backend (chat/listModels/status).
+export async function getQvacModels() {
+  await loadRealPohModules();
+  return qvacModels;
 }
 
 export function getBrainDataDir() {

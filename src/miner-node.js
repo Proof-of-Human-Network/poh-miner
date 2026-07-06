@@ -40,7 +40,7 @@ import {
 } from './consensus/block-validator.js';
 import { replayChainLedger, replayChainLedgerAsync } from './consensus/tx-ledger.js';
 import { computeVerdictWithExistingPoh } from './compute/poh-adapter.js';
-import { getBrain, getBrainDataDir } from './compute/adapters/real-poh.js';
+import { getBrain, getBrainDataDir, getQvacModels } from './compute/adapters/real-poh.js';
 import { BrainSync } from './brain/brain-sync.js';
 import { PoHTransaction, TxMempool } from './core/transaction.js';
 import { BalanceJournal } from './storage/balance-journal.js';
@@ -5415,12 +5415,11 @@ export class PohMinerNode {
     // ── Compute job path (user-specified model + optional dataset) ─────────────
     if (job.type === 'compute') {
       try {
-        const model   = job.model || this.config.model || 'qwen2.5:1.5b';
+        const model   = job.model || this.config.model || 'qwen3-1.7b';
         const dataset = job.dataset || job.datasetId || null;
         const prompt  = job.payload?.prompt || job.payload?.message || job.payload?.question;
         if (!prompt) throw new Error('payload.prompt is required for compute jobs');
 
-        const ollamaBase = this.config.ollamaUrl || 'http://localhost:11434';
         const messages = [];
         let datasetUsed = null;
 
@@ -5452,15 +5451,16 @@ export class PohMinerNode {
 
         messages.push({ role: 'user', content: prompt });
 
-        const ollamaRes = await fetch(`${ollamaBase}/api/chat`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ model, messages, stream: false, options: { temperature: 0.7 } }),
-          signal: AbortSignal.timeout(60_000),
+        // Run the job on QVAC (in-process). datasetUsed already prepended its own
+        // system message; otherwise give the model a light assistant persona.
+        const qvac = await getQvacModels();
+        if (!qvac || !qvac.ENABLED) throw new Error('Inference backend (QVAC) is unavailable on this miner');
+        const reply = await qvac.chat(messages, {
+          model,
+          timeLimit: 90_000,
+          systemPrompt: datasetUsed ? undefined : 'You are a helpful, concise assistant. Answer in clear Markdown.',
         });
-        if (!ollamaRes.ok) throw new Error(`Model "${model}" is unavailable on this miner (HTTP ${ollamaRes.status})`);
-        const data       = await ollamaRes.json();
-        const reply      = data.message?.content || '';
+        if (reply == null) throw new Error(`Model "${model}" produced no output on this miner (QVAC unavailable)`);
         const tokensUsed = job.estimatedTokens || estimateTokens(0, null);
 
         const result = new ScanResult({
