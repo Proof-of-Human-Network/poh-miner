@@ -71,8 +71,12 @@ export function validateCoinbase(block) {
 
   const workers = coinbase.workerRewards || [];
   if (workers.length === 0) {
-    if (proposer !== BLOCK_REWARD_UPOH) {
-      return { valid: false, reason: 'empty block must award full reward to proposer' };
+    // Empty block: the proposer may take AT MOST the full reward. Taking less
+    // (e.g. a reputation-reduced proposer that burns the remainder) is allowed —
+    // otherwise such a block is un-syncable by every validating peer and stalls
+    // the chain. Taking MORE than the full reward is rejected.
+    if (proposer > BLOCK_REWARD_UPOH) {
+      return { valid: false, reason: 'empty block proposer reward exceeds block reward' };
     }
     return { valid: true };
   }
