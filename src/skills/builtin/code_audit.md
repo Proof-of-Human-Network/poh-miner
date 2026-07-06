@@ -84,8 +84,9 @@ exports.run = async function(input, config) {
   // LLM semantic analysis — checks description alignment and hidden intent
   let llmReason = '';
   try {
-    const ollamaUrl = (config && config.ollamaUrl) || 'http://localhost:11434';
-    const model = (config && config.model) || 'qwen2.5:1.5b';
+    const apiPort = (config && config.walletApiPort) || 3456;
+    const llmUrl = `http://localhost:${apiPort}`;
+    const model = (config && config.model) || 'qwen3-1.7b';
     const codeSnippet = code.slice(0, 2500);
     const prompt = `You are a security auditor reviewing a skill for a decentralized network.
 
@@ -105,7 +106,7 @@ Check:
 
 Respond with ONLY JSON: {"safe": true/false, "reason": "one sentence", "issues": ["...additional issues not already listed..."]}`;
 
-    const r = await fetch(`${ollamaUrl}/api/chat`, {
+    const r = await fetch(`${llmUrl}/api/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

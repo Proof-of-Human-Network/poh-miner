@@ -10,11 +10,13 @@ Decentralized compute layer for the Proof of Human network. Miners race to evalu
 
 Download the latest `.deb` / `.AppImage` / Windows installer from [miner.proofofhuman.ge](https://miner.proofofhuman.ge).
 
-On all platforms, Ollama and the `qwen2.5:1.5b` model are downloaded and started automatically on first launch.
+Inference runs in-process via **QVAC** (the `@qvac/sdk` dependency) — there's no
+separate engine to install. On first launch the model (default `qwen3-1.7b`) is
+downloaded and loaded automatically.
 
 The desktop app includes **Chat** (private sync / public async job queue, blockchain history autocomplete), **Explorer** (blocks, addresses, completed jobs), and **P2P** exchange tabs. MCP servers use the standard `mcpServers` JSON format (`command`, `args`, `env`) in Settings.
 
-> **No Ollama?** The miner still works — chat and skill queries fall back to peer miners on the network that have Ollama running.
+> **Model still downloading?** The miner still works — chat and skill queries fall back to peer miners on the network that already have the model.
 
 ### CLI
 
@@ -54,7 +56,7 @@ Minimal example:
 {
   "bootnodes": ["https://bootnode.proofofhuman.ge"],
   "inferenceMode": "auto",
-  "model": "qwen2.5:1.5b",
+  "model": "qwen3-1.7b",
   "walletApiPort": 3456
 }
 ```
@@ -66,8 +68,7 @@ The miner creates a PoH wallet automatically on first run and stores it in `~/.p
 | `pohWallet` | auto-created | PoH address that earns rewards (created on first run if not set) |
 | `bootnodes` | production bootnode | Peer discovery + chain sync entry points |
 | `inferenceMode` | `auto` | `cpu` / `gpu` / `auto` |
-| `model` | `qwen2.5:1.5b` | Ollama model used by the brain |
-| `ollamaUrl` | `http://localhost:11434` | Ollama API base URL |
+| `model` | `qwen3-1.7b` | QVAC model id/alias (`qwen3-0.6b`…`qwen3-8b`) or a GGUF URL |
 | `walletApiPort` | `3456` | Port for the local API server |
 | `computeEnabled` | `true` | Set `false` to run as relay-only |
 | `region` | `auto` | Geographic region tag for job routing |
@@ -193,7 +194,7 @@ Address search returns balance, recent POH transfers, and **completed jobs** for
 
 ### Chat history search (Meilisearch — bundled, auto-starts)
 
-**Meilisearch is mandatory** and starts automatically with every miner node (like Ollama). On first run the binary is downloaded to `~/.poh-miner/bin/meilisearch`; data lives in `~/.poh-miner/meilisearch-data`. If port 7700 is already in use (e.g. your own Docker container), the node reuses that instance.
+**Meilisearch is mandatory** and starts automatically with every miner node (like the model download). On first run the binary is downloaded to `~/.poh-miner/bin/meilisearch`; data lives in `~/.poh-miner/meilisearch-data`. If port 7700 is already in use (e.g. your own Docker container), the node reuses that instance.
 
 As you type in **Chat**, the miner searches indexed blockchain job history (`promptPreview`, replies, skill outputs) and suggests past questions. Repetitive prompts can return a cached on-chain reply without re-running compute.
 
@@ -284,9 +285,9 @@ Skills are on-demand agent modules that extend what miners can compute. Builtin 
 
 | Endpoint | Description |
 |---|---|
-| `POST /api/chat` | Streaming chat with local Ollama (proxied) |
-| `POST /api/generate` | Ollama generate (proxied) |
-| `GET /api/models` | List models available on this node's Ollama |
+| `POST /api/chat` | Streaming chat via local QVAC (Ollama-compatible response shape) |
+| `POST /api/generate` | QVAC generate (Ollama-compatible response shape) |
+| `GET /api/models` | List models available on this node (built-in + loaded + registry) |
 | `GET /api/brain/state` | Current weights count, feedback count, model info |
 | `GET /api/brain/weights` | Full `weights.json` |
 | `POST /api/brain/feedback` | Submit human correction `{address, aiVerdict, correction, comment, signals}` |
@@ -382,8 +383,8 @@ Tests cover: P2P gossip, block/result signatures, chainWork fork resolution, tra
 
 ## Troubleshooting
 
-All heavy dependencies (the Electron binary, the Ollama installer, the LLM
-model) are downloaded over the network. On a slow or unstable connection a
+All heavy dependencies (the Electron binary and the LLM model) are downloaded
+over the network. On a slow or unstable connection a
 download can drop midway. The app now retries and resumes automatically, but if
 you still get stuck:
 
@@ -403,20 +404,17 @@ ELECTRON_MIRROR=https://npmmirror.com/mirrors/electron/ node node_modules/electr
 A `postinstall` check prints these same instructions automatically when the
 binary is missing.
 
-**Ollama / model setup fails at startup**
-The app auto-installs Ollama and pulls the model on first run and now retries on
-failure. If it still can't finish, install Ollama manually and let the app pull
-the model (`ollama pull` resumes, so re-run until it prints `success`):
+**Model download fails at startup**
+QVAC downloads the model in-process on first run and retries automatically. If it
+can't finish (slow/unstable connection), just restart the miner — the download
+resumes. You can also pick a smaller model in `~/.poh-miner/config.json`:
 
-```bash
-# Windows
-winget install Ollama.Ollama
-# macOS / Linux
-curl -fsSL https://ollama.com/install.sh | sh
-
-ollama serve            # start the service if it isn't already running
-ollama pull qwen2.5:1.5b
+```json
+{ "model": "qwen3-0.6b" }
 ```
+
+Until the model is ready, public-mode chat/skills fall back to peer miners that
+already have it.
 
 ---
 
@@ -432,7 +430,7 @@ npm run build:electron:mac     # macOS: .dmg (x64 + arm64)
 npm run build:electron:all     # all platforms
 ```
 
-The `.deb` postinst script installs Ollama and pulls `qwen2.5:1.5b` automatically on first install.
+The `.deb` needs no inference engine — QVAC runs in-process and the model downloads on first run.
 
 ---
 
@@ -471,7 +469,7 @@ electron/         GUI desktop app (Electron 31)
     index.html    main UI (Home, Logs, Chat, Explorer, P2P, Settings tabs)
     renderer.js   frontend logic (chat queue, history autocomplete, model selector, explorer)
     i18n.js       internationalization strings
-  main.cjs        IPC + Ollama auto-install + window management
+  main.cjs        IPC + QVAC model warm-up + window management
   preload.js      context bridge
 
 landing/          Promotional landing page + binary downloads

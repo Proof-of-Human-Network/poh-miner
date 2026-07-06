@@ -555,21 +555,21 @@ run();</div>
         <!-- LLM & Brain -->
         <section id="llm-brain" class="mb-16">
           <h2 class="text-[32px] mb-6 neon">LLM &amp; Brain</h2>
-          <p class="text-white/55 text-[18px] mb-6">Ollama is proxied through the miner. Brain state stores human feedback and signal weights.</p>
+          <p class="text-white/55 text-[18px] mb-6">Inference runs in-process via QVAC. Brain state stores human feedback and signal weights.</p>
 
           <div class="endpoint-card">
             <div class="mb-2"><span class="method method-post">POST</span> <code class="text-white/90">/api/chat</code></div>
-            <p class="text-white/55 text-[18px]">Streaming chat with local Ollama (OpenAI-compatible body).</p>
+            <p class="text-white/55 text-[18px]">Streaming chat via local QVAC (Ollama-compatible body).</p>
           </div>
 
           <div class="endpoint-card">
             <div class="mb-2"><span class="method method-post">POST</span> <code class="text-white/90">/api/generate</code></div>
-            <p class="text-white/55 text-[18px]">Ollama generate endpoint (proxied).</p>
+            <p class="text-white/55 text-[18px]">QVAC generate endpoint (Ollama-compatible body).</p>
           </div>
 
           <div class="endpoint-card">
             <div class="mb-2"><span class="method method-get">GET</span> <code class="text-white/90">/api/models</code></div>
-            <p class="text-white/55 text-[18px]">Models available on this node's Ollama instance.</p>
+            <p class="text-white/55 text-[18px]">Models available on this node (built-in + loaded + registry).</p>
           </div>
 
           <div class="endpoint-card">

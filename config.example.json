@@ -1,8 +1,8 @@
 {
   "_comment": "Copy this file to config.json (or ~/.poh-miner/config.json). This is the current recommended format used by both CLI and the Electron GUI (onboarding + RPC settings).",
 
-  "ollamaUrl": "http://localhost:11434",
-  "model": "qwen2.5:1.5b",
+  "_model_comment": "Inference runs in-process via QVAC. `model` is a QVAC model id/alias (qwen3-0.6b, qwen3-1.7b, qwen3-4b, qwen3-8b) or a GGUF URL. No Ollama.",
+  "model": "qwen3-1.7b",
   "inferenceMode": "auto",
   "llmApiKey": "",
 

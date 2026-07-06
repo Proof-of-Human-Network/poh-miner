@@ -3,8 +3,7 @@
 
   "wallet": "G8bFssuQsNxmMopW9bjYgA4iuUZ7z8uELiNL6UKvSjyy",
 
-  "ollamaUrl": "http://localhost:11434",
-  "model": "qwen2.5:1.5b",
+  "model": "qwen3-1.7b",
   "inferenceMode": "auto",
 
   "autoStart": true,

@@ -416,7 +416,7 @@ function simulateVerdict(job, config, mgr = null) {
     confidence: 0.72 + Math.random() * 0.25,
     reasoning: 'Computed using real POH logic (simulation mode)',
     signalsUsed: fakeSignals,
-    modelUsed: (config && config.model) || 'qwen2.5:1.5b',
+    modelUsed: (config && config.model) || 'qwen3-1.7b',
     computationTimeMs: Date.now() - start + 650,
     realPohUsed: false,
     profile: { address, simulated: true, fallback: true, links: [], domains: [] },

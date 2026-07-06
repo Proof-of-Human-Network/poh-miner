@@ -791,7 +791,7 @@ ipcMain.handle('app:restart', async () => {
   app.quit();
 });
 
-// ── Ollama / AI setup IPC ────────────────────────────────────────────────────
+// ── AI setup / downloads (QVAC in-process; no Ollama) ────────────────────────
 
 const { execFile, spawn: spawnProc } = require('child_process');
 const https = require('https');
