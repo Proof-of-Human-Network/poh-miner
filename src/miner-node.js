@@ -3858,6 +3858,13 @@ export class PohMinerNode {
 
     let freshStartApplied = false;
     if (isFreshStart && downloadedBlocks.length > 0) {
+      // Never validate/apply an incomplete download: replacing the chain with a
+      // partial prefix would truncate local history. Abort and retry next cycle.
+      const lastDownloaded = downloadedBlocks[downloadedBlocks.length - 1]?.height ?? -1;
+      if (lastDownloaded < bestHeight) {
+        console.warn(`[PoH-Miner] Full sync incomplete (got up to ${lastDownloaded} of ${bestHeight}) — aborting, will retry next cycle`);
+        return;
+      }
       const parsed = downloadedBlocks.map(b => PohBlock.fromJSON ? PohBlock.fromJSON(b) : new PohBlock(b));
 
       // effectiveAnchorHeight: where to splice. Starts as anchorHeight (fork anchor),
@@ -3893,6 +3900,13 @@ export class PohMinerNode {
               console.warn(`[PoH-Miner] Full resync chunk failed (attempt ${fullResyncRetries}/3):`, e.message);
               if (fullResyncRetries >= 3) break;
             }
+          }
+          // Same incomplete-download guard for the re-download: a partial prefix
+          // must never replace the local chain.
+          const lastRedownloaded = downloadedBlocks[downloadedBlocks.length - 1]?.height ?? -1;
+          if (lastRedownloaded < bestHeight) {
+            console.warn(`[PoH-Miner] Full resync incomplete (got up to ${lastRedownloaded} of ${bestHeight}) — aborting, will retry next cycle`);
+            return;
           }
           // Re-parse for the outer apply block below
           parsed.length = 0;
