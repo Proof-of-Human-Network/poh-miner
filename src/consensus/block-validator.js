@@ -126,6 +126,69 @@ export function validateBlockExtended(block, context = {}) {
 }
 
 /**
+ * Validate a full chain downloaded from a configured bootnode for fresh bootstrap.
+ *
+ * The canonical chain's deep history contains known storage gaps (missing
+ * heights, e.g. block 175) and occasional duplicate-height entries from old
+ * fork recovery — strict parent-linkage and difficulty-window re-validation
+ * can never pass over them, which would make it impossible for any new node
+ * to ever bootstrap. This validator mirrors what running nodes actually load:
+ *  - dedupe by height (preferring the entry that links to the kept parent)
+ *  - heights strictly ascending, genesis first; deep-history gaps tolerated
+ *  - the recent tail (default 100 blocks) validated strictly: linkage + PoW
+ *  - chainWork recomputed cumulatively so fork-choice stays consistent
+ * Only use for full-replacement sync from a trusted, configured bootnode.
+ */
+export function validateBootstrapChain(blocks, { strictTailLength = 100 } = {}) {
+  if (!Array.isArray(blocks) || blocks.length === 0) {
+    return { valid: false, reason: 'empty chain' };
+  }
+  const byHeight = new Map();
+  for (const b of blocks) {
+    if (typeof b?.height !== 'number') continue;
+    const kept = byHeight.get(b.height);
+    if (!kept) { byHeight.set(b.height, b); continue; }
+    const parent = byHeight.get(b.height - 1);
+    const parentHash = parent ? blockHash(parent) : null;
+    if (parentHash && b.previousHash === parentHash && kept.previousHash !== parentHash) {
+      byHeight.set(b.height, b);
+    }
+  }
+  const chain = [...byHeight.values()].sort((a, b) => a.height - b.height);
+  if (chain[0].height !== 0) {
+    return { valid: false, reason: `chain does not start at genesis (first height ${chain[0].height})`, height: chain[0].height };
+  }
+  let gaps = 0;
+  for (let i = 1; i < chain.length; i++) {
+    if (chain[i].height !== chain[i - 1].height + 1) gaps++;
+  }
+  const tail = chain.slice(-strictTailLength);
+  for (let i = 1; i < tail.length; i++) {
+    const parent = tail[i - 1];
+    const b = tail[i];
+    if (b.height !== parent.height + 1) {
+      return { valid: false, reason: `gap in recent tail at height ${b.height}`, height: b.height };
+    }
+    if (b.previousHash !== blockHash(parent)) {
+      return { valid: false, reason: `previousHash mismatch in recent tail at height ${b.height}`, height: b.height };
+    }
+    const pow = validateBlockPowOnly(b);
+    if (!pow.valid) {
+      return { valid: false, reason: `${pow.reason} in recent tail at height ${b.height}`, height: b.height };
+    }
+  }
+  // Preserve stored chainWork (the network's accumulated values — recomputing
+  // from a gapped history yields lower totals and would make every peer look
+  // heavier, churning no-op syncs). Fill in only where a block lacks it.
+  let work = '0';
+  for (const b of chain) {
+    work = (b.chainWork && b.chainWork !== '0') ? b.chainWork : computeChainWork(work, b.difficulty ?? 0);
+    b.chainWork = work;
+  }
+  return { valid: true, chain, gaps };
+}
+
+/**
  * Validate a contiguous segment extending an existing canonical prefix.
  * skipPoW: skip PoW recomputation for historical sync where block hash format may differ.
  */
