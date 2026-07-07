@@ -43,10 +43,10 @@
     "build:bin": "pkg . --compress GZip",
     "build:deb": "bash scripts/build-deb.sh",
     "build:electron": "electron-builder",
-    "build:electron:mac": "electron-builder --mac",
-    "build:electron:win": "electron-builder --win",
-    "build:electron:linux": "electron-builder --linux",
-    "build:electron:all": "electron-builder -mwl",
+    "build:electron:mac": "node scripts/fetch-bare-runtimes.cjs darwin-x64 darwin-arm64 && electron-builder --mac",
+    "build:electron:win": "node scripts/fetch-bare-runtimes.cjs win32-x64 && electron-builder --win",
+    "build:electron:linux": "node scripts/fetch-bare-runtimes.cjs linux-x64 linux-arm64 && electron-builder --linux",
+    "build:electron:all": "node scripts/fetch-bare-runtimes.cjs win32-x64 linux-x64 linux-arm64 darwin-x64 darwin-arm64 && electron-builder -mwl",
     "build:all": "npm run build:bin && npm run build:deb",
     "dist": "electron-builder",
     "test": "vitest run",
@@ -101,7 +101,20 @@
       "!config.json",
       "!landing/binaries/**/*",
       "!.poh-miner/**/*",
-      "!dist/**/*"
+      "!dist/**/*",
+      "!node_modules/@qvac/bci-whispercpp/prebuilds/**/*",
+      "!node_modules/@qvac/classification-ggml/prebuilds/**/*",
+      "!node_modules/@qvac/diffusion-cpp/prebuilds/**/*",
+      "!node_modules/@qvac/embed-llamacpp/prebuilds/**/*",
+      "!node_modules/@qvac/ocr-onnx/prebuilds/**/*",
+      "!node_modules/@qvac/onnx/prebuilds/**/*",
+      "!node_modules/@qvac/transcription-parakeet/prebuilds/**/*",
+      "!node_modules/@qvac/transcription-whispercpp/prebuilds/**/*",
+      "!node_modules/@qvac/translation-nmtcpp/prebuilds/**/*",
+      "!node_modules/@qvac/tts-ggml/prebuilds/**/*",
+      "!node_modules/@qvac/vla-ggml/prebuilds/**/*",
+      "!node_modules/@qvac/*/prebuilds/android-*/**/*",
+      "!node_modules/@qvac/*/prebuilds/ios-*/**/*"
     ],
     "mac": {
       "category": "public.app-category.utilities",
@@ -114,6 +127,12 @@
             "arm64"
           ]
         }
+      ],
+      "files": [
+        "!node_modules/@qvac/*/prebuilds/linux-*/**/*",
+        "!node_modules/@qvac/*/prebuilds/win32-*/**/*",
+        "!node_modules/bare-runtime-linux-*/**/*",
+        "!node_modules/bare-runtime-win32-*/**/*"
       ]
     },
     "win": {
@@ -131,6 +150,12 @@
             "x64"
           ]
         }
+      ],
+      "files": [
+        "!node_modules/@qvac/*/prebuilds/darwin-*/**/*",
+        "!node_modules/@qvac/*/prebuilds/linux-*/**/*",
+        "!node_modules/bare-runtime-darwin-*/**/*",
+        "!node_modules/bare-runtime-linux-*/**/*"
       ]
     },
     "linux": {
@@ -151,7 +176,13 @@
         }
       ],
       "category": "Network;Utility;",
-      "icon": "assets/icons"
+      "icon": "assets/icons",
+      "files": [
+        "!node_modules/@qvac/*/prebuilds/darwin-*/**/*",
+        "!node_modules/@qvac/*/prebuilds/win32-*/**/*",
+        "!node_modules/bare-runtime-darwin-*/**/*",
+        "!node_modules/bare-runtime-win32-*/**/*"
+      ]
     },
     "deb": {
       "depends": [],
