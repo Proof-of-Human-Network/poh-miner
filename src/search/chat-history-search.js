@@ -67,7 +67,13 @@ export class ChatHistorySearch {
 
   async init() {
     if (this._initPromise) return this._initPromise;
-    this._initPromise = this._doInit();
+    // Cache only successful inits. A failed init (e.g. a gossip chat job arriving
+    // while Meilisearch is still spawning) must not be cached forever — clear the
+    // promise on rejection so the next caller retries against the live server.
+    this._initPromise = this._doInit().catch(err => {
+      this._initPromise = null;
+      throw err;
+    });
     return this._initPromise;
   }
 

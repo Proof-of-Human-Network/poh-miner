@@ -78,8 +78,32 @@ async function getSdk() {
 }
 
 // ── Model name resolution ───────────────────────────────────────────────────
-// Returns { name, modelSrc } where modelSrc is either an SDK descriptor
-// (constant value) or a raw string (path / URL / HuggingFace GGUF).
+// Returns { name, modelSrc, fallbackSrc? } where modelSrc is either an SDK
+// descriptor (constant value), a raw string (path / URL / HuggingFace GGUF),
+// or — when the blob is already fully cached on disk — the local file path.
+
+// Look up an already-downloaded blob for an SDK model constant. loadModel with
+// a registry:// descriptor re-resolves through the P2P registry even when the
+// blob is cached, which hangs indefinitely on flaky networks; a plain local
+// path skips the network entirely. Returns null when not cached.
+function localBlobPath(descriptor) {
+  const modelId = descriptor && descriptor.modelId;
+  if (!modelId) return null;
+  try {
+    const fs = require('fs');
+    const path = require('path');
+    const os = require('os');
+    const dir = path.join(os.homedir(), '.qvac', 'models');
+    const hit = fs.readdirSync(dir).find(f => f.endsWith(`_${modelId}`) || f === modelId);
+    if (!hit) return null;
+    const full = path.join(dir, hit);
+    if (fs.statSync(full).size < 1024 * 1024) return null; // ignore stubs
+    return full;
+  } catch {
+    return null;
+  }
+}
+
 function resolveModel(sdk, requested) {
   const raw = (requested || '').trim() || DEFAULT_MODEL;
 
@@ -91,11 +115,20 @@ function resolveModel(sdk, requested) {
   // Alias (case-insensitive) → SDK constant name.
   const aliased = ALIASES[raw.toLowerCase()] || raw;
 
-  // Exact SDK exported constant.
-  if (sdk[aliased]) return { name: aliased, modelSrc: sdk[aliased] };
+  // Exact SDK exported constant — prefer the cached local blob when present,
+  // keeping the registry descriptor as fallback (e.g. truncated cache file).
+  if (sdk[aliased]) {
+    const local = localBlobPath(sdk[aliased]);
+    if (local) return { name: aliased, modelSrc: local, fallbackSrc: sdk[aliased] };
+    return { name: aliased, modelSrc: sdk[aliased] };
+  }
 
   // Fall back to the default constant.
-  if (sdk[DEFAULT_MODEL]) return { name: DEFAULT_MODEL, modelSrc: sdk[DEFAULT_MODEL] };
+  if (sdk[DEFAULT_MODEL]) {
+    const local = localBlobPath(sdk[DEFAULT_MODEL]);
+    if (local) return { name: DEFAULT_MODEL, modelSrc: local, fallbackSrc: sdk[DEFAULT_MODEL] };
+    return { name: DEFAULT_MODEL, modelSrc: sdk[DEFAULT_MODEL] };
+  }
 
   throw new Error(`Unknown model "${requested}" and default ${DEFAULT_MODEL} is not exported by @qvac/sdk`);
 }
@@ -124,18 +157,17 @@ async function evictIfNeeded(keepName) {
 
 async function getModelId(requested) {
   const sdk = await getSdk();
-  const { name, modelSrc } = resolveModel(sdk, requested);
+  const { name, modelSrc, fallbackSrc } = resolveModel(sdk, requested);
 
   const existing = _loaded.get(name);
   if (existing) { existing.lastUsed = Date.now(); return existing.modelId; }
 
   if (_loadPromises.has(name)) return _loadPromises.get(name);
 
-  const p = (async () => {
-    await evictIfNeeded(name);
-    console.log(`[qvac] Loading model ${name}...`);
-    const modelId = await sdk.loadModel({
-      modelSrc,
+  const loadOnce = async (src, label) => {
+    console.log(`[qvac] Loading model ${name}${label ? ` (${label})` : ''}...`);
+    return sdk.loadModel({
+      modelSrc: src,
       modelType: 'llm',
       modelConfig: { ctx_size: CTX_SIZE, verbosity: 0 },
       onProgress: (pr) => {
@@ -145,6 +177,19 @@ async function getModelId(requested) {
         }
       },
     });
+  };
+
+  const p = (async () => {
+    await evictIfNeeded(name);
+    let modelId;
+    try {
+      modelId = await loadOnce(modelSrc, fallbackSrc ? 'local blob' : '');
+    } catch (err) {
+      // Local blob unusable (truncated/corrupt) — re-fetch via the registry.
+      if (!fallbackSrc) throw err;
+      console.warn(`[qvac] Local blob load failed (${err.message}) — retrying via registry`);
+      modelId = await loadOnce(fallbackSrc, 'registry');
+    }
     _loaded.set(name, { modelId, lastUsed: Date.now() });
     _loadPromises.delete(name);
     console.log(`[qvac] Model ready: ${name} (id=${modelId})`);
