@@ -36,6 +36,7 @@ import {
   validateBlockExtended,
   validateBlockPowOnly,
   validateBlockChain,
+  validateBootstrapChain,
   findParentBlock,
 } from './consensus/block-validator.js';
 import { replayChainLedger, replayChainLedgerAsync } from './consensus/tx-ledger.js';
@@ -891,29 +892,36 @@ export class PohMinerNode {
     // 3. Bootstrap / sync the chain
     await this.syncChain();
 
-    // 3a. Meilisearch (mandatory) + blockchain chat history index
-    const msCfg = this.config.meilisearch || {};
-    if (msCfg.autoStart !== false) {
-      this._meilisearchServer = await ensureMeilisearch({
-        host: resolveMeilisearchUrl(msCfg),
-        port: msCfg.port,
-        bindHost: msCfg.bindHost,
-        dataDir: msCfg.dataDir || undefined,
-        binaryPath: msCfg.binaryPath,
-        startupTimeoutMs: msCfg.startupTimeoutMs,
-      });
-      if (this._meilisearchServer) {
-        const stopMeili = () => { try { this._meilisearchServer?.stop(); } catch { /* */ } };
-        process.on('exit', stopMeili);
-        process.on('SIGINT', stopMeili);
-        process.on('SIGTERM', stopMeili);
+    // 3a. Meilisearch + blockchain chat history index.
+    // Search failing must never block mining — chatHistorySearch degrades to
+    // disabled mode on its own when the server is unreachable.
+    try {
+      const msCfg = this.config.meilisearch || {};
+      if (msCfg.autoStart !== false) {
+        this._meilisearchServer = await ensureMeilisearch({
+          host: resolveMeilisearchUrl(msCfg),
+          port: msCfg.port,
+          bindHost: msCfg.bindHost,
+          dataDir: msCfg.dataDir || undefined,
+          binaryPath: msCfg.binaryPath,
+          startupTimeoutMs: msCfg.startupTimeoutMs,
+        });
+        if (this._meilisearchServer) {
+          const stopMeili = () => { try { this._meilisearchServer?.stop(); } catch { /* */ } };
+          process.on('exit', stopMeili);
+          process.on('SIGINT', stopMeili);
+          process.on('SIGTERM', stopMeili);
+        }
+        const meiliKey = getMeilisearchMasterKey(msCfg) || this._meilisearchServer?.masterKey;
+        if (meiliKey) this.chatHistorySearch.apiKey = meiliKey;
       }
-      const meiliKey = getMeilisearchMasterKey(msCfg) || this._meilisearchServer?.masterKey;
-      if (meiliKey) this.chatHistorySearch.apiKey = meiliKey;
+      await this.chatHistorySearch.init();
+      const localRecords = this.jobResults ? Array.from(this.jobResults.values()) : [];
+      await this.chatHistorySearch.reindexAll(this.chain, localRecords);
+    } catch (e) {
+      console.warn(`[PoH-Miner] Chat-history search disabled — Meilisearch unavailable: ${e.message}`);
+      console.warn('[PoH-Miner] Mining continues without search. Fix Meilisearch and restart to re-enable.');
     }
-    await this.chatHistorySearch.init();
-    const localRecords = this.jobResults ? Array.from(this.jobResults.values()) : [];
-    await this.chatHistorySearch.reindexAll(this.chain, localRecords);
 
     // 3. Connect to the P2P network
     await this.connectToNetwork();
@@ -3897,18 +3905,26 @@ export class PohMinerNode {
       {
         const anchorIdx = effectiveAnchorHeight >= 0 ? effectiveAnchorHeight - chainOffset : -1;
         const prefix = effectiveAnchorHeight >= 0 ? this.chain.slice(0, anchorIdx + 1) : [];
-        // Skip PoW and signature re-verification for historical sync: block hash format
-        // may differ from when these blocks were originally mined. Chain linkage and
-        // difficulty adjustment are still verified.
-        const chainCheck = validateBlockChain(parsed, prefix, { extended: false, skipPoW: true });
+        const isFullReplacement = effectiveAnchorHeight < 0;
+        // Full replacement bootstraps from a configured bootnode whose deep history has
+        // known gaps/duplicate heights — strict linkage can never pass there, so use the
+        // bootstrap validator (dedupe + gap tolerance + strict recent tail). Partial
+        // reorgs splice recent contiguous blocks and keep full strict validation.
+        const chainCheck = isFullReplacement
+          ? validateBootstrapChain(parsed)
+          : validateBlockChain(parsed, prefix, { extended: false, skipPoW: true });
         if (!chainCheck.valid) {
           console.warn(`[PoH-Miner] Fresh-start sync rejected at #${chainCheck.height} (${chainCheck.reason})`);
           return;
         }
-        this.chain = effectiveAnchorHeight >= 0
-          ? [...prefix, ...parsed]
-          : parsed;
-        for (const b of parsed) {
+        if (isFullReplacement && chainCheck.gaps > 0) {
+          console.warn(`[PoH-Miner] Bootstrap chain has ${chainCheck.gaps} known gap(s) in deep history — tolerated (matches canonical chain)`);
+        }
+        this.chain = isFullReplacement
+          ? chainCheck.chain
+          : [...prefix, ...parsed];
+        const appliedBlocks = isFullReplacement ? chainCheck.chain : parsed;
+        for (const b of appliedBlocks) {
           for (const r of (b.scanResults || [])) {
             if (r.requestId && !this.minedRequestIds.has(r.requestId)) {
               this.minedRequestIds.add(r.requestId);

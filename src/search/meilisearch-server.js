@@ -249,6 +249,14 @@ export class MeilisearchServer {
         console.warn(
           `[PoH-Meili] Exited code=${code} signal=${sig}${detail ? ` — ${detail}` : ''}`,
         );
+        // 0xC0000135 = STATUS_DLL_NOT_FOUND: meilisearch.exe needs the MSVC runtime.
+        if (process.platform === 'win32' && (code === 3221225781 || code === 0xC0000135)) {
+          console.warn(
+            '[PoH-Meili] Windows is missing the Microsoft Visual C++ Redistributable required by meilisearch.exe. ' +
+            'Install it from https://aka.ms/vs/17/release/vc_redist.x64.exe and restart the miner. ' +
+            'Mining continues without chat-history search until then.',
+          );
+        }
       });
     });
 
