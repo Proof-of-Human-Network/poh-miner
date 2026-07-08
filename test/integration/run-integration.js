@@ -97,11 +97,13 @@ async function runTests() {
     originCountry: 'US',
   });
 
+  // 120s: the first verdict pays QVAC's cold model load (~30s into RAM) on top
+  // of the multi-signal evaluation itself.
   const gotRealResult = await waitFor(() => {
     return miners.some(m => (m.submissionHistory || []).some(r =>
       r.requestId === raceJob.id && r.realPohUsed === true
     ));
-  });
+  }, 120000);
 
   assert(gotRealResult, 'At least one miner produced a result with realPohUsed === true');
 

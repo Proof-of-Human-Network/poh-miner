@@ -427,7 +427,9 @@ describe('Fix 5 — Proof of Work', () => {
     const { mineBlock } = await import('../src/consensus/pow.js');
     const block = await makeBlock({ difficulty: 1, nonce: 0 });
     const attempts = await mineBlock(block, 1, null);
-    expect(attempts).toBeGreaterThan(0);
+    // attempts can legitimately be 0: at difficulty 1 the initial nonce already
+    // meets the target ~1/16 of the time. The real assertion is a valid PoW.
+    expect(attempts).toBeGreaterThanOrEqual(0);
     expect(block.meetsDifficultySync()).toBe(true);
   });
 
@@ -466,20 +468,22 @@ describe('Fix 5 — Proof of Work', () => {
   it('getNextDifficulty increases when blocks are too fast', async () => {
     const { getNextDifficulty } = await import('../src/consensus/pow.js');
     const now = Date.now();
-    // 11 blocks in 5 seconds = ~500ms avg (way below 30s target)
+    // 11 blocks at ~500ms avg — under 10% of the 60s target, so the adjuster
+    // steps +2 to converge quickly.
     const fastChain = Array.from({ length: 11 }, (_, i) => ({
       timestamp: now + i * 500,
       difficulty: 5,
     }));
-    expect(getNextDifficulty(fastChain)).toBe(6);
+    expect(getNextDifficulty(fastChain)).toBe(7);
   });
 
   it('getNextDifficulty decreases when blocks are too slow', async () => {
     const { getNextDifficulty } = await import('../src/consensus/pow.js');
     const now = Date.now();
-    // 11 blocks at 120s each = way above 30s target
+    // 11 blocks at 300s each — over 4× the 60s target, steps -2 but clamps
+    // at MIN_DIFFICULTY (5).
     const slowChain = Array.from({ length: 11 }, (_, i) => ({
-      timestamp: now + i * 120_000,
+      timestamp: now + i * 300_000,
       difficulty: 6,
     }));
     expect(getNextDifficulty(slowChain)).toBe(5);
@@ -594,8 +598,8 @@ describe('Fix 6 — Balance Journal & Reorg', () => {
     journal.record(10, w.address, 500, 1, null); // height=10, nonceDelta=1
     journal.record(11, w.address, 250, 1, null);
 
-    // Simulate the credited balance
-    wm.credit(w.address, 750);
+    // Simulate the credited balance (credit is async — per-address lock)
+    await wm.credit(w.address, 750);
     const loaded = wm.loadWallet(w.address);
     loaded.nonce = 5;
     wm.saveWallet(loaded);
@@ -635,8 +639,8 @@ describe('Fix 6 — Balance Journal & Reorg', () => {
     wm.saveWallet(wallet);
 
     const journal = new BalanceJournal(dir, wm);
-    // Simulate a block crediting this wallet
-    wm.credit(wallet.address, 1000);
+    // Simulate a block crediting this wallet (credit is async — per-address lock)
+    await wm.credit(wallet.address, 1000);
     journal.record(5, wallet.address, 1000, 0, 'reward');
     expect(wm.getBalance(wallet.address)).toBe(1000);
 

@@ -22,9 +22,26 @@ describe('Result Validator', () => {
     vi.clearAllMocks();
   });
 
-  it('should reject results with stale methodsHash', async () => {
+  it('tolerates a plausible-but-rotated methodsHash (set can update mid-job)', async () => {
+    // A hash that was current at job start but rotated mid-job is still honest
+    // work — but the full POH output is required for peers to re-verify it.
     const result = {
       methodsHash: 'old-hash',
+      signalsUsed: ['m1', 'm2', 'm3'],
+      methodsCount: 3,
+      verdict: 'HUMAN',
+      confidence: 0.9,
+      profile: { activityLevel: 'active' },
+      reasoning: 'consistent on-chain activity across signals',
+    };
+
+    const validation = await validateResultWork(result);
+    expect(validation.isValid).toBe(true);
+  });
+
+  it('rejects results with a bogus/simulated methodsHash', async () => {
+    const result = {
+      methodsHash: 'sim-fake',
       signalsUsed: ['m1', 'm2', 'm3'],
       methodsCount: 3,
     };

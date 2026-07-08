@@ -5836,7 +5836,7 @@ export class PohMinerNode {
     if (result.verdict === 'SKILL_RESULT' || result.verdict === 'COMPUTE_RESULT') return true;
 
     if (!this.methodsManager) return true; // during early bootstrap
-    if (!result.methodsHash) return false;
+    if (!result.methodsHash || result.methodsHash === 'unknown') return false;
 
     const currentHash = this.methodsManager.hash;
 
@@ -5846,7 +5846,15 @@ export class PohMinerNode {
       return true; // still accept for local testing
     }
 
-    return result.methodsHash === currentHash;
+    // A mismatched-but-plausible hash is tolerated here: the live signal set can
+    // rotate while a job is computing, and validateResultWork (deep validation)
+    // is the accountable gate — it records the submission and slashes on low
+    // quality. Hard-rejecting here would silently drop honest work with no
+    // history entry and no reputation accounting.
+    if (result.methodsHash !== currentHash) {
+      console.warn(`[PoH-Miner] Result methodsHash rotated mid-job (${result.methodsHash.slice(0, 12)}… vs ${String(currentHash).slice(0, 12)}…) — deferring to deep validation`);
+    }
+    return true;
   }
 
   startBlockProduction() {

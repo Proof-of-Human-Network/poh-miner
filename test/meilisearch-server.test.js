@@ -1,5 +1,8 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import net from 'net';
+import os from 'os';
+import fs from 'fs';
+import path from 'path';
 import {
   resolveMeilisearchUrl,
   isPortListening,
@@ -30,8 +33,20 @@ describe('meilisearch-server', () => {
   });
 
   it('reads master key from config apiKey', () => {
-    const key = 'a'.repeat(32);
-    expect(getMeilisearchMasterKey({ apiKey: key })).toBe(key);
-    expect(getMeilisearchMasterKey({ apiKey: 'short' })).toBeNull();
+    // Isolate from any real ~/.poh-miner/meilisearch-master-key on this machine
+    // (getMeilisearchMasterKey falls back to the persisted file via os.homedir()).
+    const fakeHome = fs.mkdtempSync(path.join(os.tmpdir(), 'meili-key-test-'));
+    vi.spyOn(os, 'homedir').mockReturnValue(fakeHome);
+    const prevEnv = process.env.MEILI_MASTER_KEY;
+    delete process.env.MEILI_MASTER_KEY;
+    try {
+      const key = 'a'.repeat(32);
+      expect(getMeilisearchMasterKey({ apiKey: key })).toBe(key);
+      expect(getMeilisearchMasterKey({ apiKey: 'short' })).toBeNull();
+    } finally {
+      if (prevEnv !== undefined) process.env.MEILI_MASTER_KEY = prevEnv;
+      vi.restoreAllMocks();
+      fs.rmSync(fakeHome, { recursive: true, force: true });
+    }
   });
 });
