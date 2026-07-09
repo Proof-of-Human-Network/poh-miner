@@ -314,6 +314,22 @@ function computeJobPaymentHash({ jobId, requesterAddress, minerAddress, amount, 
     .digest('hex');
 }
 
+/**
+ * True only for requests originating on this machine and NOT relayed through a
+ * reverse proxy. nginx proxies to 127.0.0.1:3456, so req.socket.remoteAddress is
+ * loopback for every external request too — a loopback check alone is bypassed by
+ * any proxied traffic. A real reverse proxy always stamps X-Forwarded-For /
+ * X-Real-IP; a genuine local admin client (the node's own desktop/CLI UI) does not.
+ * Guards endpoints that sign with on-disk keys or push notifications.
+ */
+function isTrulyLocalRequest(req) {
+  const remote = (req.socket.remoteAddress || '').replace(/^::ffff:/, '');
+  const isLoopback = remote === '127.0.0.1' || remote === '::1';
+  if (!isLoopback) return false;
+  if (req.headers['x-forwarded-for'] || req.headers['x-real-ip'] || req.headers['forwarded']) return false;
+  return true;
+}
+
 // Well-known production bootnodes. Used when no bootnodes are configured
 // (e.g. fresh GUI onboarding). Individual users can override via config.bootnodes.
 const DEFAULT_BOOTNODES = [
@@ -1209,9 +1225,7 @@ export class PohMinerNode {
       // Localhost-only: this signs away POH on request, so it must never be reachable
       // from outside the machine running the node.
       if (req.method === 'POST' && url.pathname === '/api/wallet/sign-job-payment') {
-        const remote = req.socket.remoteAddress || '';
-        const isLocalRequest = remote === '127.0.0.1' || remote === '::1' || remote === '::ffff:127.0.0.1';
-        if (!isLocalRequest) {
+        if (!isTrulyLocalRequest(req)) {
           res.statusCode = 403;
           return res.end(JSON.stringify({ error: 'This endpoint is restricted to localhost.' }));
         }
@@ -1334,13 +1348,9 @@ export class PohMinerNode {
         // Localhost-only: this endpoint signs with private keys held on this node's
         // disk, so a remote caller could drain any locally-created wallet. External
         // clients must build + sign their own tx and POST it to /api/tx/submit.
-        {
-          const remote = req.socket.remoteAddress || '';
-          const isLocalRequest = remote === '127.0.0.1' || remote === '::1' || remote === '::ffff:127.0.0.1';
-          if (!isLocalRequest) {
-            res.statusCode = 403;
-            return res.end(JSON.stringify({ error: 'This endpoint is restricted to localhost. Sign your transaction client-side and use /api/tx/submit.' }));
-          }
+        if (!isTrulyLocalRequest(req)) {
+          res.statusCode = 403;
+          return res.end(JSON.stringify({ error: 'This endpoint is restricted to localhost. Sign your transaction client-side and use /api/tx/submit.' }));
         }
         let body = '';
         req.on('data', chunk => body += chunk);
@@ -1895,13 +1905,9 @@ export class PohMinerNode {
       if (req.method === 'POST' && url.pathname === '/api/push/send') {
         // Localhost-only: a public caller could push arbitrary (phishing)
         // notifications to every registered wallet device.
-        {
-          const remote = req.socket.remoteAddress || '';
-          const isLocalRequest = remote === '127.0.0.1' || remote === '::1' || remote === '::ffff:127.0.0.1';
-          if (!isLocalRequest) {
-            res.statusCode = 403;
-            return res.end(JSON.stringify({ error: 'This endpoint is restricted to localhost.' }));
-          }
+        if (!isTrulyLocalRequest(req)) {
+          res.statusCode = 403;
+          return res.end(JSON.stringify({ error: 'This endpoint is restricted to localhost.' }));
         }
         let body = '';
         req.on('data', c => body += c);
@@ -2013,10 +2019,8 @@ export class PohMinerNode {
       // set config.llmApiKey to allow external access via "Authorization: Bearer".
       const llmPaths = ['/api/chat', '/api/generate', '/api/embeddings', '/api/models'];
       if (llmPaths.includes(url.pathname)) {
-        const remote = req.socket.remoteAddress || '';
-        const isLocalRequest = remote === '127.0.0.1' || remote === '::1' || remote === '::ffff:127.0.0.1';
         const llmApiKey = this.config.llmApiKey;
-        if (!isLocalRequest) {
+        if (!isTrulyLocalRequest(req)) {
           if (!llmApiKey) {
             res.statusCode = 403;
             return res.end(JSON.stringify({ error: 'LLM API is restricted to localhost. Set llmApiKey in config to allow external access.' }));
