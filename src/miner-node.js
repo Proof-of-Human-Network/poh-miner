@@ -1301,6 +1301,25 @@ export class PohMinerNode {
       // Send endpoint — builds, signs, and submits a proper on-chain PoHTransaction.
       // For local wallets (created by this node) the signing key is on disk; for external
       // wallets that registered a key via /api/wallet/register-key this also works.
+      // POST /api/wallet/rebuild — recompute wallet balances from the canonical chain.
+      // Called by the mobile wallet's "Rebuild" action. The replay is expensive
+      // (30-120s over 50k blocks) so it runs async and is rate-limited globally.
+      if (req.method === 'POST' && url.pathname === '/api/wallet/rebuild') {
+        const now = Date.now();
+        const COOLDOWN_MS = 10 * 60 * 1000;
+        if (this._lastBalanceRebuildAt && now - this._lastBalanceRebuildAt < COOLDOWN_MS) {
+          res.statusCode = 429;
+          return res.end(JSON.stringify({
+            error: 'rebuild cooldown active',
+            retryAfterMs: COOLDOWN_MS - (now - this._lastBalanceRebuildAt),
+          }));
+        }
+        this._lastBalanceRebuildAt = now;
+        this._rebuildBalancesFromChain().catch(e => console.warn('[PoH-Miner] API-triggered balance rebuild failed:', e.message));
+        res.statusCode = 202;
+        return res.end(JSON.stringify({ ok: true, status: 'rebuilding' }));
+      }
+
       if (req.method === 'GET' && url.pathname === '/api/chain/supply-audit') {
         try {
           const audit = this._supplyAudit();
@@ -1312,6 +1331,17 @@ export class PohMinerNode {
       }
 
       if (req.method === 'POST' && url.pathname === '/api/wallet/send') {
+        // Localhost-only: this endpoint signs with private keys held on this node's
+        // disk, so a remote caller could drain any locally-created wallet. External
+        // clients must build + sign their own tx and POST it to /api/tx/submit.
+        {
+          const remote = req.socket.remoteAddress || '';
+          const isLocalRequest = remote === '127.0.0.1' || remote === '::1' || remote === '::ffff:127.0.0.1';
+          if (!isLocalRequest) {
+            res.statusCode = 403;
+            return res.end(JSON.stringify({ error: 'This endpoint is restricted to localhost. Sign your transaction client-side and use /api/tx/submit.' }));
+          }
+        }
         let body = '';
         req.on('data', chunk => body += chunk);
         req.on('end', async () => {
@@ -1863,6 +1893,16 @@ export class PohMinerNode {
       // POST /api/push/send  { title, body, address? }
       // address omitted → broadcast to all registered wallets
       if (req.method === 'POST' && url.pathname === '/api/push/send') {
+        // Localhost-only: a public caller could push arbitrary (phishing)
+        // notifications to every registered wallet device.
+        {
+          const remote = req.socket.remoteAddress || '';
+          const isLocalRequest = remote === '127.0.0.1' || remote === '::1' || remote === '::ffff:127.0.0.1';
+          if (!isLocalRequest) {
+            res.statusCode = 403;
+            return res.end(JSON.stringify({ error: 'This endpoint is restricted to localhost.' }));
+          }
+        }
         let body = '';
         req.on('data', c => body += c);
         req.on('end', async () => {
