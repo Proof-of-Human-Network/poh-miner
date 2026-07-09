@@ -5236,8 +5236,53 @@ export class PohMinerNode {
         return false;
       }
     }
+
+    // Reconcile wallet balances + the in-memory ledger with the canonical chain.
+    // Journal-based incremental rollback can leave per-wallet files diverged from
+    // the canonical chain — e.g. a transfer credited on the losing branch whose
+    // recipient credit is not re-applied identically on the winning branch, which
+    // silently loses the recipient's funds until the next full rebuild. Replaying
+    // the canonical chain (~1s) and rewriting only the addresses the reorg touched
+    // keeps live balances authoritative without a full 50k-block rebuild.
+    const touched = new Set();
+    for (const block of [...rolledBack, ...newBlocks]) {
+      for (const tx of (block.transactions || [])) {
+        if (tx.from) touched.add(tx.from);
+        if (tx.to) touched.add(tx.to);
+      }
+      if (block.minerWallet) touched.add(block.minerWallet);
+      for (const w of (block.coinbaseReward?.workerRewards || [])) {
+        if (w.workerId) touched.add(w.workerId);
+      }
+    }
+    const canonical = replayChainLedger(this.chain, { applyP2P: true });
+    this.txLedger = canonical;
+    this.txMempool.setSpentTxHashes(canonical.spentTxHashes);
+    for (const addr of touched) {
+      const bal = canonical.getBalance(addr);
+      const non = canonical.getNonce(addr);
+      let w = this.walletManager.loadWallet(addr)
+        || new Wallet({ address: addr, privateKey: null, publicKey: null, createdAt: Date.now() });
+      w.balance = bal;
+      w.nonce   = non;
+      this.walletManager.saveWallet(w);
+    }
+
+    // Re-inject transactions from rolled-back blocks that the winning branch did
+    // not include, so they get re-mined instead of being silently dropped.
+    const reappliedHashes = new Set();
+    for (const block of newBlocks) {
+      for (const tx of (block.transactions || [])) reappliedHashes.add(tx.txHash);
+    }
+    for (const block of rolledBack) {
+      for (const txData of (block.transactions || [])) {
+        if (reappliedHashes.has(txData.txHash) || canonical.spentTxHashes.has(txData.txHash)) continue;
+        this.txMempool.submit(txData); // re-validates; silently ignored if now invalid
+      }
+    }
+
     this.chainStore.saveChain(this.chain);
-    console.log(`[PoH-Miner] Reorg complete. New tip: #${this.chain[this.chain.length - 1].height}`);
+    console.log(`[PoH-Miner] Reorg complete. New tip: #${this.chain[this.chain.length - 1].height} (reconciled ${touched.size} wallet(s))`);
     return true;
   }
 
