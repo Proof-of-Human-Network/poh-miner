@@ -31,6 +31,7 @@ import {
 import { applyBootnodeCors } from './security/api-security.js';
 import { Wallet } from './wallet/wallet.js';
 import { IPFSStore } from './storage/ipfs-store.js';
+import { JobBoard } from './jobs/job-board.js';
 
 const ipfsStore = new IPFSStore();
 
@@ -57,6 +58,23 @@ const PEER_TTL_MS = 10 * 60 * 1000; // 10 minutes
 // Miners pull events they haven't seen yet via GET /brain/events?since=<ts>.
 const BRAIN_EVENTS_FILE = path.join(DATA_DIR, 'brain_events.json');
 const MAX_BRAIN_EVENTS = 10000; // rolling window
+
+// NAT-friendly pull-based compute job distribution (see job-board.js).
+const jobBoard = new JobBoard();
+
+/** Verify a signed board action. Returns { wallet } (canonical) or { error }. */
+function verifyBoardAuth({ wallet, signingPublicKey, signature, timestamp }, action, extraFields = {}) {
+  if (!signingPublicKey || !signature) return { error: 'missing auth fields' };
+  const canonical = Wallet.deriveAddressFromSigningKey(signingPublicKey);
+  if (!canonical) return { error: 'invalid signing public key' };
+  if (Math.abs(Date.now() - (timestamp || 0)) > 5 * 60 * 1000) return { error: 'request expired' };
+  const payload = JSON.stringify({ action, wallet: canonical, timestamp, ...extraFields });
+  if (!Wallet.verifySignature(signingPublicKey, payload, signature)) {
+    const alt = JSON.stringify({ action, wallet: wallet || canonical, timestamp, ...extraFields });
+    if (!Wallet.verifySignature(signingPublicKey, alt, signature)) return { error: 'invalid signature' };
+  }
+  return { wallet: canonical };
+}
 
 let brainEvents = []; // { type, data, ts, minerWallet, eventHash, signature? }
 let brainEventHashes = new Set();
@@ -325,6 +343,61 @@ const server = http.createServer(async (req, res) => {
         chainWork: tip.chainWork || '0',
       }));
       return;
+    }
+
+    // ── Pull-based compute job board (NAT-friendly job distribution) ────────────
+    if (url.pathname === '/jobboard/stats') {
+      res.end(JSON.stringify(jobBoard.stats()));
+      return;
+    }
+
+    // Submit a compute job to the board. Open to clients (same as gossiping a job).
+    if (req.method === 'POST' && url.pathname === '/jobboard/submit') {
+      const raw = await readLimitedBody(req, MAX_BODY_BYTES);
+      const job = JSON.parse(raw || 'null');
+      const r = jobBoard.submit(job);
+      if (r.error) { res.statusCode = 400; return res.end(JSON.stringify(r)); }
+      return res.end(JSON.stringify(r));
+    }
+
+    // Poll for claimable jobs.
+    if (req.method === 'GET' && url.pathname === '/jobboard/open') {
+      const limit  = Math.min(50, parseInt(url.searchParams.get('limit') || '10', 10));
+      const region = url.searchParams.get('region') || null;
+      return res.end(JSON.stringify({ jobs: jobBoard.listOpen({ limit, region }) }));
+    }
+
+    // Claim a job (signed). Only a real wallet can claim so results are attributable.
+    if (req.method === 'POST' && url.pathname === '/jobboard/claim') {
+      const body = JSON.parse((await readLimitedBody(req, MAX_BODY_BYTES)) || '{}');
+      const { jobId } = body;
+      if (!jobId) { res.statusCode = 400; return res.end(JSON.stringify({ error: 'jobId required' })); }
+      const auth = verifyBoardAuth(body, 'claim-job', { jobId });
+      if (auth.error) { res.statusCode = 401; return res.end(JSON.stringify(auth)); }
+      const r = jobBoard.claim(jobId, auth.wallet);
+      if (r.error) { res.statusCode = 409; return res.end(JSON.stringify(r)); }
+      return res.end(JSON.stringify(r));
+    }
+
+    // Post a result for a claimed job (signed by the claimer).
+    if (req.method === 'POST' && url.pathname === '/jobboard/result') {
+      const body = JSON.parse((await readLimitedBody(req, MAX_BODY_BYTES)) || '{}');
+      const { jobId, result } = body;
+      if (!jobId || result == null) { res.statusCode = 400; return res.end(JSON.stringify({ error: 'jobId and result required' })); }
+      const auth = verifyBoardAuth(body, 'job-result', { jobId });
+      if (auth.error) { res.statusCode = 401; return res.end(JSON.stringify(auth)); }
+      const r = jobBoard.postResult(jobId, auth.wallet, result);
+      if (r.error) { res.statusCode = 409; return res.end(JSON.stringify(r)); }
+      return res.end(JSON.stringify(r));
+    }
+
+    // Poll a job's status/result (for the original submitter).
+    if (req.method === 'GET' && url.pathname === '/jobboard/status') {
+      const jobId = url.searchParams.get('jobId');
+      if (!jobId) { res.statusCode = 400; return res.end(JSON.stringify({ error: 'jobId required' })); }
+      const s = jobBoard.get(jobId);
+      if (!s) { res.statusCode = 404; return res.end(JSON.stringify({ error: 'job not found' })); }
+      return res.end(JSON.stringify(s));
     }
 
     if (url.pathname === '/chain/blocks') {

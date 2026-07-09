@@ -953,8 +953,22 @@ export class PohMinerNode {
     // 4. Start listening for jobs (now using the smart JobQueue)
     this.startJobListener();
 
-    // 5. Start block production
-    this.startBlockProduction();
+    // 5. Start block production — unless running follower-only. A node behind NAT
+    // can't propagate the blocks it mines (peers can't reach it to receive them),
+    // so it only forks itself against the network and forces constant reorgs on
+    // reachable nodes. Follower mode still syncs the chain and computes jobs.
+    const miningDisabled = this.config.mining === false || this.config.followerOnly === true
+      || process.env.POH_NO_MINING === '1';
+    if (miningDisabled) {
+      console.log('[PoH-Miner] Follower-only mode — block production disabled (syncs + computes jobs, does not mine).');
+    } else {
+      this.startBlockProduction();
+    }
+
+    // 6. Pull-based compute worker — poll the bootnode job board for work. This is
+    // how a node behind NAT (which can't be pushed gossiped jobs) earns compute
+    // rewards. Default on; disable with config.computeWorker === false.
+    this.startBoardWorker();
 
     console.log('[PoH-Miner] Node is live and ready to compute.');
     console.log(`[PoH-Miner] Signals: ${this.methodsManager?.getStatus().hash} (${this.methodsManager?.getStatus().count} methods) | Region:`, this.myLatencyProfile?.region);
@@ -5357,6 +5371,92 @@ export class PohMinerNode {
       return;
     }
     console.log('[PoH-Miner] Job queue drained — idle');
+  }
+
+  // ── Pull-based compute worker (bootnode job board) ──────────────────────────
+  // Poll the bootnode for open compute jobs, claim one, compute it locally, and
+  // post the result back. Works through NAT (all connections are outbound), so a
+  // home miner earns compute rewards without being publicly reachable.
+  startBoardWorker() {
+    if (this.config.computeWorker === false) return;
+    const bootnode = (this.config.bootnodes && this.config.bootnodes[0]) || null;
+    if (!bootnode) return;
+    if (!this.identityWallet?.signingPublicKey || !this.identityWallet?.sign) {
+      console.warn('[PoH-Worker] No identity signing key — compute worker disabled.');
+      return;
+    }
+    this._boardBase = bootnode.replace(/\/$/, '');
+    const intervalMs = this.config.boardPollMs || 15_000;
+    this._boardBusy = false;
+    this._boardWorkerTimer = setInterval(() => this._pollBoardOnce().catch(() => {}), intervalMs);
+    console.log(`[PoH-Worker] Pull-based compute worker polling ${this._boardBase}/jobboard every ${intervalMs / 1000}s`);
+  }
+
+  _signBoardAction(action, extra, timestamp) {
+    const signingPublicKey = this.identityWallet.signingPublicKey;
+    const canonical = Wallet.deriveAddressFromSigningKey(signingPublicKey);
+    const payload = JSON.stringify({ action, wallet: canonical, timestamp, ...extra });
+    return { wallet: canonical, signingPublicKey, signature: this.identityWallet.sign(payload) };
+  }
+
+  async _pollBoardOnce() {
+    if (this._boardBusy || this._syncInProgress) return;
+    const base = this._boardBase;
+    const region = this.myLatencyProfile?.region;
+    const listRes = await fetch(`${base}/jobboard/open?limit=1${region ? `&region=${encodeURIComponent(region)}` : ''}`,
+      { signal: AbortSignal.timeout(10_000) });
+    if (!listRes.ok) return;
+    const { jobs } = await listRes.json();
+    if (!jobs?.length) return;
+    const job = jobs[0];
+
+    this._boardBusy = true;
+    try {
+      // Claim (atomic on the board — a 409 means another worker won the race)
+      const ts = Date.now();
+      const claimRes = await fetch(`${base}/jobboard/claim`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ jobId: job.id, timestamp: ts, ...this._signBoardAction('claim-job', { jobId: job.id }, ts) }),
+        signal: AbortSignal.timeout(10_000),
+      });
+      if (!claimRes.ok) return;
+      const { job: claimed } = await claimRes.json();
+      console.log(`[PoH-Worker] Claimed board job ${claimed.id} (${claimed.type || 'verdict'}) — computing…`);
+
+      const result = await this._computeBoardJob(claimed);
+      if (!result) return;
+
+      const ts2 = Date.now();
+      const postRes = await fetch(`${base}/jobboard/result`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ jobId: claimed.id, result, timestamp: ts2, ...this._signBoardAction('job-result', { jobId: claimed.id }, ts2) }),
+        signal: AbortSignal.timeout(15_000),
+      });
+      if (postRes.ok) console.log(`[PoH-Worker] Completed board job ${claimed.id} ✓`);
+    } finally {
+      this._boardBusy = false;
+    }
+  }
+
+  async _computeBoardJob(job) {
+    try {
+      if (job.type === 'skill' && job.skillId) {
+        if (!this.isSkillEnabled(job.skillId)) return null;
+        const { output } = await skillsManager.runSkill(job.skillId, job.payload, this.config, job.maxBudget);
+        return { type: 'skill', skillId: job.skillId, output };
+      }
+      const v = await computeVerdictWithExistingPoh(job, this.config);
+      return {
+        type: 'verdict',
+        address: job.payload?.address,
+        verdict: v.verdict, confidence: v.confidence, reasoning: v.reasoning,
+        profile: v.profile, methodsHash: v.methodsHash, signalsUsed: v.signalsUsed,
+        realPohUsed: v.realPohUsed,
+      };
+    } catch (e) {
+      console.warn(`[PoH-Worker] Compute failed for job ${job.id}: ${e.message}`);
+      return null;
+    }
   }
 
   async computeAndSubmitJob(job) {
