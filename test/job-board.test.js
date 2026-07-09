@@ -75,4 +75,30 @@ describe('JobBoard', () => {
     expect(board.claim('nope', 'w').error).toMatch(/not found/);
     expect(board.postResult('nope', 'w', {}).error).toMatch(/not found/);
   });
+
+  it('rejects fee-required jobs without a payment proof', () => {
+    expect(board.submit({ type: 'skill', skillId: 'x' }).error).toMatch(/paymentTx/);
+    expect(board.submit({ type: 'compute', model: 'm' }).error).toMatch(/paymentTx/);
+    // verdict (free) needs no payment
+    expect(board.submit({ type: 'verdict' }).jobId).toBeTruthy();
+  });
+
+  it('accepts a fee job with payment + budget and carries it to pending-results', () => {
+    const r = board.submit({ id: 'f1', type: 'skill', skillId: 'x',
+      requesterAddress: 'pohreq', maxBudget: 1000, paymentTx: { txHash: 'h', signature: 's', nonce: 3 } });
+    expect(r.jobId).toBe('f1');
+    board.claim('f1', 'wkr');
+    board.postResult('f1', 'wkr', { type: 'skill', output: 42 });
+    const [p] = board.takePendingResults();
+    expect(p).toMatchObject({ jobId: 'f1', worker: 'wkr', jobType: 'skill', requesterAddress: 'pohreq', maxBudget: 1000 });
+    expect(p.paymentTx.nonce).toBe(3);
+  });
+
+  it('takePendingResults leases a handed-out result (not re-offered within the lease)', () => {
+    board.submit({ id: 'j1' }); board.claim('j1', 'w'); board.postResult('j1', 'w', { verdict: 'HUMAN' });
+    expect(board.takePendingResults()).toHaveLength(1);
+    expect(board.takePendingResults()).toHaveLength(0);           // leased to the first proposer
+    board.markResultsIncluded(['j1']);
+    expect(board.pendingResults()).toHaveLength(0);               // confirmed included → gone
+  });
 });

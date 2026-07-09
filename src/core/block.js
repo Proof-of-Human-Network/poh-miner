@@ -4,6 +4,7 @@
 
 import crypto from 'crypto';
 import { Wallet } from '../wallet/wallet.js';
+import { blockHashOf } from '../consensus/block-hash.js';
 
 export class PohBlock {
   constructor({
@@ -44,31 +45,11 @@ export class PohBlock {
   get skillResults() { return this.scanResults; }
   set skillResults(v) { this.scanResults = v; }
 
-  // Synchronous SHA-256 (Node.js crypto) — used in the hot PoW loop
+  // Synchronous SHA-256 (Node.js crypto) — used in the hot PoW loop.
+  // Serialization lives in consensus/block-hash.js so the mining worker thread
+  // hashes over byte-identical input.
   getHashSync() {
-    const data = JSON.stringify({
-      height: this.height,
-      previousHash: this.previousHash,
-      timestamp: this.timestamp,
-      minerWallet: this.minerWallet,
-      scanResults: this.scanResults,
-      stateTransitions: this.stateTransitions,
-      transactions: this.transactions,
-      coinbaseReward: this.coinbaseReward ? {
-        blockHeight: this.coinbaseReward.blockHeight,
-        totalNewSupply: this.coinbaseReward.totalNewSupply,
-        proposerReward: this.coinbaseReward.proposerReward,
-        workerRewards: (this.coinbaseReward.workerRewards || []).map(w => ({
-          workerId: w.workerId,
-          amount: w.amount,
-          workProofHash: w.workProofHash,
-        })),
-      } : null,
-      stateRoot: this.stateRoot,
-      brainStateRoot: this.brainStateRoot,
-      nonce: this.nonce,
-    });
-    return crypto.createHash('sha256').update(data).digest('hex');
+    return blockHashOf(this);
   }
 
   // Async alias kept for external callers that await it

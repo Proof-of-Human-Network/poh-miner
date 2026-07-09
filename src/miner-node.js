@@ -30,7 +30,7 @@ import {
 } from './rewards/reward.js';
 import { computeChainWork, compareChainWork, getTipChainWork } from './consensus/chain-selection.js';
 import { blockId, blocksOnTipPath, selectPeerBlockOnTip } from './consensus/chain-path.js';
-import { mineBlock, getNextDifficulty, MIN_BLOCK_SPACING_MS } from './consensus/pow.js';
+import { mineBlockThreaded, getNextDifficulty, MIN_BLOCK_SPACING_MS } from './consensus/pow.js';
 import {
   validateBlock,
   validateBlockExtended,
@@ -314,6 +314,15 @@ function computeJobPaymentHash({ jobId, requesterAddress, minerAddress, amount, 
     .digest('hex');
 }
 
+// Board jobs are claimed by an unknown worker, so their payment proof binds to
+// the job + submitter + amount + nonce only (no minerAddress). The proposer
+// settles the escrowed fee to whichever worker completed it.
+function computeBoardJobPaymentHash({ jobId, requesterAddress, amount, nonce }) {
+  return crypto.createHash('sha256')
+    .update(JSON.stringify({ board: true, jobId, requesterAddress, amount, nonce }))
+    .digest('hex');
+}
+
 /**
  * True only for requests originating on this machine and NOT relayed through a
  * reverse proxy. nginx proxies to 127.0.0.1:3456, so req.socket.remoteAddress is
@@ -393,7 +402,7 @@ export class PohMinerNode {
     });
     this._meilisearchServer = null;
     this.walletManager = new WalletManager();
-    this.txMempool = new TxMempool(this.walletManager);
+    this.txMempool = new TxMempool(this.walletManager, () => this.txLedger);
     this.txLedger = null; // canonical coinbase+tx replay; rebuilt from chain
     this.p2pOrderStore = new OrderStore();
     this.p2pEscrow = new EscrowManager();
@@ -963,6 +972,9 @@ export class PohMinerNode {
       console.log('[PoH-Miner] Follower-only mode — block production disabled (syncs + computes jobs, does not mine).');
     } else {
       this.startBlockProduction();
+      // Proposers pull completed board results and pay the worker who computed
+      // them via the next block's coinbase (workers behind NAT can't mine).
+      this.startBoardResultCollector();
     }
 
     // 6. Pull-based compute worker — poll the bootnode job board for work. This is
@@ -1168,7 +1180,7 @@ export class PohMinerNode {
           res.statusCode = 400;
           return res.end(JSON.stringify({ error: 'address required' }));
         }
-        const confirmed  = this.walletManager.getBalance(address);
+        const confirmed  = this._confirmedBalance(address);
         const pendingOut = this.txMempool ? (this.txMempool.pendingOut.get(address) || 0) : 0;
         const pendingIn  = this.txMempool
           ? this.txMempool.getPending(1000).filter(tx => tx.to === address).reduce((s, tx) => s + tx.amount, 0)
@@ -1183,7 +1195,7 @@ export class PohMinerNode {
           res.statusCode = 400;
           return res.end(JSON.stringify({ error: 'address required' }));
         }
-        const nonce = this.walletManager.getNonce(address);
+        const nonce = this._confirmedNonce(address);
         const pendingNonce = this.txMempool.accountPendingNonce.get(address) ?? nonce;
         return res.end(JSON.stringify({ address, nonce, pendingNonce }));
       }
@@ -4580,6 +4592,18 @@ export class PohMinerNode {
     }
   }
 
+  // Confirmed balance/nonce from the canonical in-memory ledger (coinbase + tx
+  // replay), which never drifts from the chain. Per-wallet files are a cache that
+  // can lag after reorgs/rebuilds, so they're only a fallback before the ledger
+  // is built (early startup).
+  _confirmedBalance(address) {
+    return this.txLedger ? this.txLedger.getBalance(address) : this.walletManager.getBalance(address);
+  }
+
+  _confirmedNonce(address) {
+    return this.txLedger ? this.txLedger.getNonce(address) : this.walletManager.getNonce(address);
+  }
+
   // Replay canonical ledger from chain (coinbase + deduped txs + P2P escrow).
   async _refreshTxLedger() {
     this.txLedger = await replayChainLedgerAsync(this.chain, { applyP2P: true });
@@ -5438,6 +5462,120 @@ export class PohMinerNode {
     }
   }
 
+  // ── Proposer role: pay board workers ───────────────────────────────────────
+  // Pull results computed by board workers (incl. NAT'd nodes), validate them,
+  // and queue them for inclusion in the next block so calculateBlockRewards pays
+  // the worker via coinbase workerRewards. Only reachable/mining nodes do this.
+  startBoardResultCollector() {
+    const bootnode = (this.config.bootnodes && this.config.bootnodes[0]) || null;
+    if (!bootnode) return;
+    this._boardResultBase = bootnode.replace(/\/$/, '');
+    const intervalMs = this.config.boardResultPollMs || 20_000;
+    this._resultCollectorTimer = setInterval(() => this._collectBoardResults().catch(() => {}), intervalMs);
+    console.log(`[PoH-Miner] Board result collector active — paying compute workers from ${this._boardResultBase}`);
+  }
+
+  async _collectBoardResults() {
+    if (this._syncInProgress) return;
+    const base = this._boardResultBase;
+    const r = await fetch(`${base}/jobboard/pending-results?limit=20`, { signal: AbortSignal.timeout(10_000) });
+    if (!r.ok) return;
+    const { results } = await r.json();
+    if (!results?.length) return;
+
+    const includedJobIds = [];
+    for (const { jobId, worker, result, jobType, requesterAddress, maxBudget, paymentTx } of results) {
+      if (!worker || !result || this.minedRequestIds.has(jobId)) continue;
+      if (this.pendingValidResults.some(pr => pr.requestId === jobId)) continue;
+
+      // Fee-required jobs (skill/compute): settle the escrowed fee to the worker
+      // via job-escrow + job-settled transitions instead of a coinbase reward.
+      if (FEE_REQUIRED_JOB_TYPES.has(jobType)) {
+        const settled = await this._settleBoardFeeJob({ jobId, worker, requesterAddress, maxBudget, paymentTx });
+        if (settled) console.log(`[PoH-Miner] Settled board fee job ${jobId} → worker ${worker.slice(0, 12)}… (${maxBudget} μPOH)`);
+        includedJobIds.push(jobId); // consume regardless (invalid payment shouldn't loop forever)
+        continue;
+      }
+
+      if ((result.type || 'verdict') !== 'verdict') continue; // only verdict work is coinbase-rewarded here
+
+      const sr = new ScanResult({
+        requestId: jobId,
+        address: result.address,
+        verdict: result.verdict,
+        confidence: result.confidence,
+        reasoning: result.reasoning,
+        signalsUsed: result.signalsUsed || [],
+        minerWallet: worker,          // ← the worker who computed it gets rewarded
+        methodsHash: result.methodsHash,
+        realPohUsed: result.realPohUsed,
+        profile: result.profile || null,
+      });
+
+      const check = await validateResultWork(sr, { id: jobId, payload: { address: result.address } });
+      if (!check.isValid) {
+        console.warn(`[PoH-Miner] Board result for ${jobId} failed validation (${check.errors?.[0]}) — not rewarding`);
+        includedJobIds.push(jobId); // consume it so it isn't re-offered forever
+        continue;
+      }
+      sr.isValidWork = true;
+      this.pendingValidResults.push(sr);
+      includedJobIds.push(jobId);
+      console.log(`[PoH-Miner] Queued board result ${jobId} for reward → worker ${worker.slice(0, 12)}…`);
+    }
+
+    if (includedJobIds.length) {
+      await fetch(`${base}/jobboard/mark-included`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ jobIds: includedJobIds }),
+        signal: AbortSignal.timeout(10_000),
+      }).catch(() => {});
+    }
+  }
+
+  // Verify a board fee job's payment and settle the escrowed fee to the worker.
+  // Emits job-escrow + job-settled stateTransitions (applied deterministically by
+  // every node), so the debit from the requester and credit to the worker land on
+  // the canonical chain. Returns true on success.
+  async _settleBoardFeeJob({ jobId, worker, requesterAddress, maxBudget, paymentTx }) {
+    if (this._appliedEscrowJobIds.has(jobId)) return false;
+    if (!requesterAddress || !(maxBudget > 0) || !paymentTx?.signature || typeof paymentTx?.nonce !== 'number') {
+      console.warn(`[PoH-Miner] Board fee job ${jobId}: missing/invalid payment — not settling`);
+      return false;
+    }
+    const senderWallet = this.walletManager.loadWallet(requesterAddress);
+    if (!senderWallet?.signingPublicKey) {
+      console.warn(`[PoH-Miner] Board fee job ${jobId}: requester has no registered signing key — not settling`);
+      return false;
+    }
+    const expectedHash = computeBoardJobPaymentHash({ jobId, requesterAddress, amount: maxBudget, nonce: paymentTx.nonce });
+    if (paymentTx.txHash !== expectedHash || !Wallet.verifySignature(senderWallet.signingPublicKey, expectedHash, paymentTx.signature)) {
+      console.warn(`[PoH-Miner] Board fee job ${jobId}: invalid payment proof — not settling`);
+      return false;
+    }
+
+    // Escrow (nonce-checked debit of the requester), then settle in full to the worker.
+    const escrowTransition = {
+      type: 'job-escrow', jobId, requesterAddress, minerAddress: worker,
+      amount: maxBudget, paymentTxHash: expectedHash, unverified: false,
+      nonce: paymentTx.nonce, timestamp: Date.now(),
+    };
+    const applied = await this._applyEscrow(escrowTransition);
+    if (applied !== true) {
+      console.warn(`[PoH-Miner] Board fee job ${jobId}: escrow debit failed (${applied}) — not settling`);
+      return false;
+    }
+    this.pendingBrainTransitions.push(escrowTransition);
+
+    const settled = {
+      type: 'job-settled', jobId, requesterAddress, minerAddress: worker,
+      actualFee: maxBudget, refund: 0, completedAt: Date.now(),
+    };
+    this._applySettlement(settled);
+    this.pendingBrainTransitions.push(settled);
+    return true;
+  }
+
   async _computeBoardJob(job) {
     try {
       if (job.type === 'skill' && job.skillId) {
@@ -6159,7 +6297,7 @@ export class PohMinerNode {
       brainStateRoot,
     });
 
-    const attempts = await mineBlock(newBlock, this.currentDifficulty, abortSignal);
+    const attempts = await mineBlockThreaded(newBlock, this.currentDifficulty, abortSignal);
 
     if (attempts === null) return null; // aborted by incoming block
 

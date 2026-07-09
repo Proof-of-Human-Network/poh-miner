@@ -78,12 +78,27 @@ export class PoHTransaction {
  * before the tx is mined.
  */
 export class TxMempool {
-  constructor(walletManager) {
+  constructor(walletManager, getLedger = null) {
     this.walletManager = walletManager;
+    // Optional accessor for the canonical in-memory ledger. When set, confirmed
+    // balance/nonce come from it (never drifts from the chain) instead of the
+    // per-wallet cache files, keeping submit validation consistent with what
+    // /api/wallet/balance and /nonce report.
+    this.getLedger = getLedger;
     this.txs = new Map();            // txHash → PoHTransaction
     this.pendingOut = new Map();     // address → total μPOH locked in mempool
     this.accountPendingNonce = new Map(); // address → highest pending nonce
     this.spentTxHashes = new Set();  // txHashes already mined on canonical chain
+  }
+
+  _confirmedNonce(address) {
+    const ledger = this.getLedger?.();
+    return ledger ? ledger.getNonce(address) : this.walletManager.getNonce(address);
+  }
+
+  _confirmedBalance(address) {
+    const ledger = this.getLedger?.();
+    return ledger ? ledger.getBalance(address) : this.walletManager.getBalance(address);
   }
 
   setSpentTxHashes(hashes) {
@@ -126,14 +141,14 @@ export class TxMempool {
     if (tx.amount <= 0)           return { error: 'amount must be positive' };
 
     // Nonce check: must equal current confirmed nonce + 1 + any pending nonces
-    const confirmedNonce  = this.walletManager.getNonce(tx.from);
+    const confirmedNonce  = this._confirmedNonce(tx.from);
     const highestPending  = this.accountPendingNonce.get(tx.from) ?? confirmedNonce;
     if (tx.nonce !== highestPending + 1) {
       return { error: `invalid nonce: expected ${highestPending + 1}, got ${tx.nonce}` };
     }
 
     // Balance check: confirmed balance minus already-locked pending outgoing
-    const confirmed  = this.walletManager.getBalance(tx.from);
+    const confirmed  = this._confirmedBalance(tx.from);
     const locked     = this.pendingOut.get(tx.from) || 0;
     const available  = confirmed - locked;
     if (available < tx.amount + tx.fee) {

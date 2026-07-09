@@ -391,6 +391,20 @@ const server = http.createServer(async (req, res) => {
       return res.end(JSON.stringify(r));
     }
 
+    // Block proposers pull completed results to include in a block and reward the
+    // worker. Handing them out leases them (re-offered if not confirmed included).
+    if (req.method === 'GET' && url.pathname === '/jobboard/pending-results') {
+      const limit = Math.min(50, parseInt(url.searchParams.get('limit') || '20', 10));
+      return res.end(JSON.stringify({ results: jobBoard.takePendingResults(limit) }));
+    }
+
+    // A proposer confirms it included these results in a mined block.
+    if (req.method === 'POST' && url.pathname === '/jobboard/mark-included') {
+      const body = JSON.parse((await readLimitedBody(req, MAX_BODY_BYTES)) || '{}');
+      jobBoard.markResultsIncluded(Array.isArray(body.jobIds) ? body.jobIds : []);
+      return res.end(JSON.stringify({ ok: true }));
+    }
+
     // Poll a job's status/result (for the original submitter).
     if (req.method === 'GET' && url.pathname === '/jobboard/status') {
       const jobId = url.searchParams.get('jobId');

@@ -13,8 +13,14 @@
  * Difficulty adjustment targets a 60-second average block time.
  */
 
+import { Worker } from 'worker_threads';
+import { fileURLToPath } from 'url';
+import path from 'path';
+import { blockHashInput } from './block-hash.js';
+
 const YIELD_EVERY = 2000;         // yield to event loop this often
 const TARGET_BLOCK_TIME_MS = 60_000;
+const MINING_WORKER_PATH = path.join(path.dirname(fileURLToPath(import.meta.url)), 'mining-worker.js');
 // Hard floor on block cadence: miners never finalize a block sooner than this
 // after its parent. PoW difficulty is quantized (16× per hex-zero step) so it
 // cannot pin an exact cadence on its own; this gate holds the network to at most
@@ -49,6 +55,52 @@ export async function mineBlock(block, difficulty, abortSignal) {
   }
 
   return attempts;
+}
+
+/**
+ * Mine on a worker thread so the main event loop (HTTP API, gossip, sync) stays
+ * responsive instead of being starved by the 100%-CPU hash grind. Sets
+ * `block.nonce` to the solved value and returns the attempt count, or null if
+ * aborted (a competing block arrived) or the worker fails.
+ *
+ * The worker hashes over the same serialization as block.getHashSync() (shared
+ * consensus/block-hash.js), so the returned nonce verifies on the main thread.
+ */
+export function mineBlockThreaded(block, difficulty, abortSignal) {
+  block.difficulty = difficulty;
+  block.nonce = 0;
+  if (abortSignal?.aborted) return Promise.resolve(null);
+
+  return new Promise((resolve) => {
+    // Pass only the fields the hash covers (a PohBlock's methods can't be cloned).
+    // blockHashInput's key order + the extra `difficulty` are harmless to include.
+    const blockData = JSON.parse(blockHashInput(block));
+    let worker;
+    try {
+      worker = new Worker(MINING_WORKER_PATH, { workerData: { block: blockData, difficulty, startNonce: 0 } });
+    } catch (e) {
+      // worker_threads unavailable — fall back to the in-loop miner.
+      return resolve(mineBlock(block, difficulty, abortSignal));
+    }
+
+    let settled = false;
+    const onAbort = () => { try { worker.postMessage('abort'); } catch { /* */ } };
+    const finish = (val) => {
+      if (settled) return;
+      settled = true;
+      abortSignal?.removeEventListener?.('abort', onAbort);
+      worker.terminate().catch(() => {});
+      resolve(val);
+    };
+
+    if (abortSignal) abortSignal.addEventListener('abort', onAbort, { once: true });
+    worker.on('message', (m) => {
+      if (m?.found) { block.nonce = m.nonce; finish(m.attempts); }
+      else finish(null); // aborted
+    });
+    worker.on('error', () => finish(null));
+    worker.on('exit', () => finish(null));
+  });
 }
 
 export function getNextDifficulty(lastBlocks) {
