@@ -5506,6 +5506,8 @@ export class PohMinerNode {
         confidence: result.confidence,
         reasoning: result.reasoning,
         signalsUsed: result.signalsUsed || [],
+        methodsCount: result.methodsCount,
+        computationTimeMs: result.computationTimeMs,
         minerWallet: worker,          // ← the worker who computed it gets rewarded
         methodsHash: result.methodsHash,
         realPohUsed: result.realPohUsed,
@@ -5577,19 +5579,22 @@ export class PohMinerNode {
   }
 
   async _computeBoardJob(job) {
+    const start = Date.now();
     try {
       if (job.type === 'skill' && job.skillId) {
         if (!this.isSkillEnabled(job.skillId)) return null;
         const { output } = await skillsManager.runSkill(job.skillId, job.payload, this.config, job.maxBudget);
-        return { type: 'skill', skillId: job.skillId, output };
+        return { type: 'skill', skillId: job.skillId, output, computationTimeMs: Date.now() - start };
       }
       const v = await computeVerdictWithExistingPoh(job, this.config);
       return {
         type: 'verdict',
         address: job.payload?.address,
         verdict: v.verdict, confidence: v.confidence, reasoning: v.reasoning,
-        profile: v.profile, methodsHash: v.methodsHash, signalsUsed: v.signalsUsed,
+        profile: v.profile, methodsHash: v.methodsHash,
+        signalsUsed: v.signalsUsed, methodsCount: v.methodsCount ?? (v.signalsUsed?.length || 0),
         realPohUsed: v.realPohUsed,
+        computationTimeMs: Date.now() - start,   // real compute time — anti-fraud checks require it
       };
     } catch (e) {
       console.warn(`[PoH-Worker] Compute failed for job ${job.id}: ${e.message}`);
