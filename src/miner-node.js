@@ -428,8 +428,11 @@ export class PohMinerNode {
     // Future: TEE attestation could further strengthen these guarantees
     // (see docs/tee-protection-architecture.md)
 
-    // Queue of high-quality ScanResults ready to be included in the next block
-    this.pendingValidResults = [];
+    // Queue of high-quality ScanResults ready to be included in the next block.
+    // Persisted to disk so a restart doesn't drop pending compute rewards before
+    // they're mined (workers still get paid after the node comes back).
+    this._pendingResultsPath = path.join(os.homedir(), '.poh-miner', 'chain', 'pending-results.json');
+    this.pendingValidResults = this._loadPendingResults();
 
     // Submission history for pattern detection and strike system (software protection)
     this.submissionHistory = [];
@@ -2045,7 +2048,10 @@ export class PohMinerNode {
             return res.end(JSON.stringify({ error: 'LLM API is restricted to localhost. Set llmApiKey in config to allow external access.' }));
           }
           const provided = (req.headers['authorization'] || '').replace(/^Bearer\s+/i, '').trim();
-          if (provided !== llmApiKey) {
+          // Constant-time compare so a caller can't recover the key byte-by-byte via timing.
+          const a = Buffer.from(provided);
+          const b = Buffer.from(String(llmApiKey));
+          if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) {
             res.statusCode = 401;
             return res.end(JSON.stringify({ error: 'Invalid API key' }));
           }
@@ -3399,9 +3405,14 @@ export class PohMinerNode {
       // POST /api/p2p/referral/apply — bind a referrer to an address
       if (req.method === 'POST' && url.pathname === '/api/p2p/referral/apply') {
         readBody().then(body => {
-          const { address, code } = body;
+          const { address, signingPublicKey, signature, timestamp, code } = body;
           if (!address || !code) { res.statusCode = 400; return res.end(JSON.stringify({ error: 'address and code required' })); }
-          const result = this.p2pReferral.applyReferral(address, code);
+          // Signature-gated so a remote caller can't apply referral codes on behalf of
+          // arbitrary addresses (the credited referrer/referee are payout-bearing).
+          const auth = verifyP2PAuth(address, signingPublicKey, signature,
+            { address, timestamp, action: 'apply-referral', code });
+          if (auth.error) { res.statusCode = 401; return res.end(JSON.stringify(auth)); }
+          const result = this.p2pReferral.applyReferral(auth.address, code);
           if (result.error) { res.statusCode = 400; return res.end(JSON.stringify(result)); }
           return res.end(JSON.stringify(result));
         }).catch(e => { res.statusCode = 400; res.end(JSON.stringify({ error: e.message })); });
@@ -3410,7 +3421,14 @@ export class PohMinerNode {
 
       // POST /api/p2p/local-auth — sign a P2P auth payload using the local node wallet
       // Renderer calls this to get a signed auth token without needing the private key.
+      // Localhost-only: this signs an arbitrary caller-supplied payload with the node's
+      // on-disk identity key, so a remote caller (e.g. via the nginx /api/ proxy) could
+      // mint P2P/OTC auth tokens as this node's wallet and move its escrowed POH.
       if (req.method === 'POST' && url.pathname === '/api/p2p/local-auth') {
+        if (!isTrulyLocalRequest(req)) {
+          res.statusCode = 403;
+          return res.end(JSON.stringify({ error: 'This endpoint is restricted to localhost.' }));
+        }
         readBody().then(body => {
           let wallet = this.identityWallet;
           if (wallet) wallet = this.walletManager.ensureCanonicalAddress(wallet);
@@ -4611,7 +4629,10 @@ export class PohMinerNode {
     const before = this.pendingValidResults.length;
     this.pendingValidResults = this.pendingValidResults.filter(r => !this.minedRequestIds.has(r.requestId));
     const dropped = before - this.pendingValidResults.length;
-    if (dropped > 0) console.log(`[PoH-Miner] Dropped ${dropped} pending result(s) already mined in block #${block.height}`);
+    if (dropped > 0) {
+      this._persistPendingResults(); // durable queue: only drop rewards once mined
+      console.log(`[PoH-Miner] Dropped ${dropped} pending result(s) already mined in block #${block.height}`);
+    }
 
     this.processIncomingBlockRewards(block);
 
@@ -5576,6 +5597,7 @@ export class PohMinerNode {
       }
       sr.isValidWork = true;
       this.pendingValidResults.push(sr);
+      this._persistPendingResults();
       includedJobIds.push(jobId);
       console.log(`[PoH-Miner] Queued board result ${jobId} for reward → worker ${worker.slice(0, 12)}…`);
     }
@@ -5630,6 +5652,39 @@ export class PohMinerNode {
     this._applySettlement(settled);
     this.pendingBrainTransitions.push(settled);
     return true;
+  }
+
+  // ── Durable pending-reward queue ────────────────────────────────────────────
+  _loadPendingResults() {
+    try {
+      if (!fs.existsSync(this._pendingResultsPath)) return [];
+      const raw = JSON.parse(fs.readFileSync(this._pendingResultsPath, 'utf8'));
+      if (!Array.isArray(raw)) return [];
+      const out = [];
+      for (const d of raw) {
+        if (!d?.requestId) continue;
+        const sr = new ScanResult(d);
+        if (d.signingPublicKey) sr.signingPublicKey = d.signingPublicKey;
+        sr.isValidWork = d.isValidWork !== false;
+        out.push(sr);
+      }
+      if (out.length) console.log(`[PoH-Miner] Restored ${out.length} pending compute reward(s) from disk`);
+      return out;
+    } catch (e) {
+      console.warn('[PoH-Miner] Could not load pending-results queue:', e.message);
+      return [];
+    }
+  }
+
+  _persistPendingResults() {
+    try {
+      fs.mkdirSync(path.dirname(this._pendingResultsPath), { recursive: true });
+      const tmp = this._pendingResultsPath + '.tmp';
+      fs.writeFileSync(tmp, JSON.stringify(this.pendingValidResults.map(r => ({ ...r }))));
+      fs.renameSync(tmp, this._pendingResultsPath);
+    } catch (e) {
+      console.warn('[PoH-Miner] Could not persist pending-results queue:', e.message);
+    }
   }
 
   async _computeBoardJob(job) {
@@ -6201,6 +6256,7 @@ export class PohMinerNode {
 
     // Add to the queue for block inclusion (only valid work goes into blocks)
     this.pendingValidResults.push(result);
+    this._persistPendingResults();
 
     this._saveQualityState();
 
@@ -6297,7 +6353,13 @@ export class PohMinerNode {
 
     // === Fixed 1 POH per block + Strict Work Quality Filter ===
     // Only results that passed validateResultWork are allowed in blocks.
-    const validResultsForBlock = this.pendingValidResults.splice(0, 20); // take up to 20 recent valid ones
+    // Non-destructive take: results stay in the (persisted) queue until a block
+    // that includes them is actually applied (_applyBlockState removes them by
+    // mined requestId). So an aborted block or a restart never drops a pending
+    // reward — the worker still gets paid from a later block.
+    const validResultsForBlock = this.pendingValidResults
+      .filter(r => !this.minedRequestIds.has(r.requestId))
+      .slice(0, 20);
 
     // Build work submissions only from validated results
     const validWorkSubmissions = validResultsForBlock.map(r => ({
