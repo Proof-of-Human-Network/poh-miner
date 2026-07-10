@@ -15,6 +15,7 @@
 import { ScanRequest, ScanResult } from './core/scanRequest.js';
 import { PohBlock } from './core/block.js';
 import { JobQueue } from './jobs/job-queue.js';
+import { computeBoardJobPaymentHash } from './jobs/board-payment.js';
 import { detectMyCountry, getCountryProximityMultiplier } from './jobs/geo.js';
 import { getMethodsManager } from './signals/methods-manager.js';
 import { P2PGossip } from './network/p2p-gossip.js';
@@ -314,14 +315,6 @@ function computeJobPaymentHash({ jobId, requesterAddress, minerAddress, amount, 
     .digest('hex');
 }
 
-// Board jobs are claimed by an unknown worker, so their payment proof binds to
-// the job + submitter + amount + nonce only (no minerAddress). The proposer
-// settles the escrowed fee to whichever worker completed it.
-function computeBoardJobPaymentHash({ jobId, requesterAddress, amount, nonce }) {
-  return crypto.createHash('sha256')
-    .update(JSON.stringify({ board: true, jobId, requesterAddress, amount, nonce }))
-    .digest('hex');
-}
 
 /**
  * True only for requests originating on this machine and NOT relayed through a
