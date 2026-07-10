@@ -3421,19 +3421,41 @@ window.scannerWelcomeSetup = function() {
 
 // POH token has 9 decimals; slider value is in whole POH
 const BUDGET_DECIMALS = 1_000_000_000;
-const _BLOG_MIN = 0.01, _BLOG_MAX = 200, _BLOG_STEPS = 200;
+// Fee slider: 1 μPOH (1e-9 POH) → 1 POH, logarithmic.
+const _BLOG_MIN = 0.000000001, _BLOG_MAX = 1, _BLOG_STEPS = 200;
 
 function _sliderStepToPoh(step) {
-  if (step <= 0) return 0;
+  if (step <= 1) return _BLOG_MIN;
   return _BLOG_MIN * Math.pow(_BLOG_MAX / _BLOG_MIN, (step - 1) / (_BLOG_STEPS - 1));
 }
 
+// Slider step for a fraction [0,1] of the log range — used by the preset marks.
+function _pctToSliderStep(pct) {
+  return Math.round(1 + pct * (_BLOG_STEPS - 1));
+}
+
 function _formatPoh(poh) {
-  if (poh < 0.1)  return poh.toFixed(3) + ' POH';
-  if (poh < 10)   return poh.toFixed(2)  + ' POH';
-  if (poh < 100)  return poh.toFixed(1)  + ' POH';
+  if (poh <= 0)      return 'no fee';
+  if (poh < 0.001)   return Math.round(poh * 1e9).toLocaleString() + ' μPOH';
+  if (poh < 1)       return poh.toPrecision(2) + ' POH';
+  if (poh < 10)      return poh.toFixed(2) + ' POH';
   return Math.round(poh) + ' POH';
 }
+
+// Fee preset marks: default 0%, low 25%, high 60%, max 100%.
+const FEE_PRESETS = [
+  { label: 'Default', pct: 0.00 },
+  { label: 'Low',     pct: 0.25 },
+  { label: 'High',    pct: 0.60 },
+  { label: 'Max',     pct: 1.00 },
+];
+window.setFeePreset = function(sliderId, displayFn, pct) {
+  const slider = document.getElementById(sliderId);
+  if (!slider) return;
+  slider.value = String(_pctToSliderStep(pct));
+  if (typeof window[displayFn] === 'function') window[displayFn](slider.value);
+  slider.style.setProperty('--fill', `${(parseInt(slider.value, 10) / _BLOG_STEPS) * 100}%`);
+};
 
 window.updateBudgetDisplay = function(val) {
   const step = parseInt(val, 10);
