@@ -4136,6 +4136,61 @@ export class PohMinerNode {
   }
 
   /**
+   * Active reconnect watcher. Polls the first reachable bootnode every 30s; on a
+   * down→up transition (internet came back) it immediately re-registers, re-discovers
+   * peers, and triggers a chain re-sync — so the node rejoins within ~30s instead of
+   * waiting for the 8-10 min periodic loops. Also logs the disconnect for visibility.
+   */
+  startConnectivityWatcher() {
+    if (this._connectivityTimer) return;
+    const bootnodes = this.config.bootnodes || [];
+    if (!bootnodes.length) return;
+    this._online = true; // we just connected in connectToNetwork()
+    const CHECK_MS = 30_000;
+
+    const probe = async () => {
+      for (const bn of bootnodes) {
+        try {
+          const base = bn.replace(/\/$/, '');
+          const r = await fetch(`${base}/health`, { signal: AbortSignal.timeout(8_000) });
+          if (r.ok) return true;
+        } catch { /* try next bootnode */ }
+      }
+      return false;
+    };
+
+    this._connectivityTimer = setInterval(async () => {
+      if (this._reconnecting) return;
+      const reachable = await probe();
+      if (!reachable) {
+        if (this._online) console.warn('[PoH-Miner] Network/bootnode unreachable — will auto-reconnect when restored.');
+        this._online = false;
+        return;
+      }
+      if (this._online) return; // still online, nothing to do
+      // Transition offline → online: reconnect now.
+      this._online = true;
+      this._reconnecting = true;
+      console.log('[PoH-Miner] Connection restored — re-registering, re-discovering peers, and re-syncing…');
+      try {
+        await this.discoverAndRegisterWithBootnodes();
+        if (!this.peers.length) await this._discoverPeersFromIPFS();
+        if (!this._syncInProgress) {
+          this._syncInProgress = true;
+          this._abortMining();
+          try { await this.syncFromBootnodes(); } finally { this._syncInProgress = false; }
+        }
+        console.log(`[PoH-Miner] Reconnected — ${this.peers.length} peer(s), chain re-synced.`);
+      } catch (e) {
+        console.warn('[PoH-Miner] Reconnect attempt failed (will retry):', e.message);
+        this._online = false; // force another attempt next tick
+      } finally {
+        this._reconnecting = false;
+      }
+    }, CHECK_MS);
+  }
+
+  /**
    * IPFS peer discovery fallback — used when all bootnodes are unreachable.
    * Fetches the peer directory pinned to IPFS and merges it into this.peers.
    */
@@ -4235,6 +4290,12 @@ export class PohMinerNode {
         try { await this.syncFromBootnodes(); } catch { /* ignore */ }
         this._syncInProgress = false;
       }, 10 * 60 * 1000);
+
+      // Active reconnect: the loops above heal slowly (8-10 min). This watcher
+      // polls bootnode reachability every 30s and, the moment the connection is
+      // restored after being down, immediately re-registers, re-discovers peers,
+      // and re-syncs the chain instead of waiting for the next scheduled tick.
+      this.startConnectivityWatcher();
     } else {
       console.log('[PoH-Miner] No bootnodes configured — running in local/dev mode only');
     }
