@@ -3926,6 +3926,10 @@ export class PohMinerNode {
               this._advanceTxLedger(block);
               this.currentDifficulty = getNextDifficulty(this.chain);
               added++;
+              // Yield to the event loop periodically so applying a large catch-up
+              // batch (validate + apply + save + hash per block) doesn't block the
+              // HTTP API for seconds. Safe: handleIncomingBlock defers while syncing.
+              if (added % 25 === 0) await new Promise(r => setImmediate(r));
             }
           }
           if (!added) {
@@ -4538,6 +4542,10 @@ export class PohMinerNode {
    */
   async handleIncomingBlock(blockData, from) {
     try {
+      // Don't mutate the chain from gossip while a batch sync is applying blocks
+      // (the sync loop now yields to the event loop between blocks). Anything we
+      // skip here is re-fetched by the sync itself or the next sync cycle.
+      if (this._syncInProgress) return;
       const newBlock = PohBlock.fromJSON(blockData);
       const currentHeight = this.chain[this.chain.length - 1]?.height ?? this.chain.length - 1;
       const tipHash = this.chain[this.chain.length - 1].getHashSync();
