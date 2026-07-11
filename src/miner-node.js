@@ -2029,6 +2029,13 @@ export class PohMinerNode {
               this.gossip.publish('new-tx', tx.toJSON()).catch(() => {});
               return res.end(JSON.stringify({ ok: true, txHash: tx.txHash, queueSize: this.txMempool.size() }));
             }
+            // Idempotency: resubmitting the exact same signed tx (a retry after a
+            // client timeout) is a success, not an error — the tx is already in
+            // flight or mined. Clients should retry with the SAME tx rather than
+            // rebuilding at a new nonce (which would double-send).
+            if (result?.error === 'duplicate tx' || result?.error === 'tx already mined') {
+              return res.end(JSON.stringify({ ok: true, txHash: tx.txHash, idempotent: true, note: result.error }));
+            }
             res.statusCode = 400;
             res.end(JSON.stringify({ error: result.error || result }));
           } catch (e) {
