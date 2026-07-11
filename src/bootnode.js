@@ -24,6 +24,8 @@ import {
   verifyBrainEvent,
   verifyIpfsUpdate,
   verifyPeerRegistration,
+  isPublicPeerHost,
+  validatePeerPort,
   readLimitedBody,
   MAX_BODY_BYTES,
   MAX_CHAIN_BLOCKS_RANGE,
@@ -69,6 +71,22 @@ const checkpointSigner = (() => {
 })();
 console.log(`[Bootnode] Finality checkpoint signer address: ${checkpointSigner.address} ` +
   `(pin this as "checkpointPublicKey" in miner config)`);
+
+// Caller's real public IP. Behind nginx the socket address is 127.0.0.1, so honor
+// X-Real-IP ($remote_addr — set by nginx, not client-spoofable) first; fall back to
+// the last X-Forwarded-For hop, then the socket. Used by /whoami + /probe so a node
+// can learn its own address and self-test reachability (SSRF-guarded: probes only
+// public IPs, the caller's own address, fixed /status path).
+function callerIp(req) {
+  let ip = (req.headers['x-real-ip'] || '').trim();
+  if (!ip) {
+    const xff = String(req.headers['x-forwarded-for'] || '').split(',').map(s => s.trim()).filter(Boolean);
+    ip = xff.length ? xff[xff.length - 1] : '';
+  }
+  if (!ip) ip = req.socket?.remoteAddress || '';
+  if (ip.startsWith('::ffff:')) ip = ip.slice(7); // IPv4-mapped IPv6
+  return ip;
+}
 
 // Peer registry for node discovery
 let peers = new Map(); // wallet -> peerInfo
@@ -153,7 +171,7 @@ function avgBucket(pts) {
   return {
     t:      pts[0].t,
     nodes:  Math.round(pts.reduce((s, p) => s + p.nodes, 0) / pts.length),
-    tflops: Math.round(pts.reduce((s, p) => s + p.tflops, 0) / pts.length * 10) / 10,
+    tflops: Math.round(pts.reduce((s, p) => s + p.tflops, 0) / pts.length * 1000) / 1000,
   };
 }
 
@@ -162,7 +180,7 @@ function snapshotNetwork() {
   const peerList = Array.from(peers.values());
   const now    = Date.now();
   const nodes  = peerList.length;
-  const tflops = Math.round(peerList.reduce((s, p) => s + (p.tflops || 0), 0) * 10) / 10;
+  const tflops = Math.round(peerList.reduce((s, p) => s + (p.tflops || 0), 0) * 1000) / 1000;
   const entry  = { t: now, nodes, tflops };
 
   // Minutely (last 24 h)
@@ -378,6 +396,30 @@ const server = http.createServer(async (req, res) => {
       const cpBlock = chain.find(b => (b.height ?? -1) === cpHeight) ?? chain[chain.length - 1];
       const cpHash = cpBlock.blockHash || await cpBlock.getHash();
       res.end(JSON.stringify(signCheckpoint(checkpointSigner, { height: cpBlock.height, hash: cpHash })));
+      return;
+    }
+
+    // Tell a caller its observed public IP (for zero-config public-host detection).
+    if (url.pathname === '/whoami') {
+      res.end(JSON.stringify({ ip: callerIp(req) }));
+      return;
+    }
+
+    // Reachability self-test: dial the caller's own IP:port /status and report
+    // whether it answers. Lets a node decide if it can be a public peer or must
+    // stay a follower — without advertising an unreachable (NAT'd) address.
+    if (url.pathname === '/probe') {
+      const ip = callerIp(req);
+      const port = parseInt(url.searchParams.get('port') || '3456', 10);
+      if (!isPublicPeerHost(ip) || !validatePeerPort(port)) {
+        return res.end(JSON.stringify({ reachable: false, ip, port, reason: 'non-public host or invalid port' }));
+      }
+      let reachable = false;
+      try {
+        const r = await fetch(`http://${ip}:${port}/status`, { signal: AbortSignal.timeout(3000) });
+        reachable = r.ok;
+      } catch { reachable = false; }
+      res.end(JSON.stringify({ reachable, ip, port }));
       return;
     }
 
@@ -686,8 +728,10 @@ const server = http.createServer(async (req, res) => {
         tflops: p.tflops || null,
         registeredAt: p.registeredAt || p.lastSeen,
       }));
+      // Round to 3 decimals, not 1 — CPU-only nodes contribute sub-0.05 TFLOPS
+      // each, which 1-decimal rounding collapses to 0 and hides the whole network.
       const totalTflops = peerList.reduce((s, p) => s + (p.tflops || 0), 0);
-      res.end(JSON.stringify({ peers: peerList, count: peerList.length, totalTflops: Math.round(totalTflops * 10) / 10 }));
+      res.end(JSON.stringify({ peers: peerList, count: peerList.length, totalTflops: Math.round(totalTflops * 1000) / 1000 }));
       return;
     }
 

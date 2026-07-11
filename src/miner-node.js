@@ -752,7 +752,12 @@ export class PohMinerNode {
       } catch {}
     }
 
-    // 6. CPU FP benchmark fallback
+    // 6. CPU FP benchmark fallback.
+    // Measure single-thread matmul throughput, then scale by core count for an
+    // aggregate node estimate (compute jobs parallelize across cores). A pure-JS
+    // FP64 loop hits ~1 GFLOP/s per core, so a CPU-only node lands in the sub-TFLOPS
+    // (GFLOPS) range — reported honestly as fractional TFLOPS; the landing renders
+    // sub-1-TFLOPS totals in GFLOPS instead of rounding them to zero.
     const N = 512;
     const a = new Float64Array(N * N).fill(1.5);
     const b = new Float64Array(N * N).fill(0.7);
@@ -765,8 +770,10 @@ export class PohMinerNode {
       }
     }
     const elapsed = (performance.now() - t0) / 1000;
-    const tflops = Math.round((2 * N * N * N) / elapsed / 1e12 * 1000) / 1000;
-    console.log(`[PoH-Miner] TFLOPS: CPU matmul → ${tflops} TFLOPS`);
+    const perCore = (2 * N * N * N) / elapsed / 1e12; // TFLOPS, single thread
+    const cores = Math.max(1, os.cpus()?.length || 1);
+    const tflops = Math.round(perCore * cores * 1000) / 1000;
+    console.log(`[PoH-Miner] TFLOPS: CPU matmul → ${perCore.toFixed(4)}/core × ${cores} cores → ${tflops} TFLOPS`);
     return tflops || 0.001;
   }
 
@@ -4131,6 +4138,10 @@ export class PohMinerNode {
       ]);
     }
 
+    // Resolve our public host once (auto-detect + reachability probe unless an
+    // explicit host is configured) so reachable nodes register with zero config.
+    await this._resolvePublicHost();
+
     const walletApiPort = this.config.walletApiPort || 3456;
     const p2pPort = this.config.p2pPort || null;
     const baseInfo = {
@@ -4353,9 +4364,52 @@ export class PohMinerNode {
   }
 
   _getPublicHost() {
-    // In production this should be the externally reachable IP/hostname.
-    // For now we use a reasonable default that works in most LAN + cloud setups.
-    return process.env.POH_PUBLIC_HOST || this.config.publicHost || 'localhost';
+    // Explicit config wins; otherwise the auto-resolved value (set by
+    // _resolvePublicHost). Falls back to 'localhost' — which the bootnode rejects
+    // as non-public, so an unresolved node simply stays a follower/compute client.
+    return process.env.POH_PUBLIC_HOST || this.config.publicHost || this._publicHost || 'localhost';
+  }
+
+  /**
+   * Auto-detect whether this node is publicly reachable, so it can register as a
+   * peer with zero manual config. Steps: ask the bootnode our observed public IP
+   * (/whoami), then have the bootnode dial us back (/probe). Only if the probe
+   * succeeds do we adopt the public IP as our host — otherwise we're behind
+   * NAT/firewall and must not advertise an unreachable address (which would put a
+   * dead entry in /peers). An explicit POH_PUBLIC_HOST / config.publicHost skips
+   * all of this. Resolved once and cached.
+   */
+  async _resolvePublicHost() {
+    if (this._publicHostResolved) return this._publicHost;
+    const explicit = process.env.POH_PUBLIC_HOST || this.config.publicHost;
+    if (explicit) { this._publicHost = explicit; this._publicHostResolved = true; return explicit; }
+
+    const port = this.config.walletApiPort || 3456;
+    for (const bootnode of (this.config.bootnodes || [])) {
+      const base = bootnode.replace(/\/$/, '');
+      try {
+        const who = await fetch(`${base}/whoami`, { signal: AbortSignal.timeout(6000) })
+          .then(r => (r.ok ? r.json() : null)).catch(() => null);
+        const ip = who?.ip;
+        if (!ip) continue;
+        const probe = await fetch(`${base}/probe?port=${port}`, { signal: AbortSignal.timeout(9000) })
+          .then(r => (r.ok ? r.json() : null)).catch(() => null);
+        if (probe?.reachable) {
+          this._publicHost = ip;
+          this._publicHostResolved = true;
+          console.log(`[PoH-Miner] Auto-detected public address ${ip}:${port} (reachable) — registering as a public peer.`);
+          return ip;
+        }
+        console.log(`[PoH-Miner] Not publicly reachable at ${ip}:${port} (NAT/firewall) — running as a follower/compute client. ` +
+          `To appear as a public node, forward port ${port} or set POH_PUBLIC_HOST.`);
+        this._publicHost = null;
+        this._publicHostResolved = true;
+        return null;
+      } catch { /* try next bootnode */ }
+    }
+    this._publicHost = null;
+    this._publicHostResolved = true;
+    return null;
   }
 
   _initBrainSync() {

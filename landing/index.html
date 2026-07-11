@@ -1020,17 +1020,24 @@
           if (count !== null)
             document.getElementById('node-count').textContent = fmtNum(count);
 
-          // Aggregate TFLOPS across all peers
+          // Aggregate compute across all peers. CPU-only nodes contribute a
+          // fraction of a TFLOP each, so render sub-1-TFLOPS totals in GFLOPS
+          // instead of rounding them away to "—".
           let totalTflops = data.totalTflops;
           if (totalTflops == null && Array.isArray(data.peers)) {
             totalTflops = data.peers.reduce((s, p) => s + (p.tflops || 0), 0);
-            totalTflops = Math.round(totalTflops * 10) / 10;
           }
           if (totalTflops != null && totalTflops > 0) {
             const speedEl = document.getElementById('network-speed');
-            speedEl.textContent = totalTflops >= 1000
-              ? (totalTflops / 1000).toFixed(1) + 'k TFLOPS'
-              : totalTflops + ' TFLOPS';
+            if (totalTflops >= 1000) {
+              speedEl.textContent = (totalTflops / 1000).toFixed(1) + 'k TFLOPS';
+            } else if (totalTflops >= 1) {
+              speedEl.textContent = (Math.round(totalTflops * 10) / 10) + ' TFLOPS';
+            } else {
+              // < 1 TFLOPS → show GFLOPS (1 TFLOPS = 1000 GFLOPS)
+              const gflops = totalTflops * 1000;
+              speedEl.textContent = (gflops >= 10 ? Math.round(gflops) : Math.round(gflops * 10) / 10) + ' GFLOPS';
+            }
           }
         }
       } catch { document.getElementById('node-count').textContent = '—'; }
