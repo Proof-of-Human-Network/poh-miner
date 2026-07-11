@@ -42,6 +42,7 @@ import {
 } from './consensus/block-validator.js';
 import { replayChainLedger, replayChainLedgerAsync } from './consensus/tx-ledger.js';
 import { FINALITY_DEPTH, evaluateReorg, verifyCheckpoint, chainHonorsCheckpoint } from './consensus/finality.js';
+import { autoForwardPort } from './net/port-forward.js';
 import { computeVerdictWithExistingPoh } from './compute/poh-adapter.js';
 import { getBrain, getBrainDataDir, getQvacModels } from './compute/adapters/real-poh.js';
 import { BrainSync } from './brain/brain-sync.js';
@@ -4397,6 +4398,19 @@ export class PohMinerNode {
     if (explicit) { this._publicHost = explicit; this._publicHostResolved = true; return explicit; }
 
     const port = this.config.walletApiPort || 3456;
+
+    // Zero-config reachability: try to auto-open the port on the router (UPnP →
+    // NAT-PMP) before probing. If the mapping (or an already-open port) works, the
+    // /probe below succeeds and we register as a public peer with no user action.
+    // Skippable with POH_NO_UPNP=1. Never blocks startup on failure.
+    if (process.env.POH_NO_UPNP !== '1') {
+      try {
+        const fwd = await autoForwardPort(port, { description: 'PoH Miner' });
+        if (fwd.ok) console.log(`[PoH-Miner] Auto-opened port ${port} via ${fwd.method.toUpperCase()}.`);
+        else console.log(`[PoH-Miner] Auto port-forward not available (${fwd.reason}) — will verify direct reachability.`);
+      } catch { /* best-effort */ }
+    }
+
     for (const bootnode of (this.config.bootnodes || [])) {
       const base = bootnode.replace(/\/$/, '');
       try {
