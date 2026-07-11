@@ -1378,12 +1378,35 @@ export class PohMinerNode {
         req.on('data', chunk => body += chunk);
         req.on('end', async () => {
           try {
-            const { from, to, amount, fee = 0, memo = '' } = JSON.parse(body);
+            const { from, to, amount, fee = 0, memo = '', idempotencyKey } = JSON.parse(body);
             const amt = Math.round(parseFloat(amount) * POH_DECIMALS);
 
             if (!from || !to || !amt || amt <= 0) {
               res.statusCode = 400;
               return res.end(JSON.stringify({ error: 'Invalid parameters' }));
+            }
+
+            // Idempotency — a retried send (client timed out but the tx was actually
+            // accepted) must not create a SECOND transfer with the next nonce.
+            //  1) explicit idempotencyKey: return the same result for ~10 min.
+            //  2) no key: if an identical (from,to,amount,memo) tx is already pending
+            //     in the mempool, return it instead of building a new one. This is
+            //     exactly the retry-while-pending case; intentional repeats after the
+            //     first mines are still allowed (nothing pending to match).
+            if (!this._recentSends) this._recentSends = new Map();
+            const _now = Date.now();
+            for (const [k, v] of this._recentSends) if (_now - v.at > 10 * 60 * 1000) this._recentSends.delete(k);
+            if (idempotencyKey) {
+              const prev = this._recentSends.get(`k:${idempotencyKey}`);
+              if (prev) {
+                return res.end(JSON.stringify({ success: true, txHash: prev.txHash, status: 'pending', idempotent: true, message: 'Duplicate send suppressed (idempotency key)' }));
+              }
+            } else {
+              const dup = this.txMempool.getPending(1000).find(t =>
+                t.from === from && t.to === to && t.amount === amt && (t.memo || '') === (memo || ''));
+              if (dup) {
+                return res.end(JSON.stringify({ success: true, txHash: dup.txHash, status: 'pending', idempotent: true, message: 'Identical transfer already pending — not resent' }));
+              }
             }
 
             const senderWallet = this.walletManager.loadWallet(from);
@@ -1392,7 +1415,7 @@ export class PohMinerNode {
               return res.end(JSON.stringify({ error: 'Sender wallet has no signing key on this node. Use /api/wallet/register-key first.' }));
             }
 
-            const confirmedNonce = this.walletManager.getNonce(from);
+            const confirmedNonce = this._confirmedNonce(from);
             const pendingNonce   = this.txMempool.accountPendingNonce.get(from) ?? confirmedNonce;
             const nonce = pendingNonce + 1;
             const tx = new PoHTransaction({ from, to, amount: amt, fee, nonce, memo });
@@ -1403,6 +1426,9 @@ export class PohMinerNode {
               res.statusCode = 400;
               return res.end(JSON.stringify({ error: submitResult.error || 'Transaction rejected by mempool' }));
             }
+
+            // Remember this send so a retried request returns the same tx.
+            if (idempotencyKey) this._recentSends.set(`k:${idempotencyKey}`, { txHash: tx.txHash, at: _now });
 
             // Gossip to peers so all miners can include it
             this.gossip.publish('new-tx', tx.toJSON()).catch(() => {});
@@ -5354,48 +5380,56 @@ export class PohMinerNode {
     // Journal-based incremental rollback can leave per-wallet files diverged from
     // the canonical chain — e.g. a transfer credited on the losing branch whose
     // recipient credit is not re-applied identically on the winning branch, which
-    // silently loses the recipient's funds until the next full rebuild. Replaying
-    // the canonical chain (~1s) and rewriting only the addresses the reorg touched
-    // keeps live balances authoritative without a full 50k-block rebuild.
-    const touched = new Set();
-    for (const block of [...rolledBack, ...newBlocks]) {
-      for (const tx of (block.transactions || [])) {
-        if (tx.from) touched.add(tx.from);
-        if (tx.to) touched.add(tx.to);
+    // silently loses the recipient's funds until the next full rebuild.
+    //
+    // Only needed when blocks were actually rolled back: with an empty rollback
+    // the new branch simply extends the tip and _acceptBlock already applied it
+    // incrementally to the ledger + wallet files. And the replay is done with the
+    // ASYNC variant (yields every 2000 blocks) so a burst of reorgs can't pin the
+    // event loop and starve the node's HTTP API.
+    let touchedCount = 0;
+    if (rolledBack.length > 0) {
+      const touched = new Set();
+      for (const block of [...rolledBack, ...newBlocks]) {
+        for (const tx of (block.transactions || [])) {
+          if (tx.from) touched.add(tx.from);
+          if (tx.to) touched.add(tx.to);
+        }
+        if (block.minerWallet) touched.add(block.minerWallet);
+        for (const w of (block.coinbaseReward?.workerRewards || [])) {
+          if (w.workerId) touched.add(w.workerId);
+        }
       }
-      if (block.minerWallet) touched.add(block.minerWallet);
-      for (const w of (block.coinbaseReward?.workerRewards || [])) {
-        if (w.workerId) touched.add(w.workerId);
+      touchedCount = touched.size;
+      const canonical = await replayChainLedgerAsync(this.chain, { applyP2P: true });
+      this.txLedger = canonical;
+      this.txMempool.setSpentTxHashes(canonical.spentTxHashes);
+      for (const addr of touched) {
+        const bal = canonical.getBalance(addr);
+        const non = canonical.getNonce(addr);
+        let w = this.walletManager.loadWallet(addr)
+          || new Wallet({ address: addr, privateKey: null, publicKey: null, createdAt: Date.now() });
+        w.balance = bal;
+        w.nonce   = non;
+        this.walletManager.saveWallet(w);
       }
-    }
-    const canonical = replayChainLedger(this.chain, { applyP2P: true });
-    this.txLedger = canonical;
-    this.txMempool.setSpentTxHashes(canonical.spentTxHashes);
-    for (const addr of touched) {
-      const bal = canonical.getBalance(addr);
-      const non = canonical.getNonce(addr);
-      let w = this.walletManager.loadWallet(addr)
-        || new Wallet({ address: addr, privateKey: null, publicKey: null, createdAt: Date.now() });
-      w.balance = bal;
-      w.nonce   = non;
-      this.walletManager.saveWallet(w);
-    }
 
-    // Re-inject transactions from rolled-back blocks that the winning branch did
-    // not include, so they get re-mined instead of being silently dropped.
-    const reappliedHashes = new Set();
-    for (const block of newBlocks) {
-      for (const tx of (block.transactions || [])) reappliedHashes.add(tx.txHash);
-    }
-    for (const block of rolledBack) {
-      for (const txData of (block.transactions || [])) {
-        if (reappliedHashes.has(txData.txHash) || canonical.spentTxHashes.has(txData.txHash)) continue;
-        this.txMempool.submit(txData); // re-validates; silently ignored if now invalid
+      // Re-inject transactions from rolled-back blocks that the winning branch did
+      // not include, so they get re-mined instead of being silently dropped.
+      const reappliedHashes = new Set();
+      for (const block of newBlocks) {
+        for (const tx of (block.transactions || [])) reappliedHashes.add(tx.txHash);
+      }
+      for (const block of rolledBack) {
+        for (const txData of (block.transactions || [])) {
+          if (reappliedHashes.has(txData.txHash) || canonical.spentTxHashes.has(txData.txHash)) continue;
+          this.txMempool.submit(txData); // re-validates; silently ignored if now invalid
+        }
       }
     }
 
     this.chainStore.saveChain(this.chain);
-    console.log(`[PoH-Miner] Reorg complete. New tip: #${this.chain[this.chain.length - 1].height} (reconciled ${touched.size} wallet(s))`);
+    console.log(`[PoH-Miner] Reorg complete. New tip: #${this.chain[this.chain.length - 1].height} (rolled back ${rolledBack.length}, reconciled ${touchedCount} wallet(s))`);
     return true;
   }
 
