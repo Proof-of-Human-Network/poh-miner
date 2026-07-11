@@ -449,6 +449,22 @@ export class PohMinerNode {
     // Resolve mining wallet — must be a PoH-native wallet (poh... address with a local private key).
     // solanaAddress in config is for future bridge/withdrawal only, never used as rewards recipient.
     const isNativePoH = addr => addr && addr.startsWith('poh');
+
+    // Persist the resolved mining wallet into the config file that was actually
+    // loaded (config._configPath, set by start.js) so the next start reuses it.
+    // Falls back to the global path only when the loaded path is unknown.
+    this._persistWalletToConfig = (address) => {
+      try {
+        const cfgPath = this.config._configPath
+          || path.join(os.homedir(), '.poh-miner', 'config.json');
+        const saved = fs.existsSync(cfgPath) ? JSON.parse(fs.readFileSync(cfgPath, 'utf8')) : {};
+        saved.pohWallet = address;
+        saved.wallet    = address;
+        fs.writeFileSync(cfgPath, JSON.stringify(saved, null, 2));
+      } catch (e) {
+        console.warn('[PoH-Miner] Could not persist wallet to config:', e.message);
+      }
+    };
     const candidateAddr = isNativePoH(this.config.pohWallet) ? this.config.pohWallet
                         : isNativePoH(this.config.wallet)    ? this.config.wallet
                         : null;
@@ -469,31 +485,17 @@ export class PohMinerNode {
     if (!resolvedWallet) {
       resolvedWallet = this.walletManager.createWallet();
       console.log(`[PoH-Miner] Created new PoH wallet: ${resolvedWallet.address}`);
-      // Persist the new wallet address to config.json so restarts reuse it
-      try {
-        const cfgPath = path.join(os.homedir(), '.poh-miner', 'config.json');
-        const saved = fs.existsSync(cfgPath) ? JSON.parse(fs.readFileSync(cfgPath, 'utf8')) : {};
-        saved.pohWallet = resolvedWallet.address;
-        saved.wallet    = resolvedWallet.address;
-        fs.writeFileSync(cfgPath, JSON.stringify(saved, null, 2));
-      } catch (e) {
-        console.warn('[PoH-Miner] Could not persist wallet to config:', e.message);
-      }
+      // Persist to the SAME config file we loaded so restarts reuse it. Using a
+      // hardcoded home path here re-minted a fresh wallet every start whenever the
+      // loaded config lived elsewhere (e.g. cwd/config.json in a source-tree run).
+      this._persistWalletToConfig(resolvedWallet.address);
     }
 
     resolvedWallet = this.walletManager.ensureCanonicalAddress(resolvedWallet);
     if (resolvedWallet.address !== (this.config.pohWallet || this.config.wallet)) {
       this.config.pohWallet = resolvedWallet.address;
       this.config.wallet    = resolvedWallet.address;
-      try {
-        const cfgPath = path.join(os.homedir(), '.poh-miner', 'config.json');
-        const saved = fs.existsSync(cfgPath) ? JSON.parse(fs.readFileSync(cfgPath, 'utf8')) : {};
-        saved.pohWallet = resolvedWallet.address;
-        saved.wallet    = resolvedWallet.address;
-        fs.writeFileSync(cfgPath, JSON.stringify(saved, null, 2));
-      } catch (e) {
-        console.warn('[PoH-Miner] Could not persist migrated wallet to config:', e.message);
-      }
+      this._persistWalletToConfig(resolvedWallet.address);
     } else {
       this.config.pohWallet = resolvedWallet.address;
       this.config.wallet    = resolvedWallet.address;
@@ -3483,13 +3485,7 @@ export class PohMinerNode {
             this.config.pohWallet = address;
             this.config.wallet = address;
             this.identityWallet = wallet;
-            try {
-              const cfgPath = path.join(os.homedir(), '.poh-miner', 'config.json');
-              const saved = fs.existsSync(cfgPath) ? JSON.parse(fs.readFileSync(cfgPath, 'utf8')) : {};
-              saved.pohWallet = address;
-              saved.wallet = address;
-              fs.writeFileSync(cfgPath, JSON.stringify(saved, null, 2));
-            } catch { /* non-fatal */ }
+            this._persistWalletToConfig?.(address);
           }
           const payloadObj = { address, timestamp, action, ...extraFields };
           const signature = wallet.sign(JSON.stringify(payloadObj));

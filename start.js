@@ -113,6 +113,12 @@ async function startProject() {
   const chosenModel = await chooseModelFirstRun(config, configPath);
   await warmUpQvac(chosenModel || config.model || 'qwen3-1.7b');
 
+  // Persist runtime-resolved fields (e.g. an auto-created wallet) back to the SAME
+  // file we loaded — not a hardcoded ~/.poh-miner/config.json, which may be a
+  // different file when running from a source tree (cwd/config.json wins). Writing
+  // to the wrong file was silently re-minting a new mining wallet on every restart.
+  config._configPath = configPath;
+
   const node = new PohMinerNode(config);
   await node.start();
 
