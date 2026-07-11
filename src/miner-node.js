@@ -6402,6 +6402,25 @@ export class PohMinerNode {
     if (!requesterAddress || !amount) return 'missing requesterAddress/amount';
     if (this._appliedEscrowJobIds.has(jobId)) return true; // block replay — already debited locally
 
+    // Canonical-ledger reconcile before the (file-based) debit. On a sync-only
+    // (follower) node the per-wallet FILE balance is a stale stub (0) while the
+    // txLedger — the same source /api/wallet/balance reports — holds the true
+    // confirmed balance. Without this the debit sees 0 and rejects a funded wallet
+    // with "insufficient balance". Reconcile the requester's file up to the ledger
+    // once per session before its first escrow debit (balance only; the nonce is
+    // validated against the file value the client signed). Bump-up only, so it
+    // never erases a locally-decremented (escrow-in-progress) balance.
+    if (!this._escrowReconciled) this._escrowReconciled = new Set();
+    if (this.txLedger && !this._escrowReconciled.has(requesterAddress)) {
+      this._escrowReconciled.add(requesterAddress);
+      const w = this.walletManager.loadWallet(requesterAddress);
+      const ledgerBal = this.txLedger.getBalance(requesterAddress);
+      if (w && ledgerBal > (w.balance || 0)) {
+        w.balance = ledgerBal;
+        this.walletManager.saveWallet(w);
+      }
+    }
+
     if (typeof nonce === 'number') {
       const result = await this.walletManager.debitWithNonce(requesterAddress, amount, nonce);
       if (result !== true) return result.error || 'payment failed';
