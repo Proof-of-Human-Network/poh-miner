@@ -6412,12 +6412,15 @@ export class PohMinerNode {
     // never erases a locally-decremented (escrow-in-progress) balance.
     if (!this._escrowReconciled) this._escrowReconciled = new Set();
     if (this.txLedger && !this._escrowReconciled.has(requesterAddress)) {
-      this._escrowReconciled.add(requesterAddress);
       const w = this.walletManager.loadWallet(requesterAddress);
       const ledgerBal = this.txLedger.getBalance(requesterAddress);
       if (w && ledgerBal > (w.balance || 0)) {
         w.balance = ledgerBal;
         this.walletManager.saveWallet(w);
+        // Mark reconciled ONLY after a real bump — so a wallet touched before the
+        // ledger finished syncing (ledgerBal still 0) is retried on the next job
+        // instead of being stuck at the stale stub balance for the whole session.
+        this._escrowReconciled.add(requesterAddress);
       }
     }
 
