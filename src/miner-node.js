@@ -41,6 +41,7 @@ import {
   findParentBlock,
 } from './consensus/block-validator.js';
 import { replayChainLedger, replayChainLedgerAsync } from './consensus/tx-ledger.js';
+import { FINALITY_DEPTH, evaluateReorg, verifyCheckpoint, chainHonorsCheckpoint } from './consensus/finality.js';
 import { computeVerdictWithExistingPoh } from './compute/poh-adapter.js';
 import { getBrain, getBrainDataDir, getQvacModels } from './compute/adapters/real-poh.js';
 import { BrainSync } from './brain/brain-sync.js';
@@ -363,6 +364,11 @@ export class PohMinerNode {
     this.peers = [];
     this.knownPeers = [];
     this.orphanPool = new Map();   // previousHash → PohBlock[]
+
+    // Finality: latest bootnode-signed checkpoint we've verified ({height, hash}),
+    // and an operator escape hatch to permit deep reorgs during recovery.
+    this.finalizedCheckpoint = null;
+    this._allowDeepReorg = process.env.POH_ALLOW_DEEP_REORG === '1';
     this.txMempool = null;         // initialized after walletManager is ready
     // Set of requestIds already included in a mined block. Used to prevent
     // the same scan job being computed and rewarded twice across the network.
@@ -4035,6 +4041,32 @@ export class PohMinerNode {
       }
 
       {
+        // ── Finality gate (full-resync path) ──────────────────────────────────
+        // A deep fork can bypass reorgTo and land here as a full/anchored
+        // replacement. Apply the same rule: a synced node must not discard history
+        // deeper than FINALITY_DEPTH, and must not adopt a chain that contradicts a
+        // verified checkpoint. `effectiveAnchorHeight` (-1 = full replace) is the
+        // last block kept. Being merely behind is an append, not a reorg, and does
+        // not reach this block, so legitimate catch-up is unaffected.
+        const finReplace = evaluateReorg({
+          localTipHeight: localChainHeight,
+          forkHeight: effectiveAnchorHeight,
+          finalityDepth: FINALITY_DEPTH,
+          allowDeep: this._allowDeepReorg,
+        });
+        if (!finReplace.allowed) {
+          console.warn(`[PoH-Miner] ⛔ Resync REJECTED by finality rule: ${finReplace.reason}. ` +
+            `Wipe ~/.poh-miner/chain or set POH_ALLOW_DEEP_REORG=1 to recover.`);
+          return;
+        }
+        if (this.finalizedCheckpoint &&
+            !chainHonorsCheckpoint(parsed, this.finalizedCheckpoint,
+              b => (b.blockHash || b.getHashSync()))) {
+          console.warn(`[PoH-Miner] ⛔ Resync REJECTED: downloaded chain conflicts with finalized ` +
+            `checkpoint #${this.finalizedCheckpoint.height} (${this.finalizedCheckpoint.hash.slice(0, 12)}…)`);
+          return;
+        }
+
         const anchorIdx = effectiveAnchorHeight >= 0 ? effectiveAnchorHeight - chainOffset : -1;
         const prefix = effectiveAnchorHeight >= 0 ? this.chain.slice(0, anchorIdx + 1) : [];
         const isFullReplacement = effectiveAnchorHeight < 0;
@@ -4246,6 +4278,62 @@ export class PohMinerNode {
   }
 
   /**
+   * Poll the configured bootnode(s) for the signed finality checkpoint and adopt
+   * it once verified. The checkpoint pins the finalized tip (bootnode tip minus
+   * FINALITY_DEPTH); reorgTo + the resync path then refuse any branch that
+   * rewrites at/below it. `checkpointPublicKey` in config pins the trusted signer;
+   * without it the signature is still checked but any signer is accepted (the
+   * local max-reorg-depth rule already protects a synced node on its own).
+   */
+  startCheckpointSync() {
+    if (this._checkpointTimer) return;
+    const bootnodes = this.config.bootnodes || [];
+    if (!bootnodes.length) return;
+    const pinnedPublicKey = this.config.checkpointPublicKey || null;
+    const POLL_MS = 60_000;
+
+    const pull = async () => {
+      for (const bn of bootnodes) {
+        try {
+          const base = bn.replace(/\/$/, '');
+          const r = await fetch(`${base}/checkpoint`, { signal: AbortSignal.timeout(8_000) });
+          if (!r.ok) continue;
+          const cp = await r.json();
+          if (!cp || typeof cp.height !== 'number') continue;
+
+          const v = verifyCheckpoint(cp, { pinnedPublicKey });
+          if (!v.ok) {
+            console.warn(`[PoH-Miner] Ignoring checkpoint from ${base}: ${v.reason}`);
+            continue;
+          }
+          // Monotonic: never move the finalized point backwards.
+          if (this.finalizedCheckpoint && cp.height <= this.finalizedCheckpoint.height) return;
+
+          // If we already hold the block at the checkpoint height, its hash MUST
+          // match — otherwise we are on a fork below finality and must not silently
+          // advance the checkpoint over the conflict (surface it loudly instead).
+          const local = this.chain.find(b => (b.height ?? -1) === cp.height);
+          if (local) {
+            const localHash = local.blockHash || local.getHashSync();
+            if (localHash !== cp.hash) {
+              console.error(`[PoH-Miner] ⛔ CHECKPOINT CONFLICT at #${cp.height}: local ` +
+                `${localHash.slice(0, 12)}… vs signed ${cp.hash.slice(0, 12)}…. Local chain is on a ` +
+                `finalized-orphan fork — manual recovery required (wipe ~/.poh-miner/chain).`);
+              return;
+            }
+          }
+          this.finalizedCheckpoint = { height: cp.height, hash: cp.hash };
+          console.log(`[PoH-Miner] Finality checkpoint updated → #${cp.height} (${cp.hash.slice(0, 12)}…)`);
+          return;
+        } catch { /* try next bootnode */ }
+      }
+    };
+
+    pull().catch(() => {});
+    this._checkpointTimer = setInterval(() => pull().catch(() => {}), POLL_MS);
+  }
+
+  /**
    * IPFS peer discovery fallback — used when all bootnodes are unreachable.
    * Fetches the peer directory pinned to IPFS and merges it into this.peers.
    */
@@ -4351,6 +4439,10 @@ export class PohMinerNode {
       // restored after being down, immediately re-registers, re-discovers peers,
       // and re-syncs the chain instead of waiting for the next scheduled tick.
       this.startConnectivityWatcher();
+
+      // Pull the bootnode-signed finality checkpoint so deep reorgs below it are
+      // refused even on a freshly-started or eclipsed node.
+      this.startCheckpointSync();
     } else {
       console.log('[PoH-Miner] No bootnodes configured — running in local/dev mode only');
     }
@@ -5355,6 +5447,30 @@ export class PohMinerNode {
     }
     if (commonHeight < 0) {
       console.warn('[PoH-Miner] Reorg: no common ancestor in fetched segment — triggering full resync');
+      return false;
+    }
+
+    // ── Finality gate ────────────────────────────────────────────────────────
+    // Refuse to rewrite history buried deeper than FINALITY_DEPTH below our tip,
+    // and refuse any branch that contradicts a verified bootnode checkpoint. This
+    // is what makes deep double-spends impossible regardless of attacker hashrate.
+    // Checked BEFORE the splice so a rejected reorg leaves the chain untouched.
+    const localTipHeight = this.chain[this.chain.length - 1]?.height ?? (this.chain.length - 1);
+    const forkHeight = this.chain[commonHeight]?.height ?? commonHeight;
+    const fin = evaluateReorg({
+      localTipHeight, forkHeight,
+      finalityDepth: FINALITY_DEPTH,
+      allowDeep: this._allowDeepReorg,
+    });
+    if (!fin.allowed) {
+      console.warn(`[PoH-Miner] ⛔ Reorg REJECTED by finality rule: ${fin.reason}. ` +
+        `Set POH_ALLOW_DEEP_REORG=1 to override (recovery only).`);
+      return false;
+    }
+    if (this.finalizedCheckpoint &&
+        !chainHonorsCheckpoint(newBlocks, this.finalizedCheckpoint, b => b.getHashSync())) {
+      console.warn(`[PoH-Miner] ⛔ Reorg REJECTED: branch conflicts with finalized ` +
+        `checkpoint #${this.finalizedCheckpoint.height} (${this.finalizedCheckpoint.hash.slice(0, 12)}…)`);
       return false;
     }
 

@@ -19,6 +19,7 @@ import { validateBlockExtended } from './consensus/block-validator.js';
 import { replayChainLedger } from './consensus/tx-ledger.js';
 import { computeChainWork } from './consensus/chain-selection.js';
 import { blocksOnTipPath } from './consensus/chain-path.js';
+import { FINALITY_DEPTH, signCheckpoint } from './consensus/finality.js';
 import {
   verifyBrainEvent,
   verifyIpfsUpdate,
@@ -47,6 +48,27 @@ const ALLOW_LOCAL_HOSTS = argv.includes('--allow-local-hosts')
 
 const chainStore = new ChainStore(DATA_DIR);
 let chain = chainStore.loadChain().map(b => PohBlock.fromJSON ? PohBlock.fromJSON(b) : new PohBlock(b));
+
+// ── Finality checkpoint signer ──────────────────────────────────────────────
+// A stable ed25519 identity the bootnode uses to sign its finalized tip. Miners
+// pin its public key (config.checkpointPublicKey) and refuse any chain that
+// contradicts a checkpoint it signs. Persisted so restarts keep the same key.
+const CHECKPOINT_KEY_FILE = path.join(DATA_DIR, 'checkpoint-signer.json');
+const checkpointSigner = (() => {
+  try {
+    const saved = JSON.parse(fs.readFileSync(CHECKPOINT_KEY_FILE, 'utf8'));
+    return Wallet.fromJSON(saved);
+  } catch {
+    const w = Wallet.generate();
+    try {
+      fs.mkdirSync(DATA_DIR, { recursive: true });
+      fs.writeFileSync(CHECKPOINT_KEY_FILE, JSON.stringify(w.toJSON()), { mode: 0o600 });
+    } catch (e) { console.warn('[Bootnode] Could not persist checkpoint signer key:', e.message); }
+    return w;
+  }
+})();
+console.log(`[Bootnode] Finality checkpoint signer address: ${checkpointSigner.address} ` +
+  `(pin this as "checkpointPublicKey" in miner config)`);
 
 // Peer registry for node discovery
 let peers = new Map(); // wallet -> peerInfo
@@ -342,6 +364,20 @@ const server = http.createServer(async (req, res) => {
         timestamp: tip.timestamp,
         chainWork: tip.chainWork || '0',
       }));
+      return;
+    }
+
+    // Signed finality checkpoint: the block FINALITY_DEPTH below the tip, signed by
+    // the bootnode's checkpoint key. Miners pin the key and refuse any chain that
+    // rewrites at/below this height. Deep double-spend protection anchored to the
+    // trusted bootnode.
+    if (url.pathname === '/checkpoint') {
+      const tipHeight = chain[chain.length - 1]?.height ?? (chain.length - 1);
+      if (tipHeight < 0) { res.statusCode = 503; return res.end(JSON.stringify({ error: 'no chain' })); }
+      const cpHeight = Math.max(0, tipHeight - FINALITY_DEPTH);
+      const cpBlock = chain.find(b => (b.height ?? -1) === cpHeight) ?? chain[chain.length - 1];
+      const cpHash = cpBlock.blockHash || await cpBlock.getHash();
+      res.end(JSON.stringify(signCheckpoint(checkpointSigner, { height: cpBlock.height, hash: cpHash })));
       return;
     }
 
