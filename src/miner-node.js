@@ -3883,6 +3883,18 @@ export class PohMinerNode {
       return;
     }
 
+    // Fork against a heavier peer: heal it with a bounded reorg to the true common
+    // ancestor (within finality depth) BEFORE the partial-reorg / full-resync path
+    // below, which escalates a few-block miner fork into a genesis wipe that
+    // finality then rejects — leaving the node permanently stuck on its own fork.
+    if (isFork && bestBase && compareChainWork(bestWork, localWork) > 0) {
+      const healed = await this._tryBoundedReorg(bestBase, bestHeight);
+      if (healed) {
+        console.log('[PoH-Miner] [Sync] Fork healed via bounded reorg — chains converged.');
+        return;
+      }
+    }
+
     // Determine sync mode:
     //   - incremental: peer is simply ahead (or we only have genesis), append new blocks
     //   - partial reorg: competing tip (fork at local tip only), keep common prefix and download tail
@@ -5185,8 +5197,12 @@ export class PohMinerNode {
           if (incomingTip && compareChainWork(incomingTip.chainWork, ourWork) > 0) {
             const reorgDone = await this.reorgTo(incoming);
             if (reorgDone) return;
-            // Common ancestor not in the fetched segment — deep fork, need full resync.
-            // Release the lock first so syncFromBootnodes can run.
+            // Common ancestor not in the fetched window — fetch enough history to
+            // find it (within finality depth) and do a bounded reorg before falling
+            // back to a full resync (which finality would reject for a shallow fork).
+            const healed = await this._tryBoundedReorg(bootnode, incomingTip.height);
+            if (healed) return;
+            // Genuinely deep fork — release the lock so syncFromBootnodes can run.
             this._syncInProgress = false;
             this.syncFromBootnodes().catch(() => {});
             return;
@@ -5483,6 +5499,52 @@ export class PohMinerNode {
    *
    * Called when a sync reveals a heavier chain branch.
    */
+
+  /**
+   * Heal a fork against a heavier peer by finding the TRUE common ancestor within
+   * finality depth and doing a bounded reorg — instead of escalating a few-block
+   * fork to a full genesis wipe (which the finality rule then rejects, stranding
+   * the node). Fetches [min(localTip,peerTip)-FINALITY_DEPTH … peerTip] from the
+   * peer, walks down to the highest matching block, and reorgs from there. Returns
+   * true if the fork was healed. If no common ancestor exists within finality
+   * depth, the fork is genuinely deeper than finality and we do NOT wipe.
+   */
+  async _tryBoundedReorg(peerBase, peerTipHeight) {
+    const localTip = this.chain[this.chain.length - 1]?.height ?? -1;
+    if (localTip < 0 || peerTipHeight < 0) return false;
+    const from = Math.max(0, Math.min(localTip, peerTipHeight) - FINALITY_DEPTH);
+
+    let peerBlocks;
+    try {
+      const r = await fetch(`${peerBase.replace(/\/$/, '')}/chain/blocks?from=${from}&to=${peerTipHeight}`,
+        { signal: AbortSignal.timeout(60000) });
+      if (!r.ok) return false;
+      const raw = await r.json();
+      if (!Array.isArray(raw) || !raw.length) return false;
+      peerBlocks = raw.map(b => (PohBlock.fromJSON ? PohBlock.fromJSON(b) : new PohBlock(b)));
+    } catch { return false; }
+
+    const peerByHeight = new Map(peerBlocks.map(b => [b.height, b]));
+    const localByHeight = new Map(this.chain.map(b => [b.height, b]));
+    let commonHeight = -1;
+    for (let h = Math.min(localTip, peerTipHeight); h >= from; h--) {
+      const lb = localByHeight.get(h), pb = peerByHeight.get(h);
+      if (!lb || !pb) continue;
+      const lh = lb.blockHash || lb.getHashSync();
+      const ph = pb.blockHash || pb.getHashSync();
+      if (lh === ph) { commonHeight = h; break; }
+    }
+    if (commonHeight < 0) {
+      console.warn(`[PoH-Miner] [Sync] No common ancestor within ${FINALITY_DEPTH} blocks of #${localTip} — fork deeper than finality; not wiping.`);
+      return false;
+    }
+
+    const newBranch = peerBlocks.filter(b => b.height > commonHeight).sort((a, b) => a.height - b.height);
+    if (!newBranch.length) return false;
+    console.log(`[PoH-Miner] [Sync] Bounded reorg: common ancestor #${commonHeight}, applying ${newBranch.length} peer block(s) → #${peerTipHeight}`);
+    return await this.reorgTo(newBranch);
+  }
+
   async reorgTo(newBlocks) {
     if (!newBlocks?.length) return;
 
