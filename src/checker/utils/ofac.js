@@ -175,8 +175,9 @@ async function refreshUk() {
   }
 }
 
-// Kick off (non-blocking)
-refreshUk().catch(() => {});
+// Note: the initial UK load is kicked off by the unified block near the bottom
+// of this module (alongside OFAC + EU). A standalone kickoff here would fetch the
+// list twice on startup (duplicate "[sanctions] UK list loaded" logs).
 
 function isUkSanctioned(addressOrName) {
   if (!addressOrName) return { sanctioned: false };
@@ -289,8 +290,8 @@ async function refreshEu() {
   }
 }
 
-// Kick off on load
-refreshEu().catch(() => {});
+// Note: the initial EU load is kicked off by the unified block near the bottom
+// of this module (alongside OFAC + UK) — no standalone kickoff here (would fetch twice).
 
 function isEuSanctioned(query) {
   if (!query) return { sanctioned: false };
