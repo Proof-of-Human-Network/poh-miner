@@ -32,6 +32,7 @@ import {
   MAX_SUBMIT_BLOCK_BATCH,
 } from './security/bootnode-auth.js';
 import { applyBootnodeCors } from './security/api-security.js';
+import { envelopeSignPayload } from './network/p2p-gossip.js';
 import { Wallet } from './wallet/wallet.js';
 import { IPFSStore } from './storage/ipfs-store.js';
 import { JobBoard } from './jobs/job-board.js';
@@ -92,6 +93,35 @@ function callerIp(req) {
 let peers = new Map(); // wallet -> peerInfo
 
 const PEER_TTL_MS = 10 * 60 * 1000; // 10 minutes
+
+// ── NAT relay inboxes ────────────────────────────────────────────────────────
+// A follower (reachable:false) can't be dialed, so gossip destined for it is
+// queued here and drained via the follower's authenticated long-poll GET /inbox.
+// In-memory + bounded + dropped when the follower goes stale, so it can never
+// grow without bound (ephemeral, like the job board).
+const inboxes = new Map(); // wallet -> { queue: [envelope], seen: Set<id> }
+const MAX_INBOX = 500;     // per-follower cap; oldest dropped past this
+
+/** Fan a gossip envelope into every eligible follower's inbox. Returns count queued. */
+function enqueueForFollowers(envelope) {
+  const path = new Set(envelope.path || []);
+  let queued = 0;
+  for (const [wallet, peer] of peers.entries()) {
+    if (peer.reachable !== false) continue;             // only NAT'd followers use the relay
+    if (wallet === envelope.from || path.has(wallet)) continue; // don't echo to origin/relayers
+    let box = inboxes.get(wallet);
+    if (!box) { box = { queue: [], seen: new Set() }; inboxes.set(wallet, box); }
+    if (box.seen.has(envelope.id)) continue;            // dedupe per follower
+    box.seen.add(envelope.id);
+    box.queue.push(envelope);
+    if (box.queue.length > MAX_INBOX) {
+      const dropped = box.queue.shift();
+      box.seen.delete(dropped.id);
+    }
+    queued++;
+  }
+  return queued;
+}
 
 // ── Brain event store ──────────────────────────────────────────────────────────
 // Accumulates signed brain events (feedback, weight updates) from all miners.
@@ -275,6 +305,7 @@ function pruneStalePeers() {
   for (const [wallet, peer] of peers.entries()) {
     if (now - peer.lastSeen > PEER_TTL_MS) {
       peers.delete(wallet);
+      inboxes.delete(wallet); // drop the follower's relay inbox with it
       removed++;
     }
   }
@@ -585,11 +616,13 @@ const server = http.createServer(async (req, res) => {
           signingPublicKey: peerInfo.signingPublicKey,
           methodsHash: peerInfo.methodsHash || null,
           tflops: typeof peerInfo.tflops === 'number' ? peerInfo.tflops : null,
+          reachable: auth.reachable !== false, // followers (NAT'd) are reached via /inbox relay
           registeredAt: auth.ts,
         };
 
         peers.set(peer.wallet, peer);
-        console.log(`[Bootnode] Registered VERIFIED peer: ${peer.wallet} @ ${peer.host}:${peer.walletApiPort} (methods=${peer.methodsHash?.slice(0,8)||'?'})`);
+        const kind = peer.reachable ? 'peer' : 'follower (relay)';
+        console.log(`[Bootnode] Registered VERIFIED ${kind}: ${peer.wallet} @ ${peer.host}:${peer.walletApiPort} (methods=${peer.methodsHash?.slice(0,8)||'?'})`);
         schedulePeerDirectoryPin();
         res.statusCode = 200;
         res.end(JSON.stringify({ registered: true, peersKnown: peers.size, verified: true, peersCid: ipfsRegistry.peers?.cid || null }));
@@ -711,10 +744,54 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
+    // ── NAT relay: reachable peers push gossip here; the bootnode fans it into
+    // the inboxes of followers that can't be dialed directly. Verified so the
+    // relay can't be spammed with junk followers would only reject anyway.
+    if (req.method === 'POST' && url.pathname === '/gossip') {
+      const raw = await readLimitedBody(req, 256 * 1024);
+      let envelope;
+      try { envelope = JSON.parse(raw || '{}'); }
+      catch { res.statusCode = 400; return res.end(JSON.stringify({ error: 'invalid json' })); }
+      if (!envelope?.id || !envelope?.topic) {
+        res.statusCode = 400; return res.end(JSON.stringify({ error: 'invalid envelope' }));
+      }
+      if (!envelope.signature || !envelope.signingPublicKey
+          || !Wallet.verifySignature(envelope.signingPublicKey, envelopeSignPayload(envelope), envelope.signature)) {
+        res.statusCode = 403; return res.end(JSON.stringify({ error: 'invalid or missing signature' }));
+      }
+      const queued = enqueueForFollowers(envelope);
+      res.end(JSON.stringify({ ok: true, queued }));
+      return;
+    }
+
+    // ── NAT relay: a follower drains its queued gossip here. Authenticated with
+    // the same signed-action scheme as the job board (action='inbox-poll'), so a
+    // node can only read its own inbox. Polling also proves liveness.
+    if (req.method === 'GET' && url.pathname === '/inbox') {
+      const auth = verifyBoardAuth({
+        wallet: url.searchParams.get('wallet'),
+        signingPublicKey: url.searchParams.get('signingPublicKey'),
+        signature: url.searchParams.get('signature'),
+        timestamp: Number(url.searchParams.get('timestamp')),
+      }, 'inbox-poll');
+      if (auth.error) { res.statusCode = 403; return res.end(JSON.stringify({ error: auth.error })); }
+      const peer = peers.get(auth.wallet);
+      if (peer) peer.lastSeen = Date.now(); // a poll keeps the follower alive
+      const box = inboxes.get(auth.wallet);
+      const envelopes = box ? box.queue.splice(0, box.queue.length) : [];
+      if (box) box.seen.clear();
+      res.end(JSON.stringify({ envelopes }));
+      return;
+    }
+
     if (url.pathname === '/peers') {
       pruneStalePeers(); // ensure fresh list
-      const peerList = Array.from(peers.values())
-        .filter(p => p.signingPublicKey && Wallet.isAddressBoundToSigningKey(p.wallet, p.signingPublicKey))
+      const verified = Array.from(peers.values())
+        .filter(p => p.signingPublicKey && Wallet.isAddressBoundToSigningKey(p.wallet, p.signingPublicKey));
+      // Only directly-dialable peers go in the peer list; followers participate
+      // via the relay and must never be handed out as a dial target.
+      const peerList = verified
+        .filter(p => p.reachable !== false)
         .map(p => ({
         wallet: p.wallet,
         host: p.host,
@@ -723,15 +800,18 @@ const server = http.createServer(async (req, res) => {
         region: p.region,
         lastSeen: p.lastSeen,
         verified: true,
+        reachable: true,
         signingPublicKey: p.signingPublicKey || null,
         methodsHash: p.methodsHash || null,
         tflops: p.tflops || null,
         registeredAt: p.registeredAt || p.lastSeen,
       }));
+      const followerCount = verified.length - peerList.length;
       // Round to 3 decimals, not 1 — CPU-only nodes contribute sub-0.05 TFLOPS
       // each, which 1-decimal rounding collapses to 0 and hides the whole network.
-      const totalTflops = peerList.reduce((s, p) => s + (p.tflops || 0), 0);
-      res.end(JSON.stringify({ peers: peerList, count: peerList.length, totalTflops: Math.round(totalTflops * 1000) / 1000 }));
+      // Count follower compute too — they pull and process jobs like anyone else.
+      const totalTflops = verified.reduce((s, p) => s + (p.tflops || 0), 0);
+      res.end(JSON.stringify({ peers: peerList, count: peerList.length, followerCount, totalTflops: Math.round(totalTflops * 1000) / 1000 }));
       return;
     }
 
@@ -760,7 +840,9 @@ server.listen(PORT, BIND_HOST, () => {
   console.log(`   GET  /chain/blocks?from=0&to=100`);
   console.log(`   POST /submit-block`);
   console.log(`   POST /register          (miners announce themselves - requires valid node signature proof)`);
-  console.log(`   GET  /peers             (list of known active *verified* miners + their walletApiPort for direct connect)`);
+  console.log(`   GET  /peers             (list of known active *verified* dialable miners + their walletApiPort for direct connect)`);
+  console.log(`   POST /gossip            (reachable peers relay gossip for NAT'd followers)`);
+  console.log(`   GET  /inbox             (a follower drains its relayed gossip - signed, action=inbox-poll)`);
   console.log(`   POST /brain/events      (miners push signed brain events — feedback, weight updates)`);
   console.log(`   GET  /brain/events?since=<ts>  (miners pull brain events since timestamp)`);
   console.log(`   GET  /brain/stats       (brain event accumulator stats)`);

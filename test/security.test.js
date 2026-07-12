@@ -193,7 +193,74 @@ describe('Bootnode auth', () => {
   it('rejects private hosts unless explicitly allowed', () => {
     expect(isPublicPeerHost('192.168.1.5')).toBe(false);
     expect(isPublicPeerHost('192.168.1.5', { allowLocal: true })).toBe(true);
-    expect(isPublicPeerHost('bootnode.proofofhuman.ge')).toBe(true);
+    expect(isPublicPeerHost('miner.proofofhuman.ge')).toBe(true);
+  });
+
+  it('accepts a NAT follower registration (reachable:false) without a public host', () => {
+    const wallet = Wallet.generate();
+    const ts = Date.now();
+    const signed = {
+      wallet: wallet.address,
+      host: 'localhost',        // not publicly reachable — allowed for a follower
+      timestamp: ts,
+      walletApiPort: 3456,
+      p2pPort: null,
+      methodsHash: 'abc',
+      reachable: false,
+    };
+    const peerInfo = {
+      ...signed,
+      signingPublicKey: wallet.signingPublicKey,
+      signature: wallet.sign(buildPeerRegistrationMessage(signed)),
+    };
+    const res = verifyPeerRegistration(peerInfo);
+    expect(res.ok).toBe(true);
+    expect(res.reachable).toBe(false);
+  });
+
+  it('still rejects a non-public host when the node claims to be reachable', () => {
+    const wallet = Wallet.generate();
+    const ts = Date.now();
+    const signed = {
+      wallet: wallet.address,
+      host: 'localhost',
+      timestamp: ts,
+      walletApiPort: 3456,
+      p2pPort: null,
+      methodsHash: 'abc',
+      // reachable omitted → defaults to true (legacy public-peer path)
+    };
+    const peerInfo = {
+      ...signed,
+      signingPublicKey: wallet.signingPublicKey,
+      signature: wallet.sign(buildPeerRegistrationMessage(signed)),
+    };
+    const res = verifyPeerRegistration(peerInfo);
+    expect(res.ok).toBe(false);
+    expect(res.error).toMatch(/publicly reachable/);
+  });
+
+  it('cannot forge reachable:false — signature is bound to the flag', () => {
+    const wallet = Wallet.generate();
+    const ts = Date.now();
+    // Sign as a PUBLIC peer (legacy message, no reachable field)...
+    const signedPublic = {
+      wallet: wallet.address,
+      host: 'localhost',
+      timestamp: ts,
+      walletApiPort: 3456,
+      p2pPort: null,
+      methodsHash: 'abc',
+    };
+    // ...then tamper the payload to claim follower status. The bootnode rebuilds
+    // the message WITH reachable:false, so the signature no longer verifies.
+    const peerInfo = {
+      ...signedPublic,
+      reachable: false,
+      signingPublicKey: wallet.signingPublicKey,
+      signature: wallet.sign(buildPeerRegistrationMessage(signedPublic)),
+    };
+    expect(verifyPeerRegistration(peerInfo).ok).toBe(false);
   });
 });
 

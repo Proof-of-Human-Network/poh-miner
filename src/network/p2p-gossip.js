@@ -28,7 +28,7 @@ const SEEN_TTL_MS = 5 * 60 * 1000;   // evict seen IDs after 5 min
 const DEFAULT_TTL = 4;                 // max hops
 const BROADCAST_TIMEOUT_MS = 4000;
 
-function envelopeSignPayload(envelope) {
+export function envelopeSignPayload(envelope) {
   // ttl/path are relay metadata — not part of the originator's signature
   return JSON.stringify({
     id: envelope.id,
@@ -131,6 +131,7 @@ export class P2PGossip {
 
   async _broadcast(envelope, skipWallet) {
     const peers = (this.getPeers?.() || []).filter(p =>
+      p.reachable !== false &&   // followers (NAT'd) can't be dialed — they receive via the bootnode relay inbox
       p.wallet !== skipWallet &&
       !(envelope.path || []).includes(p.wallet)
     );

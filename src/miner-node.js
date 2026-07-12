@@ -2075,6 +2075,19 @@ export class PohMinerNode {
           try {
             const envelope = JSON.parse(body);
             await this.gossip.receive(envelope);
+            // On a bootnode host, the miner is where all gossip funnels (nginx
+            // routes /gossip here), but NAT-follower relay fanout lives on the
+            // co-located bootnode. Forward the signed envelope so it can be
+            // queued into followers' inboxes. Fire-and-forget; deduped per-inbox
+            // by envelope id. Set relayForwardUrl only on bootnode hosts.
+            if (this.config.relayForwardUrl && envelope?.signature) {
+              fetch(`${this.config.relayForwardUrl.replace(/\/$/, '')}/gossip`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body,
+                signal: AbortSignal.timeout(4000),
+              }).catch(() => {});
+            }
             res.end(JSON.stringify({ ok: true }));
           } catch (e) {
             res.statusCode = 400;
@@ -4157,9 +4170,17 @@ export class PohMinerNode {
 
     const walletApiPort = this.config.walletApiPort || 3456;
     const p2pPort = this.config.p2pPort || null;
+
+    // Reachable when we resolved a public host (explicit config or a successful
+    // dial-back probe). Otherwise we're behind NAT: register as a follower
+    // (reachable:false), which the bootnode accepts and reaches via the /inbox
+    // relay instead of trying to dial us. Advertise our observed public IP for
+    // display only — it's never dialed while reachable:false.
+    const reachable = !!this._publicHost;
+    const advertisedHost = reachable ? this._getPublicHost() : (this._observedIp || 'localhost');
     const baseInfo = {
       wallet: walletAddr,
-      host: this._getPublicHost(),
+      host: advertisedHost,
       walletApiPort,
       p2pPort,
       region: this.myLocation?.country || null,
@@ -4167,10 +4188,12 @@ export class PohMinerNode {
       methodsHash,
       tflops: this.tflops || null,
     };
+    if (!reachable) baseInfo.reachable = false;
 
     // Attach proof that we are a real running poh-miner node (possess local wallet privkey)
     let registerPayload = { ...baseInfo };
     if (this.identityWallet && typeof this.identityWallet.sign === 'function') {
+      // Must match the bootnode's buildPeerRegistrationMessage byte-for-byte.
       const toSign = JSON.stringify({
         wallet: baseInfo.wallet,
         host: baseInfo.host,
@@ -4178,13 +4201,15 @@ export class PohMinerNode {
         methodsHash,
         walletApiPort,
         p2pPort,
+        ...(reachable ? {} : { reachable: false }),
       });
       registerPayload.signingPublicKey = this.identityWallet.signingPublicKey;
       registerPayload.signature = this.identityWallet.sign(toSign);
     }
 
     console.log(`[PoH-Miner] Registering with bootnode(s): ${this.config.bootnodes.join(', ')}`);
-    console.log(`[PoH-Miner] Register payload: wallet=${registerPayload.wallet} host=${registerPayload.host} signed=${!!registerPayload.signature}`);
+    console.log(`[PoH-Miner] Register payload: wallet=${registerPayload.wallet} host=${registerPayload.host} ` +
+      `mode=${reachable ? 'public-peer' : 'follower(relay)'} signed=${!!registerPayload.signature}`);
 
     for (const bootnode of this.config.bootnodes) {
       const base = bootnode.endsWith('/') ? bootnode : bootnode + '/';
@@ -4240,6 +4265,50 @@ export class PohMinerNode {
         methodsHash,
       }).catch(() => {});
     }
+  }
+
+  /**
+   * NAT relay inbox poller. A follower (behind NAT, not directly dialable) can't
+   * receive push-gossip, so it drains gossip queued for it on the bootnode via an
+   * authenticated GET /inbox and feeds each envelope into the normal gossip
+   * receiver — as if it had been pushed directly. A publicly-reachable node skips
+   * this entirely (the poll body no-ops while a public host is resolved). Idempotent.
+   */
+  _startInboxPoll() {
+    if (this._inboxTimer) return;
+    if (!this.identityWallet || typeof this.identityWallet.sign !== 'function') return;
+    const bootnodes = this.config.bootnodes || [];
+    if (!bootnodes.length) return;
+
+    const poll = async () => {
+      if (this._publicHost) return; // reachable node gets gossip directly — no relay needed
+      for (const bn of bootnodes) {
+        const base = bn.replace(/\/$/, '');
+        try {
+          const ts = Date.now();
+          const a = this._signBoardAction('inbox-poll', {}, ts);
+          const qs = new URLSearchParams({
+            wallet: a.wallet,
+            signingPublicKey: a.signingPublicKey,
+            signature: a.signature,
+            timestamp: String(ts),
+          });
+          const res = await fetch(`${base}/inbox?${qs}`, { signal: AbortSignal.timeout(12_000) });
+          if (!res.ok) continue; // 404 (old bootnode) / 403 — skip, retry next tick
+          const { envelopes } = await res.json();
+          if (Array.isArray(envelopes) && envelopes.length) {
+            for (const env of envelopes) {
+              try { await this.gossip.receive(env); } catch { /* malformed relayed envelope */ }
+            }
+          }
+        } catch { /* bootnode unreachable — retry next tick */ }
+      }
+    };
+
+    const intervalMs = this.config.inboxPollMs || 5_000;
+    this._inboxTimer = setInterval(() => poll().catch(() => {}), intervalMs);
+    poll().catch(() => {});
+    console.log('[PoH-Miner] NAT relay inbox poll started — receiving gossip via bootnode relay while behind NAT.');
   }
 
   /**
@@ -4418,6 +4487,7 @@ export class PohMinerNode {
           .then(r => (r.ok ? r.json() : null)).catch(() => null);
         const ip = who?.ip;
         if (!ip) continue;
+        this._observedIp = ip; // remember for follower registration display, even if not reachable
         const probe = await fetch(`${base}/probe?port=${port}`, { signal: AbortSignal.timeout(9000) })
           .then(r => (r.ok ? r.json() : null)).catch(() => null);
         if (probe?.reachable) {
@@ -4515,6 +4585,10 @@ export class PohMinerNode {
       // restored after being down, immediately re-registers, re-discovers peers,
       // and re-syncs the chain instead of waiting for the next scheduled tick.
       this.startConnectivityWatcher();
+
+      // NAT'd followers can't be push-gossiped — drain the bootnode relay inbox
+      // so they still receive txs/jobs/blocks. No-ops when publicly reachable.
+      this._startInboxPoll();
 
       // Pull the bootnode-signed finality checkpoint so deep reorgs below it are
       // refused even on a freshly-started or eclipsed node.

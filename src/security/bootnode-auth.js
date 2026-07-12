@@ -44,19 +44,30 @@ export function buildPeerRegistrationMessage(peerInfo) {
   const ts = peerInfo.timestamp ?? peerInfo.ts ?? 0;
   const walletApiPort = peerInfo.walletApiPort ?? 3456;
   const p2pPort = peerInfo.p2pPort ?? null;
-  return JSON.stringify({
+  const body = {
     wallet: peerInfo.wallet,
     host: peerInfo.host,
     timestamp: ts,
     methodsHash: peerInfo.methodsHash || '',
     walletApiPort,
     p2pPort,
-  });
+  };
+  // A follower (NAT'd) node signs an explicit reachable:false so it can't be
+  // forged as directly dialable. Publicly-reachable peers keep the legacy
+  // message shape (no reachable field) so their signatures stay compatible
+  // with older miners and bootnodes.
+  if (peerInfo.reachable === false) body.reachable = false;
+  return JSON.stringify(body);
 }
 
 export function verifyPeerRegistration(peerInfo, { allowLocalHosts = false } = {}) {
   const { wallet, host, signature, signingPublicKey } = peerInfo;
-  if (!wallet || !host) {
+  // Default true keeps legacy (pre-relay) registrations as public peers.
+  const reachable = peerInfo.reachable !== false;
+  if (!wallet) {
+    return { ok: false, error: 'wallet is required' };
+  }
+  if (reachable && !host) {
     return { ok: false, error: 'wallet and host are required' };
   }
   if (!signature || !signingPublicKey) {
@@ -72,7 +83,9 @@ export function verifyPeerRegistration(peerInfo, { allowLocalHosts = false } = {
     return { ok: false, error: 'wallet not bound to signing key' };
   }
 
-  if (!isPublicPeerHost(host, { allowLocal: allowLocalHosts })) {
+  // A public peer must advertise a dialable host. A follower is reached via the
+  // bootnode relay inbox instead, so it needs no publicly-reachable host.
+  if (reachable && !isPublicPeerHost(host, { allowLocal: allowLocalHosts })) {
     return { ok: false, error: 'host must be a publicly reachable address' };
   }
 
@@ -90,7 +103,7 @@ export function verifyPeerRegistration(peerInfo, { allowLocalHosts = false } = {
     return { ok: false, error: 'invalid signature' };
   }
 
-  return { ok: true, walletApiPort, p2pPort, ts };
+  return { ok: true, walletApiPort, p2pPort, ts, reachable };
 }
 
 export function verifySignedPayload(payload, signedFields, { requireWalletBinding = true } = {}) {
