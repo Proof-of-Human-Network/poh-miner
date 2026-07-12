@@ -97,6 +97,40 @@ export class OrderStore {
       .sort((a, b) => b.createdAt - a.createdAt);
   }
 
+  // POH has no fixed/oracle price — the ONLY reference is the best open P2P order.
+  // For one currency: best bid = highest a buyer will pay, best ask = lowest a seller
+  // will take; `price` is the mid when both sides exist, else the single best order.
+  _priceFor(quoteCurrency) {
+    const open = this.listOrders({ quoteCurrency, status: 'open' });
+    const buys  = open.filter(o => o.side === 'buy').sort((a, b) => b.pricePerPOH - a.pricePerPOH);
+    const sells = open.filter(o => o.side === 'sell').sort((a, b) => a.pricePerPOH - b.pricePerPOH);
+    const bestBid = buys[0] || null;
+    const bestAsk = sells[0] || null;
+    if (!bestBid && !bestAsk) return { price: null, quoteCurrency, source: 'none' };
+    const price = (bestBid && bestAsk) ? (bestBid.pricePerPOH + bestAsk.pricePerPOH) / 2
+                : bestAsk ? bestAsk.pricePerPOH : bestBid.pricePerPOH;
+    return {
+      price,
+      quoteCurrency,
+      bestBid: bestBid && { price: bestBid.pricePerPOH, orderId: bestBid.id, pohAmount: bestBid.pohAmount },
+      bestAsk: bestAsk && { price: bestAsk.pricePerPOH, orderId: bestAsk.id, pohAmount: bestAsk.pohAmount },
+      source: 'p2p-best-order',
+      asOf: Date.now(),
+    };
+  }
+
+  // Reference POH price, derived only from the best P2P order(s). Pass a currency for a
+  // single quote, or omit for a per-currency map of everything currently quoted.
+  getReferencePrice(quoteCurrency = null) {
+    if (quoteCurrency) return this._priceFor(quoteCurrency);
+    const out = {};
+    for (const c of QUOTE_CURRENCIES) {
+      const r = this._priceFor(c);
+      if (r.price != null) out[c] = r;
+    }
+    return out;
+  }
+
   _patchOrder(id, patch) {
     if (!this.orders[id]) return null;
     Object.assign(this.orders[id], patch, { updatedAt: Date.now() });

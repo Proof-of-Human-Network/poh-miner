@@ -3,7 +3,8 @@ export const GAS = {
   TOKENS_PER_SIGNAL:    60,
   TOKENS_PER_CHAIN:    120,
   OUTPUT_TOKENS:       350,
-  DEFAULT_GAS_PRICE:   1_000_000,  // μPOH per token (= 0.001 POH per token)
+  DEFAULT_GAS_PRICE:   1,          // μPOH per AI compute token (1 POH = 1e9 tokens).
+                                   // μPOH is the smallest unit, so this is the price floor.
   TIMEOUT_RESERVE_PCT: 0.05,      // 5% of maxBudget kept on timeout
 };
 
@@ -28,10 +29,16 @@ export function estimateFee(activeSignalCount, address, gasPrice = GAS.DEFAULT_G
   return estimateTokens(activeSignalCount, address) * gasPrice;
 }
 
+// A job always pays for at least every AI token it consumed:
+//   cost = actualTokens × gasPrice  (at the 1 μPOH/token default, 1000 tokens ⇒ ≥ 1000 μPOH).
+// The fee is never reduced below that cost. maxBudget is only the ceiling the requester
+// escrowed; the accept-time gate (see miner-node feeRequired path) rejects any job whose
+// budget can't cover its token cost, so `underfunded` should never trigger in practice.
 export function settleFee(actualTokens, gasPrice, maxBudget) {
-  const fee    = Math.min(actualTokens * gasPrice, maxBudget);
-  const refund = maxBudget - fee;
-  return { fee, refund };
+  const cost   = Math.max(0, Math.round(actualTokens * gasPrice)); // FLOOR — used tokens
+  const fee    = Math.min(cost, maxBudget);
+  const refund = Math.max(0, maxBudget - fee);
+  return { fee, refund, cost, underfunded: cost > maxBudget };
 }
 
 export function timeoutFee(maxBudget, pct = GAS.TIMEOUT_RESERVE_PCT) {

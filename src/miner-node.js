@@ -1537,6 +1537,19 @@ export class PohMinerNode {
             }
 
             if (feeRequired) {
+              // Fee floor: the escrowed budget must cover at least the AI tokens this job
+              // will use (gasPrice μPOH/token). A job can never be settled for less than the
+              // tokens it consumes, so reject up front if the budget is below that cost.
+              const gasPrice = this.config.gasPrice || GAS.DEFAULT_GAS_PRICE;
+              const minTokens = estimateTokens(0, job.payload?.address);
+              const minFee = minTokens * gasPrice;
+              if (job.maxBudget < minFee) {
+                res.statusCode = 402;
+                return res.end(JSON.stringify({
+                  error: `maxBudget (${job.maxBudget} μPOH) is below the minimum compute cost of ${minFee} μPOH (~${minTokens} tokens at ${gasPrice} μPOH/token).`,
+                  code: 'FEE_TOO_LOW', minFee, minTokens, gasPrice,
+                }));
+              }
               // Strict path: the fee MUST be backed by a valid Ed25519 signature from a
               // registered signing key, over a hash bound to this exact jobId + miner +
               // amount + nonce. There is no "unverified" fallback here — the job is
@@ -3222,6 +3235,17 @@ export class PohMinerNode {
       // GET /api/p2p/currencies — list supported quote currencies
       if (req.method === 'GET' && url.pathname === '/api/p2p/currencies') {
         return res.end(JSON.stringify({ currencies: QUOTE_CURRENCIES }));
+      }
+
+      // GET /api/p2p/price — POH reference price. POH has NO fixed price; this is derived
+      // ONLY from the best open P2P order(s). ?quoteCurrency=USDT-TRC20 for a single quote,
+      // omit for a per-currency map.
+      if (req.method === 'GET' && url.pathname === '/api/p2p/price') {
+        const quoteCurrency = url.searchParams.get('quoteCurrency') || null;
+        return res.end(JSON.stringify({
+          poh: this.p2pOrderStore.getReferencePrice(quoteCurrency),
+          note: 'POH has no fixed price — the market (best P2P order) defines it.',
+        }));
       }
 
       // GET /api/p2p/orders — list open orders (filters: side, quoteCurrency)

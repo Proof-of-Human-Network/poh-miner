@@ -54,7 +54,7 @@ Minimal example:
 
 ```json
 {
-  "bootnodes": ["https://bootnode.proofofhuman.ge"],
+  "bootnodes": ["https://miner.proofofhuman.ge"],
   "inferenceMode": "auto",
   "model": "qwen3-1.7b",
   "walletApiPort": 3456
@@ -243,6 +243,18 @@ requester's POH balance and pays the miner network; there is no unverified
 fallback for these job types. `verdict` jobs may optionally carry the same
 `maxBudget`/`paymentTx` fields, but a fee isn't required for them (the
 default identity scan / LLM chat is free).
+
+**Pricing (gas).** Paid jobs are metered per AI compute token at
+`gasPrice` **μPOH per token** — default **1 μPOH/token** (μPOH is the smallest
+unit, so this is the price floor). Since `1 POH = 1e9 μPOH`, **1 POH buys up to
+1,000,000,000 tokens**. The fee is `tokensUsed × gasPrice` and **can never be
+less than the tokens the job actually used** (e.g. 1,000 tokens ⇒ ≥ 1,000 μPOH);
+unused budget is refunded. A job whose `maxBudget` can't cover its token cost is
+rejected up front with `402 FEE_TOO_LOW`.
+
+**POH price.** POH has no fixed or oracle price — the only reference is the best
+open P2P order. `GET /api/p2p/price[?quoteCurrency=USDT-TRC20]` returns the
+market price (best bid/ask/mid) derived solely from live P2P orders.
 
 A `compute` job looks like:
 
