@@ -69,6 +69,7 @@ import { OrderStore, QUOTE_CURRENCIES } from './p2p/order-store.js';
 import { EscrowManager, ESCROW_ADDRESS } from './p2p/escrow.js';
 import { ReferralStore } from './p2p/referral-store.js';
 import { tryExternalProviders } from './ai/external-providers.js';
+import { McpManager } from './ai/mcp-client.js';
 import { needsDatasetLookup, searchDatasets, disambiguateDataset } from './datasets/hf-dataset-search.js';
 import { needsHfModelLookup, searchModelsWithFallback, pickRelevantModels, formatModelSuggestions } from './datasets/hf-model-search.js';
 import * as hfDatasetManager from './datasets/hf-dataset-manager.js';
@@ -2673,10 +2674,12 @@ export class PohMinerNode {
               } catch { /* fall through to local attempt */ }
             }
 
-            // Free LLM answer (non-streaming so any client can use it)
+            // Free LLM answer (non-streaming so any client can use it).
+            // Routes through the MCP tool loop when MCP servers are connected;
+            // otherwise _mcpChat falls straight through to a plain completion.
             const selModel   = reqModel || this.config.model;
             const messages   = [...history, { role: 'user', content: message }];
-            const reply = await this._llmChat(messages, { model: selModel, timeoutMs: 40_000 });
+            const reply = await this._mcpChat(messages, { model: selModel, timeoutMs: 40_000 });
 
             // 2nd-pass web search: if LLM says it can't access internet, run web_search and retry
             const LLM_NO_WEB_RE = /(?:don['']t|do not|cannot|can['']t|no|lack|without).{0,40}(?:internet|web|real.?time|online|access|current|browse|search)/i;
@@ -3097,6 +3100,14 @@ export class PohMinerNode {
           }));
         const jobCtx = this._getWalletJobContext(q, 10);
         return res.end(JSON.stringify({ type: 'address', address: q, balance, entries, jobs: jobCtx.jobs, latestSkillMemory: jobCtx.latestSkillMemory }));
+      }
+
+      // ── MCP status (/api/mcp/status) — configured servers + connected tools ──
+      if (req.method === 'GET' && url.pathname === '/api/mcp/status') {
+        return res.end(JSON.stringify({
+          servers: this.mcp?.status?.() || [],
+          tools: this.mcp?.listTools?.() || [],
+        }));
       }
 
       // ── Dataset serving (/api/dataset, /api/dataset/:file) ───────────────────
@@ -4525,6 +4536,10 @@ export class PohMinerNode {
     // Real version: libp2p, gossipsub, or simple WebSocket mesh between miners
     console.log('[PoH-Miner] Connecting to network...');
 
+    // Connect any configured external MCP servers so the chat model can use
+    // their tools. Independent of bootnodes; best-effort, non-blocking.
+    this._initMcp().catch(() => {});
+
     // Initialize brain sync (needs brain data dir set by first compute call,
     // but we do a best-effort init here — it will be re-tried on first API call)
     this._initBrainSync();
@@ -5364,6 +5379,79 @@ export class PohMinerNode {
       timeLimit: timeoutMs,
     });
     return reply || '';
+  }
+
+  /** Connect to the MCP servers in config.mcpServers (idempotent). */
+  async _initMcp() {
+    if (this._mcpInit) return;
+    this._mcpInit = true;
+    try {
+      this.mcp = new McpManager(() => this.config);
+      await this.mcp.connectAll();
+    } catch (e) {
+      console.warn('[MCP] init failed:', e.message);
+    }
+  }
+
+  /**
+   * Chat with MCP tool use. When MCP servers expose tools, run a bounded
+   * JSON-tool-call loop: the model may emit {"tool":"<name>","arguments":{...}},
+   * we execute it via the MCP client, feed the result back, and repeat (max 3
+   * rounds) until it answers in prose. Falls back to a plain completion when no
+   * tools are available — so this is a safe drop-in for _llmChat on the chat path.
+   */
+  async _mcpChat(messages, { model, timeoutMs = 40_000 } = {}) {
+    const tools = this.mcp?.listTools?.() || [];
+    if (!tools.length) return this._llmChat(messages, { model, timeoutMs });
+
+    const toolList = tools.map(t =>
+      `- ${t.name}: ${t.description || 'no description'}\n  input schema: ${JSON.stringify(t.inputSchema || {})}`
+    ).join('\n');
+    const sys = {
+      role: 'system',
+      content:
+        'You can call external tools to fetch information or take actions. Available tools:\n' +
+        toolList +
+        '\n\nWhen a tool is needed, reply with ONLY a JSON object on a single line: ' +
+        '{"tool":"<exact tool name>","arguments":{...}} and nothing else. ' +
+        'After you receive the tool result, use it to answer the user in clear Markdown. ' +
+        'If no tool is needed, answer directly without JSON.',
+    };
+
+    const convo = [sys, ...messages];
+    for (let round = 0; round < 3; round++) {
+      const raw = await this._llmChat(convo, { model, timeoutMs });
+      const call = this._parseToolCall(raw);
+      if (!call) return raw; // model answered in prose
+      convo.push({ role: 'assistant', content: raw });
+      let result;
+      try {
+        result = await this.mcp.callTool(call.tool, call.arguments || {});
+        console.log(`[MCP] tool "${call.tool}" invoked from chat`);
+      } catch (e) {
+        result = `Error calling tool "${call.tool}": ${e.message}`;
+      }
+      const resultStr = typeof result === 'string' ? result : JSON.stringify(result);
+      convo.push({
+        role: 'user',
+        content: `Tool "${call.tool}" returned:\n${resultStr.slice(0, 6000)}\n\nNow answer my original question using this result. Do not call another tool unless strictly necessary.`,
+      });
+    }
+    // Ran out of rounds — force a final prose answer.
+    return this._llmChat([...convo, { role: 'user', content: 'Answer now in prose using what you have. Do not output JSON.' }], { model, timeoutMs });
+  }
+
+  /** Extract a {tool, arguments} call from a model reply, or null if it's prose. */
+  _parseToolCall(raw) {
+    if (!raw || typeof raw !== 'string') return null;
+    // Grab the first {...} block (tolerate code fences / surrounding text).
+    const fenced = raw.match(/```(?:json)?\s*(\{[\s\S]*?\})\s*```/);
+    const candidate = fenced ? fenced[1] : (raw.match(/\{[\s\S]*\}/) || [])[0];
+    if (!candidate) return null;
+    let obj;
+    try { obj = JSON.parse(candidate); } catch { return null; }
+    if (!obj || typeof obj.tool !== 'string') return null;
+    return { tool: obj.tool, arguments: obj.arguments || obj.args || {} };
   }
 
   async _getNetworkModels() {

@@ -5,7 +5,7 @@
  */
 
 const PROVIDER_DEFAULTS = {
-  anthropic: { baseUrl: 'https://api.anthropic.com', model: 'claude-sonnet-4-6' },
+  anthropic: { baseUrl: 'https://api.anthropic.com', model: 'claude-opus-4-8' },
   openai:    { baseUrl: 'https://api.openai.com',    model: 'gpt-4o-mini' },
   xai:       { baseUrl: 'https://api.x.ai',           model: 'grok-2-latest' },
 };
