@@ -30,7 +30,7 @@ import {
   SKILL_GRADUATION_THRESHOLD_POH,
 } from './rewards/reward.js';
 import { computeChainWork, compareChainWork, getTipChainWork } from './consensus/chain-selection.js';
-import { createGenesisBlock } from './consensus/genesis.js';
+import { createGenesisBlock, buildMigrationGenesis, loadSnapshot, defaultMigrationSnapshot, EXPECTED_GENESIS_HASH } from './consensus/genesis.js';
 import { blockId, blocksOnTipPath, selectPeerBlockOnTip } from './consensus/chain-path.js';
 import { mineBlockThreaded, getNextDifficulty, MIN_BLOCK_SPACING_MS } from './consensus/pow.js';
 import {
@@ -3607,12 +3607,18 @@ export class PohMinerNode {
       // Ledger replay is deferred — eager replay of 50k blocks OOMs the Electron shell.
     }
 
-    // 2. If still empty, create genesis. With config.genesisSnapshot set this is a
-    // migration genesis that mints the carried-over balances/nonces as canonical
-    // ledger state (see scripts/genesis/README.md). The genesis block itself is
-    // then synced to peers like any block, so miners converge on one identity.
+    // 1b. Auto-migrate off a stale pre-fork chain: if our on-disk genesis no
+    // longer matches the pinned network genesis, wipe the old chain (keeping
+    // wallets) so the new genesis is built below. This is what lets an upgraded
+    // client join the post-fork chain without a manual wipe.
+    this._migrateChainIfStale();
+
+    // 2. If still empty, create genesis. With a snapshot (config.genesisSnapshot
+    // or the bundled one) this is a migration genesis that mints the carried-over
+    // balances/nonces as canonical ledger state (see scripts/genesis/README.md).
+    // The genesis block itself is then synced to peers, so miners converge on one identity.
     if (this.chain.length === 0) {
-      const g = createGenesisBlock({ snapshot: this.config.genesisSnapshot || null, difficulty: this.currentDifficulty });
+      const g = createGenesisBlock({ snapshot: this.config.genesisSnapshot || defaultMigrationSnapshot(), difficulty: this.currentDifficulty });
       this.chain.push(g.genesis);
       this.chainStore.saveChain(this.chain);
       if (g.migration) {
@@ -5381,6 +5387,58 @@ export class PohMinerNode {
       timeLimit: timeoutMs,
     });
     return reply || '';
+  }
+
+  /**
+   * If the on-disk chain's genesis differs from the pinned network genesis, this
+   * is a pre-fork chain — wipe it (keeping wallets/keys) so the new genesis is
+   * rebuilt. Gated on being able to actually reproduce EXPECTED_GENESIS_HASH from
+   * the configured/bundled snapshot, so a missing snapshot or a rogue peer never
+   * triggers a wipe. Runs once: after the reset the genesis matches and it no-ops.
+   */
+  _migrateChainIfStale() {
+    if (!EXPECTED_GENESIS_HASH || !this.chain?.length) return;
+    const local = this.chain[0]?.getHashSync?.();
+    if (!local || local === EXPECTED_GENESIS_HASH) return; // already on the new chain
+
+    // Safety: only reset if we can build the expected genesis locally.
+    let target = null;
+    try {
+      const snap = loadSnapshot(this.config.genesisSnapshot || defaultMigrationSnapshot());
+      if (snap) target = buildMigrationGenesis(snap, { difficulty: this.currentDifficulty }).genesis.getHashSync();
+    } catch { /* fall through */ }
+    if (target !== EXPECTED_GENESIS_HASH) {
+      console.warn('[PoH-Miner] On-disk genesis is stale but the migration snapshot is missing/invalid — ' +
+        'not resetting automatically. To join the new chain, wipe ~/.poh-miner/chain.');
+      return;
+    }
+
+    console.warn(`[PoH-Miner] ⛓ Migrating to the new network genesis ${EXPECTED_GENESIS_HASH.slice(0, 12)}… ` +
+      `(local was ${local.slice(0, 12)}…). Wiping the old chain — wallets and keys are preserved.`);
+    this._wipeStaleChainState();
+    this.chain = []; // → the genesis-creation block rebuilds the new genesis
+  }
+
+  /** Remove chain + chain-derived caches under the miner data dir. Never wallets/keys/config/brain. */
+  _wipeStaleChainState() {
+    try {
+      const chainDir = this.chainStore?.dataDir;
+      if (!chainDir) return;
+      const base = path.dirname(chainDir);
+      const targets = [
+        path.join(chainDir, 'chain.ndjson'),
+        path.join(chainDir, 'chain.json'),
+        path.join(base, 'ipfs_cid_cache.json'),
+        path.join(base, 'meilisearch-data'),
+        path.join(base, 'rewards'),
+        path.join(base, 'p2p'),
+        path.join(base, 'data'),
+      ];
+      for (const t of targets) { try { fs.rmSync(t, { recursive: true, force: true }); } catch { /* best effort */ } }
+      console.warn('[PoH-Miner] Old chain state removed (wallets/keys/config kept).');
+    } catch (e) {
+      console.warn('[PoH-Miner] chain wipe encountered an error:', e.message);
+    }
   }
 
   /** Connect to the MCP servers in config.mcpServers (idempotent). */

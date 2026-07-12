@@ -10,8 +10,26 @@
  */
 
 import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import { PohBlock } from '../core/block.js';
 import { computeChainWork } from './chain-selection.js';
+
+// ── Active network genesis (migration pin) ───────────────────────────────────
+// After the balance-preserving hard fork, this is the canonical genesis hash.
+// A node whose on-disk chain has a DIFFERENT genesis is running the pre-fork
+// chain and auto-migrates to this one (see miner-node _migrateChainIfStale).
+// Set to null to disable the pin (dev / pre-migration builds).
+export const EXPECTED_GENESIS_HASH = '669db90bf2c10449a062e5f6a5e07121ae0c6b8074ed935166a8a730783c7020';
+
+/** Path to the snapshot bundled with the app (ships in the build), or null. */
+export function defaultMigrationSnapshot() {
+  if (!EXPECTED_GENESIS_HASH) return null;
+  try {
+    const p = path.join(path.dirname(fileURLToPath(import.meta.url)), 'genesis-snapshot.json');
+    return fs.existsSync(p) ? p : null;
+  } catch { return null; }
+}
 
 // The original mainnet genesis parameters (kept so an un-migrated chain is
 // byte-identical to today's).
