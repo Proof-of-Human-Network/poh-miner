@@ -73,6 +73,9 @@
     .card-hover:hover { transform: translateY(-4px); border-color: rgba(34,197,94,0.5); }
     .reveal { opacity: 0; transform: translateY(24px); transition: opacity .7s ease, transform .7s ease; }
     .reveal.in { opacity: 1; transform: none; }
+
+    /* Full-height sections with vertically-centred content */
+    .section-full { min-height: 100dvh; display: flex; flex-direction: column; justify-content: center; }
   </style>
 </head>
 <body class="bg-black text-white overflow-x-hidden">
@@ -130,22 +133,22 @@
   </div>
 
   <!-- Value band -->
-  <div class="border-y border-white/10 py-12 md:py-16 bg-[#050505]">
+  <div class="section-full border-y border-white/10 py-12 md:py-16 bg-[#050505]">
     <div class="max-w-5xl mx-auto px-6 text-center reveal">
-      <div class="uppercase tracking-[3px] text-xs text-[#22c55e] mb-3">WHAT ONE POH IS WORTH</div>
+      <div class="uppercase tracking-[3px] text-xs text-[#22c55e] mb-6">WHAT ONE POH IS WORTH</div>
       <div class="font-display text-[48px] sm:text-[70px] md:text-[104px] leading-none">1 POH ≈ <span class="neon">$2K–5K</span></div>
-      <p class="mt-5 text-[16px] sm:text-[22px] md:text-[26px] text-white/60 max-w-3xl mx-auto">One POH buys up to <span class="text-white/85">1 billion AI compute tokens</span> — about $2,000–5,000 of inference at what ChatGPT, Gemini or Grok charge. There's no fixed price: <span class="text-white/85">the market sets it</span> through the best peer-to-peer order.</p>
+      <p class="mt-10 text-[16px] sm:text-[22px] md:text-[26px] text-white/60 max-w-3xl mx-auto">One POH buys up to <span class="text-white/85">1 billion AI compute tokens</span> — about $2,000–5,000 of inference at what ChatGPT, Gemini or Grok charge. There's no fixed price: <span class="text-white/85">the market sets it</span> through the best peer-to-peer order.</p>
     </div>
   </div>
 
   <!-- Earn vs Spend -->
-  <div id="earn-spend" class="max-w-6xl mx-auto px-4 sm:px-8 py-16 md:py-32">
-    <div class="text-center mb-10 md:mb-16 reveal">
-      <div class="uppercase tracking-[3px] text-xs text-[#22c55e] mb-3">TWO SIDES OF ONE ECONOMY</div>
+  <div id="earn-spend" class="section-full max-w-6xl mx-auto px-4 sm:px-8 py-16 md:py-32">
+    <div class="text-center mb-16 md:mb-24 reveal">
+      <div class="uppercase tracking-[3px] text-xs text-[#22c55e] mb-6">TWO SIDES OF ONE ECONOMY</div>
       <h2 class="font-display text-[40px] sm:text-[60px] md:text-[84px] leading-none">Earn it. Spend it.</h2>
     </div>
 
-    <div class="grid md:grid-cols-2 gap-6">
+    <div class="grid md:grid-cols-2 gap-8 md:gap-10">
       <div class="glass card-hover p-8 md:p-10 rounded-[6px] reveal">
         <svg class="ico mb-5" viewBox="0 0 24 24"><path d="M12 2v20M2 12h20"/><circle cx="12" cy="12" r="9"/></svg>
         <h3 class="text-[34px] md:text-[50px] tracking-tight mb-3">Run a node, earn POH</h3>
@@ -162,14 +165,14 @@
   </div>
 
   <!-- Why POH -->
-  <div class="border-t border-white/10 bg-[#050505]">
-    <div class="max-w-6xl mx-auto px-4 sm:px-8 py-16 md:py-32">
-      <div class="text-center mb-10 md:mb-16 reveal">
-        <div class="uppercase tracking-[3px] text-xs text-[#22c55e] mb-3">WHY POH</div>
+  <div class="section-full border-t border-white/10 bg-[#050505]">
+    <div class="w-full max-w-6xl mx-auto px-4 sm:px-8 py-16 md:py-32">
+      <div class="text-center mb-16 md:mb-24 reveal">
+        <div class="uppercase tracking-[3px] text-xs text-[#22c55e] mb-6">WHY POH</div>
         <h2 class="font-display text-[40px] sm:text-[60px] md:text-[80px] leading-none">Money that means work.</h2>
       </div>
 
-      <div class="grid grid-cols-2 lg:grid-cols-4 gap-6">
+      <div class="grid grid-cols-2 lg:grid-cols-4 gap-8 md:gap-10">
         <div class="glass card-hover p-6 md:p-8 rounded-[6px] reveal">
           <svg class="ico mb-4" viewBox="0 0 24 24"><path d="M20 7 9 18l-5-5"/></svg>
           <h3 class="text-[26px] md:text-[34px] tracking-tight mb-2">Real backing</h3>
@@ -195,13 +198,13 @@
   </div>
 
   <!-- Utility strip -->
-  <div class="max-w-6xl mx-auto px-4 sm:px-8 py-16 md:py-32">
-    <div class="text-center mb-10 md:mb-16 reveal">
-      <div class="uppercase tracking-[3px] text-xs text-[#22c55e] mb-3">UTILITY</div>
+  <div class="section-full max-w-6xl mx-auto px-4 sm:px-8 py-16 md:py-32">
+    <div class="text-center mb-16 md:mb-24 reveal">
+      <div class="uppercase tracking-[3px] text-xs text-[#22c55e] mb-6">UTILITY</div>
       <h2 class="font-display text-[40px] sm:text-[56px] md:text-[76px] leading-none">One token, the whole network.</h2>
     </div>
 
-    <div class="grid grid-cols-2 md:grid-cols-4 gap-6 text-center">
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-8 md:gap-10 text-center">
       <div class="glass card-hover p-6 rounded-[6px] reveal">
         <div class="text-[30px] md:text-[45px] text-[#22c55e] mb-1">1 POH</div>
         <div class="text-[15px] md:text-[18px] text-white/60">block reward</div>
@@ -222,14 +225,14 @@
   </div>
 
   <!-- How to get POH (3 steps) -->
-  <div class="border-t border-white/10 bg-[#050505]">
-    <div class="max-w-5xl mx-auto px-4 sm:px-8 py-16 md:py-32">
-      <div class="text-center mb-10 md:mb-16 reveal">
-        <div class="uppercase tracking-[3px] text-xs text-[#22c55e] mb-3">GET STARTED IN MINUTES</div>
+  <div class="section-full border-t border-white/10 bg-[#050505]">
+    <div class="w-full max-w-5xl mx-auto px-4 sm:px-8 py-16 md:py-32">
+      <div class="text-center mb-16 md:mb-24 reveal">
+        <div class="uppercase tracking-[3px] text-xs text-[#22c55e] mb-6">GET STARTED IN MINUTES</div>
         <h2 class="font-display text-[40px] sm:text-[56px] md:text-[76px] leading-none">Three steps to your first POH.</h2>
       </div>
 
-      <div class="grid md:grid-cols-3 gap-6">
+      <div class="grid md:grid-cols-3 gap-8 md:gap-10">
         <div class="glass card-hover p-6 md:p-8 rounded-[6px] reveal">
           <div class="text-[#22c55e] text-[40px] md:text-[56px] font-display leading-none mb-3">01</div>
           <h3 class="text-[26px] md:text-[36px] tracking-tight mb-2">Install</h3>
@@ -250,9 +253,9 @@
   </div>
 
   <!-- Final CTA -->
-  <div class="max-w-5xl mx-auto px-4 sm:px-6 py-20 md:py-44 text-center hero-bg">
+  <div class="section-full max-w-5xl mx-auto px-4 sm:px-6 py-20 md:py-44 text-center hero-bg">
     <h2 class="font-display text-[48px] sm:text-[72px] md:text-[110px] leading-[0.9] reveal">Put your machine<br><span class="neon">to work tonight.</span></h2>
-    <div class="mt-10 flex flex-col sm:flex-row gap-4 justify-center reveal">
+    <div class="mt-14 flex flex-col sm:flex-row gap-4 justify-center reveal">
       <a href="miner.html#start"
          class="inline-flex items-center justify-center px-10 py-4 bg-[#22c55e] text-black text-[20px] sm:text-[26px] md:text-[32px] rounded-[4px] hover:bg-white transition">
         Download &amp; start mining
