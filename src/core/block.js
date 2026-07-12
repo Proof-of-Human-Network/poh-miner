@@ -23,6 +23,7 @@ export class PohBlock {
     minerSigningPublicKey = null,
     stateRoot = null,      // SHA-256 of sorted {address,balance,nonce} at this height
     brainStateRoot = null, // SHA-256 of weights.json + pools.json at this height
+    genesisAllocations,    // migration genesis only: [{address, balance, nonce}] minted at height 0
   }) {
     this.height = height;
     this.previousHash = previousHash;
@@ -39,6 +40,8 @@ export class PohBlock {
     this.minerSigningPublicKey = minerSigningPublicKey;
     this.stateRoot = stateRoot;
     this.brainStateRoot = brainStateRoot;
+    // Only set when present so normal blocks serialize/hash byte-identically to before.
+    if (genesisAllocations !== undefined) this.genesisAllocations = genesisAllocations;
   }
 
   // Layer 5: skillResults is the canonical name; scanResults kept for on-disk compat

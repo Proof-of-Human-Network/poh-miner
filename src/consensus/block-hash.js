@@ -32,6 +32,12 @@ export function blockHashInput(b) {
     } : null,
     stateRoot: b.stateRoot,
     brainStateRoot: b.brainStateRoot,
+    // Migration-genesis balance/nonce distribution. Included in the hash ONLY when
+    // present, so (a) every ordinary block hashes exactly as before, and (b) a
+    // genesis carrying allocations gets a distinct hash → a fresh chain identity.
+    ...(Array.isArray(b.genesisAllocations) && b.genesisAllocations.length
+      ? { genesisAllocations: b.genesisAllocations }
+      : {}),
     nonce: b.nonce,
   });
 }

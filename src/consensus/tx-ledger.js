@@ -152,7 +152,26 @@ export class TxLedgerState {
    * skipVerify=true skips crypto signature checks — safe for chain replay where txs
    *   are already validated on chain; avoids 100k+ crypto ops on startup.
    */
+  /**
+   * Migration genesis: credit each snapshotted balance and seed its nonce, minting
+   * exactly the distributed total. Makes the carried-over balances canonical ledger
+   * state (survives _rebuildBalancesFromChain), unlike config.genesisAlloc which is
+   * applied outside the ledger and wiped on rebuild.
+   */
+  applyGenesisAllocations(block) {
+    const allocs = block.genesisAllocations;
+    if (!Array.isArray(allocs) || !allocs.length) return;
+    for (const a of allocs) {
+      if (!a || !a.address) continue;
+      const bal = Number(a.balance) || 0;
+      if (bal > 0) { this._credit(a.address, bal); this.totalMinted += bal; }
+      const nonce = Number(a.nonce) || 0;
+      if (nonce > 0) this.nonces.set(a.address, nonce);
+    }
+  }
+
   applyBlock(block, { strict = true, skipVerify = false } = {}) {
+    this.applyGenesisAllocations(block);
     this.applyCoinbase(block);
 
     for (const txData of (block.transactions || [])) {

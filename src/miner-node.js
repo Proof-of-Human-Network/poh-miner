@@ -30,6 +30,7 @@ import {
   SKILL_GRADUATION_THRESHOLD_POH,
 } from './rewards/reward.js';
 import { computeChainWork, compareChainWork, getTipChainWork } from './consensus/chain-selection.js';
+import { createGenesisBlock } from './consensus/genesis.js';
 import { blockId, blocksOnTipPath, selectPeerBlockOnTip } from './consensus/chain-path.js';
 import { mineBlockThreaded, getNextDifficulty, MIN_BLOCK_SPACING_MS } from './consensus/pow.js';
 import {
@@ -3606,27 +3607,28 @@ export class PohMinerNode {
       // Ledger replay is deferred — eager replay of 50k blocks OOMs the Electron shell.
     }
 
-    // 2. If still empty, create genesis
+    // 2. If still empty, create genesis. With config.genesisSnapshot set this is a
+    // migration genesis that mints the carried-over balances/nonces as canonical
+    // ledger state (see scripts/genesis/README.md). The genesis block itself is
+    // then synced to peers like any block, so miners converge on one identity.
     if (this.chain.length === 0) {
-      const genesis = new PohBlock({
-        height: 0,
-        previousHash: '0'.repeat(64),
-        timestamp: 1780700000000,
-        minerWallet: 'bootnode-genesis',
-        difficulty: this.currentDifficulty,
-      });
-      this.chain.push(genesis);
+      const g = createGenesisBlock({ snapshot: this.config.genesisSnapshot || null, difficulty: this.currentDifficulty });
+      this.chain.push(g.genesis);
       this.chainStore.saveChain(this.chain);
-
-      // Apply genesis allocations from config: { genesisAlloc: { "poh123...": 1000000000 } }
-      // Amounts are in raw POH units (1 POH = 1e9 raw).
-      const alloc = this.config.genesisAlloc;
-      if (alloc && typeof alloc === 'object') {
-        for (const [address, amount] of Object.entries(alloc)) {
-          const raw = Number(amount);
-          if (raw > 0) {
-            this.walletManager.credit(address, raw);
-            console.log(`[PoH-Miner] Genesis alloc: ${address} +${raw} (${(raw / 1e9).toFixed(4)} POH)`);
+      if (g.migration) {
+        console.log(`[PoH-Miner] Migration genesis: ${g.count} allocations, ${(g.total / 1e9).toFixed(4)} POH minted ` +
+          `(hash ${g.genesis.getHashSync().slice(0, 12)}…). Balances derive from the chain on rebuild.`);
+      } else {
+        // Legacy config.genesisAlloc (applied outside the ledger — NOTE: this is
+        // wiped by _rebuildBalancesFromChain; prefer config.genesisSnapshot).
+        const alloc = this.config.genesisAlloc;
+        if (alloc && typeof alloc === 'object') {
+          for (const [address, amount] of Object.entries(alloc)) {
+            const raw = Number(amount);
+            if (raw > 0) {
+              this.walletManager.credit(address, raw);
+              console.log(`[PoH-Miner] Genesis alloc: ${address} +${raw} (${(raw / 1e9).toFixed(4)} POH)`);
+            }
           }
         }
       }

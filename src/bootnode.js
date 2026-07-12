@@ -18,6 +18,7 @@ import { ChainStore } from './storage/chain-store.js';
 import { validateBlockExtended } from './consensus/block-validator.js';
 import { replayChainLedger } from './consensus/tx-ledger.js';
 import { computeChainWork } from './consensus/chain-selection.js';
+import { createGenesisBlock } from './consensus/genesis.js';
 import { blocksOnTipPath } from './consensus/chain-path.js';
 import { FINALITY_DEPTH, signCheckpoint } from './consensus/finality.js';
 import {
@@ -48,6 +49,12 @@ const DATA_DIR = argv.find(a => a.startsWith('--data-dir='))?.split('=')[1] || p
 const PEER_SYNC_URL = argv.find(a => a.startsWith('--peer='))?.split('=').slice(1).join('=') || null;
 const ALLOW_LOCAL_HOSTS = argv.includes('--allow-local-hosts')
   || process.env.POH_BOOTNODE_ALLOW_LOCAL === '1';
+// Genesis migration: path to a balance/nonce snapshot. When set AND the chain is
+// empty, height-0 is built as a migration genesis that mints the snapshot. Absent
+// → legacy empty genesis (unchanged). See scripts/genesis/README.md.
+const GENESIS_SNAPSHOT = argv.find(a => a.startsWith('--genesis-snapshot='))?.split('=').slice(1).join('=')
+  || process.env.POH_GENESIS_SNAPSHOT
+  || null;
 
 const chainStore = new ChainStore(DATA_DIR);
 let chain = chainStore.loadChain().map(b => PohBlock.fromJSON ? PohBlock.fromJSON(b) : new PohBlock(b));
@@ -318,16 +325,14 @@ function pruneStalePeers() {
 setInterval(pruneStalePeers, 2 * 60 * 1000);
 
 if (chain.length === 0) {
-  const genesis = new PohBlock({
-    height: 0,
-    previousHash: '0'.repeat(64),
-    timestamp: 1780700000000,
-    minerWallet: 'bootnode-genesis',
-    difficulty: 4,
-    chainWork: computeChainWork('0', 4),
-  });
-  chain.push(genesis);
+  const g = createGenesisBlock({ snapshot: GENESIS_SNAPSHOT, difficulty: 4 });
+  chain.push(g.genesis);
   chainStore.saveChain(chain);
+  if (g.migration) {
+    console.log(`[Bootnode] Migration genesis created — ${g.count} allocations, ` +
+      `${(g.total / 1e9).toFixed(4)} POH minted, snapshotHash=${g.snapshotHash || 'n/a'}`);
+    console.log(`[Bootnode] New genesis hash: ${g.genesis.getHashSync()}`);
+  }
 }
 
 let txLedger = replayChainLedger(chain);
