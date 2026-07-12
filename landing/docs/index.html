@@ -31,6 +31,19 @@
       white-space: pre-wrap;
       word-break: break-word;
     }
+    /* Syntax highlighting — highlight.js token colors, tuned to the PoH palette */
+    .code-block.hljs, .code-block .hljs { background: transparent; padding: 0; }
+    .code-block .hljs-comment, .code-block .hljs-quote { color: #5c6370; font-style: italic; }
+    .code-block .hljs-keyword, .code-block .hljs-selector-tag, .code-block .hljs-literal,
+    .code-block .hljs-section, .code-block .hljs-link { color: #c084fc; }
+    .code-block .hljs-string, .code-block .hljs-attr, .code-block .hljs-meta .hljs-string { color: #86efac; }
+    .code-block .hljs-number, .code-block .hljs-symbol, .code-block .hljs-bullet { color: #d19a66; }
+    .code-block .hljs-title, .code-block .hljs-name, .code-block .hljs-title.function_ { color: #60a5fa; }
+    .code-block .hljs-built_in, .code-block .hljs-type, .code-block .hljs-class .hljs-title { color: #22d3ee; }
+    .code-block .hljs-attribute, .code-block .hljs-property { color: #e5c07b; }
+    .code-block .hljs-variable, .code-block .hljs-template-variable { color: #e06c75; }
+    .code-block .hljs-meta { color: #7f848e; }
+    .code-block .hljs-punctuation { color: #a3a3a3; }
     .method {
       display: inline-block;
       min-width: 3.5rem;
@@ -387,6 +400,13 @@ run();</div>
             <code>skill</code> and <code>compute</code> jobs require a signed payment proof (<code>maxBudget</code> in μPOH).
           </p>
 
+          <div class="glass rounded-[4px] p-5 mb-6 text-[17px] text-white/70">
+            <div class="neon mb-2 text-[20px]">Pricing &amp; fees</div>
+            <p class="mb-2">Paid jobs are metered per AI compute token at <strong>1&nbsp;μPOH&nbsp;per&nbsp;token</strong> (the default <code>gasPrice</code>; μPOH is the smallest unit, so this is the floor). Since <strong>1&nbsp;POH&nbsp;=&nbsp;1&nbsp;000&nbsp;000&nbsp;000&nbsp;μPOH</strong>, one POH buys up to <strong>1&nbsp;billion&nbsp;tokens</strong>.</p>
+            <p class="mb-2">The fee is <code>tokensUsed × gasPrice</code> and is <strong>never less than the tokens actually used</strong> (1&nbsp;000 tokens ⇒ ≥ 1&nbsp;000&nbsp;μPOH). Unused budget is refunded. A <code>maxBudget</code> too small to cover the job's token cost is rejected with <code>402 FEE_TOO_LOW</code>.</p>
+            <p>POH has no fixed price — the market defines it via the best open P2P order (see <code>GET /api/p2p/price</code>).</p>
+          </div>
+
           <div class="endpoint-card">
             <div class="mb-2"><span class="method method-post">POST</span> <code class="text-white/90">/job</code></div>
             <p class="text-white/55 text-[18px]">Submit a job. Returns <code>{ jobId, statusUrl, resultUrl }</code>. <code>paymentTx.txHash</code> is a SHA-256 of <code>{ jobId, requesterAddress, minerAddress, amount, nonce }</code> — not a blockchain transaction hash.</p>
@@ -617,6 +637,11 @@ run();</div>
           </div>
 
           <div class="endpoint-card">
+            <div class="mb-2"><span class="method method-get">GET</span> <code class="text-white/90">/api/p2p/price?quoteCurrency=&lt;cur&gt;</code></div>
+            <p class="text-white/55 text-[18px]">Reference POH price — the market price derived <strong>only</strong> from the best open P2P order(s): <code>{ price (mid), bestBid, bestAsk, source }</code>. Omit <code>quoteCurrency</code> for a per-currency map. POH has no oracle/fixed price.</p>
+          </div>
+
+          <div class="endpoint-card">
             <div class="mb-2"><span class="method method-get">GET</span> <code class="text-white/90">/api/p2p/orders</code></div>
             <p class="text-white/55 text-[18px]">Open order book. Filters: <code>side</code>, <code>quoteCurrency</code>.</p>
           </div>
@@ -694,7 +719,25 @@ run();</div>
     </div>
   </footer>
 
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
   <script>
+    // Syntax-highlight every code block. Detect the language from a few cheap
+    // heuristics, then let highlight.js tokenize it.
+    document.querySelectorAll('.code-block').forEach(el => {
+      if (el.id === 'base-url') return;               // dynamic single-line URL
+      const t = el.textContent.trim();
+      let lang = 'plaintext';
+      if (/^(curl|node|npm|npx|cd|export|bash|sh|#|\$)\b/m.test(t) && t[0] !== '{') {
+        lang = 'bash';
+      } else if (t[0] === '{' || t[0] === '[') {
+        lang = 'json';
+      } else if (/(\brequire\(|\bconst |\blet |=>|console\.|\bfunction )/.test(t)) {
+        lang = 'javascript';
+      }
+      el.classList.add('language-' + lang);
+      if (window.hljs) { try { hljs.highlightElement(el); } catch (_) {} }
+    });
+
     // Highlight active TOC section on scroll
     const sections = document.querySelectorAll('section[id]');
     const tocLinks = document.querySelectorAll('.toc a');

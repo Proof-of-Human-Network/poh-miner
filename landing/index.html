@@ -3,108 +3,90 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>PoH Miner • Run AI Compute. Earn While You Sleep.</title>
+  <title>POH • The Coin That Pays for AI Compute</title>
+  <meta name="description" content="POH is the native token of the Proof-of-Human decentralized AI compute network. Earn it by running a node, spend it on real AI compute.">
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://fonts.googleapis.com/css2?family=Iceland&display=swap" rel="stylesheet">
-  <!-- PoH favicons (self-contained in landing/ for direct / sub-CID use; also staged at root for full site) -->
   <link rel="icon" type="image/svg+xml" href="poh-miner.svg">
   <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
   <link rel="shortcut icon" href="favicon.ico">
   <style>
-    :root {
-      --bg: #000000;
-      --accent: #22c55e;
-    }
+    :root { --bg: #000000; --accent: #22c55e; }
 
-    /* Match proofofhuman.ge exactly */
-    body {
-      font-family: 'Iceland', sans-serif;
-      background: #000;
-      color: #fff;
-      line-height: 1.45;
-    }
-
-    h1, h2, h3, .font-display {
-      font-family: 'Iceland', sans-serif;
-      font-weight: 400;
-    }
-
-    .font-display {
-      font-family: 'Iceland', sans-serif;
-    }
+    body { font-family: 'Iceland', sans-serif; background: #000; color: #fff; line-height: 1.4; }
+    h1, h2, h3, .font-display { font-family: 'Iceland', sans-serif; font-weight: 400; }
 
     .glass { background: rgba(10,10,10,0.85); border: 1px solid #1f1f1f; backdrop-filter: blur(20px); }
     .neon { color: #22c55e; }
 
-    #node-mesh {
-      position: absolute;
-      top: 0; left: 0;
-      width: 100%; height: 100%;
-      opacity: 0.85;
-      z-index: 1;
-      pointer-events: none;
+    #coin-mesh {
+      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+      opacity: 0.9; z-index: 1; pointer-events: none;
     }
+    .hero-bg { background: radial-gradient(circle at 50% 25%, rgba(34,197,94,0.10) 0%, transparent 65%); }
 
-    .hero-bg {
-      background: radial-gradient(circle at 50% 30%, rgba(34,197,94,0.06) 0%, transparent 70%);
-    }
-
-    /* === GLOBAL +50% FONT SIZE SCALING (applied across entire landing) === */
+    /* === GLOBAL +50% FONT SIZE SCALING === */
     html { font-size: 150%; }
     @media (max-width: 639px)  { html { font-size: 100%; } }
     @media (max-width: 767px)  { html { font-size: 110%; } }
-
-    /* Prevent tiny legal / meta text from exploding */
     .text-xs, .text-\[10px\], .text-\[15px\] { font-size: 0.92rem !important; }
-
     .footer-text { font-size: 1.25rem !important; }
 
-    /* ── Mobile nav ─────────────────────────────────── */
+    /* ── Mobile nav ── */
     .nav-links { display: none; }
     @media (min-width: 1024px) { .nav-links { display: flex; } }
-
-    /* Mobile hamburger */
     .hamburger { display: flex; flex-direction: column; gap: 5px; cursor: pointer; padding: 4px; }
     .hamburger span { display: block; width: 22px; height: 2px; background: #fff; border-radius: 2px; transition: 0.25s; }
     .hamburger.open span:nth-child(1) { transform: translateY(7px) rotate(45deg); }
     .hamburger.open span:nth-child(2) { opacity: 0; }
     .hamburger.open span:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
     @media (min-width: 1024px) { .hamburger { display: none; } }
-
-    /* Mobile menu drawer */
     .mobile-drawer {
       display: none; position: fixed; top: 64px; left: 0; right: 0; z-index: 49;
       background: #0a0a0a; border-bottom: 1px solid #1f1f1f;
-      flex-direction: column; padding: 16px 24px 24px;
-      gap: 0;
+      flex-direction: column; padding: 16px 24px 24px; gap: 0;
     }
     @media (min-width: 640px) { .mobile-drawer { top: 80px; } }
     .mobile-drawer.open { display: flex; }
-    .mobile-drawer a {
-      padding: 14px 0; font-size: 22px; color: #fff;
-      border-bottom: 1px solid #1a1a1a; text-decoration: none;
-    }
+    .mobile-drawer a { padding: 14px 0; font-size: 22px; color: #fff; border-bottom: 1px solid #1a1a1a; text-decoration: none; }
     .mobile-drawer a:last-child { border-bottom: none; }
     @media (min-width: 1024px) { .mobile-drawer { display: none !important; } }
 
+    /* Spinning coin */
+    .coin {
+      width: 190px; height: 190px; border-radius: 9999px;
+      display: flex; align-items: center; justify-content: center;
+      background: radial-gradient(circle at 35% 28%, #1c5636, #041108 72%);
+      border: 2px solid rgba(34,197,94,0.55);
+      box-shadow: 0 0 80px rgba(34,197,94,0.30), inset 0 0 34px rgba(34,197,94,0.18);
+      color: #22c55e; animation: coin-float 4s ease-in-out infinite; position: relative;
+    }
+    .coin::after {
+      content: ''; position: absolute; inset: 14px; border-radius: 9999px;
+      border: 1px solid rgba(34,197,94,0.25);
+    }
+    @keyframes coin-float { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-16px); } }
+
+    .chip { border: 1px solid #1f1f1f; background: rgba(10,10,10,0.6); border-radius: 999px; }
+    .ico { width: 40px; height: 40px; stroke: #22c55e; stroke-width: 1.6; fill: none; }
+    .card-hover { transition: transform .25s, border-color .25s; }
+    .card-hover:hover { transform: translateY(-4px); border-color: rgba(34,197,94,0.5); }
+    .reveal { opacity: 0; transform: translateY(24px); transition: opacity .7s ease, transform .7s ease; }
+    .reveal.in { opacity: 1; transform: none; }
   </style>
 </head>
 <body class="bg-black text-white overflow-x-hidden">
   <!-- Nav -->
   <nav class="border-b border-white/10 bg-black/80 backdrop-blur-xl fixed w-full z-50">
     <div class="max-w-7xl mx-auto px-4 sm:px-8 h-16 sm:h-20 flex items-center justify-between">
-      <div class="flex items-center gap-x-2 sm:gap-x-4">
-        <div class="flex items-center gap-x-2 sm:gap-x-3">
-          <img src="poh-miner.svg" alt="PoH Logo" width="36" height="36" class="sm:w-[48px] sm:h-[48px]" style="vertical-align: middle;" />
-          <span class="font-display text-[32px] sm:text-[48px] md:text-[60px] leading-none">Miner</span>
-        </div>
-      </div>
+      <a href="index.html" class="flex items-center gap-x-2 sm:gap-x-3">
+        <img src="poh-miner.svg" alt="PoH Logo" width="36" height="36" class="sm:w-[48px] sm:h-[48px]" style="vertical-align: middle;" />
+      </a>
       <div class="nav-links items-center gap-x-6 xl:gap-x-9 text-[17px] xl:text-[20px]">
-        <a href="#how" class="hover:text-[#22c55e] transition whitespace-nowrap">How it works</a>
-        <a href="#network" class="hover:text-[#22c55e] transition whitespace-nowrap">The Network</a>
-        <a href="#start" class="hover:text-[#22c55e] transition whitespace-nowrap">Start Earning</a>
+        <a href="gelt/" class="hover:text-[#22c55e] transition whitespace-nowrap">GEL₮</a>
+        <a href="index.html" class="text-[#22c55e] transition whitespace-nowrap">POH</a>
         <a href="wallet/" class="hover:text-[#22c55e] transition whitespace-nowrap">Wallet</a>
-        <a href="https://proofofhuman.ge" target="_blank" class="px-3 lg:px-5 py-2 rounded-[4px] border border-white/20 hover:bg-white/5 transition whitespace-nowrap">proofofhuman.ge</a>
+        <a href="miner.html#start" class="px-3 lg:px-5 py-2 rounded-[4px] bg-[#22c55e] text-black hover:bg-white transition whitespace-nowrap">Run a miner</a>
       </div>
       <button class="hamburger" id="hamburger" aria-label="Open menu">
         <span></span><span></span><span></span>
@@ -114,1393 +96,230 @@
 
   <!-- Mobile nav drawer -->
   <div class="mobile-drawer" id="mobile-drawer">
-    <a href="#how">How it works</a>
-    <a href="#network">The Network</a>
-    <a href="#start">Start Earning</a>
+    <a href="gelt/">GEL₮</a>
+    <a href="index.html">POH</a>
     <a href="wallet/">Wallet</a>
-    <a href="https://proofofhuman.ge" target="_blank">proofofhuman.ge</a>
+    <a href="miner.html#start">Run a miner</a>
   </div>
 
   <!-- Hero -->
-  <div class="relative min-h-[100dvh] flex items-center justify-center pt-16 sm:pt-20">
-    <!-- Background mesh -->
-    <canvas id="node-mesh" class="absolute inset-0"></canvas>
-    
-    <div class="relative z-10 max-w-5xl px-6 text-center">
+  <div class="relative min-h-[100dvh] flex items-center justify-center pt-16 sm:pt-20 hero-bg">
+    <canvas id="coin-mesh" class="absolute inset-0"></canvas>
 
-      <h1 class="font-display text-[44px] sm:text-[68px] md:text-[138px] leading-[0.92]">
-        Power the AI Brain.<br>
-        <span class="neon">It earns when you are out.</span>
+    <div class="relative z-10 max-w-5xl px-6 text-center">
+      <div class="flex justify-center mb-8">
+        <div class="coin"><span class="text-[80px] leading-none font-display">₽</span></div>
+      </div>
+
+      <h1 class="font-display text-[52px] sm:text-[80px] md:text-[150px] leading-[0.9]">
+        Earn <span class="neon">POH</span>.<br>
+        While you sleep.
       </h1>
 
       <div class="mt-10 flex flex-col sm:flex-row gap-4 justify-center">
-        <a href="#start"
-           class="inline-flex items-center justify-center px-8 py-3 bg-white text-black text-[18px] sm:text-[24px] md:text-[30px] rounded-[4px] hover:bg-[#22c55e] transition">
-          Start running a node
+        <a href="miner.html#start"
+           class="inline-flex items-center justify-center px-8 py-3 bg-[#22c55e] text-black text-[18px] sm:text-[24px] md:text-[30px] rounded-[4px] hover:bg-white transition">
+          Start mining POH
         </a>
-        <a href="#network"
+        <a href="#earn-spend"
            class="inline-flex items-center justify-center px-8 py-3 border border-white/30 hover:bg-white/5 text-[18px] sm:text-[24px] md:text-[30px] rounded-[4px] transition">
-          See the live mesh
+          How it pays
         </a>
       </div>
     </div>
   </div>
 
-  <!-- Stats (real data where possible) -->
-  <div class="border-y border-white/10 py-6">
-    <div class="max-w-6xl mx-auto px-8 grid grid-cols-2 md:grid-cols-3 gap-8 text-center">
-      <div>
-        <div class="text-[36px] md:text-[60px] font-display tracking-tighter" id="node-count" data-raw="0">—</div>
-        <div class="text-xs text-white/50 tracking-widest mt-1">ACTIVE COMPUTE NODES</div>
+  <!-- Value band -->
+  <div class="border-y border-white/10 py-12 md:py-16 bg-[#050505]">
+    <div class="max-w-5xl mx-auto px-6 text-center reveal">
+      <div class="uppercase tracking-[3px] text-xs text-[#22c55e] mb-3">WHAT ONE POH IS WORTH</div>
+      <div class="font-display text-[48px] sm:text-[70px] md:text-[104px] leading-none">1 POH ≈ <span class="neon">$2K–5K</span></div>
+      <p class="mt-5 text-[16px] sm:text-[22px] md:text-[26px] text-white/60 max-w-3xl mx-auto">One POH buys up to <span class="text-white/85">1 billion AI compute tokens</span> — about $2,000–5,000 of inference at what ChatGPT, Gemini or Grok charge. There's no fixed price: <span class="text-white/85">the market sets it</span> through the best peer-to-peer order.</p>
+    </div>
+  </div>
+
+  <!-- Earn vs Spend -->
+  <div id="earn-spend" class="max-w-6xl mx-auto px-4 sm:px-8 py-16 md:py-32">
+    <div class="text-center mb-10 md:mb-16 reveal">
+      <div class="uppercase tracking-[3px] text-xs text-[#22c55e] mb-3">TWO SIDES OF ONE ECONOMY</div>
+      <h2 class="font-display text-[40px] sm:text-[60px] md:text-[84px] leading-none">Earn it. Spend it.</h2>
+    </div>
+
+    <div class="grid md:grid-cols-2 gap-6">
+      <div class="glass card-hover p-8 md:p-10 rounded-[6px] reveal">
+        <svg class="ico mb-5" viewBox="0 0 24 24"><path d="M12 2v20M2 12h20"/><circle cx="12" cy="12" r="9"/></svg>
+        <h3 class="text-[34px] md:text-[50px] tracking-tight mb-3">Run a node, earn POH</h3>
+        <p class="text-white/70 text-[17px] md:text-[20px]">Your machine solves incoming AI tasks. Every block you win mints fresh POH straight to your wallet — no cloud, no boss, no cap on how much you run.</p>
+        <a href="miner.html#start" class="inline-block mt-6 neon text-[18px] md:text-[22px] hover:underline">Download the miner →</a>
       </div>
-      <div>
-        <div class="text-[36px] md:text-[60px] font-display tracking-tighter text-[#22c55e]" id="network-speed" data-raw="0">—</div>
-        <div class="text-xs text-white/50 tracking-widest mt-1">NETWORK SPEED</div>
-      </div>
-      <div>
-        <div class="text-[36px] md:text-[60px] font-display tracking-tighter" id="jobs-count" data-raw="0">—</div>
-        <div class="text-xs text-white/50 tracking-widest mt-1">AI TASKS PROCESSED</div>
+      <div class="glass card-hover p-8 md:p-10 rounded-[6px] reveal">
+        <svg class="ico mb-5" viewBox="0 0 24 24"><path d="M3 10h18M7 15h4"/><rect x="2" y="5" width="20" height="14" rx="2"/></svg>
+        <h3 class="text-[34px] md:text-[50px] tracking-tight mb-3">Spend POH, get compute</h3>
+        <p class="text-white/70 text-[17px] md:text-[20px]">Post an AI job with a POH budget and the fastest node answers it. Deploy skills, stake to secure them, or settle peer-to-peer in seconds.</p>
+        <a href="wallet/" class="inline-block mt-6 neon text-[18px] md:text-[22px] hover:underline">Open your wallet →</a>
       </div>
     </div>
   </div>
 
-  <!-- Live Network Chart -->
-  <div class="border-t border-white/10 py-14 md:py-20">
-    <div class="max-w-5xl mx-auto px-4 sm:px-8">
-      <div class="flex items-end justify-between mb-6 gap-4 flex-wrap">
-        <div>
-          <div class="uppercase tracking-[3px] text-xs text-white/40 mb-1">LIVE NETWORK</div>
-          <h2 class="font-display text-[32px] sm:text-[42px] leading-none">Compute &amp; nodes over time</h2>
-        </div>
-        <div class="flex items-center gap-6 text-sm">
-          <span class="flex items-center gap-2"><span class="inline-block w-3 h-3 rounded-full bg-[#22c55e]"></span><span class="text-white/60">TFLOPS</span></span>
-          <span class="flex items-center gap-2"><span class="inline-block w-3 h-3 rounded-full bg-[#f97316]"></span><span class="text-white/60">Nodes</span></span>
-          <span id="chart-last-updated" class="text-white/30 tabular-nums text-xs"></span>
-        </div>
+  <!-- Why POH -->
+  <div class="border-t border-white/10 bg-[#050505]">
+    <div class="max-w-6xl mx-auto px-4 sm:px-8 py-16 md:py-32">
+      <div class="text-center mb-10 md:mb-16 reveal">
+        <div class="uppercase tracking-[3px] text-xs text-[#22c55e] mb-3">WHY POH</div>
+        <h2 class="font-display text-[40px] sm:text-[60px] md:text-[80px] leading-none">Money that means work.</h2>
       </div>
-      <div id="net-chart-wrap" class="relative" style="height:450px">
-        <canvas id="net-chart" class="absolute inset-0 w-full h-full cursor-crosshair"></canvas>
-        <div id="chart-tooltip" class="pointer-events-none absolute z-20 hidden rounded-md border border-white/10 bg-[#141414]/95 px-3 py-2 text-xs shadow-lg backdrop-blur-sm tabular-nums"></div>
+
+      <div class="grid grid-cols-2 lg:grid-cols-4 gap-6">
+        <div class="glass card-hover p-6 md:p-8 rounded-[6px] reveal">
+          <svg class="ico mb-4" viewBox="0 0 24 24"><path d="M20 7 9 18l-5-5"/></svg>
+          <h3 class="text-[26px] md:text-[34px] tracking-tight mb-2">Real backing</h3>
+          <p class="text-white/60 text-[15px] md:text-[17px]">Every coin is a receipt for a solved AI task.</p>
+        </div>
+        <div class="glass card-hover p-6 md:p-8 rounded-[6px] reveal">
+          <svg class="ico mb-4" viewBox="0 0 24 24"><path d="M12 2 4 6v6c0 5 3.5 8 8 10 4.5-2 8-5 8-10V6z"/></svg>
+          <h3 class="text-[26px] md:text-[34px] tracking-tight mb-2">Fair launch</h3>
+          <p class="text-white/60 text-[15px] md:text-[17px]">No pre-sale. Mine to earn.</p>
+        </div>
+        <div class="glass card-hover p-6 md:p-8 rounded-[6px] reveal">
+          <svg class="ico mb-4" viewBox="0 0 24 24"><path d="M13 2 3 14h7l-1 8 10-12h-7z"/></svg>
+          <h3 class="text-[26px] md:text-[34px] tracking-tight mb-2">Instant p2p</h3>
+          <p class="text-white/60 text-[15px] md:text-[17px]">Signed transfers settle in seconds.</p>
+        </div>
+        <div class="glass card-hover p-6 md:p-8 rounded-[6px] reveal">
+          <svg class="ico mb-4" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
+          <h3 class="text-[26px] md:text-[34px] tracking-tight mb-2">Slashing-secured</h3>
+          <p class="text-white/60 text-[15px] md:text-[17px]">Bad work gets rejected and staked POH burned.</p>
+        </div>
       </div>
     </div>
   </div>
 
-  <!-- The Network -->
-  <div id="network" class="max-w-7xl mx-auto px-4 sm:px-8 py-16 md:py-20">
-    
-    <div class="flex flex-col md:flex-row gap-12 items-center">
-      <div class="md:w-5/12 md:pb-40">
-        <div class="uppercase tracking-[3px] text-xs text-[#22c55e] mb-3">THE INFRASTRUCTURE</div>
-        <h2 class="font-display text-[52px] sm:text-[72px] md:text-[90px] leading-none">A living mesh of<br>compute providers.</h2>
-        <p class="mt-6 text-[18px] sm:text-[22px] md:text-[30px] text-white/70">Nodes running local LLMs form a decentralized AI compute network. When tasks arrive, your machine processes them and earns — no data center required.</p>
-      </div>
-
-      <!-- Real Mesh Visualization -->
-      <div class="md:w-7/12 relative">
-        <div class="aspect-[16/9] rounded-[4px] overflow-hidden bg-black relative">
-          <canvas id="live-mesh" class="absolute inset-0 w-full h-full"></canvas>
-        </div>
-      </div>
+  <!-- Utility strip -->
+  <div class="max-w-6xl mx-auto px-4 sm:px-8 py-16 md:py-32">
+    <div class="text-center mb-10 md:mb-16 reveal">
+      <div class="uppercase tracking-[3px] text-xs text-[#22c55e] mb-3">UTILITY</div>
+      <h2 class="font-display text-[40px] sm:text-[56px] md:text-[76px] leading-none">One token, the whole network.</h2>
     </div>
 
-  </div>
-
-  <!-- ═══ APP SHOWCASE ═══ -->
-  <div class="border-t border-white/10 overflow-hidden" style="background:#030303;">
-    <div class="max-w-7xl mx-auto px-4 sm:px-8 py-16 md:py-32">
-
-      <div class="text-center mb-4">
-        <div class="uppercase tracking-[3px] text-xs text-[#22c55e] mb-4">THE DESKTOP APP</div>
-        <h2 class="font-display text-[56px] sm:text-[80px] md:text-[130px] leading-[0.88]">PoH Miner.</h2>
-        <p class="mt-6 text-[16px] sm:text-[20px] md:text-[26px] text-white/55 max-w-2xl mx-auto">One native app. Your node joins the network, your local LLM solves incoming AI tasks, and you earn POH each time.</p>
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-6 text-center">
+      <div class="glass card-hover p-6 rounded-[6px] reveal">
+        <div class="text-[30px] md:text-[45px] text-[#22c55e] mb-1">1 POH</div>
+        <div class="text-[15px] md:text-[18px] text-white/60">block reward</div>
       </div>
-
-      <!-- Mobile app summary card (hidden on sm+) -->
-      <div class="mt-8 sm:hidden rounded-2xl border border-white/10 bg-[#111] p-6 text-left space-y-4">
-        <div class="flex items-center gap-3">
-          <span class="w-3 h-3 rounded-full bg-[#ff5f57]"></span>
-          <span class="w-3 h-3 rounded-full bg-[#febc2e]"></span>
-          <span class="w-3 h-3 rounded-full bg-[#28c840]"></span>
-          <span class="text-white/30 text-xs ml-2" style="font-family:system-ui">PoH Miner — Mining Active</span>
-        </div>
-        <div class="font-mono text-xs space-y-2 text-white/70">
-          <div><span class="text-white/30">14:22:01</span> <span class="text-[#22c55e]">[PoH-Miner] Connected · 14 peers</span></div>
-          <div><span class="text-white/30">14:22:05</span> <span class="text-[#22c55e]">[LLM] ✓ qwen3-1.7b ready · serving compute</span></div>
-          <div><span class="text-white/30">14:22:19</span> <span class="text-[#22c55e]">[Task] ⚡ AI task received · running inference</span></div>
-          <div><span class="text-white/30">14:22:32</span> <span class="text-[#22c55e]">[Reward] ✓ +0.6 POH earned</span></div>
-        </div>
-        <div class="flex items-center gap-2 pt-2 border-t border-white/10">
-          <span class="w-2 h-2 rounded-full bg-[#22c55e] animate-pulse"></span>
-          <span class="text-[#22c55e] text-xs font-mono">MINING ACTIVE · Balance: 12.48 POH</span>
-        </div>
+      <div class="glass card-hover p-6 rounded-[6px] reveal">
+        <div class="text-[30px] md:text-[45px] text-[#22c55e] mb-1">100 POH</div>
+        <div class="text-[15px] md:text-[18px] text-white/60">deploy a skill</div>
       </div>
-
-      <!-- macOS window mockup — hidden on small screens, unreadable at narrow widths -->
-      <div class="mt-8 md:mt-16 relative max-w-6xl mx-auto hidden sm:block">
-        <div class="absolute -inset-10 bg-[#22c55e]/4 blur-3xl rounded-full pointer-events-none"></div>
-        <div class="relative rounded-2xl overflow-hidden border border-white/8 shadow-[0_40px_120px_rgba(0,0,0,0.9)]">
-          <!-- Title bar -->
-          <div class="flex items-center gap-x-2 px-5 bg-[#161616] border-b border-white/5" style="height:42px;">
-            <span style="width:13px;height:13px;border-radius:50%;background:#ff5f57;display:inline-block;"></span>
-            <span style="width:13px;height:13px;border-radius:50%;background:#febc2e;display:inline-block;"></span>
-            <span style="width:13px;height:13px;border-radius:50%;background:#28c840;display:inline-block;"></span>
-            <span class="mx-auto text-white/25 text-xs" style="font-family:system-ui;letter-spacing:0.03em;">PoH Miner — Mining Active</span>
-          </div>
-          <!-- App SVG -->
-          <svg viewBox="0 0 1280 720" xmlns="http://www.w3.org/2000/svg" style="width:100%;display:block;background:#0a0a0a;">
-            <!-- Left status sidebar -->
-            <rect x="0" y="0" width="210" height="720" fill="#111"/>
-            <line x1="210" y1="0" x2="210" y2="720" stroke="#1c1c1c" stroke-width="1"/>
-            <!-- Sidebar header -->
-            <text x="18" y="30" fill="#22c55e" font-size="10" font-family="monospace" letter-spacing="2.5">NODE STATUS</text>
-            <line x1="0" y1="40" x2="210" y2="40" stroke="#1c1c1c" stroke-width="1"/>
-            <!-- Wallet -->
-            <text x="18" y="64" fill="#4b5563" font-size="8.5" font-family="monospace" letter-spacing="1.5">POH WALLET</text>
-            <text x="18" y="80" fill="#e5e7eb" font-size="10.5" font-family="monospace">poh3a7f…c2e9</text>
-            <!-- Balance -->
-            <text x="18" y="108" fill="#4b5563" font-size="8.5" font-family="monospace" letter-spacing="1.5">BALANCE</text>
-            <text x="18" y="132" fill="#22c55e" font-size="30" font-family="sans-serif" font-weight="300">12.48</text>
-            <text x="106" y="132" fill="#22c55e" font-size="13" font-family="monospace">POH</text>
-            <!-- Chain height -->
-            <text x="18" y="162" fill="#4b5563" font-size="8.5" font-family="monospace" letter-spacing="1.5">CHAIN HEIGHT</text>
-            <text x="18" y="184" fill="#f9fafb" font-size="26" font-family="sans-serif" font-weight="300">7,284</text>
-            <!-- Reputation -->
-            <text x="18" y="214" fill="#4b5563" font-size="8.5" font-family="monospace" letter-spacing="1.5">REPUTATION</text>
-            <text x="18" y="236" fill="#22c55e" font-size="26" font-family="sans-serif" font-weight="300">1.00</text>
-            <line x1="18" y1="250" x2="192" y2="250" stroke="#1c1c1c" stroke-width="1"/>
-            <!-- Submissions -->
-            <text x="18" y="272" fill="#4b5563" font-size="8.5" font-family="monospace" letter-spacing="1.5">VALID SCANS</text>
-            <text x="18" y="292" fill="#f9fafb" font-size="22" font-family="sans-serif" font-weight="300">847</text>
-            <text x="18" y="316" fill="#4b5563" font-size="8.5" font-family="monospace" letter-spacing="1.5">REJECTED</text>
-            <text x="18" y="336" fill="#374151" font-size="22" font-family="sans-serif" font-weight="300">3</text>
-            <line x1="18" y1="352" x2="192" y2="352" stroke="#1c1c1c" stroke-width="1"/>
-            <!-- Inference -->
-            <text x="18" y="374" fill="#4b5563" font-size="8.5" font-family="monospace" letter-spacing="1.5">INFERENCE</text>
-            <text x="18" y="392" fill="#9ca3af" font-size="10" font-family="monospace">AUTO · qwen3-1.7b</text>
-            <!-- Solana -->
-            <text x="18" y="418" fill="#4b5563" font-size="8.5" font-family="monospace" letter-spacing="1.5">SOLANA</text>
-            <text x="18" y="436" fill="#6b7280" font-size="10" font-family="monospace">FGdB…G15Z</text>
-            <!-- Peers -->
-            <text x="18" y="462" fill="#4b5563" font-size="8.5" font-family="monospace" letter-spacing="1.5">PEERS</text>
-            <text x="18" y="482" fill="#22c55e" font-size="22" font-family="sans-serif" font-weight="300">14 online</text>
-            <!-- Mining pulse -->
-            <circle cx="18" cy="520" r="5" fill="#22c55e">
-              <animate attributeName="opacity" values="1;0.2;1" dur="2s" repeatCount="indefinite"/>
-            </circle>
-            <text x="30" y="524" fill="#22c55e" font-size="10" font-family="monospace">MINING ACTIVE</text>
-            <!-- Region -->
-            <text x="18" y="558" fill="#4b5563" font-size="8.5" font-family="monospace" letter-spacing="1.5">REGION</text>
-            <text x="18" y="576" fill="#9ca3af" font-size="10" font-family="monospace">EU · auto-detected</text>
-
-            <!-- Main area: tab bar -->
-            <rect x="210" y="0" width="760" height="38" fill="#0f0f0f"/>
-            <rect x="210" y="0" width="120" height="38" fill="#0a0a0a"/>
-            <line x1="210" y1="38" x2="970" y2="38" stroke="#1c1c1c" stroke-width="1"/>
-            <text x="270" y="24" text-anchor="middle" fill="#f9fafb" font-size="11" font-family="monospace" letter-spacing="1.5">LOGS</text>
-            <line x1="210" y1="38" x2="330" y2="38" stroke="#22c55e" stroke-width="2"/>
-            <text x="400" y="24" text-anchor="middle" fill="#374151" font-size="11" font-family="monospace" letter-spacing="1.5">CHAT</text>
-            <text x="510" y="24" text-anchor="middle" fill="#374151" font-size="11" font-family="monospace" letter-spacing="1.5">SCANNER</text>
-            <text x="626" y="24" text-anchor="middle" fill="#374151" font-size="11" font-family="monospace" letter-spacing="1.5">SEND</text>
-            <text x="736" y="24" text-anchor="middle" fill="#374151" font-size="11" font-family="monospace" letter-spacing="1.5">RECEIVE</text>
-
-            <!-- Log lines -->
-            <text x="224" y="66" fill="#374151" font-size="10" font-family="monospace">14:22:01</text>
-            <text x="298" y="66" fill="#22c55e" font-size="10" font-family="monospace">[PoH-Miner] Connected to bootnode · 14 peers discovered</text>
-
-            <text x="224" y="86" fill="#374151" font-size="10" font-family="monospace">14:22:04</text>
-            <text x="298" y="86" fill="#9ca3af" font-size="10" font-family="monospace">[RealPOH] Brain state dir: ~/.poh-miner/brain  signals=47</text>
-
-            <text x="224" y="106" fill="#374151" font-size="10" font-family="monospace">14:22:05</text>
-            <text x="298" y="106" fill="#22c55e" font-size="10" font-family="monospace">[RealPOH] ✓ Loaded checker + brain  model=qwen3-1.7b</text>
-
-            <text x="224" y="126" fill="#374151" font-size="10" font-family="monospace">14:22:19</text>
-            <text x="298" y="126" fill="#22c55e" font-size="10" font-family="monospace">[PoH-Miner] ⚡ New job: 0x7a3f…c891  starting inference</text>
-
-            <text x="224" y="146" fill="#374151" font-size="10" font-family="monospace">14:22:23</text>
-            <text x="298" y="146" fill="#9ca3af" font-size="10" font-family="monospace">[Checker] Running 47 signals for 0x7a3f…c891</text>
-
-            <text x="224" y="166" fill="#374151" font-size="10" font-family="monospace">14:22:31</text>
-            <text x="298" y="166" fill="#22c55e" font-size="10" font-family="monospace">[brain] HUMAN (conf: 0.91) — "ENS + Gitcoin + Farcaster confirmed"</text>
-
-            <text x="224" y="186" fill="#374151" font-size="10" font-family="monospace">14:22:32</text>
-            <text x="298" y="186" fill="#22c55e" font-size="10" font-family="monospace">[Reward] ✓ Block #7284 mined — +0.6 POH to poh3a7f…c2e9</text>
-
-            <text x="224" y="206" fill="#374151" font-size="10" font-family="monospace">14:22:45</text>
-            <text x="298" y="206" fill="#6b7280" font-size="10" font-family="monospace">[Gossip] Broadcasting block #7284 to 14 peers</text>
-
-            <text x="224" y="226" fill="#374151" font-size="10" font-family="monospace">14:22:58</text>
-            <text x="298" y="226" fill="#22c55e" font-size="10" font-family="monospace">[PoH-Miner] ⚡ New job: FGdBhX…G15Z  starting inference</text>
-
-            <text x="224" y="246" fill="#374151" font-size="10" font-family="monospace">14:23:06</text>
-            <text x="298" y="246" fill="#9ca3af" font-size="10" font-family="monospace">[Checker] Running 47 signals for FGdBhX…G15Z</text>
-
-            <text x="224" y="266" fill="#374151" font-size="10" font-family="monospace">14:23:14</text>
-            <text x="298" y="266" fill="#22c55e" font-size="10" font-family="monospace">[brain] HUMAN (conf: 0.88) — "Solana DeFi activity + age confirmed"</text>
-
-            <text x="224" y="286" fill="#374151" font-size="10" font-family="monospace">14:23:15</text>
-            <text x="298" y="286" fill="#22c55e" font-size="10" font-family="monospace">[Reward] ✓ Block #7285 mined — +0.6 POH to poh3a7f…c2e9</text>
-
-            <text x="224" y="306" fill="#1f2937" font-size="10" font-family="monospace">14:23:31</text>
-            <text x="298" y="306" fill="#1f2937" font-size="10" font-family="monospace">[Gossip] Peer EU-03 reconnected  peers: 14</text>
-
-            <text x="224" y="326" fill="#1f2937" font-size="10" font-family="monospace">14:23:48</text>
-            <text x="298" y="326" fill="#1f2937" font-size="10" font-family="monospace">[brain] Weight update: ENS 2.38 → 2.40  (vote confirmed)</text>
-
-            <!-- Blinking cursor -->
-            <rect x="224" y="345" width="7" height="13" fill="#22c55e">
-              <animate attributeName="opacity" values="1;0;1" dur="1.1s" repeatCount="indefinite"/>
-            </rect>
-
-            <!-- Right brain panel -->
-            <rect x="970" y="0" width="310" height="720" fill="#0d0d0d"/>
-            <line x1="970" y1="0" x2="970" y2="720" stroke="#1c1c1c" stroke-width="1"/>
-            <!-- Brain header -->
-            <rect x="970" y="0" width="310" height="38" fill="#0f0f0f"/>
-            <text x="988" y="24" fill="#22c55e" font-size="10" font-family="monospace" letter-spacing="2.5">AI BRAIN</text>
-            <line x1="970" y1="38" x2="1280" y2="38" stroke="#1c1c1c" stroke-width="1"/>
-            <!-- Model -->
-            <text x="988" y="66" fill="#4b5563" font-size="8.5" font-family="monospace" letter-spacing="1.5">MODEL</text>
-            <text x="988" y="84" fill="#e5e7eb" font-size="11" font-family="monospace">qwen3-1.7b</text>
-            <!-- Signals -->
-            <text x="988" y="112" fill="#4b5563" font-size="8.5" font-family="monospace" letter-spacing="1.5">ACTIVE SIGNALS</text>
-            <text x="988" y="148" fill="#22c55e" font-size="42" font-family="sans-serif" font-weight="200">47</text>
-            <!-- Feedback -->
-            <text x="988" y="176" fill="#4b5563" font-size="8.5" font-family="monospace" letter-spacing="1.5">CORRECTIONS LOGGED</text>
-            <text x="988" y="198" fill="#e5e7eb" font-size="22" font-family="sans-serif" font-weight="300">23</text>
-            <line x1="988" y1="214" x2="1260" y2="214" stroke="#1c1c1c" stroke-width="1"/>
-            <!-- Top signals -->
-            <text x="988" y="234" fill="#4b5563" font-size="8.5" font-family="monospace" letter-spacing="1.5">TOP SIGNALS (WEIGHT)</text>
-            <text x="988" y="256" fill="#9ca3af" font-size="10" font-family="monospace">ENS name owned</text>
-            <text x="1255" y="256" text-anchor="end" fill="#22c55e" font-size="10" font-family="monospace">2.40</text>
-            <text x="988" y="274" fill="#9ca3af" font-size="10" font-family="monospace">Gitcoin Passport</text>
-            <text x="1255" y="274" text-anchor="end" fill="#22c55e" font-size="10" font-family="monospace">2.18</text>
-            <text x="988" y="292" fill="#9ca3af" font-size="10" font-family="monospace">Farcaster verified</text>
-            <text x="1255" y="292" text-anchor="end" fill="#22c55e" font-size="10" font-family="monospace">1.95</text>
-            <text x="988" y="310" fill="#9ca3af" font-size="10" font-family="monospace">Uniswap LP position</text>
-            <text x="1255" y="310" text-anchor="end" fill="#22c55e" font-size="10" font-family="monospace">1.72</text>
-            <text x="988" y="328" fill="#9ca3af" font-size="10" font-family="monospace">SOL tx history 90d</text>
-            <text x="1255" y="328" text-anchor="end" fill="#22c55e" font-size="10" font-family="monospace">1.61</text>
-            <line x1="988" y1="344" x2="1260" y2="344" stroke="#1c1c1c" stroke-width="1"/>
-            <!-- Brain state -->
-            <text x="988" y="364" fill="#4b5563" font-size="8.5" font-family="monospace" letter-spacing="1.5">BRAIN STATE</text>
-            <text x="988" y="384" fill="#374151" font-size="9.5" font-family="monospace">Top: ENS (2.40), Gitcoin (2.18).</text>
-            <text x="988" y="400" fill="#374151" font-size="9.5" font-family="monospace">23 corrections improved avg</text>
-            <text x="988" y="416" fill="#374151" font-size="9.5" font-family="monospace">confidence by 4.2%.</text>
-            <line x1="988" y1="432" x2="1260" y2="432" stroke="#1c1c1c" stroke-width="1"/>
-            <!-- Consolidation -->
-            <text x="988" y="452" fill="#4b5563" font-size="8.5" font-family="monospace" letter-spacing="1.5">NEXT CONSOLIDATION</text>
-            <text x="988" y="474" fill="#9ca3af" font-size="20" font-family="sans-serif" font-weight="300">47 min</text>
-            <!-- Inference status -->
-            <circle cx="988" cy="504" r="4" fill="#22c55e"/>
-            <text x="1000" y="508" fill="#6b7280" font-size="10" font-family="monospace">QVAC running</text>
-            <circle cx="988" cy="528" r="4" fill="#22c55e">
-              <animate attributeName="opacity" values="1;0.2;1" dur="2s" repeatCount="indefinite"/>
-            </circle>
-            <text x="1000" y="532" fill="#6b7280" font-size="10" font-family="monospace">Syncing brain events</text>
-          </svg>
-        </div>
+      <div class="glass card-hover p-6 rounded-[6px] reveal">
+        <div class="text-[30px] md:text-[45px] text-[#22c55e] mb-1">1,000 POH</div>
+        <div class="text-[15px] md:text-[18px] text-white/60">stake to go live</div>
       </div>
-
-      <!-- Feature callouts -->
-      <div class="mt-40 mb-40 grid md:grid-cols-3 gap-10 max-w-5xl mx-auto text-center">
-        <div>
-          <div class="text-[#22c55e] text-xs tracking-[3px] mb-3">LIVE CHAIN MONITOR</div>
-          <h3 class="font-display text-[38px] mb-3">Every block. Every reward.</h3>
-          <p class="text-white/55 text-[18px]">Watch the chain grow in real time. Each block you mine confirms in the log within seconds of inference completing.</p>
-        </div>
-        <div>
-          <div class="text-[#22c55e] text-xs tracking-[3px] mb-3">BUILT-IN LLM CHAT</div>
-          <h3 class="font-display text-[38px] mb-3">Talk to your local AI.</h3>
-          <p class="text-white/55 text-[18px]">The same LLM that earns you POH is available as a private chat. No API key, no cloud, no rate limits.</p>
-        </div>
-        <div>
-          <div class="text-[#22c55e] text-xs tracking-[3px] mb-3">SELF-LEARNING BRAIN</div>
-          <h3 class="font-display text-[38px] mb-3">Gets smarter every hour.</h3>
-          <p class="text-white/55 text-[18px]">Signal weights adjust from every scan, correction, and vote. The brain consolidates what it learned each hour automatically.</p>
-        </div>
+      <div class="glass card-hover p-6 rounded-[6px] reveal">
+        <div class="text-[24px] md:text-[38px] text-[#22c55e] mb-1">GEL₮</div>
+        <div class="text-[15px] md:text-[18px] text-white/60">priced in stable Lari</div>
       </div>
-
-      <!-- Chat tab preview (secondary) -->
-      <div class="mt-20 max-w-4xl mx-auto">
-        <div class="mb-8 text-center">
-          <div class="uppercase tracking-[3px] text-xs text-[#22c55e] mb-3">CHAT TAB</div>
-          <h3 class="font-display text-[60px] leading-none">Your node. Your LLM.</h3>
-          <p class="mt-4 text-[22px] text-white/55">Switch tabs. Ask anything. No API key, no cloud, no rate limits.</p>
-        </div>
-        <div class="relative rounded-2xl overflow-hidden border border-white/8 shadow-[0_20px_80px_rgba(0,0,0,0.8)]">
-          <div class="flex items-center gap-x-2 px-5 bg-[#161616] border-b border-white/5" style="height:42px;">
-            <span style="width:13px;height:13px;border-radius:50%;background:#ff5f57;display:inline-block;"></span>
-            <span style="width:13px;height:13px;border-radius:50%;background:#febc2e;display:inline-block;"></span>
-            <span style="width:13px;height:13px;border-radius:50%;background:#28c840;display:inline-block;"></span>
-            <span class="mx-auto text-white/25 text-xs" style="font-family:system-ui;">PoH Miner — Chat</span>
-          </div>
-          <svg viewBox="0 0 1000 480" xmlns="http://www.w3.org/2000/svg" style="width:100%;display:block;background:#0a0a0a;">
-            <!-- Sidebar (abbreviated) -->
-            <rect x="0" y="0" width="180" height="480" fill="#111"/>
-            <line x1="180" y1="0" x2="180" y2="480" stroke="#1c1c1c" stroke-width="1"/>
-            <text x="16" y="30" fill="#22c55e" font-size="9" font-family="monospace" letter-spacing="2">NODE STATUS</text>
-            <line x1="0" y1="40" x2="180" y2="40" stroke="#1c1c1c" stroke-width="1"/>
-            <text x="16" y="68" fill="#4b5563" font-size="8" font-family="monospace" letter-spacing="1.5">BALANCE</text>
-            <text x="16" y="90" fill="#22c55e" font-size="24" font-family="sans-serif" font-weight="300">12.48 POH</text>
-            <text x="16" y="116" fill="#4b5563" font-size="8" font-family="monospace" letter-spacing="1.5">CHAIN HEIGHT</text>
-            <text x="16" y="136" fill="#e5e7eb" font-size="22" font-family="sans-serif" font-weight="300">7,286</text>
-            <circle cx="16" cy="172" r="4" fill="#22c55e"><animate attributeName="opacity" values="1;0.2;1" dur="2s" repeatCount="indefinite"/></circle>
-            <text x="28" y="176" fill="#22c55e" font-size="9" font-family="monospace">MINING ACTIVE</text>
-            <!-- Tab bar -->
-            <rect x="180" y="0" width="820" height="38" fill="#0f0f0f"/>
-            <line x1="180" y1="38" x2="1000" y2="38" stroke="#1c1c1c" stroke-width="1"/>
-            <text x="252" y="24" text-anchor="middle" fill="#374151" font-size="11" font-family="monospace" letter-spacing="1.5">LOGS</text>
-            <rect x="298" y="0" width="120" height="38" fill="#0a0a0a"/>
-            <text x="358" y="24" text-anchor="middle" fill="#f9fafb" font-size="11" font-family="monospace" letter-spacing="1.5">CHAT</text>
-            <line x1="298" y1="38" x2="418" y2="38" stroke="#22c55e" stroke-width="2"/>
-            <text x="474" y="24" text-anchor="middle" fill="#374151" font-size="11" font-family="monospace" letter-spacing="1.5">SCANNER</text>
-            <text x="590" y="24" text-anchor="middle" fill="#374151" font-size="11" font-family="monospace" letter-spacing="1.5">SEND</text>
-            <text x="700" y="24" text-anchor="middle" fill="#374151" font-size="11" font-family="monospace" letter-spacing="1.5">RECEIVE</text>
-            <!-- Model selector -->
-            <rect x="700" y="8" width="180" height="22" rx="3" fill="#1a1a1a" stroke="#2a2a2a" stroke-width="1"/>
-            <text x="714" y="23" fill="#6b7280" font-size="10" font-family="monospace">qwen3-1.7b ▾</text>
-            <!-- Chat messages -->
-            <!-- User msg 1 -->
-            <rect x="560" y="58" width="390" height="44" rx="6" fill="#1a1a1a"/>
-            <text x="578" y="76" fill="#e5e7eb" font-size="11" font-family="monospace">What signals does PoH use to detect bots?</text>
-            <text x="916" y="94" text-anchor="end" fill="#374151" font-size="9" font-family="monospace">You</text>
-            <!-- AI msg 1 -->
-            <rect x="198" y="114" width="560" height="76" rx="6" fill="#0f1a0f"/>
-            <text x="216" y="132" fill="#22c55e" font-size="11" font-family="monospace">PoH uses 47 active signals including ENS ownership,</text>
-            <text x="216" y="150" fill="#22c55e" font-size="11" font-family="monospace">Gitcoin Passport score, Farcaster verification, Uniswap</text>
-            <text x="216" y="168" fill="#22c55e" font-size="11" font-family="monospace">LP history, and 43 more on-chain + social indicators.</text>
-            <text x="216" y="184" text-anchor="start" fill="#374151" font-size="9" font-family="monospace">AI · qwen3-1.7b</text>
-            <!-- User msg 2 -->
-            <rect x="560" y="204" width="348" height="44" rx="6" fill="#1a1a1a"/>
-            <text x="578" y="222" fill="#e5e7eb" font-size="11" font-family="monospace">Which signal has the highest weight?</text>
-            <text x="890" y="240" text-anchor="end" fill="#374151" font-size="9" font-family="monospace">You</text>
-            <!-- AI msg 2 -->
-            <rect x="198" y="260" width="480" height="60" rx="6" fill="#0f1a0f"/>
-            <text x="216" y="278" fill="#22c55e" font-size="11" font-family="monospace">ENS name ownership (weight: 2.40) is currently the</text>
-            <text x="216" y="296" fill="#22c55e" font-size="11" font-family="monospace">strongest signal, followed by Gitcoin Passport (2.18).</text>
-            <text x="216" y="312" text-anchor="start" fill="#374151" font-size="9" font-family="monospace">AI · qwen3-1.7b</text>
-            <!-- Input area -->
-            <rect x="180" y="430" width="820" height="50" fill="#0d0d0d"/>
-            <line x1="180" y1="430" x2="1000" y2="430" stroke="#1c1c1c" stroke-width="1"/>
-            <rect x="198" y="440" width="680" height="32" rx="4" fill="#161616" stroke="#222" stroke-width="1"/>
-            <text x="214" y="460" fill="#374151" font-size="11" font-family="monospace">Ask anything about the network, signals, or your node…</text>
-            <rect x="888" y="440" width="80" height="32" rx="4" fill="#22c55e"/>
-            <text x="928" y="460" text-anchor="middle" fill="#000" font-size="11" font-family="monospace" font-weight="bold">SEND</text>
-          </svg>
-        </div>
-      </div>
-
     </div>
   </div>
-  <!-- ═══ END APP SHOWCASE ═══ -->
 
-    <!-- CTA: Ready to contribute real compute? -->
-  <div id="start" class="max-w-5xl mx-auto px-4 sm:px-6 py-14 md:py-40 border-t border-white/10">
-    <div class="text-center mb-10">
-      <h2 class="font-display text-[44px] sm:text-[60px] md:text-[78px] leading-none">Ready to contribute real compute?</h2>
-      <p class="mt-4 text-[16px] sm:text-[22px] md:text-[30px] text-white/70 max-w-2xl mx-auto">Download the pre-built binary for your system. Double-click to install — no terminal, no coding required for non-technical users.</p>
-    </div>
-
-    <div class="max-w-6xl mx-auto">
-      <!-- One-click pre-built binary downloads -->
-      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <!-- Linux .deb -->
-        <div class="glass p-6 rounded-[4px] flex flex-col">
-          <div class="flex items-center gap-x-3 mb-3">
-            <span class="text-3xl leading-none">
-              <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 32 32" fill="none">
-                <path d="M30 16C30 23.728 23.735 30 16 30C8.265 30 2 23.728 2 16C2 8.265 8.265 2 16 2C23.735 2 30 8.265 30 16Z" fill="white"/>
-                <path d="M11.3063 21.91C11.181 21.7232 11.0714 21.4713 10.9824 21.1699C9.37571 19.358 10.6169 16.6916 11.8446 14.881C11.9623 14.6874 12.0905 14.5004 12.2299 14.3215C13.1666 13.1577 13.4089 12.3478 13.481 11.2521C13.4896 11.0481 13.4727 10.7781 13.4533 10.4678C13.3542 8.8837 13.1895 6.25174 16.0159 6.0184C19.5489 5.72669 19.2611 8.97105 19.235 10.8732C19.2339 10.9519 19.2328 11.0285 19.2321 11.1024C19.2225 12.249 19.8209 13.0341 20.4455 13.8535C20.6736 14.1528 20.9052 14.4566 21.112 14.7843C21.1181 14.794 21.1242 14.8038 21.1303 14.8135C22.2218 16.3877 23.2994 18.737 21.7995 20.9653C21.5887 21.7259 21.2695 22.424 20.8434 22.9921C19.3136 25.0052 17.9539 24.8008 16.892 24.6412C16.5717 24.5931 16.2785 24.549 16.0159 24.5711C15.5797 24.5977 15.2301 24.6682 14.9281 24.7292C13.7608 24.9648 13.3046 25.0569 11.3063 21.91Z" fill="#000000"/>
-                <path d="M18.0139 7.79452C17.9811 8.72691 16.9921 9.53681 15.8065 9.61167C14.6209 9.68654 13.6907 8.97873 13.7235 8.04633C13.7562 7.11393 14.7453 6.30404 15.9309 6.22917C17.1165 6.16112 18.0466 6.86212 18.0139 7.79452Z" fill="url(#paint0_linear_87_7435)"/>
-                <path fill-rule="evenodd" clip-rule="evenodd" d="M15.8656 10.0609C15.8751 10.5679 16.1073 11.0002 16.4334 11.1955C15.3695 11.1002 14.0512 11.4891 14.0512 12.2252C14.0348 13.4703 13.3418 15.0195 12.8429 16.1346C12.7447 16.3543 12.654 16.5571 12.5774 16.7374C12.2686 17.5021 12.0833 18.32 12.0614 19.1221C11.2435 17.9947 11.8378 16.5484 12.1582 15.9207C12.5846 15.0947 12.5764 14.9916 12.4108 15.1852C11.7759 16.2648 10.5803 18.4333 12.0775 19.736C12.125 20.3177 12.2667 20.8813 12.5185 21.3994C14.5228 25.4421 18.2761 23.7815 19.5141 21.6853C19.6788 21.3872 19.812 21.0989 19.9177 20.8203C19.9797 20.8593 20.0461 20.8895 20.1167 20.9094C20.739 21.0932 21.6691 20.3922 21.8918 19.9566C22.1604 19.3781 21.8853 18.9833 20.9683 18.5137C20.9215 18.4906 20.8753 18.4688 20.8297 18.4485C21.1814 16.9676 20.2122 15.4276 19.52 14.7743C19.3909 14.7424 19.3727 14.8156 19.5731 15.0155C20.009 15.4333 20.9572 16.9228 20.4442 18.3091C20.3597 18.2864 20.2784 18.2704 20.2009 18.2616C20.0433 17.3158 19.6231 16.58 19.3294 16.0658C19.2629 15.9493 19.2029 15.8442 19.1538 15.7506C19.055 15.5617 18.9368 15.3661 18.8114 15.1587C18.3283 14.3594 17.739 13.3843 17.739 11.9393C17.6651 11.6214 17.3651 11.4094 16.9658 11.2923C17.4293 11.1988 17.7772 10.6573 17.7652 10.0065C17.7521 9.30545 17.3132 8.74737 16.7892 8.76099C16.2652 8.7746 15.846 9.3599 15.8656 10.0609ZM16.2979 10.2174C16.2914 10.6054 16.4748 10.9184 16.7172 10.9184C16.953 10.9184 17.156 10.6054 17.1626 10.2242C17.1691 9.83631 16.9857 9.52324 16.7434 9.52324C16.501 9.52324 16.3045 9.83631 16.2979 10.2174Z" fill="url(#paint1_linear_87_7435)"/>
-                <path fill-rule="evenodd" clip-rule="evenodd" d="M14.5556 11.1498C14.9355 11.1294 15.2106 10.619 15.1779 10.0133C15.1451 9.40754 14.8111 8.93794 14.4311 8.95835C14.0512 8.97877 13.7761 9.48921 13.8089 10.0949C13.8416 10.7006 14.1757 11.1702 14.5556 11.1498ZM14.7848 10.2242C14.8176 10.5441 14.6997 10.8163 14.5294 10.8436C14.3591 10.864 14.1953 10.6258 14.1626 10.3059C14.1298 9.98604 14.2477 9.7138 14.418 9.68658C14.5883 9.66616 14.7521 9.90436 14.7848 10.2242Z" fill="url(#paint2_linear_87_7435)"/>
-                <path d="M16.3961 9.99963C16.3764 10.2174 16.4747 10.3944 16.6122 10.408C16.7498 10.4216 16.8808 10.2514 16.9004 10.0405C16.9201 9.82267 16.8218 9.64572 16.6843 9.63211C16.5467 9.6185 16.4157 9.78865 16.3961 9.99963Z" fill="url(#paint3_linear_87_7435)"/>
-                <path d="M14.641 10.0542C14.6606 10.2312 14.5886 10.3877 14.4838 10.4013C14.379 10.4149 14.2807 10.2788 14.261 10.0951C14.2414 9.91811 14.3134 9.76158 14.4183 9.74797C14.5231 9.73436 14.6213 9.87728 14.641 10.0542Z" fill="url(#paint4_linear_87_7435)"/>
-                <path d="M18.669 17.1525C18.669 18.3503 17.562 19.9021 15.6625 19.8885C13.7039 19.9021 12.8721 18.3503 12.8721 17.1525C12.8721 15.9547 14.169 14.9814 15.7673 14.9814C17.3721 14.9883 18.669 15.9547 18.669 17.1525Z" fill="url(#paint5_linear_87_7435)"/>
-                <path d="M17.6346 13.3892C17.615 14.6279 16.8355 14.9205 15.8529 14.9205C14.8704 14.9205 14.1564 14.7367 14.0713 13.3892C14.0713 12.5453 14.8704 12.0552 15.8529 12.0552C16.8355 12.0484 17.6346 12.5385 17.6346 13.3892Z" fill="url(#paint6_linear_87_7435)"/>
-                <path d="M11.6936 15.2947C12.3356 14.2807 13.6914 12.7221 11.9491 15.5125C10.5342 17.8129 11.4251 19.2898 11.8836 19.6981C13.2067 20.9232 13.1543 21.7467 12.1128 21.1001C9.87922 19.7185 10.3443 17.3909 11.6936 15.2947Z" fill="url(#paint7_linear_87_7435)"/>
-                <path d="M20.9881 15.71C20.4314 14.519 18.6628 11.4972 21.0733 15.009C23.2676 18.1873 21.7283 20.3992 21.4532 20.617C21.1781 20.8348 20.2545 21.2771 20.5231 20.5081C20.7982 19.739 22.1606 18.2826 20.9881 15.71Z" fill="url(#paint8_linear_87_7435)"/>
-                <path d="M11.2089 25.1021C9.74165 24.2922 7.61283 25.2586 8.38575 23.0671C8.54296 22.5703 8.15649 21.8217 8.4054 21.3384C8.70016 20.7463 9.33553 20.8756 9.71544 20.4809C10.0888 20.0726 10.3246 19.3648 11.0255 19.4736C11.7198 19.5825 12.1849 20.4673 12.6696 21.5562C13.0299 22.3321 14.3006 23.4278 14.2154 24.299C14.1106 25.6329 12.6499 25.8847 11.2089 25.1021Z" fill="url(#paint9_linear_87_7435)"/>
-                <path fill-rule="evenodd" clip-rule="evenodd" d="M9.87664 20.6404C9.51984 21.0307 8.86452 20.9371 8.60152 21.4477C8.43261 21.7756 8.61716 22.2796 8.64206 22.6387C8.67282 23.0824 8.30503 23.711 8.49233 24.0899C8.70268 24.5154 9.65296 24.4602 10.0707 24.5213C11.1019 24.6719 12.8063 26.0065 13.7388 24.9414C14.6504 23.9002 12.8982 22.5825 12.4684 21.6569C12.1889 21.0289 11.7706 19.825 10.992 19.7027C10.4431 19.6175 10.1931 20.2943 9.87664 20.6404ZM11.0583 19.2446C12.0278 19.3967 12.5129 20.6535 12.8707 21.4572C13.4138 22.6227 15.2747 23.8755 14.0686 25.2531C12.9732 26.5043 11.2438 25.1604 10.0086 24.98C9.39166 24.8898 8.41858 24.9546 8.09576 24.3015C7.81821 23.7401 8.2362 23.2316 8.1974 22.672C8.16434 22.1952 7.97565 21.6832 8.2077 21.2306C8.52537 20.5945 9.13864 20.7485 9.55546 20.3192C9.99809 19.8328 10.2634 19.1211 11.0583 19.2446Z" fill="#E68C3F"/>
-                <path d="M21.3814 24.7278C22.4556 23.3735 24.8464 23.6525 23.2351 21.7945C22.8945 21.393 22.9993 20.5354 22.5801 20.1679C22.0888 19.7187 21.5451 20.0862 21.0473 19.8548C20.5495 19.603 20.0255 19.1198 19.4163 19.4601C18.8071 19.8072 18.7416 20.7056 18.6827 21.8898C18.6303 22.7405 17.8836 24.1629 18.2831 24.9456C18.8596 26.157 20.3596 25.9937 21.3814 24.7278Z" fill="url(#paint10_linear_87_7435)"/>
-                <path fill-rule="evenodd" clip-rule="evenodd" d="M21.8097 19.6982C22.0851 19.6909 22.415 19.7102 22.7248 19.9925C23.1101 20.3322 23.1139 20.8867 23.2592 21.351C23.4312 21.9008 24.0341 22.2149 23.998 22.8597C23.9391 23.9136 22.1138 24.1675 21.552 24.8759C21.0121 25.5447 20.3297 25.9429 19.6821 25.9966C18.7 26.078 17.8888 25.2522 17.9462 24.2439C17.9928 23.4276 18.4086 22.6861 18.4593 21.8764C18.4885 21.29 18.52 20.7464 18.626 20.305C18.7331 19.8589 18.9261 19.4748 19.3083 19.257C20.1453 18.7894 20.9539 19.7206 21.8097 19.6982ZM19.5219 19.6637C19.2953 19.7931 19.1512 20.0316 19.0586 20.4171C18.9649 20.8073 18.9341 21.3073 18.9043 21.9046C18.8543 22.7162 18.4377 23.4572 18.3913 24.2713C18.3499 24.9972 18.9075 25.5961 19.6467 25.5348C20.1484 25.4932 20.7272 25.1764 21.2091 24.5797C21.6397 24.0373 23.5137 23.5336 23.5529 22.8328C23.5785 22.3752 22.9765 21.9459 22.8351 21.4943C22.7245 21.1408 22.7187 20.5932 22.4355 20.3449C22.2545 20.1795 22.0641 20.1549 21.8209 20.1613C21.1162 20.1797 20.1761 19.2992 19.5219 19.6637Z" fill="#E68C3F"/>
-                <path d="M20.9156 22.9174C22.5793 20.3652 21.3413 20.3856 20.9221 20.1882C20.5029 19.9841 20.0641 19.5825 19.5728 19.8616C19.0815 20.1474 19.0553 20.8824 19.0422 21.8489C19.0226 22.5431 18.4658 23.7069 18.7999 24.3534C19.206 25.1089 20.1885 24.0131 20.9156 22.9174Z" fill="url(#paint11_linear_87_7435)"/>
-                <path d="M10.8682 23.2847C8.37909 21.6105 9.54502 21.0388 9.91839 20.7733C10.3704 20.433 10.3769 19.7797 10.9337 19.8409C11.4904 19.9022 11.8179 20.6168 12.1913 21.5016C12.4664 22.1345 13.4228 22.9784 13.3507 23.7066C13.259 24.5642 11.9424 23.9993 10.8682 23.2847Z" fill="url(#paint12_linear_87_7435)"/>
-                <path d="M21.7481 19.9362C21.5516 20.2901 20.7525 20.8481 20.2219 20.6984C19.6783 20.5555 19.4294 19.7592 19.5407 19.1603C19.639 18.4797 20.2219 18.4457 20.9556 18.786C21.735 19.1535 21.9774 19.4666 21.7481 19.9362Z" fill="#000000"/>
-                <path d="M21.2108 19.7389C21.0863 19.9839 20.5623 20.3718 20.1955 20.2697C19.8287 20.1676 19.6453 19.6164 19.7042 19.2012C19.7566 18.7316 20.1496 18.7044 20.6475 18.9358C21.1846 19.1944 21.3549 19.4122 21.2108 19.7389Z" fill="url(#paint13_linear_87_7435)"/>
-                <path d="M14.4374 10.8576C14.6994 10.6057 15.3348 9.83668 16.54 10.6398C16.7627 10.7895 16.9461 10.8031 17.3719 10.9937C18.23 11.3612 17.8238 12.2459 16.9068 12.5454C16.5138 12.6747 16.1601 13.1715 15.4527 13.1239C14.8435 13.0899 14.6863 12.6747 14.3129 12.4501C13.6514 12.0622 13.5531 11.5381 13.9134 11.2591C14.2736 10.9801 14.4112 10.878 14.4374 10.8576Z" fill="url(#paint14_linear_87_7435)"/>
-                <path fill-rule="evenodd" clip-rule="evenodd" d="M13.9933 11.3703C13.8563 11.4764 13.8127 11.6174 13.858 11.7734C13.951 12.0938 14.6216 12.5345 14.8784 12.7501C15.0244 12.8727 15.1914 12.9699 15.4613 12.985C16.0393 13.0239 16.3603 12.5792 16.8667 12.4126C17.1997 12.3038 17.9044 11.8882 17.671 11.4119C17.4718 11.0054 16.8008 10.9803 16.4675 10.7563C15.8939 10.3742 15.4763 10.3769 15.1788 10.4841C14.8528 10.6016 14.2885 11.1416 13.9933 11.3703ZM15.0911 10.2215C15.4781 10.0821 15.9812 10.1021 16.6126 10.5228C17.0276 10.8018 17.659 10.7749 17.9093 11.2858C18.2282 11.9365 17.4555 12.5116 16.947 12.6777C16.4025 12.857 16.0983 13.3061 15.4447 13.2624C15.1058 13.2433 14.8884 13.1158 14.7103 12.9663C14.3408 12.6561 13.7165 12.3613 13.5738 11.8694C13.4946 11.5966 13.6101 11.3204 13.8334 11.1474C14.1943 10.8679 14.682 10.369 15.0911 10.2215Z" fill="#E68C3F"/>
-                <path fill-rule="evenodd" clip-rule="evenodd" d="M17.4745 11.5671C17.4772 11.6182 17.4395 11.6619 17.3904 11.6646C16.6971 11.7039 16.2099 12.4951 15.427 12.4951C14.9889 12.4951 14.6421 12.2837 14.3941 12.0804C14.3442 12.0395 13.9033 11.6996 13.9033 11.613C13.9033 11.5618 13.9432 11.5203 13.9925 11.5203C14.0846 11.5203 14.3625 11.8219 14.4659 11.9067C14.6995 12.0982 15.0463 12.3098 15.427 12.3098C16.2021 12.3098 16.6776 11.5195 17.3806 11.4796C17.4298 11.4768 17.4718 11.516 17.4745 11.5671Z" fill="#E68C3F"/>
-                <path d="M14.8442 10.7893C14.9752 10.6668 15.3878 10.3333 15.9315 10.6736C16.0494 10.7416 16.1673 10.8165 16.3376 10.9186C16.6848 11.1296 16.5145 11.4358 16.0952 11.6264C15.9053 11.7081 15.5909 11.885 15.3551 11.8714C15.0931 11.8442 14.9162 11.6672 14.7459 11.5515C14.4249 11.3338 14.4446 11.15 14.5952 11.0071C14.7066 10.8982 14.8311 10.7961 14.8442 10.7893Z" fill="url(#paint15_linear_87_7435)"/>
-                <defs>
-                <linearGradient id="paint0_linear_87_7435" x1="16.0578" y1="6.30617" x2="15.8364" y2="9.30598" gradientUnits="userSpaceOnUse">
-                <stop stop-color="white" stop-opacity="0.8"/>
-                <stop offset="1" stop-color="white" stop-opacity="0"/>
-                </linearGradient>
-                <linearGradient id="paint1_linear_87_7435" x1="12.8966" y1="22.6721" x2="11.2506" y2="17.2716" gradientUnits="userSpaceOnUse">
-                <stop stop-color="#FFEED7"/>
-                <stop offset="1" stop-color="#BDBFC2"/>
-                </linearGradient>
-                <linearGradient id="paint2_linear_87_7435" x1="12.8966" y1="22.6721" x2="11.2506" y2="17.2716" gradientUnits="userSpaceOnUse">
-                <stop stop-color="#FFEED7"/>
-                <stop offset="1" stop-color="#BDBFC2"/>
-                </linearGradient>
-                <linearGradient id="paint3_linear_87_7435" x1="16.6681" y1="9.65546" x2="16.5748" y2="10.3542" gradientUnits="userSpaceOnUse">
-                <stop stop-color="white" stop-opacity="0.65"/>
-                <stop offset="1" stop-color="white" stop-opacity="0"/>
-                </linearGradient>
-                <linearGradient id="paint4_linear_87_7435" x1="14.434" y1="9.78294" x2="14.5344" y2="10.3483" gradientUnits="userSpaceOnUse">
-                <stop stop-color="white" stop-opacity="0.65"/>
-                <stop offset="1" stop-color="white" stop-opacity="0"/>
-                </linearGradient>
-                <linearGradient id="paint5_linear_87_7435" x1="15.7613" y1="15.6306" x2="15.778" y2="19.6272" gradientUnits="userSpaceOnUse">
-                <stop stop-color="white" stop-opacity="0.8"/>
-                <stop offset="1" stop-color="white" stop-opacity="0"/>
-                </linearGradient>
-                <linearGradient id="paint6_linear_87_7435" x1="15.8504" y1="13.1247" x2="15.8688" y2="14.7138" gradientUnits="userSpaceOnUse">
-                <stop stop-color="white" stop-opacity="0.65"/>
-                <stop offset="1" stop-color="white" stop-opacity="0"/>
-                </linearGradient>
-                <linearGradient id="paint7_linear_87_7435" x1="11.72" y1="14.1055" x2="11.72" y2="19.9372" gradientUnits="userSpaceOnUse">
-                <stop stop-color="white" stop-opacity="0.65"/>
-                <stop offset="1" stop-color="white" stop-opacity="0"/>
-                </linearGradient>
-                <linearGradient id="paint8_linear_87_7435" x1="21.033" y1="13.5359" x2="21.0308" y2="18.8052" gradientUnits="userSpaceOnUse">
-                <stop stop-color="white" stop-opacity="0.65"/>
-                <stop offset="1" stop-color="white" stop-opacity="0"/>
-                </linearGradient>
-                <linearGradient id="paint9_linear_87_7435" x1="11.4286" y1="22.4374" x2="10.5354" y2="25.4214" gradientUnits="userSpaceOnUse">
-                <stop stop-color="#FFA63F"/>
-                <stop offset="1" stop-color="#FFFF00"/>
-                </linearGradient>
-                <linearGradient id="paint10_linear_87_7435" x1="19.882" y1="21.53" x2="22.2656" y2="24.7801" gradientUnits="userSpaceOnUse">
-                <stop stop-color="#FFA63F"/>
-                <stop offset="1" stop-color="#FFFF00"/>
-                </linearGradient>
-                <linearGradient id="paint11_linear_87_7435" x1="20.5198" y1="18.9333" x2="19.6863" y2="22.8605" gradientUnits="userSpaceOnUse">
-                <stop stop-color="white" stop-opacity="0.65"/>
-                <stop offset="1" stop-color="white" stop-opacity="0"/>
-                </linearGradient>
-                <linearGradient id="paint12_linear_87_7435" x1="11.2464" y1="19.9042" x2="11.4117" y2="24.3239" gradientUnits="userSpaceOnUse">
-                <stop stop-color="white" stop-opacity="0.65"/>
-                <stop offset="1" stop-color="white" stop-opacity="0"/>
-                </linearGradient>
-                <linearGradient id="paint13_linear_87_7435" x1="20.3755" y1="18.8616" x2="20.5688" y2="20.1822" gradientUnits="userSpaceOnUse">
-                <stop stop-color="white" stop-opacity="0.65"/>
-                <stop offset="1" stop-color="white" stop-opacity="0"/>
-                </linearGradient>
-                <linearGradient id="paint14_linear_87_7435" x1="15.7644" y1="10.784" x2="15.7805" y2="13.1098" gradientUnits="userSpaceOnUse">
-                <stop stop-color="#FFA63F"/>
-                <stop offset="1" stop-color="#FFFF00"/>
-                </linearGradient>
-                <linearGradient id="paint15_linear_87_7435" x1="15.5106" y1="10.5638" x2="15.5062" y2="11.7936" gradientUnits="userSpaceOnUse">
-                <stop stop-color="white" stop-opacity="0.65"/>
-                <stop offset="1" stop-color="white" stop-opacity="0"/>
-                </linearGradient>
-                </defs>
-              </svg>
-            </span>
-            <div>
-              <div class="font-semibold text-[30px]">Linux .deb</div>
-              <div class="text-xs text-white/50">Ubuntu • Debian • Pop!_OS • Mint</div>
-            </div>
-          </div>
-          <div class="text-[22px] text-white/70 mb-4 flex-1">Double-click installer. Adds system menu entry, desktop icon, and CLI. Easiest for most Linux users.</div>
-          <a href="binaries/poh-miner-linux-x64.deb" download="poh-miner-linux-x64.deb"
-             class="block w-full text-center bg-[#22c55e] hover:bg-white hover:text-black transition text-black py-3 rounded-[4px] text-sm font-medium">
-            Download .deb (64-bit)
-          </a>
-        </div>
-
-        <!-- Linux AppImage -->
-        <div class="glass p-6 rounded-[4px] flex flex-col">
-          <div class="flex items-center gap-x-3 mb-3">
-            <span class="text-3xl leading-none">📦</span>
-            <div>
-              <div class="font-semibold text-[30px]">Linux AppImage</div>
-              <div class="text-xs text-white/50">Universal • Any distro</div>
-            </div>
-          </div>
-          <div class="text-sm text-white/70 mb-4 flex-1">Portable single file. No root install. Download → chmod +x → double-click or run from anywhere.</div>
-          <a href="binaries/poh-miner-linux-x64.AppImage" download="poh-miner-linux-x64.AppImage"
-             class="block w-full text-center border border-white/30 hover:bg-white/5 py-3 rounded-[4px] text-sm font-medium transition">
-            Download AppImage
-          </a>
-        </div>
-
-        <!-- macOS -->
-        <div class="glass p-6 rounded-[4px] flex flex-col">
-          <div class="flex items-center gap-x-3 mb-3">
-            <svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor" class="text-white flex-shrink-0"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/></svg>
-            <div>
-              <div class="font-semibold text-[30px]">macOS</div>
-              <div class="text-xs text-white/50">Mac Mini, MacBook, iMAC</div>
-            </div>
-          </div>
-          <div class="text-sm text-white/70 mb-3 flex-1">Open .dmg → drag to Applications • may need “Open Anyway” in Security &amp; Privacy</div>
-          <div class=”flex flex-col gap-2”>
-            <a href=”binaries/poh-miner-macos-intel.dmg” download=”poh-miner-macos-intel.dmg”
-               class="block w-full text-center border border-white/30 hover:bg-white/5 py-3 rounded-[4px] text-sm font-medium transition">
-              Download Intel .dmg installer
-            </a>
-          </div>
-          <div class=”flex flex-col gap-2”>
-            <a href=”binaries/poh-miner-macos-amd.dmg” download=”poh-miner-macos-amd.dmg”
-               class=”block w-full text-center bg-[#22c55e] hover:bg-white hover:text-black transition text-black py-3 rounded-[4px] text-sm font-medium”>
-              Download Apple Silicon .dmg
-            </a>
-          </div>
-        </div>
-
-        <!-- Windows -->
-        <div class="glass p-6 rounded-[4px] flex flex-col">
-          <div class="flex items-center gap-x-3 mb-3">
-            <svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor" class="text-white flex-shrink-0"><path d="M3 3h8v8H3V3zm10 0h8v8h-8V3zM3 13h8v8H3v-8zm10 0h8v8h-8v-8z"/></svg>
-            <div>
-              <div class="font-semibold text-[30px]">Windows</div>
-              <div class="text-xs text-white/50">Windows 10 / 11 (x64)</div>
-            </div>
-          </div>
-          <div class="text-sm text-white/70 mb-4 flex-1">Standard .exe installer with shortcuts, Start Menu entry, and clean uninstaller. Built with NSIS.</div>
-          <a href="binaries/poh-miner-windows-x64.exe" download="poh-miner-windows-x64.exe"
-             class="block w-full text-center bg-[#22c55e] hover:bg-white hover:text-black transition text-black py-3 rounded-[4px] text-sm font-medium">
-            Download Windows Installer
-          </a>
-        </div>
+  <!-- How to get POH (3 steps) -->
+  <div class="border-t border-white/10 bg-[#050505]">
+    <div class="max-w-5xl mx-auto px-4 sm:px-8 py-16 md:py-32">
+      <div class="text-center mb-10 md:mb-16 reveal">
+        <div class="uppercase tracking-[3px] text-xs text-[#22c55e] mb-3">GET STARTED IN MINUTES</div>
+        <h2 class="font-display text-[40px] sm:text-[56px] md:text-[76px] leading-none">Three steps to your first POH.</h2>
       </div>
-
-      <!-- Terminal / power-user fallback (kept prominent but secondary) -->
-      <div class="mt-8 text-center">
-        <div class="text-[18px] uppercase tracking-[1.5px] text-white/50 mb-2">Power users &amp; one-liner install</div>
-        <div class="inline-flex flex-col sm:flex-row items-center gap-2 bg-black/60 border border-white/10 rounded-[4px] px-5 py-3 text-sm font-mono max-w-full overflow-x-auto">
-          curl -fsSL https://miner.proofofhuman.ge/scripts/easy-start.sh | bash
-        </div>
-        <div class="mt-3 flex flex-wrap justify-center gap-x-4 text-xs">
-          <a href="scripts/easy-start.sh" download="easy-start.sh" class="text-[#22c55e] hover:underline">Download easy-start.sh</a>
-          <span class="text-white/20">•</span>
-          <a href="scripts/download-latest.sh" download="download-latest.sh" class="text-[#22c55e] hover:underline">download-latest.sh (picks binary)</a>
-          <span class="text-white/20">•</span>
-          <a href="https://github.com/Proof-of-Human-Network/poh-miner" target="_blank" class="text-white/60 hover:text-white">View build scripts + source</a>
-        </div>
-      </div>
-
-    </div>
-  </div>
-  
-
-  <!-- How it works -->
-  <div id="how" class="border-t border-white/10 bg-[#050505]">
-    <div class="max-w-6xl mx-auto px-4 sm:px-8 py-14 md:py-40">
-      <h2 class="font-display text-[44px] sm:text-[60px] md:text-[78px] leading-none text-center mb-10 md:mb-16">How the network actually works</h2>
 
       <div class="grid md:grid-cols-3 gap-6">
-        <div class="glass p-6 md:p-8 rounded-[4px]">
-          <div class="text-[#22c55e] mb-4 text-sm tracking-widest">01</div>
-          <h3 class="text-[32px] md:text-[45px] tracking-tight mb-4">You run a node</h3>
-          <p class="text-white/70">Install once on any machine. Your node joins the global mesh and advertises its location and capabilities.</p>
+        <div class="glass card-hover p-6 md:p-8 rounded-[6px] reveal">
+          <div class="text-[#22c55e] text-[40px] md:text-[56px] font-display leading-none mb-3">01</div>
+          <h3 class="text-[26px] md:text-[36px] tracking-tight mb-2">Install</h3>
+          <p class="text-white/60 text-[16px] md:text-[19px]">Download the app. Double-click. No terminal.</p>
         </div>
-        <div class="glass p-6 md:p-8 rounded-[4px]">
-          <div class="text-[#22c55e] mb-4 text-sm tracking-widest">02</div>
-          <h3 class="text-[32px] md:text-[45px] tracking-tight mb-4">AI tasks arrive</h3>
-          <p class="text-white/70">Compute tasks enter the shared mempool and are dispatched to nearby nodes. Your machine picks them up automatically — no action needed.</p>
+        <div class="glass card-hover p-6 md:p-8 rounded-[6px] reveal">
+          <div class="text-[#22c55e] text-[40px] md:text-[56px] font-display leading-none mb-3">02</div>
+          <h3 class="text-[26px] md:text-[36px] tracking-tight mb-2">Run</h3>
+          <p class="text-white/60 text-[16px] md:text-[19px]">Your node joins the mesh and starts solving tasks.</p>
         </div>
-        <div class="glass p-6 md:p-8 rounded-[4px]">
-          <div class="text-[#22c55e] mb-4 text-sm tracking-widest">03</div>
-          <h3 class="text-[32px] md:text-[45px] tracking-tight mb-4">Your LLM solves it. You earn.</h3>
-          <p class="text-white/70">Your local LLM runs inference on the task. First valid result from the fastest node wins the POH reward — low latency and good hardware win more.</p>
+        <div class="glass card-hover p-6 md:p-8 rounded-[6px] reveal">
+          <div class="text-[#22c55e] text-[40px] md:text-[56px] font-display leading-none mb-3">03</div>
+          <h3 class="text-[26px] md:text-[36px] tracking-tight mb-2">Earn</h3>
+          <p class="text-white/60 text-[16px] md:text-[19px]">POH lands in your wallet, block after block.</p>
         </div>
       </div>
     </div>
   </div>
 
-  <!-- Non-Tech About Section -->
-  <div class="max-w-5xl mx-auto px-4 sm:px-6 py-14 md:py-40">
-    <div class="max-w-3xl mx-auto text-center">
-      <h2 class="font-display text-[40px] sm:text-[52px] md:text-[64px] leading-none mb-6">What is PoH Miner, really?</h2>
-      <div class="text-lg text-white/80 space-y-4">
-        <p>
-          AI needs compute. But that compute doesn't have to live in a data center owned by a single company.
-        </p>
-        <p>
-          PoH Miner is a decentralized AI compute network. You run a node on your own hardware. When an AI task arrives, your local LLM processes it right on your device. You earn POH for every task solved.
-        </p>
-        <p>
-          No cloud. No middleman. Your machine does real AI work for the network — and the network pays you for it.
-        </p>
-        <p class="text-white/60 text-base">
-          This is compute that actually matters.
-        </p>
-      </div>
-    </div>
-  </div>
-
-  <!-- Blockchain & Mining Pitch -->
-  <div class="max-w-5xl mx-auto px-4 sm:px-6 py-14 md:py-40 border-t border-white/10">
-    <div class="text-center mb-10">
-      <h2 class="font-display text-[40px] sm:text-[56px] md:text-[72px] leading-none">Real AI work. Real rewards.</h2>
-    </div>
-
-    <div class="grid md:grid-cols-2 lg:grid-cols-4 gap-6 max-w-5xl mx-auto text-center">
-      <div class="glass p-6 rounded-[4px]">
-        <div class="text-[30px] sm:text-[40px] md:text-[45px] text-[#22c55e] mb-2">1 POH</div>
-        <div class="font-semibold">per block</div>
-        <div class="text-sm text-white/60 mt-1">Fixed subsidy for each block — one solved AI task per block</div>
-      </div>
-      <div class="glass p-6 rounded-[4px]">
-        <div class="text-[28px] sm:text-[38px] md:text-[45px] text-[#22c55e] mb-2">100 POH</div>
-        <div class="font-semibold">deploy a skill</div>
-        <div class="text-sm text-white/60 mt-1">Propose a public skill — fee escrowed for network security audit</div>
-      </div>
-      <div class="glass p-6 rounded-[4px]">
-        <div class="text-[28px] sm:text-[38px] md:text-[45px] text-[#22c55e] mb-2">1,000 POH</div>
-        <div class="font-semibold">staking threshold</div>
-        <div class="text-sm text-white/60 mt-1">Community stake to graduate a skill live across the network</div>
-      </div>
-      <div class="glass p-6 rounded-[4px]">
-        <div class="text-[22px] sm:text-[32px] md:text-[38px] text-[#22c55e] mb-2">Proof + Slashing</div>
-        <div class="font-semibold">Quality protected</div>
-        <div class="text-sm text-white/60 mt-1">Miners must evaluate most live signals or get rejected & slashed</div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Prominent Wallet Section -->
-  <div id="wallet" class="max-w-6xl mx-auto px-6 py-16 border-t border-white/10">
-    <div class="text-center mb-10">
-      <div class="inline-block px-4 py-1 rounded-full border border-[#22c55e]/40 text-[#22c55e] text-sm tracking-[2px] mb-4">COMPANION APP</div>
-      <h2 class="font-display text-[40px] sm:text-[52px] md:text-[64px] leading-none tracking-[-2px]">POH Miner Wallet</h2>
-      <p class="mt-4 text-[16px] sm:text-[22px] md:text-[28px] text-white/70 max-w-2xl mx-auto">
-        Send, receive, and track your mining rewards in real time — directly from your phone.
-      </p>
-    </div>
-
-    <!-- Infographics / Feature Grid -->
-    <div class="grid grid-cols-2 md:grid-cols-4 gap-6 max-w-5xl mx-auto mb-12">
-      <!-- Live Balance -->
-      <div class="glass p-6 rounded-[4px] text-center">
-        <div class="mb-3 flex justify-center">
-          <svg width="56" height="56" viewBox="0 0 56 56" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <!-- Subtle dark rounded background -->
-            <rect x="8" y="8" width="40" height="40" rx="8" fill="#1f2937"/>
-            <!-- Grid -->
-            <g stroke="#4b5563" stroke-width="1.5" stroke-linecap="round">
-              <line x1="14" y1="16" x2="42" y2="16"/>
-              <line x1="14" y1="24" x2="42" y2="24"/>
-              <line x1="14" y1="32" x2="42" y2="32"/>
-              <line x1="14" y1="40" x2="42" y2="40"/>
-              <line x1="16" y1="14" x2="16" y2="42"/>
-              <line x1="24" y1="14" x2="24" y2="42"/>
-              <line x1="32" y1="14" x2="32" y2="42"/>
-              <line x1="40" y1="14" x2="40" y2="42"/>
-            </g>
-            <!-- Green rising line (sharp & clean) -->
-            <path d="M15 38 L21 30 L27 32 L33 20 L39 15 L44 12" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-            <circle cx="44" cy="12" r="2.5" fill="#22c55e"/>
-          </svg>
-        </div>
-        <div class="font-semibold text-[22px] mb-1">Live Balance</div>
-        <div class="text-[17px] text-white/60">Real-time balance pulled from your running node via the lightweight Wallet API.</div>
-      </div>
-
-      <!-- Send & Receive -->
-      <div class="glass p-6 rounded-[4px] text-center">
-        <div class="mb-3 flex justify-center">
-          <svg width="56" height="56" viewBox="0 0 56 56" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <!-- Subtle dark rounded background -->
-            <rect x="8" y="8" width="40" height="40" rx="8" fill="#1f2937"/>
-            <!-- White arrows with green accent -->
-            <!-- Top left arrow -->
-            <path d="M15 22 L24 15 V19 H33 V25 H24 V29 Z" fill="#fff"/>
-            <!-- Bottom right arrow -->
-            <path d="M41 34 L32 41 V37 H23 V31 H32 V27 Z" fill="#fff"/>
-            <!-- Green center highlight -->
-            <rect x="26" y="25" width="4" height="6" rx="1" fill="#22c55e"/>
-          </svg>
-        </div>
-        <div class="font-semibold text-[22px] mb-1">Send &amp; Receive</div>
-        <div class="text-[17px] text-white/60">Full POH transfers between addresses. Works with any node that knows the wallet.</div>
-      </div>
-
-      <!-- Transaction History -->
-      <div class="glass p-6 rounded-[4px] text-center">
-        <div class="mb-3 flex justify-center">
-          <svg width="56" height="56" viewBox="0 0 56 56" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <!-- Subtle dark rounded background -->
-            <rect x="8" y="8" width="40" height="40" rx="8" fill="#1f2937"/>
-            <!-- White scroll body -->
-            <rect x="15" y="13" width="26" height="30" rx="2" fill="#fff"/>
-            <!-- Green accent lines (text simulation) -->
-            <g stroke="#22c55e" stroke-width="2" stroke-linecap="round">
-              <line x1="19" y1="19" x2="37" y2="19"/>
-              <line x1="19" y1="24" x2="37" y2="24"/>
-              <line x1="19" y1="29" x2="37" y2="29"/>
-              <line x1="19" y1="34" x2="37" y2="34"/>
-            </g>
-            <!-- Dark rolled ends -->
-            <rect x="12" y="11" width="6" height="34" rx="2" fill="#111827"/>
-            <rect x="38" y="11" width="6" height="34" rx="2" fill="#111827"/>
-          </svg>
-        </div>
-        <div class="font-semibold text-[22px] mb-1">Transaction History</div>
-        <div class="text-[17px] text-white/60">See all incoming rewards and outgoing sends with status and timestamps.</div>
-      </div>
-
-      <!-- Notifications -->
-      <div class="glass p-6 rounded-[4px] text-center">
-        <div class="mb-3 flex justify-center">
-          <svg width="56" height="56" viewBox="0 0 56 56" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <!-- Subtle dark rounded background -->
-            <rect x="8" y="8" width="40" height="40" rx="8" fill="#1f2937"/>
-            <!-- White bell body -->
-            <path d="M18 36 C18 41 22 44 28 44 C34 44 38 41 38 36" fill="#fff"/>
-            <path d="M18 18 Q18 12 28 12 Q38 12 38 18 L38 32 Q38 36 28 36 Q18 36 18 32 Z" fill="#fff"/>
-            <!-- Green highlight on top -->
-            <path d="M21 16 Q25 14 28 16" stroke="#22c55e" stroke-width="2.5" stroke-linecap="round"/>
-            <!-- Dark bottom rim -->
-            <rect x="17" y="35" width="22" height="4" rx="2" fill="#111827"/>
-            <!-- Dark clapper -->
-            <circle cx="28" cy="32" r="3.5" fill="#111827"/>
-          </svg>
-        </div>
-        <div class="font-semibold text-[22px] mb-1">Notifications</div>
-        <div class="text-[17px] text-white/60">Get alerted when rewards arrive or transactions are confirmed.</div>
-      </div>
-    </div>
-
-    <div class="text-center flex flex-col sm:flex-row gap-4 justify-center">
-      <a href="wallet/"
-         class="inline-flex items-center justify-center px-10 py-4 bg-white hover:bg-[#22c55e] hover:text-black transition text-black text-[24px] font-medium rounded-[4px]">
-        See Wallet →
+  <!-- Final CTA -->
+  <div class="max-w-5xl mx-auto px-4 sm:px-6 py-20 md:py-44 text-center hero-bg">
+    <h2 class="font-display text-[48px] sm:text-[72px] md:text-[110px] leading-[0.9] reveal">Put your machine<br><span class="neon">to work tonight.</span></h2>
+    <div class="mt-10 flex flex-col sm:flex-row gap-4 justify-center reveal">
+      <a href="miner.html#start"
+         class="inline-flex items-center justify-center px-10 py-4 bg-[#22c55e] text-black text-[20px] sm:text-[26px] md:text-[32px] rounded-[4px] hover:bg-white transition">
+        Download &amp; start mining
       </a>
-      <a href="binaries/poh-miner-wallet.apk"
-         class="inline-flex items-center justify-center px-10 py-4 bg-[#22c55e] hover:bg-white hover:text-black transition text-black text-[24px] font-medium rounded-[4px]">
-        Download Android (.apk)
+      <a href="docs/"
+         class="inline-flex items-center justify-center px-10 py-4 border border-white/30 hover:bg-white/5 text-[20px] sm:text-[26px] md:text-[32px] rounded-[4px] transition">
+        Read the docs
       </a>
     </div>
   </div>
 
+  <!-- Footer -->
   <footer class="border-t border-white/10 py-8 footer-text text-white/50">
     <div class="max-w-7xl mx-auto px-4 sm:px-8 flex flex-col sm:flex-row gap-2 sm:justify-between">
-      <div>PoH Miner Network — Decentralized AI compute, powered by local LLMs</div>
-      <div class="flex gap-4">
+      <div>POH — Decentralized AI compute, powered by local LLMs</div>
+      <div class="flex gap-4 flex-wrap">
+        <a href="miner.html" class="hover:text-white">PoH Miner</a>
+        <a href="gelt/" class="hover:text-white">GEL₮</a>
+        <a href="wallet/" class="hover:text-white">Wallet</a>
         <a href="docs/" class="hover:text-white">Docs</a>
         <a href="https://proofofhuman.ge" class="hover:text-white">proofofhuman.ge</a>
-        <a href="https://github.com/Proof-of-Human-Network" target="_blank" class="hover:text-white">GitHub</a>
       </div>
     </div>
   </footer>
 
   <script>
-    function copyInstallCommand(button) {
-      const command = 'curl -fsSL https://raw.githubusercontent.com/poh/poh-miner-network/main/scripts/easy-start.sh | bash';
-      navigator.clipboard.writeText(command).then(() => {
-        const originalText = button.textContent;
-        button.textContent = 'Copied!';
-        setTimeout(() => {
-          button.textContent = originalText;
-        }, 1800);
-      }).catch(() => {
-        // Fallback
-        prompt('Copy this command:', command);
-      });
-    }
-
-    // === Beautiful Live Node Mesh ===
-    function initLiveMesh() {
-      const canvas = document.getElementById('live-mesh');
+    // Hero particle mesh
+    function initCoinMesh() {
+      const canvas = document.getElementById('coin-mesh');
       if (!canvas) return;
-      
       const ctx = canvas.getContext('2d', { alpha: true });
-      let width, height, nodes = [], connections = [];
-
-      function resize() {
-        width = canvas.offsetWidth;
-        height = canvas.offsetHeight;
-        canvas.width = width * 2;
-        canvas.height = height * 2;
-        ctx.scale(2, 2);
-      }
-      window.addEventListener('resize', resize);
-      resize();
-
-      // Create nodes (representing real miners)
-      function createNodes(count) {
-        nodes = [];
-        for (let i = 0; i < count; i++) {
-          nodes.push({
-            x: Math.random() * width,
-            y: Math.random() * height,
-            vx: (Math.random() - 0.5) * 0.6,
-            vy: (Math.random() - 0.5) * 0.6,
-            radius: 2.5 + Math.random() * 2,
-            country: ['GE','SG','US','DE','JP','BR','AU','IN'][i % 8]
-          });
-        }
-      }
-      createNodes(42);
-
+      let width, height, nodes = [];
+      function resize() { width = canvas.width = canvas.offsetWidth; height = canvas.height = canvas.offsetHeight; }
+      window.addEventListener('resize', resize); resize();
+      for (let i = 0; i < 55; i++) nodes.push({ x: Math.random()*width, y: Math.random()*height, vx:(Math.random()-0.5)*0.4, vy:(Math.random()-0.5)*0.4, r:1.5+Math.random()*1.5 });
       function draw() {
-        ctx.clearRect(0, 0, width, height);
-
-        // Update positions (organic movement)
-        nodes.forEach(n => {
-          n.x += n.vx;
-          n.y += n.vy;
-          if (n.x < 0 || n.x > width) n.vx *= -1;
-          if (n.y < 0 || n.y > height) n.vy *= -1;
-        });
-
-        // Draw connections (mesh)
-        ctx.strokeStyle = 'rgba(34, 197, 94, 0.15)';
-        ctx.lineWidth = 1;
-
-        for (let i = 0; i < nodes.length; i++) {
-          for (let j = i + 1; j < nodes.length; j++) {
-            const dx = nodes[i].x - nodes[j].x;
-            const dy = nodes[i].y - nodes[j].y;
-            const dist = Math.sqrt(dx*dx + dy*dy);
-            if (dist < 180) {
-              ctx.beginPath();
-              ctx.moveTo(nodes[i].x, nodes[i].y);
-              ctx.lineTo(nodes[j].x, nodes[j].y);
-              ctx.stroke();
-            }
-          }
+        ctx.clearRect(0,0,width,height);
+        nodes.forEach(n => { n.x+=n.vx; n.y+=n.vy; if(n.x<0||n.x>width)n.vx*=-1; if(n.y<0||n.y>height)n.vy*=-1; });
+        ctx.strokeStyle = 'rgba(34,197,94,0.12)'; ctx.lineWidth = 1;
+        for (let i=0;i<nodes.length;i++) for (let j=i+1;j<nodes.length;j++){
+          const dx=nodes[i].x-nodes[j].x, dy=nodes[i].y-nodes[j].y, d=Math.hypot(dx,dy);
+          if(d<140){ ctx.globalAlpha=1-d/140; ctx.beginPath(); ctx.moveTo(nodes[i].x,nodes[i].y); ctx.lineTo(nodes[j].x,nodes[j].y); ctx.stroke(); }
         }
-
-        // Draw nodes
-        nodes.forEach(n => {
-          ctx.fillStyle = ['GE','DE','FR'].includes(n.country) ? '#22c55e' : 'rgba(255,255,255,0.85)';
-          ctx.beginPath();
-          ctx.arc(n.x, n.y, n.radius, 0, Math.PI * 2);
-          ctx.fill();
-        });
-
+        ctx.globalAlpha=1; ctx.fillStyle='rgba(34,197,94,0.55)';
+        nodes.forEach(n=>{ ctx.beginPath(); ctx.arc(n.x,n.y,n.r,0,Math.PI*2); ctx.fill(); });
         requestAnimationFrame(draw);
       }
-
       draw();
     }
 
-    function fmtNum(n) {
-      if (n >= 1_000_000_000) return (n / 1_000_000_000).toFixed(1).replace(/\.0$/, '') + 'M';
-      if (n >= 1_000)     return (n / 1_000).toFixed(1).replace(/\.0$/, '') + 'k';
-      return n.toLocaleString();
+    // Scroll reveal
+    function initReveal() {
+      const els = document.querySelectorAll('.reveal');
+      const io = new IntersectionObserver(entries => {
+        entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); } });
+      }, { threshold: 0.15 });
+      els.forEach(el => io.observe(el));
     }
 
-    const MINER_API = 'https://miner.proofofhuman.ge';
-
-    async function fetchMinerApi(path) {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 6000);
-      try {
-        const res = await fetch(MINER_API + path, { cache: 'no-store', signal: controller.signal });
-        clearTimeout(timer);
-        if (!res.ok) return null;
-        return res;
-      } catch {
-        clearTimeout(timer);
-        return null;
-      }
-    }
-
-    async function loadRealStats() {
-      // Run all fetches in parallel
-      const [peersRes, statusRes] = await Promise.allSettled([
-        fetchMinerApi('/peers'),
-        fetch(MINER_API + '/status', { cache: 'no-store' }),
-      ]);
-
-      // ACTIVE COMPUTE NODES + NETWORK SPEED (from bootnode /peers)
-      try {
-        const res = peersRes.status === 'fulfilled' ? peersRes.value : null;
-        if (res) {
-          const data = await res.json();
-          const count = data.count ?? (Array.isArray(data.peers) ? data.peers.length : null);
-          if (count !== null)
-            document.getElementById('node-count').textContent = fmtNum(count);
-
-          // Aggregate compute across all peers. CPU-only nodes contribute a
-          // fraction of a TFLOP each, so render sub-1-TFLOPS totals in GFLOPS
-          // instead of rounding them away to "—".
-          let totalTflops = data.totalTflops;
-          if (totalTflops == null && Array.isArray(data.peers)) {
-            totalTflops = data.peers.reduce((s, p) => s + (p.tflops || 0), 0);
-          }
-          if (totalTflops != null && totalTflops > 0) {
-            const speedEl = document.getElementById('network-speed');
-            if (totalTflops >= 1000) {
-              speedEl.textContent = (totalTflops / 1000).toFixed(1) + 'k TFLOPS';
-            } else if (totalTflops >= 1) {
-              speedEl.textContent = (Math.round(totalTflops * 10) / 10) + ' TFLOPS';
-            } else {
-              // < 1 TFLOPS → show GFLOPS (1 TFLOPS = 1000 GFLOPS)
-              const gflops = totalTflops * 1000;
-              speedEl.textContent = (gflops >= 10 ? Math.round(gflops) : Math.round(gflops * 10) / 10) + ' GFLOPS';
-            }
-          }
-        }
-      } catch { document.getElementById('node-count').textContent = '—'; }
-
-      // AI TASKS PROCESSED (from live miner status)
-      try {
-        if (statusRes.status === 'fulfilled' && statusRes.value.ok) {
-          const s = await statusRes.value.json();
-          const height = s.chainHeight ?? 0;
-          if (height > 0) document.getElementById('jobs-count').textContent = fmtNum(height);
-        }
-      } catch { /* leave as — */ }
-    }
-
-    async function detectRealLocation() {
-      const resultEl = document.getElementById('geo-result');
-      resultEl.innerHTML = 'Detecting your location via IP...';
-
-      try {
-        const res = await fetch('https://ipapi.co/json/');
-        const data = await res.json();
-
-        const myCountry = data.country_code?.toUpperCase();
-        const myCountryName = data.country_name || myCountry;
-
-        if (!myCountry) throw new Error('Could not detect');
-
-        // Show advantage vs a few example miner countries
-        const examples = [
-          { code: 'GE', name: 'Georgia' },
-          { code: 'SG', name: 'Singapore' },
-          { code: 'US', name: 'United States' },
-          { code: 'DE', name: 'Germany' },
-          { code: 'JP', name: 'Japan' },
-        ];
-
-        let html = `<div class="mb-3">Your real location: <strong>${myCountryName} (${myCountry})</strong></div>`;
-        html += `<div class="text-xs text-white/60 mb-2">Advantage if you ran a miner in these countries:</div>`;
-
-        examples.forEach(ex => {
-          const mult = getAdvantageMultiplier(myCountry, ex.code);
-          const color = mult >= 3 ? '#22c55e' : (mult >= 1.5 ? '#eab308' : '#ef4444');
-          html += `<div class="flex justify-between text-sm py-0.5">
-            <span>${ex.name} (${ex.code})</span>
-            <span style="color:${color}; font-weight:600;">${mult.toFixed(1)}x</span>
-          </div>`;
-        });
-
-        resultEl.innerHTML = html;
-
-      } catch (e) {
-        resultEl.innerHTML = 'Could not detect location. Using a free public IP service failed (try again later).';
-      }
-    }
-
-    // Simple client-side version of the proximity multiplier
-    function getAdvantageMultiplier(myCountry, jobCountry) {
-      if (myCountry === jobCountry) return 3.5;
-      // Very rough continent grouping for demo
-      const continents = {
-        Europe: ['GE','DE','FR','GB','IT','ES','NL','PL'],
-        Asia: ['SG','JP','KR','IN','CN','TH','VN'],
-        'North America': ['US','CA','MX'],
-        'South America': ['BR','AR'],
-        Africa: ['ZA','NG'],
-        Oceania: ['AU','NZ']
-      };
-
-      let myCont = null, jobCont = null;
-      for (const [cont, list] of Object.entries(continents)) {
-        if (list.includes(myCountry)) myCont = cont;
-        if (list.includes(jobCountry)) jobCont = cont;
-      }
-
-      if (myCont && jobCont && myCont === jobCont) return 1.85;
-      return 0.65;
-    }
-
-    // ── Live network chart ────────────────────────────────────────────
-    const CHART_MAX_POINTS = 1440;
-    const chartData = { points: [] }; // { t, tflops, nodes }
-    let chartHoverIdx = null;
-    let chartLayout = null;
-
-    // Smooth Catmull-Rom spline through canvas points
-    function splinePath(ctx, pts, toX, toY) {
-      if (pts.length < 2) return;
-      ctx.moveTo(toX(0), toY(pts[0].v));
-      for (let i = 0; i < pts.length - 1; i++) {
-        const p0 = pts[Math.max(0, i - 1)];
-        const p1 = pts[i];
-        const p2 = pts[i + 1];
-        const p3 = pts[Math.min(pts.length - 1, i + 2)];
-        const cp1x = toX(i)     + (toX(i + 1) - toX(Math.max(0, i - 1))) / 6;
-        const cp1y = toY(p1.v)  + (toY(p2.v)  - toY(p0.v))  / 6;
-        const cp2x = toX(i + 1) - (toX(Math.min(pts.length - 1, i + 2)) - toX(i)) / 6;
-        const cp2y = toY(p2.v)  - (toY(p3.v)  - toY(p1.v))  / 6;
-        ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, toX(i + 1), toY(p2.v));
-      }
-    }
-
-    function fmtV(v) {
-      return v >= 1000 ? (v / 1000).toFixed(1) + 'k' : v % 1 === 0 ? String(v) : v.toFixed(1);
-    }
-
-    function fmtChartTime(t, spanMs) {
-      const d = new Date(t);
-      if (spanMs > 7 * 86_400_000) return (d.getMonth() + 1) + '/' + d.getDate() + '/' + String(d.getFullYear()).slice(2);
-      if (spanMs > 86_400_000) return (d.getMonth() + 1) + '/' + d.getDate() + ' ' + d.getHours().toString().padStart(2, '0') + ':00';
-      return d.getHours().toString().padStart(2, '0') + ':' + d.getMinutes().toString().padStart(2, '0');
-    }
-
-    function setChartPoints(rows) {
-      chartData.points = rows
-        .map(p => ({ t: p.t, tflops: p.tflops ?? 0, nodes: p.nodes ?? 0 }))
-        .sort((a, b) => a.t - b.t);
-    }
-
-    function appendLiveChartPoint(count, tflops) {
-      const t = Date.now();
-      const pts = chartData.points;
-      const nodes = count ?? 0;
-      const flops = tflops ?? 0;
-      if (pts.length && t - pts[pts.length - 1].t < 30_000) {
-        pts[pts.length - 1] = { t, nodes, tflops: flops };
-      } else {
-        pts.push({ t, nodes, tflops: flops });
-      }
-      if (pts.length > CHART_MAX_POINTS) pts.shift();
-    }
-
-    function nearestChartPoint(mouseX) {
-      if (!chartLayout?.points?.length) return null;
-      const { points, PAD, cW, tMin, tMax } = chartLayout;
-      const span = tMax - tMin || 1;
-      const clampedX = Math.max(PAD.left, Math.min(PAD.left + cW, mouseX));
-      const targetT = tMin + ((clampedX - PAD.left) / cW) * span;
-      let best = 0, bestDist = Infinity;
-      for (let i = 0; i < points.length; i++) {
-        const dist = Math.abs(points[i].t - targetT);
-        if (dist < bestDist) { bestDist = dist; best = i; }
-      }
-      return best;
-    }
-
-    function hideChartTooltip() {
-      const tip = document.getElementById('chart-tooltip');
-      if (tip) tip.classList.add('hidden');
-      chartHoverIdx = null;
-      drawNetChart();
-    }
-
-    function showChartTooltip(idx, clientX, clientY) {
-      const tip = document.getElementById('chart-tooltip');
-      const wrap = document.getElementById('net-chart-wrap');
-      const p = chartData.points[idx];
-      if (!tip || !wrap || !p || !chartLayout) return;
-
-      const spanMs = chartLayout.tMax - chartLayout.tMin;
-      tip.innerHTML =
-        '<div class="text-white/45 mb-1">' + fmtChartTime(p.t, spanMs) + '</div>' +
-        '<div class="text-[#f97316]">' + fmtV(p.nodes) + ' nodes</div>' +
-        '<div class="text-[#22c55e]">' + fmtV(p.tflops) + ' TFLOPS</div>';
-
-      const rect = wrap.getBoundingClientRect();
-      const tipW = 132, tipH = 68;
-      let left = clientX - rect.left + 14;
-      let top = clientY - rect.top - tipH - 10;
-      if (left + tipW > rect.width - 8) left = clientX - rect.left - tipW - 14;
-      if (top < 8) top = clientY - rect.top + 14;
-      tip.style.left = left + 'px';
-      tip.style.top = top + 'px';
-      tip.classList.remove('hidden');
-    }
-
-    function drawNetChart() {
-      const canvas = document.getElementById('net-chart');
-      if (!canvas) return;
-      const dpr = window.devicePixelRatio || 1;
-      const W = canvas.offsetWidth, H = canvas.offsetHeight;
-      if (!W || !H) return;
-      canvas.width = W * dpr; canvas.height = H * dpr;
-      const ctx = canvas.getContext('2d');
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-
-      ctx.fillStyle = '#0b0b0b';
-      ctx.fillRect(0, 0, W, H);
-
-      const PAD = { top: 18, right: 52, bottom: 30, left: 52 };
-      const cW = W - PAD.left - PAD.right;
-      const cH = H - PAD.top - PAD.bottom;
-      const points = chartData.points;
-
-      for (let i = 0; i <= 4; i++) {
-        const y = PAD.top + (cH / 4) * i;
-        ctx.strokeStyle = 'rgba(255,255,255,0.04)';
-        ctx.lineWidth = 1;
-        ctx.beginPath(); ctx.moveTo(PAD.left, y); ctx.lineTo(PAD.left + cW, y); ctx.stroke();
-      }
-
-      if (points.length < 2) {
-        chartLayout = null;
-        ctx.fillStyle = 'rgba(255,255,255,0.15)';
-        ctx.font = '13px system-ui,sans-serif';
-        ctx.textAlign = 'center';
-        ctx.fillText('Collecting data…', PAD.left + cW / 2, PAD.top + cH / 2 + 5);
-        return;
-      }
-
-      const tMin = points[0].t;
-      const tMax = points[points.length - 1].t;
-      const spanMs = tMax - tMin || 1;
-      const toX = i => PAD.left + ((points[i].t - tMin) / spanMs) * cW;
-      chartLayout = { points, PAD, cW, cH, W, H, tMin, tMax, toX };
-
-      ctx.fillStyle = 'rgba(255,255,255,0.2)';
-      ctx.font = '10px monospace';
-      ctx.textAlign = 'center';
-      const ticks = 6;
-      for (let k = 0; k < ticks; k++) {
-        const frac = ticks === 1 ? 0 : k / (ticks - 1);
-        const t = tMin + frac * spanMs;
-        const x = PAD.left + frac * cW;
-        ctx.fillText(fmtChartTime(t, spanMs), x, H - 8);
-      }
-
-      function drawSeries(key, color, side, unit, sharedMn, sharedMx) {
-        const series = points.map(p => ({ t: p.t, v: p[key] }));
-        if (series.length < 2) return;
-        const sn = series.length;
-        const mn = sharedMn, mx = sharedMx, range = mx - mn || 1;
-        const toY = v => PAD.top + cH - ((v - mn) / range) * cH;
-
-        ctx.fillStyle = color + 'cc';
-        ctx.font = '10px monospace';
-        ctx.textAlign = side === 'left' ? 'right' : 'left';
-        const xLbl = side === 'left' ? PAD.left - 6 : PAD.left + cW + 6;
-        const vals = series.map(p => p.v);
-        const sMin = Math.min(...vals), sMax = Math.max(...vals);
-        [sMin, (sMin + sMax) / 2, sMax].forEach(v => {
-          ctx.fillText(fmtV(v), xLbl, toY(v) + 3);
-        });
-        ctx.font = '9px monospace';
-        ctx.fillStyle = color + '88';
-        ctx.fillText(unit, xLbl, PAD.top - 5);
-
-        const rgb = color === '#22c55e' ? '34,197,94' : '249,115,22';
-        const grad = ctx.createLinearGradient(0, PAD.top, 0, PAD.top + cH);
-        grad.addColorStop(0, `rgba(${rgb},0.25)`);
-        grad.addColorStop(0.55, `rgba(${rgb},0.07)`);
-        grad.addColorStop(1, `rgba(${rgb},0.0)`);
-        ctx.beginPath();
-        splinePath(ctx, series, toX, toY);
-        ctx.lineTo(toX(sn - 1), PAD.top + cH);
-        ctx.lineTo(toX(0), PAD.top + cH);
-        ctx.closePath();
-        ctx.fillStyle = grad;
-        ctx.fill();
-
-        ctx.beginPath();
-        splinePath(ctx, series, toX, toY);
-        ctx.strokeStyle = color;
-        ctx.lineWidth = 2;
-        ctx.lineJoin = 'round';
-        ctx.shadowColor = color;
-        ctx.shadowBlur = 8;
-        ctx.stroke();
-        ctx.shadowBlur = 0;
-
-        const lx = toX(sn - 1), ly = toY(series[sn - 1].v);
-        ctx.shadowColor = color; ctx.shadowBlur = 14;
-        ctx.beginPath(); ctx.arc(lx, ly, 4, 0, Math.PI * 2);
-        ctx.fillStyle = color; ctx.fill();
-        ctx.shadowBlur = 0;
-      }
-
-      const _allVals = points.flatMap(p => [p.tflops, p.nodes]);
-      const _rawMin = Math.max(0, Math.min(..._allVals));
-      const _rawMax = Math.max(..._allVals);
-      const _pad = (_rawMax - _rawMin) * 0.12 || 1;
-      const _sharedMn = Math.max(0, _rawMin - _pad);
-      const _sharedMx = _rawMax + _pad;
-
-      drawSeries('tflops', '#22c55e', 'left', 'TFLOPS', _sharedMn, _sharedMx);
-      drawSeries('nodes', '#f97316', 'right', 'nodes', _sharedMn, _sharedMx);
-
-      if (chartHoverIdx != null && points[chartHoverIdx]) {
-        const hx = toX(chartHoverIdx);
-        const hp = points[chartHoverIdx];
-        ctx.strokeStyle = 'rgba(255,255,255,0.18)';
-        ctx.lineWidth = 1;
-        ctx.setLineDash([4, 4]);
-        ctx.beginPath();
-        ctx.moveTo(hx, PAD.top);
-        ctx.lineTo(hx, PAD.top + cH);
-        ctx.stroke();
-        ctx.setLineDash([]);
-
-        const toY = v => PAD.top + cH - ((v - _sharedMn) / (_sharedMx - _sharedMn || 1)) * cH;
-        ctx.beginPath();
-        ctx.arc(hx, toY(hp.tflops), 5, 0, Math.PI * 2);
-        ctx.fillStyle = '#22c55e';
-        ctx.fill();
-        ctx.beginPath();
-        ctx.arc(hx, toY(hp.nodes), 5, 0, Math.PI * 2);
-        ctx.fillStyle = '#f97316';
-        ctx.fill();
-      }
-    }
-
-    // Merge tiered history (daily → hourly → minutely) into one timeline,
-    // then auto-aggregate to at most ~300 points for chart rendering.
-    function mergeAndAggregate(daily, hourly, minutely) {
-      // Build a deduplicated, time-ordered series from all three tiers.
-      // Newer tiers override older ones for overlapping time windows.
-      const map = new Map();
-      const add = pts => pts.forEach(p => map.set(Math.round(p.t / 60_000), p)); // key by minute
-      add(daily);
-      add(hourly);
-      add(minutely);
-      const sorted = [...map.values()].sort((a, b) => a.t - b.t);
-      if (!sorted.length) return [];
-
-      // Auto-aggregate to ≤300 visible points
-      const TARGET = 300;
-      if (sorted.length <= TARGET) return sorted;
-
-      const span   = sorted[sorted.length - 1].t - sorted[0].t;
-      const bucket = Math.ceil(span / TARGET); // ms per bucket
-
-      const buckets = new Map();
-      for (const p of sorted) {
-        const k = Math.floor(p.t / bucket);
-        if (!buckets.has(k)) buckets.set(k, []);
-        buckets.get(k).push(p);
-      }
-      return [...buckets.values()].map(pts => ({
-        t:      pts[0].t,
-        nodes:  Math.round(pts.reduce((s, p) => s + p.nodes,  0) / pts.length),
-        tflops: Math.round(pts.reduce((s, p) => s + p.tflops, 0) / pts.length * 10) / 10,
-      })).sort((a, b) => a.t - b.t);
-    }
-
-    async function loadChartHistory() {
-      try {
-        const res = await fetchMinerApi('/network/history');
-        if (!res) return;
-        const data = await res.json();
-        // Support both new tiered format and legacy { history: [...] }
-        const merged = (data.minutely || data.hourly || data.daily)
-          ? mergeAndAggregate(data.daily || [], data.hourly || [], data.minutely || [])
-          : (data.history || []);
-        if (!merged.length) return;
-        setChartPoints(merged);
-        drawNetChart();
-      } catch {}
-    }
-
-    // Animate a numeric counter from its current displayed value to a new value
-    function animateCounter(el, newVal, format) {
-      if (!el) return;
-      const raw = el.dataset.raw !== undefined ? parseFloat(el.dataset.raw) : null;
-      const from = (raw !== null && !isNaN(raw)) ? raw : newVal;
-      el.dataset.raw = newVal;
-      const start = performance.now();
-      const dur = 600;
-      function step(now) {
-        const p = Math.min(1, (now - start) / dur);
-        const ease = 1 - Math.pow(1 - p, 3); // ease-out cubic
-        const cur = from + (newVal - from) * ease;
-        el.textContent = format(cur);
-        if (p < 1) requestAnimationFrame(step);
-      }
-      requestAnimationFrame(step);
-    }
-
-    async function tickChart() {
-      try {
-        const [peersRes, statusRes] = await Promise.allSettled([
-          fetchMinerApi('/peers'),
-          fetch(MINER_API + '/status', { cache: 'no-store' }),
-        ]);
-
-        // Peers → nodes + TFLOPS
-        const res = peersRes.status === 'fulfilled' ? peersRes.value : null;
-        if (res) {
-          const data = await res.json();
-          const count = data.count ?? (Array.isArray(data.peers) ? data.peers.length : null);
-          let tflops = data.totalTflops;
-          if (tflops == null && Array.isArray(data.peers))
-            tflops = Math.round(data.peers.reduce((s, p) => s + (p.tflops || 0), 0) * 10) / 10;
-
-          if (count != null || tflops != null)
-            appendLiveChartPoint(count ?? chartData.points.at(-1)?.nodes ?? 0, tflops ?? chartData.points.at(-1)?.tflops ?? 0);
-
-          // Update stat counters with animation
-          if (count != null)
-            animateCounter(document.getElementById('node-count'), count, v => Math.round(v).toString());
-          if (tflops != null)
-            animateCounter(document.getElementById('network-speed'), tflops,
-              v => (v >= 1000 ? (v / 1000).toFixed(1) + 'k' : v.toFixed(1)) + ' TFLOPS');
-        }
-
-        // Status → AI tasks processed
-        if (statusRes.status === 'fulfilled' && statusRes.value.ok) {
-          try {
-            const s = await statusRes.value.json();
-            const jobs = s.totalJobsProcessed ?? s.jobsProcessed ?? s.chainHeight ?? 0;
-            if (jobs > 0)
-              animateCounter(document.getElementById('jobs-count'), jobs, v => fmtNum(Math.round(v)));
-          } catch {}
-        }
-
-        drawNetChart();
-        const el = document.getElementById('chart-last-updated');
-        if (el) {
-          const d = new Date();
-          el.textContent = 'updated ' + d.getHours().toString().padStart(2,'0') + ':' + d.getMinutes().toString().padStart(2,'0') + ':' + d.getSeconds().toString().padStart(2,'0');
-        }
-      } catch {}
-    }
-
-    function initChartHover() {
-      const canvas = document.getElementById('net-chart');
-      if (!canvas) return;
-      canvas.addEventListener('mousemove', e => {
-        const rect = canvas.getBoundingClientRect();
-        const idx = nearestChartPoint(e.clientX - rect.left);
-        if (idx == null) return hideChartTooltip();
-        if (idx !== chartHoverIdx) {
-          chartHoverIdx = idx;
-          drawNetChart();
-        }
-        showChartTooltip(idx, e.clientX, e.clientY);
-      });
-      canvas.addEventListener('mouseleave', hideChartTooltip);
-    }
-
-    window.onload = () => {
-      initLiveMesh();
-      loadRealStats();
-      initChartHover();
-      loadChartHistory().then(() => tickChart());
-      setInterval(tickChart, 15000);
-      // Reload full all-time history every 10 minutes so daily/hourly tiers stay fresh
-      setInterval(loadChartHistory, 10 * 60 * 1000);
-      window.addEventListener('resize', () => { drawNetChart(); });
-    };
+    window.onload = () => { initCoinMesh(); initReveal(); };
 
     // Mobile hamburger nav
     const hamburger = document.getElementById('hamburger');
     const drawer = document.getElementById('mobile-drawer');
     if (hamburger && drawer) {
-      hamburger.addEventListener('click', () => {
-        hamburger.classList.toggle('open');
-        drawer.classList.toggle('open');
-      });
-      drawer.querySelectorAll('a').forEach(a => {
-        a.addEventListener('click', () => {
-          hamburger.classList.remove('open');
-          drawer.classList.remove('open');
-        });
-      });
+      hamburger.addEventListener('click', () => { hamburger.classList.toggle('open'); drawer.classList.toggle('open'); });
+      drawer.querySelectorAll('a').forEach(a => a.addEventListener('click', () => { hamburger.classList.remove('open'); drawer.classList.remove('open'); }));
     }
   </script>
 </body>
