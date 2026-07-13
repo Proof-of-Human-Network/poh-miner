@@ -55,6 +55,8 @@ export class ScanResult {
     methodsCount,
     realPohUsed = false,
     profile = null,    // Full POH profile returned by enrichProfile (required for valid work)
+    isValidWork = false,      // restored on re-hydration so getResultHash() stays deterministic
+    validationErrors = [],
   }) {
     this.requestId = requestId;
     this.address = address;
@@ -77,9 +79,12 @@ export class ScanResult {
     this.realPohUsed = realPohUsed;     // ← Indicates whether real POH checker/brain was used
     this.profile = profile || null;     // ← Required by validateResultWork for full POH output
 
-    // Work quality flags (set by validator before block inclusion)
-    this.isValidWork = false;
-    this.validationErrors = [];
+    // Work quality flags (set by validator before block inclusion).
+    // MUST be restored from input when re-hydrating a stored/gossiped result: both are
+    // folded into getResultHash(), so forcing them to false on a real-work result changes
+    // the work-proof hash and breaks coinbase validation + signature verification.
+    this.isValidWork = isValidWork;
+    this.validationErrors = Array.isArray(validationErrors) ? validationErrors : [];
   }
 
   // Sign this result with the miner's identity wallet.
