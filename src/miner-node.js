@@ -22,6 +22,7 @@ import { P2PGossip } from './network/p2p-gossip.js';
 import { validateResultWork } from './validation/result-validator.js';
 import {
   calculateBlockRewards,
+  workTokens,
   BLOCK_REWARD_POH,
   POH_DECIMALS,
   SKILL_PROPOSE_FEE_UPOH,
@@ -6920,11 +6921,14 @@ export class PohMinerNode {
       .filter(r => !this.minedRequestIds.has(r.requestId))
       .slice(0, 20);
 
-    // Build work submissions only from validated results
+    // Build work submissions only from validated results. `tokens` is the
+    // deterministic compute weight (from block-carried fields) used by the v2
+    // reward split — the validator recomputes the identical value from the block.
     const validWorkSubmissions = validResultsForBlock.map(r => ({
       nodeId: r.minerWallet,
       requestId: r.requestId,
       proofHash: r.getResultHash ? r.getResultHash() : `result-${r.requestId}`,
+      tokens: workTokens(r),
     }));
 
     // When there's no compute work, share the 40% keepalive reward among

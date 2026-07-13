@@ -62,6 +62,7 @@ Copy-Item -Recurse "$env:USERPROFILE\.poh-miner" "$env:USERPROFILE\.poh-miner-ba
 
 ## What changed in this release (upgrade-relevant)
 
+- **Reward model v2 (flag-day):** Above the `REWARD_V2_HEIGHT` boundary, each block's ~1 POH goes to the nodes that completed AI jobs — **split by delivered compute** — with only a small (~10%) proposer cut; blocks with no work mint just a small keepalive. Blocks at/below the boundary keep the legacy 60/40 split, so existing history stays valid. This is a **coordinated (flag-day) upgrade**: every node must be on this build before the chain reaches the boundary height.
 - **Consensus:** Incoming blocks must pass real PoW, valid coinbase, and signatures — fake `chainWork` is ignored.
 - **Wallets:** Private/signing keys encrypted at rest; Electron onboarding adds a **POH_WALLET_KEY** backup step.
 - **API:** Remote peer access on by default (`0.0.0.0`); set `"localOnly": true` in config to bind localhost only.

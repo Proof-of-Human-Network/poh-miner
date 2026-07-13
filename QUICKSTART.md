@@ -3,8 +3,9 @@
 This is the **base layer** software you run to participate in the decentralized Proof-of-Work network that powers POH.
 
 ## What You Earn
-- POH tokens for every block you help produce
-- POH tokens + fees for being the fastest correct responder on scan/verdict requests (first-come-first-serve)
+- POH for the AI work your node completes — each block's reward is split among workers **weighted by the compute they delivered** (plus a small cut to the block proposer)
+- The per-job **fee** (paid by the requester) on every `skill`/`compute` job your node answers
+- Idle blocks (no jobs) mint only a small keepalive, so rewards follow real demand
 
 ## Hardware Requirements
 - A companion device (Raspberry Pi 5 8GB recommended minimum for small models)

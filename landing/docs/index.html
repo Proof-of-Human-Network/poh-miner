@@ -404,6 +404,7 @@ run();</div>
             <div class="neon mb-2 text-[20px]">Pricing &amp; fees</div>
             <p class="mb-2">Paid jobs are metered per AI compute token at <strong>1&nbsp;μPOH&nbsp;per&nbsp;token</strong> (the default <code>gasPrice</code>; μPOH is the smallest unit, so this is the floor). Since <strong>1&nbsp;POH&nbsp;=&nbsp;1&nbsp;000&nbsp;000&nbsp;000&nbsp;μPOH</strong>, one POH buys up to <strong>1&nbsp;billion&nbsp;tokens</strong>.</p>
             <p class="mb-2">The fee is <code>tokensUsed × gasPrice</code> and is <strong>never less than the tokens actually used</strong> (1&nbsp;000 tokens ⇒ ≥ 1&nbsp;000&nbsp;μPOH). Unused budget is refunded. A <code>maxBudget</code> too small to cover the job's token cost is rejected with <code>402 FEE_TOO_LOW</code>.</p>
+            <p class="mb-2"><strong>Block reward.</strong> On top of the fee, each block's ~1&nbsp;POH subsidy is <strong>split among the workers who completed jobs, weighted by delivered compute</strong> (a deterministic token estimate — splitting into many nodes earns nothing extra), minus a small (~10%) proposer cut. Blocks with no real work mint only a small keepalive, so emission tracks demand.</p>
             <p>POH has no fixed price — the market defines it via the best open P2P order (see <code>GET /api/p2p/price</code>).</p>
           </div>
 

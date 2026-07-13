@@ -112,7 +112,7 @@ Each block contains:
 - `scanResults[]` — mined job results (verdict scans, skill outputs, compute replies): `requestId`, `verdict`, `profile`, `reasoning`, `minerWallet`, signature
 - `stateTransitions[]` — on-chain state deltas applied by this block: `job-submitted` (public job queue metadata + `promptPreview`), escrow, brain updates, `brain-state-root`
 - `transactions[]` — signed POH token transfers with nonces
-- `coinbaseReward` — 1 POH per block; if compute work exists: 60% to proposer, 40% split among workers; if no work but peers are active: 60% to proposer, 40% split among active peers; if no peers: 100% to proposer
+- `coinbaseReward` — up to 1 POH per block, paid to the nodes that did the AI work. **Reward model v2** (active above `REWARD_V2_HEIGHT` in `src/rewards/reward.js`): if compute work exists, the proposer keeps a small `PROPOSER_CUT` (~10%) and the rest is split among workers **weighted by delivered compute** (a deterministic token estimate, so splitting into many identities earns nothing extra); a block with no real work mints only a small keepalive (`KEEPALIVE_UPOH`), not a full POH, so emission tracks demand. Blocks at/below the flag-day boundary keep the legacy 60/40 split (history stays valid). Amounts are consensus-recomputed by every node in `src/consensus/coinbase-validator.js` — gossiped amounts are never trusted.
 - `nonce`, `difficulty`, `chainWork` — PoW fields (chainWork is cumulative hex bigint)
 - `stateRoot` — SHA-256 of sorted `{address, balance, nonce}` at this height
 - `brainStateRoot` — SHA-256 of `weights.json` + `pools.json` at this height

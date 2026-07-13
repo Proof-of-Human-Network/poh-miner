@@ -5,6 +5,8 @@
  * This is a simplified model for the current JS simulation.
  */
 
+import { estimateTokens } from '../jobs/gas-estimator.js';
+
 export class RewardOutput {
   constructor({
     id,                    // Unique output id (e.g., `${blockHeight}:${index}`)
@@ -85,22 +87,48 @@ export const SKILL_PROPOSE_FEE_UPOH = SKILL_PROPOSE_FEE_POH * POH_DECIMALS;
 export const SKILL_GRADUATION_THRESHOLD_POH = 1000;
 export const SKILL_GRADUATION_THRESHOLD_UPOH = SKILL_GRADUATION_THRESHOLD_POH * POH_DECIMALS;
 
-/**
- * @param validWorkSubmissions  Array of { nodeId|minerWallet, proofHash|requestId }
- * @param blockHeight           Current block height
- * @param activePeers           Array of { wallet } — peers to share the keepalive
- *                              reward with when there is no compute work.
- *                              The block proposer should be excluded from this list
- *                              (they already receive the proposer share).
- */
-export function calculateBlockRewards(validWorkSubmissions = [], blockHeight = 0, activePeers = []) {
-  const totalNewSupply = BLOCK_REWARD_UPOH;
+// ── Reward model v2 ──────────────────────────────────────────────────────────
+// The network's product is AI compute, so the block subsidy should flow to the
+// nodes that completed jobs — weighted by the compute they delivered — not to
+// whoever won the PoW race. Below constants are CONSENSUS-CRITICAL: they must be
+// identical on every node (imported by both the proposer and coinbase-validator).
+// Do NOT make them per-node config — divergence forks the chain.
 
+/** Proposer keeps this fraction (for PoW + assembling the block); the rest is
+ *  split among AI workers by delivered compute. */
+export const PROPOSER_CUT = 0.10;
+
+/** A block with no real AI work mints only this small keepalive (not a full POH),
+ *  so emission tracks demand. */
+export const KEEPALIVE_UPOH = Math.floor(0.05 * POH_DECIMALS);
+
+/**
+ * Height at which reward model v2 activates. Blocks with height <= this validate
+ * under the legacy 60/40 rule (so existing history stays valid); blocks above it
+ * use v2. FLAG-DAY: pinned to (chain tip + ~10) at the coordinated 2026-07-13
+ * deploy — every node must be on this build before the chain reaches this height.
+ */
+export const REWARD_V2_HEIGHT = 225;
+
+/**
+ * Deterministic compute weight for one work result, derived ONLY from fields that
+ * live in the block (and are therefore hashed): the number of signals evaluated and
+ * the scanned address. Never uses self-reported/runtime token counts — those aren't
+ * deterministic across nodes and would be gameable. Both the proposer and every
+ * validator compute this identically from block.scanResults.
+ */
+export function workTokens(result) {
+  const signals = Array.isArray(result?.signalsUsed) ? result.signalsUsed.length : 0;
+  return estimateTokens(signals, result?.address || null);
+}
+
+/** Legacy (pre-v2) coinbase: 60% proposer / 40% split evenly among workers/peers. */
+function legacyBlockRewards(validWorkSubmissions, blockHeight, activePeers) {
+  const totalNewSupply = BLOCK_REWARD_UPOH;
   let proposerReward;
   let workerRewards = [];
 
   if (validWorkSubmissions.length > 0) {
-    // Compute block: 60% to proposer, 40% split evenly among workers
     proposerReward = Math.floor(totalNewSupply * 0.6);
     const perWorker = Math.floor((totalNewSupply * 0.4) / validWorkSubmissions.length);
     workerRewards = validWorkSubmissions.map((work, i) => ({
@@ -109,8 +137,6 @@ export function calculateBlockRewards(validWorkSubmissions = [], blockHeight = 0
       workProofHash: work.proofHash || work.requestId || `work-${i}`,
     }));
   } else if (activePeers.length > 0) {
-    // Empty block with known active peers:
-    // 60% to proposer for doing PoW, 40% split as keepalive among active peers.
     proposerReward = Math.floor(totalNewSupply * 0.6);
     const perPeer = Math.floor((totalNewSupply * 0.4) / activePeers.length);
     workerRewards = activePeers.map((peer, i) => ({
@@ -119,14 +145,64 @@ export function calculateBlockRewards(validWorkSubmissions = [], blockHeight = 0
       workProofHash: `keepalive:${blockHeight}:${peer.wallet}`,
     }));
   } else {
-    // Empty block, no known peers — full reward to proposer
     proposerReward = totalNewSupply;
   }
 
-  return new CoinbaseReward({
-    blockHeight,
-    proposerReward,
-    workerRewards,
-    totalNewSupply,
-  });
+  return new CoinbaseReward({ blockHeight, proposerReward, workerRewards, totalNewSupply });
+}
+
+/**
+ * @param validWorkSubmissions  Array of { nodeId|minerWallet, proofHash|requestId, tokens }
+ *                              `tokens` is the deterministic weight from workTokens();
+ *                              callers (proposer + validator) must set it identically.
+ * @param blockHeight           Current block height (selects legacy vs v2 rule)
+ * @param activePeers           Array of { wallet } to share the keepalive reward with
+ *                              when there is no compute work (proposer excluded).
+ */
+export function calculateBlockRewards(validWorkSubmissions = [], blockHeight = 0, activePeers = []) {
+  // History (and any block up to the flag-day boundary) keeps the old rule.
+  if (blockHeight <= REWARD_V2_HEIGHT) {
+    return legacyBlockRewards(validWorkSubmissions, blockHeight, activePeers);
+  }
+
+  // ── v2: pay AI workers by delivered compute, tiny proposer cut ──
+  if (validWorkSubmissions.length > 0) {
+    const totalNewSupply = BLOCK_REWARD_UPOH;
+    let proposerReward   = Math.floor(totalNewSupply * PROPOSER_CUT);
+    const workerPool     = totalNewSupply - proposerReward;
+
+    const weights = validWorkSubmissions.map(w => Math.max(1, w.tokens || 1));
+    const weightSum = weights.reduce((a, b) => a + b, 0);
+
+    let distributed = 0;
+    const workerRewards = validWorkSubmissions.map((work, i) => {
+      const amount = Math.floor((workerPool * weights[i]) / weightSum);
+      distributed += amount;
+      return {
+        workerId:      work.nodeId || work.minerWallet,
+        amount,
+        workProofHash: work.proofHash || work.requestId || `work-${i}`,
+      };
+    });
+    // Floor-division dust goes to the proposer so Σ === totalNewSupply exactly.
+    proposerReward += workerPool - distributed;
+
+    return new CoinbaseReward({ blockHeight, proposerReward, workerRewards, totalNewSupply });
+  }
+
+  // No real work → mint only a small keepalive (emission tracks demand).
+  const totalNewSupply = KEEPALIVE_UPOH;
+  if (activePeers.length > 0) {
+    let proposerReward = Math.floor(totalNewSupply * PROPOSER_CUT);
+    const pool = totalNewSupply - proposerReward;
+    const perPeer = Math.floor(pool / activePeers.length);
+    const workerRewards = activePeers.map(peer => ({
+      workerId:      peer.wallet,
+      amount:        perPeer,
+      workProofHash: `keepalive:${blockHeight}:${peer.wallet}`,
+    }));
+    proposerReward += pool - perPeer * activePeers.length; // dust to proposer
+    return new CoinbaseReward({ blockHeight, proposerReward, workerRewards, totalNewSupply });
+  }
+  return new CoinbaseReward({ blockHeight, proposerReward: totalNewSupply, workerRewards: [], totalNewSupply });
 }
