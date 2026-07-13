@@ -28,7 +28,7 @@ const MINING_WORKER_PATH = path.join(path.dirname(fileURLToPath(import.meta.url)
 // as a validation rule, so historical blocks are never retroactively rejected.
 export const MIN_BLOCK_SPACING_MS = 60_000;
 const ADJUSTMENT_WINDOW = 10;    // blocks
-export const MIN_DIFFICULTY = 5;        // 5 leading hex zeros ≈ 1M hashes avg (~5-15 s in JS)
+export const MIN_DIFFICULTY = 3;        // 3 hex zeros — floor kept low so PoW does not starve the main-thread HTTP API on this hashrate-limited testnet
 export const MAX_DIFFICULTY = 20;
 
 export async function mineBlock(block, difficulty, abortSignal) {
@@ -103,13 +103,26 @@ export function mineBlockThreaded(block, difficulty, abortSignal) {
   });
 }
 
+// Flag-day for the difficulty-floor reduction (5 -> 3). Blocks at or below this height
+// were mined under the legacy floor of 5 and MUST keep validating against it; blocks
+// above use MIN_DIFFICULTY. Without this gate, lowering MIN_DIFFICULTY retroactively
+// invalidates the legacy blocks ("difficulty mismatch") and forks the chain.
+export const DIFFICULTY_REDUCTION_HEIGHT = 270;
+const LEGACY_MIN_DIFFICULTY = 5;
+function difficultyFloor(height) {
+  return height > DIFFICULTY_REDUCTION_HEIGHT ? MIN_DIFFICULTY : LEGACY_MIN_DIFFICULTY;
+}
+
 export function getNextDifficulty(lastBlocks) {
   // Before the adjustment window is full, preserve the current difficulty
   // rather than resetting to MIN — prevents blocks racing past MIN on a fresh chain.
   const tip = lastBlocks.length ? lastBlocks[lastBlocks.length - 1] : null;
+  // Height of the block whose difficulty we are computing (one past the tip).
+  const targetHeight = (typeof tip?.height === 'number' ? tip.height : lastBlocks.length - 1) + 1;
+  const floor = difficultyFloor(targetHeight);
   const current = tip?.difficulty
-    ? Math.max(MIN_DIFFICULTY, tip.difficulty)
-    : MIN_DIFFICULTY;
+    ? Math.max(floor, tip.difficulty)
+    : floor;
 
   if (lastBlocks.length < ADJUSTMENT_WINDOW + 1) return current;
 
@@ -122,7 +135,7 @@ export function getNextDifficulty(lastBlocks) {
   // at 2s (vs 30s target) still leaves them at 32s after the jump — fine to do aggressively.
   if (avgMs < TARGET_BLOCK_TIME_MS * 0.1)  return Math.min(MAX_DIFFICULTY, current + 2); // <1s → jump 2
   if (avgMs < TARGET_BLOCK_TIME_MS * 0.5)  return Math.min(MAX_DIFFICULTY, current + 1); // <5s → jump 1
-  if (avgMs > TARGET_BLOCK_TIME_MS * 4.0)  return Math.max(MIN_DIFFICULTY, current - 2); // >40s → drop 2
-  if (avgMs > TARGET_BLOCK_TIME_MS * 2.0)  return Math.max(MIN_DIFFICULTY, current - 1); // >20s → drop 1
+  if (avgMs > TARGET_BLOCK_TIME_MS * 4.0)  return Math.max(floor, current - 2); // >40s → drop 2
+  if (avgMs > TARGET_BLOCK_TIME_MS * 2.0)  return Math.max(floor, current - 1); // >20s → drop 1
   return current;
 }

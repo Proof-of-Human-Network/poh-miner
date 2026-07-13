@@ -130,6 +130,76 @@ function enqueueForFollowers(envelope) {
   return queued;
 }
 
+// ── Persistent relay streams (Server-Sent Events) ────────────────────────────
+// Every node — reachable or NAT'd — holds an authenticated GET /stream open. The
+// relay pushes each gossip envelope down these streams instantly, turning the
+// bootnode into a full-duplex pub/sub relay instead of a follower-only inbox.
+// This is what lets two NAT'd home nodes exchange blocks/txs/jobs through the
+// relay with no direct dialability. Multiple relays (bootnodes) give redundancy;
+// receivers dedupe by envelope.id so overlap between relays is harmless.
+const streams = new Map();          // wallet -> Set<res>  (a node may hold >1)
+const relaySeen = new Map();        // envelope.id -> ts   (drop re-fanned dups)
+const RELAY_SEEN_TTL_MS = 5 * 60 * 1000;
+const MAX_RELAY_SEEN = 20000;
+
+function relayMarkSeen(id) {
+  if (relaySeen.has(id)) return false;
+  relaySeen.set(id, Date.now());
+  if (relaySeen.size > MAX_RELAY_SEEN) {
+    const cutoff = Date.now() - RELAY_SEEN_TTL_MS;
+    for (const [k, ts] of relaySeen) { if (ts < cutoff) relaySeen.delete(k); }
+  }
+  return true;
+}
+
+function addStream(wallet, res) {
+  let set = streams.get(wallet);
+  if (!set) { set = new Set(); streams.set(wallet, set); }
+  set.add(res);
+}
+
+function removeStream(wallet, res) {
+  const set = streams.get(wallet);
+  if (!set) return;
+  set.delete(res);
+  if (set.size === 0) streams.delete(wallet);
+}
+
+/**
+ * Live-push an envelope to every connected subscriber except the origin and any
+ * wallet already on the relay path (loop prevention). Wallets that are registered
+ * but not currently streaming fall back to the inbox buffer so they catch up on
+ * reconnect. Returns { pushed, queued }.
+ */
+function fanoutEnvelope(envelope) {
+  const path = new Set(envelope.path || []);
+  const delivered = new Set();
+  let pushed = 0;
+  const frame = `data: ${JSON.stringify(envelope)}\n\n`;
+  for (const [wallet, set] of streams.entries()) {
+    if (wallet === envelope.from || path.has(wallet)) continue;
+    for (const res of set) {
+      try { res.write(frame); pushed++; delivered.add(wallet); }
+      catch { /* dead stream — cleaned up on its own close handler */ }
+    }
+  }
+  // Offline buffer for NAT'd followers that aren't currently streaming.
+  let queued = 0;
+  const pathAll = new Set([...path, envelope.from]);
+  for (const [wallet, peer] of peers.entries()) {
+    if (peer.reachable !== false) continue;
+    if (delivered.has(wallet) || pathAll.has(wallet)) continue;
+    let box = inboxes.get(wallet);
+    if (!box) { box = { queue: [], seen: new Set() }; inboxes.set(wallet, box); }
+    if (box.seen.has(envelope.id)) continue;
+    box.seen.add(envelope.id);
+    box.queue.push(envelope);
+    if (box.queue.length > MAX_INBOX) { const d = box.queue.shift(); box.seen.delete(d.id); }
+    queued++;
+  }
+  return { pushed, queued };
+}
+
 // ── Brain event store ──────────────────────────────────────────────────────────
 // Accumulates signed brain events (feedback, weight updates) from all miners.
 // Miners pull events they haven't seen yet via GET /brain/events?since=<ts>.
@@ -764,8 +834,14 @@ const server = http.createServer(async (req, res) => {
           || !Wallet.verifySignature(envelope.signingPublicKey, envelopeSignPayload(envelope), envelope.signature)) {
         res.statusCode = 403; return res.end(JSON.stringify({ error: 'invalid or missing signature' }));
       }
-      const queued = enqueueForFollowers(envelope);
-      res.end(JSON.stringify({ ok: true, queued }));
+      // Drop envelopes we've already relayed so re-broadcasts (every receiver
+      // re-POSTs on TTL relay) don't get re-fanned to the whole network.
+      if (!relayMarkSeen(envelope.id)) {
+        return res.end(JSON.stringify({ ok: true, duplicate: true }));
+      }
+      // Live-push to every connected subscriber; buffer for offline followers.
+      const { pushed, queued } = fanoutEnvelope(envelope);
+      res.end(JSON.stringify({ ok: true, pushed, queued }));
       return;
     }
 
@@ -786,6 +862,51 @@ const server = http.createServer(async (req, res) => {
       const envelopes = box ? box.queue.splice(0, box.queue.length) : [];
       if (box) box.seen.clear();
       res.end(JSON.stringify({ envelopes }));
+      return;
+    }
+
+    // ── NAT relay: persistent Server-Sent Events stream. Any node (reachable or
+    // NAT'd) holds this open; the relay pushes each gossip envelope down it live.
+    // Authenticated with the same signed-action scheme (action='stream-subscribe').
+    // On connect we drain any buffered inbox so the node catches up on messages
+    // that arrived while it was disconnected, then stay open for live push.
+    if (req.method === 'GET' && url.pathname === '/stream') {
+      const auth = verifyBoardAuth({
+        wallet: url.searchParams.get('wallet'),
+        signingPublicKey: url.searchParams.get('signingPublicKey'),
+        signature: url.searchParams.get('signature'),
+        timestamp: Number(url.searchParams.get('timestamp')),
+      }, 'stream-subscribe');
+      if (auth.error) { res.statusCode = 403; return res.end(JSON.stringify({ error: auth.error })); }
+
+      res.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache, no-transform',
+        'Connection': 'keep-alive',
+        'X-Accel-Buffering': 'no', // tell nginx not to buffer the stream
+      });
+      res.write(': connected\n\n');
+
+      const peer = peers.get(auth.wallet);
+      if (peer) peer.lastSeen = Date.now();
+      addStream(auth.wallet, res);
+
+      // Catch-up: flush anything buffered while this node was offline.
+      const box = inboxes.get(auth.wallet);
+      if (box && box.queue.length) {
+        for (const env of box.queue) { try { res.write(`data: ${JSON.stringify(env)}\n\n`); } catch { /* ignore */ } }
+        box.queue.length = 0;
+        box.seen.clear();
+      }
+
+      const ping = setInterval(() => {
+        try { res.write(': ping\n\n'); const p = peers.get(auth.wallet); if (p) p.lastSeen = Date.now(); }
+        catch { /* closed */ }
+      }, 20_000);
+
+      const cleanup = () => { clearInterval(ping); removeStream(auth.wallet, res); };
+      req.on('close', cleanup);
+      req.on('error', cleanup);
       return;
     }
 
@@ -848,6 +969,7 @@ server.listen(PORT, BIND_HOST, () => {
   console.log(`   GET  /peers             (list of known active *verified* dialable miners + their walletApiPort for direct connect)`);
   console.log(`   POST /gossip            (reachable peers relay gossip for NAT'd followers)`);
   console.log(`   GET  /inbox             (a follower drains its relayed gossip - signed, action=inbox-poll)`);
+  console.log(`   GET  /stream            (persistent SSE relay stream - live gossip push, signed, action=stream-subscribe)`);
   console.log(`   POST /brain/events      (miners push signed brain events — feedback, weight updates)`);
   console.log(`   GET  /brain/events?since=<ts>  (miners pull brain events since timestamp)`);
   console.log(`   GET  /brain/stats       (brain event accumulator stats)`);

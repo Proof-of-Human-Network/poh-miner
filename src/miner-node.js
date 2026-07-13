@@ -386,7 +386,7 @@ export class PohMinerNode {
     // (enables any frontend to connect directly to a discovered node via its walletApiPort)
     this.jobResults = new Map(); // jobId -> {id, status:'queued'|'computing'|'done'|'error', job, result:ScanResult|null, error?:string, createdAt, updatedAt}
     this.myLatencyProfile = null; // populated on startup
-    this.currentDifficulty = 5; // matches MIN_DIFFICULTY in pow.js
+    this.currentDifficulty = 3; // start at MIN_DIFFICULTY so the first post-restart block is not ground at a high diff
     this.gossip = new P2PGossip(
       this.config.wallet || 'unknown-miner',
       () => this.peers || [],   // live peer list — updated by discoverAndRegisterWithBootnodes
@@ -4349,10 +4349,100 @@ export class PohMinerNode {
       }
     };
 
-    const intervalMs = this.config.inboxPollMs || 5_000;
+    const intervalMs = this.config.inboxPollMs || 30_000;
     this._inboxTimer = setInterval(() => poll().catch(() => {}), intervalMs);
     poll().catch(() => {});
-    console.log('[PoH-Miner] NAT relay inbox poll started — receiving gossip via bootnode relay while behind NAT.');
+    console.log('[PoH-Miner] NAT relay inbox poll started (fallback) — receiving gossip via bootnode relay while behind NAT.');
+  }
+
+  /**
+   * Persistent relay stream (Server-Sent Events). Every node — reachable or NAT'd
+   * — holds an authenticated GET /stream open to each configured relay. The relay
+   * pushes each gossip envelope down it live, so blocks/txs/jobs propagate to nodes
+   * behind NAT instantly instead of on the next inbox poll. This is the primary
+   * transport that makes home↔home (and VPS↔home) communication work without any
+   * direct dialability. Envelopes are deduped + signature-verified by gossip.receive,
+   * so overlap with the inbox-poll fallback or with multiple relays is harmless.
+   * One long-lived reader per relay, with exponential-backoff reconnect.
+   */
+  _startRelayStream() {
+    if (this._relayStreams) return;
+    if (!this.identityWallet || typeof this.identityWallet.sign !== 'function') return;
+    const bootnodes = this.config.bootnodes || [];
+    if (!bootnodes.length) return;
+    this._relayStreams = new Map(); // base -> { stop }
+
+    for (const bn of bootnodes) {
+      const base = bn.replace(/\/$/, '');
+      const state = { closed: false, backoff: 1000 };
+      this._relayStreams.set(base, state);
+
+      const connect = async () => {
+        while (!state.closed) {
+          let gotData = false;
+          try {
+            const ts = Date.now();
+            const a = this._signBoardAction('stream-subscribe', {}, ts);
+            const qs = new URLSearchParams({
+              wallet: a.wallet,
+              signingPublicKey: a.signingPublicKey,
+              signature: a.signature,
+              timestamp: String(ts),
+            });
+            const res = await fetch(`${base}/stream?${qs}`, {
+              headers: { Accept: 'text/event-stream' },
+              signal: (state.ctrl = new AbortController()).signal,
+            });
+            if (!res.ok || !res.body) {
+              // 404 = old relay without /stream — fall back to inbox poll silently.
+              if (res.status !== 404) console.warn(`[PoH-Miner] Relay stream ${base} → ${res.status}`);
+              throw new Error(`stream ${res.status}`);
+            }
+            console.log(`[PoH-Miner] Relay stream connected: ${base} (live gossip push)`);
+            state.backoff = 1000;
+            const reader = res.body.getReader();
+            const decoder = new TextDecoder();
+            let buf = '';
+            while (!state.closed) {
+              const { value, done } = await reader.read();
+              if (done) break;
+              gotData = true;
+              buf += decoder.decode(value, { stream: true });
+              // SSE frames are separated by a blank line.
+              let idx;
+              while ((idx = buf.indexOf('\n\n')) !== -1) {
+                const frame = buf.slice(0, idx);
+                buf = buf.slice(idx + 2);
+                for (const line of frame.split('\n')) {
+                  if (!line.startsWith('data:')) continue; // skip ':' comments/pings
+                  const json = line.slice(5).trim();
+                  if (!json) continue;
+                  try {
+                    const env = JSON.parse(json);
+                    await this.gossip.receive(env);
+                  } catch { /* malformed frame — ignore */ }
+                }
+              }
+            }
+          } catch { /* connection dropped — reconnect below */ }
+          if (state.closed) break;
+          // Reset backoff if the stream had been healthy; otherwise grow it.
+          state.backoff = gotData ? 1000 : Math.min(state.backoff * 2, 30_000);
+          await new Promise(r => setTimeout(r, state.backoff));
+        }
+      };
+      connect().catch(() => {});
+    }
+    console.log('[PoH-Miner] Persistent relay streams started — live block/tx/job push via bootnode relay(s).');
+  }
+
+  _stopRelayStream() {
+    if (!this._relayStreams) return;
+    for (const state of this._relayStreams.values()) {
+      state.closed = true;
+      try { state.ctrl?.abort(); } catch { /* ignore */ }
+    }
+    this._relayStreams = null;
   }
 
   /**
@@ -4634,8 +4724,13 @@ export class PohMinerNode {
       // and re-syncs the chain instead of waiting for the next scheduled tick.
       this.startConnectivityWatcher();
 
-      // NAT'd followers can't be push-gossiped — drain the bootnode relay inbox
-      // so they still receive txs/jobs/blocks. No-ops when publicly reachable.
+      // Primary transport: hold a persistent SSE stream to each relay so every
+      // node (reachable or NAT'd) receives blocks/txs/jobs pushed live — this is
+      // what makes home↔home and VPS↔home propagation work without direct dials.
+      this._startRelayStream();
+
+      // Fallback for relays without /stream (older bootnodes) and to catch up on
+      // anything missed between reconnects. Deduped against the stream by id.
       this._startInboxPoll();
 
       // Pull the bootnode-signed finality checkpoint so deep reorgs below it are
