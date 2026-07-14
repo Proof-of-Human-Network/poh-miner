@@ -1,21 +1,25 @@
 {
   "version": 1,
-  "sourceHeight": 51396,
-  "tipHeight": 51396,
-  "finalizedHeight": 51296,
-  "snapshotHash": "55fd72feab7f3f44a0aaf689730ca3bdfcfecb815cdda02601286c0d42cafccb",
-  "totalMinted": 51399000000000,
-  "coinbaseDust": 599925223356,
-  "excludedBalance": 10000000,
+  "sourceHeight": 645,
+  "tipHeight": 745,
+  "finalizedHeight": 645,
+  "snapshotHash": "838f19d730ea6e5703e95b1b284e66ac4428f54061ed067e37b622b233785572",
+  "totalMinted": 51046014776644,
+  "coinbaseDust": 0,
+  "excludedBalance": 0,
   "excluded": [
     "pohaudit000000000000000000000000000000000001"
   ],
-  "sumBalances": 50799064776644,
-  "addressCount": 139,
-  "generatedAt": "2026-07-12T14:49:00.515Z",
+  "sumBalances": 51046014776644,
+  "addressCount": 145,
+  "generatedAt": "2026-07-14T05:50:59.663Z",
   "balances": {
     "poh001c87a57ef2260b3b7479f55e787e57fadd6ec9": {
       "balance": 29334444304,
+      "nonce": 0
+    },
+    "poh04d00b5ead791de28aa442beffb53473ee291842": {
+      "balance": 2440798000000,
       "nonce": 0
     },
     "poh06a6f9beaa518ec3b5fe84270e5b45f19152ef0c": {
@@ -51,8 +55,8 @@
       "nonce": 0
     },
     "poh1a9532bb2724bdacf399e713363524b1fbf5905f": {
-      "balance": 554800000000,
-      "nonce": 0
+      "balance": 16755000000,
+      "nonce": 1
     },
     "poh1d350c08ea25f3d0ccf8a31cec8d160bb99cce5a": {
       "balance": 799999998,
@@ -63,8 +67,8 @@
       "nonce": 0
     },
     "poh1fc92411e9df2f2d882b5c915163b6f5e857e5b7": {
-      "balance": 3000000000,
-      "nonce": 1
+      "balance": 0,
+      "nonce": 2
     },
     "poh2050f5a4f35afb6d50dbcc68db3e9b0fdcc8ffb9": {
       "balance": 3601656250,
@@ -107,8 +111,8 @@
       "nonce": 0
     },
     "poh28dc0038c70c11aeda28891ee727d74e419d7638": {
-      "balance": 3896818825360,
-      "nonce": 0
+      "balance": 3886818825360,
+      "nonce": 1
     },
     "poh293216f47277d48e0c3c826f41e67753fbc88826": {
       "balance": 416659499157,
@@ -179,8 +183,8 @@
       "nonce": 0
     },
     "poh483d2f8ba466f4a7c80704118af186d6b513ba63": {
-      "balance": 2000000000,
-      "nonce": 0
+      "balance": 0,
+      "nonce": 1
     },
     "poh490139e3bd452a5d3544ce20c9a956b09942f88d": {
       "balance": 55469047433,
@@ -224,6 +228,10 @@
     },
     "poh5c87080400559ca43a36a2a568165bc5afd5e6e2": {
       "balance": 444977412825,
+      "nonce": 0
+    },
+    "poh616131756eacebbadbf03030c80f6789fee3ce10": {
+      "balance": 180000000,
       "nonce": 0
     },
     "poh61cc20ebbabf3b1aa4c3f8988f57ad63051fb47b": {
@@ -314,6 +322,10 @@
       "balance": 1554162720592,
       "nonce": 0
     },
+    "poh84e6727749f95c53bca90ac127d57e3c95f44b9d": {
+      "balance": 10000000000,
+      "nonce": 0
+    },
     "poh84ed6104a03add4439fb4e9f5f9566d1a7735c72": {
       "balance": 17514014408,
       "nonce": 0
@@ -335,8 +347,8 @@
       "nonce": 0
     },
     "poh93acdc3750eb3bd85014620a9cca77b34f6e7bcd": {
-      "balance": 546669000000,
-      "nonce": 0
+      "balance": 0,
+      "nonce": 1
     },
     "poh9576b287ba5d12db9ccee2e661319fd3ad3b1b39": {
       "balance": 713043464,
@@ -359,8 +371,8 @@
       "nonce": 0
     },
     "poh9cd4c4e9d6ee7f0d8d87024521a2167fb1b9d635": {
-      "balance": 570619000000,
-      "nonce": 0
+      "balance": 0,
+      "nonce": 1
     },
     "poh9d06d6f1c707727b08aa09eb223d41038625e800": {
       "balance": 1196660181354,
@@ -379,8 +391,8 @@
       "nonce": 0
     },
     "poha12bad0741bd9df8fe9b6400a1d31b4c3a9ea31e": {
-      "balance": 539470000000,
-      "nonce": 0
+      "balance": 0,
+      "nonce": 1
     },
     "poha62849bf1754f649fbcba7ce9a4b1fb50198c5e6": {
       "balance": 0,
@@ -451,7 +463,7 @@
       "nonce": 0
     },
     "pohc5683c6492f2bc3167db3be97b64c252d524e455": {
-      "balance": 12000000000,
+      "balance": 20090000000,
       "nonce": 0
     },
     "pohc5e6c861b1b6cf1cac91f8dac38f63d7804228ac": {
@@ -507,7 +519,11 @@
       "nonce": 1
     },
     "pohd9e846332f341a773f14a2d2999da524d018164c": {
-      "balance": 400000000,
+      "balance": 0,
+      "nonce": 1
+    },
+    "pohda786d99e98d6a80efce9b8c4bd3bc286fc200bf": {
+      "balance": 312500000,
       "nonce": 0
     },
     "pohdaa0c5a460c62427c303a7e2c6034c8744cd577d": {
@@ -554,8 +570,16 @@
       "balance": 16323856267,
       "nonce": 0
     },
+    "pohf3dc9001452b66d813bc4198992cf16ff883f81d": {
+      "balance": 112500000,
+      "nonce": 0
+    },
     "pohf766ce5a59afb9124e7229cad4307525522e4f55": {
-      "balance": 3200000000,
+      "balance": 0,
+      "nonce": 1
+    },
+    "pohfc1ad9c73750f0dace61cd33549eb88f13b43fc0": {
+      "balance": 860000000,
       "nonce": 0
     },
     "pohff32bccc2892374d49474a49d42c4d9547c2823b": {
