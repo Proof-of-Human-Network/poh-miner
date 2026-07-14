@@ -4029,6 +4029,15 @@ export class PohMinerNode {
               );
             }
             if (!isFreshStart && compareChainWork(bestWork, localWork) > 0) {
+              // Forked tip can't be appended incrementally. Try a cheap bounded reorg
+              // (splice at the common ancestor within FINALITY_DEPTH) BEFORE escalating to a
+              // full chain re-download — the full resync blocks the event loop across
+              // hundreds of blocks and orphans in-flight jobs/payments (multi-miner churn).
+              const stallHealed = await this._tryBoundedReorg(bestBase, bestHeight);
+              if (stallHealed) {
+                console.log('[PoH-Miner] [Sync] Incremental stall healed via bounded reorg — chains converged.');
+                return;
+              }
               console.warn(`[PoH-Miner] Incremental sync stalled at height ${localChainHeight} — full resync from ${bestLabel}`);
               isFreshStart = true;
               isFork = true;
@@ -4076,6 +4085,14 @@ export class PohMinerNode {
         const anchor = this.chain[anchorIdx];
         const anchorHash = anchor?.blockHash || anchor?.getHashSync();
         if (!anchor || parsed[0].previousHash !== anchorHash) {
+          // Anchor didn't link — try a cheap bounded reorg (deeper common-ancestor search
+          // within FINALITY_DEPTH) before falling back to the event-loop-blocking full
+          // chain re-download.
+          const anchorHealed = await this._tryBoundedReorg(bestBase, bestHeight);
+          if (anchorHealed) {
+            console.log('[PoH-Miner] [Sync] Anchor mismatch healed via bounded reorg — chains converged.');
+            return;
+          }
           console.warn(`[PoH-Miner] Partial reorg anchor mismatch at ${anchorHeight} — falling back to full resync`);
           // Re-download the full chain from genesis
           downloadedBlocks.length = 0;
