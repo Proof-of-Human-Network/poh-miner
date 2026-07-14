@@ -3643,7 +3643,10 @@ export class PohMinerNode {
     // balances/nonces as canonical ledger state (see scripts/genesis/README.md).
     // The genesis block itself is then synced to peers, so miners converge on one identity.
     if (this.chain.length === 0) {
-      const g = createGenesisBlock({ snapshot: this.config.genesisSnapshot || defaultMigrationSnapshot(), difficulty: this.currentDifficulty });
+      // Genesis difficulty MUST be a fixed constant identical on miner + bootnode (3 = MIN_DIFFICULTY).
+      // It is read by getNextDifficulty for block #1's expected difficulty; using the mutable
+      // this.currentDifficulty made the miner (3) and bootnode (4) disagree → block #1 rejected.
+      const g = createGenesisBlock({ snapshot: this.config.genesisSnapshot || defaultMigrationSnapshot(), difficulty: 3 });
       this.chain.push(g.genesis);
       this.chainStore.saveChain(this.chain);
       if (g.migration) {

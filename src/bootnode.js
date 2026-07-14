@@ -395,7 +395,7 @@ function pruneStalePeers() {
 setInterval(pruneStalePeers, 2 * 60 * 1000);
 
 if (chain.length === 0) {
-  const g = createGenesisBlock({ snapshot: GENESIS_SNAPSHOT, difficulty: 4 });
+  const g = createGenesisBlock({ snapshot: GENESIS_SNAPSHOT, difficulty: 3 }); // must match miner genesis difficulty (MIN_DIFFICULTY)
   chain.push(g.genesis);
   chainStore.saveChain(chain);
   if (g.migration) {
