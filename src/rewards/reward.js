@@ -108,7 +108,7 @@ export const KEEPALIVE_UPOH = Math.floor(0.05 * POH_DECIMALS);
  * use v2. FLAG-DAY: pinned to (chain tip + ~10) at the coordinated 2026-07-13
  * deploy — every node must be on this build before the chain reaches this height.
  */
-export const REWARD_V2_HEIGHT = 225;
+export const REWARD_V2_HEIGHT = 0;
 
 /**
  * Deterministic compute weight for one work result, derived ONLY from fields that
