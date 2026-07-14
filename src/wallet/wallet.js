@@ -284,6 +284,32 @@ export class WalletManager {
     return wallet ? (wallet.balance || 0) : 0;
   }
 
+  // Cheap existence check — no unseal.
+  walletExists(address) {
+    return fs.existsSync(path.join(this.walletsDir, `${address}.json`));
+  }
+
+  // Update ONLY the plaintext balance/nonce fields of a sealed wallet file, WITHOUT
+  // unsealing (scrypt-decrypting) the keys. The balance rebuild touches thousands of
+  // wallets; routing that through loadWallet runs scrypt per wallet and pins the event
+  // loop at 100% for minutes (frozen HTTP API). balance/nonce live top-level in plaintext
+  // (sealWalletData only encrypts the key fields), so they can be edited in place.
+  // Returns true if the file changed. Pass nonce=null to leave nonce untouched.
+  setBalanceNonceRaw(address, balance, nonce = null) {
+    const file = path.join(this.walletsDir, `${address}.json`);
+    if (!fs.existsSync(file)) return false;
+    let raw;
+    try { raw = JSON.parse(fs.readFileSync(file, 'utf8')); } catch { return false; }
+    const newNonce = nonce == null ? (raw.nonce || 0) : nonce;
+    if ((raw.balance || 0) === balance && (raw.nonce || 0) === newNonce) return false; // no change → no write
+    raw.balance = balance;
+    raw.nonce = newNonce;
+    const tmp = file + '.tmp';
+    fs.writeFileSync(tmp, JSON.stringify(raw, null, 2));
+    fs.renameSync(tmp, file);
+    return true;
+  }
+
   // Credit balance (used when receiving rewards or transfers)
   // Auto-creates a stub wallet file for the address if none exists (so remote workerIds or
   // alternate identity addresses like solana addrs used as pohWallet still get balances recorded).

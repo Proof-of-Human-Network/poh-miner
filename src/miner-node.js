@@ -5242,17 +5242,14 @@ export class PohMinerNode {
     for (const addr of allAddrs) {
       const balance = balances.get(addr) ?? 0;
       const nonce   = nonces.get(addr) ?? 0;
-      const existing = this.walletManager.loadWallet(addr);
-      if (existing) {
-        existing.balance = balance;
-        existing.nonce   = nonce;
-        this.walletManager.saveWallet(existing);
+      // Raw balance/nonce write — never scrypt-unseal a wallet's keys just to persist a
+      // balance (there can be thousands of wallet files; loadWallet per wallet freezes
+      // the event loop). Only fall back to credit() to create a stub for unseen addresses.
+      if (this.walletManager.walletExists(addr)) {
+        this.walletManager.setBalanceNonceRaw(addr, balance, nonce);
       } else {
         this.walletManager.credit(addr, balance);
-        if (nonce > 0) {
-          const w = this.walletManager.loadWallet(addr);
-          if (w) { w.nonce = nonce; this.walletManager.saveWallet(w); }
-        }
+        if (nonce > 0) this.walletManager.setBalanceNonceRaw(addr, balance, nonce);
       }
       if (++_flushCount % 50 === 0) await new Promise(r => setImmediate(r));
     }
@@ -5260,8 +5257,9 @@ export class PohMinerNode {
     let _zeroCount = 0;
     for (const addr of this.walletManager.listWallets()) {
       if (!allAddrs.has(addr)) {
-        const w = this.walletManager.loadWallet(addr);
-        if (w && (w.balance || 0) !== 0) { w.balance = 0; this.walletManager.saveWallet(w); }
+        // Raw zero — no scrypt-unseal. setBalanceNonceRaw skips the write when already 0,
+        // so this is a cheap JSON read for the (many) already-zero stale wallet files.
+        this.walletManager.setBalanceNonceRaw(addr, 0);
       }
       if (++_zeroCount % 50 === 0) await new Promise(r => setImmediate(r));
     }
