@@ -26,8 +26,8 @@
     --green:#22c55e; --red:#ef4444;
     /* night Simien Mountains scene */
     --sky-top:#04060c; --sky-mid:#081321; --sky-low:#0e2133;
-    --moon:#eef4ff; --snow-lit:#cdd9ea; --snow-shade:#33465e; --snow-deep:#1a2a3e;
-    --ridge-far:#132234; --ridge-mid:#0d1928;
+    --moon:#ffeccd; --snow-lit:#c2a888; --snow-shade:#4d3a2a; --snow-deep:#2a1d13;
+    --ridge-far:#2b1f18; --ridge-mid:#1a120c;
 
     --maxw:1120px;
     --step-1:clamp(1.4375rem,1.25rem + 0.875vw,1.875rem);
@@ -154,7 +154,7 @@
   /* cta */
   .cta{align-items:center;text-align:center}
   .btns{display:flex;gap:.9rem;flex-wrap:wrap;justify-content:center;margin-top:.4rem}
-  .btn{display:inline-flex;align-items:center;gap:.5rem;padding:.85rem 1.6rem;border-radius:999px;
+  .btn{display:inline-flex;align-items:center;gap:.5rem;padding:.85rem 1.6rem;
     font-family:var(--sans);font-weight:600;text-decoration:none;font-size:1.2rem;transition:transform .2s,background .2s}
   .btn.primary{background:var(--green);color:#000}
   .btn.primary:hover{background:#2fd66a}
@@ -260,15 +260,22 @@
     <path d="M0 486 L200 420 L380 470 L580 392 L780 456 L1000 404 L1220 462 L1440 420 L1440 640 L0 640 Z" fill="var(--ridge-far)"/>
     <path d="M0 524 L240 470 L470 514 L700 446 L940 508 L1180 468 L1440 512 L1440 660 L0 660 Z" fill="var(--ridge-mid)"/>
 
-    <!-- main massif, moonlit -->
-    <path d="M470 640 L760 226 L1030 640 Z" fill="url(#snow)"/>
-    <path d="M760 226 L1030 640 L800 640 L760 372 Z" fill="var(--snow-deep)" opacity=".85"/>
-    <path d="M760 226 L806 340 L770 382 L820 478 L784 568 L470 640 Z" fill="var(--snow-lit)" opacity=".5"/>
-    <path d="M760 226 L700 350 L742 382 L690 478 L735 548 L706 640 L640 640 L560 512 Z" fill="var(--snow-shade)" opacity=".8"/>
-    <path d="M250 640 L430 396 L610 640 Z" fill="url(#snow)" opacity=".8"/>
-    <path d="M430 396 L610 640 L470 640 L430 486 Z" fill="var(--snow-deep)" opacity=".85"/>
-    <path d="M980 640 L1150 436 L1330 640 Z" fill="url(#snow)" opacity=".72"/>
-    <path d="M1150 436 L1330 640 L1180 640 L1150 512 Z" fill="var(--snow-deep)" opacity=".85"/>
+    <!-- the Simien escarpment, moonlit: a flat-topped amba and jagged spires -->
+    <path d="M456 640 L496 410 L906 380 L946 640 Z" fill="url(#snow)"/>
+    <path d="M906 380 L946 640 L776 640 L796 396 Z" fill="var(--snow-deep)" opacity=".8"/>
+    <path d="M496 410 L906 380 L888 420 L514 448 Z" fill="var(--snow-lit)" opacity=".45"/>
+    <!-- stepped terraces down the escarpment face -->
+    <g fill="var(--snow-shade)" opacity=".5">
+      <path d="M488 486 L912 462 L914 494 L490 518 Z"/>
+      <path d="M482 566 L918 544 L920 574 L484 596 Z"/>
+    </g>
+    <!-- pinnacles left -->
+    <path d="M210 640 L300 402 L344 520 L400 380 L470 640 Z" fill="url(#snow)" opacity=".8"/>
+    <path d="M400 380 L470 640 L360 640 L400 470 Z" fill="var(--snow-deep)" opacity=".8"/>
+    <!-- pinnacles right -->
+    <path d="M940 640 L1030 430 L1082 540 L1150 396 L1240 640 Z" fill="url(#snow)" opacity=".72"/>
+    <path d="M1150 396 L1240 640 L1120 640 L1150 480 Z" fill="var(--snow-deep)" opacity=".8"/>
+    <path d="M1220 640 L1320 470 L1420 640 Z" fill="url(#snow)" opacity=".58"/>
 
     <!-- drifting cloud band -->
     <g class="cloud" opacity=".5">
@@ -280,7 +287,8 @@
     <path d="M0 620 L260 576 L520 626 L820 576 L1120 628 L1440 586 L1440 760 L0 760 Z" fill="#0c1622"/>
     <path d="M0 690 L320 650 L660 700 L1000 654 L1440 702 L1440 900 L0 900 Z" fill="#070d15"/>
     <path d="M0 792 L1440 770 L1440 900 L0 900 Z" fill="#04070c"/>
-    <g id="poppies"></g>
+    <!-- tukul huts on the highland below -->
+    <g class="tukuls" data-list="240,828,104|468,840,126|1092,832,112"></g>
   </svg>
 
   <div class="veil"></div>
@@ -298,13 +306,7 @@
   </div>
 
   <div class="hero-inner wrap">
-    <span class="kicker"><span class="g"></span> Based in Ethiopia · Decentralized AI compute</span>
     <h1 class="headline">Decentralized AI compute, paid in <span class="t">ETB</span></h1>
-    <p class="lede">Ethiopian-built compute for the <b>ETB</b> ecosystem — Birr stablecoin.</p>
-    <div class="herostats">
-      <span class="chip"><b>1&nbsp;ETB&nbsp;=&nbsp;1&nbsp;<span class="tari">Br</span></b></span>
-      <span class="chip"><span class="g"></span> Powered by the POH network</span>
-    </div>
   </div>
 </header>
 

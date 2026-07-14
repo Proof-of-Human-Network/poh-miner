@@ -154,7 +154,7 @@
   /* cta */
   .cta{align-items:center;text-align:center}
   .btns{display:flex;gap:.9rem;flex-wrap:wrap;justify-content:center;margin-top:.4rem}
-  .btn{display:inline-flex;align-items:center;gap:.5rem;padding:.85rem 1.6rem;border-radius:999px;
+  .btn{display:inline-flex;align-items:center;gap:.5rem;padding:.85rem 1.6rem;
     font-family:var(--sans);font-weight:600;text-decoration:none;font-size:1.2rem;transition:transform .2s,background .2s}
   .btn.primary{background:var(--green);color:#000}
   .btn.primary:hover{background:#2fd66a}
@@ -260,15 +260,16 @@
     <path d="M0 486 L200 420 L380 470 L580 392 L780 456 L1000 404 L1220 462 L1440 420 L1440 640 L0 640 Z" fill="var(--ridge-far)"/>
     <path d="M0 524 L240 470 L470 514 L700 446 L940 508 L1180 468 L1440 512 L1440 660 L0 660 Z" fill="var(--ridge-mid)"/>
 
-    <!-- main massif, moonlit -->
-    <path d="M470 640 L760 226 L1030 640 Z" fill="url(#snow)"/>
-    <path d="M760 226 L1030 640 L800 640 L760 372 Z" fill="var(--snow-deep)" opacity=".85"/>
-    <path d="M760 226 L806 340 L770 382 L820 478 L784 568 L470 640 Z" fill="var(--snow-lit)" opacity=".5"/>
-    <path d="M760 226 L700 350 L742 382 L690 478 L735 548 L706 640 L640 640 L560 512 Z" fill="var(--snow-shade)" opacity=".8"/>
-    <path d="M250 640 L430 396 L610 640 Z" fill="url(#snow)" opacity=".8"/>
-    <path d="M430 396 L610 640 L470 640 L430 486 Z" fill="var(--snow-deep)" opacity=".85"/>
-    <path d="M980 640 L1150 436 L1330 640 Z" fill="url(#snow)" opacity=".72"/>
-    <path d="M1150 436 L1330 640 L1180 640 L1150 512 Z" fill="var(--snow-deep)" opacity=".85"/>
+    <!-- Khan Tengri, moonlit: the sharp marble pyramid of the Tian Shan -->
+    <path d="M520 640 L762 180 L1004 640 Z" fill="url(#snow)"/>
+    <path d="M762 180 L1004 640 L800 640 L762 330 Z" fill="var(--snow-deep)" opacity=".85"/>
+    <path d="M762 180 L800 320 L768 366 L812 470 L780 566 L520 640 Z" fill="var(--snow-lit)" opacity=".5"/>
+    <path d="M762 180 L712 330 L748 372 L700 472 L740 552 L714 640 L648 640 L586 520 Z" fill="var(--snow-shade)" opacity=".8"/>
+    <!-- flanking Tian Shan ridges -->
+    <path d="M250 640 L446 368 L642 640 Z" fill="url(#snow)" opacity=".78"/>
+    <path d="M446 368 L642 640 L500 640 L446 470 Z" fill="var(--snow-deep)" opacity=".85"/>
+    <path d="M960 640 L1156 404 L1352 640 Z" fill="url(#snow)" opacity=".7"/>
+    <path d="M1156 404 L1352 640 L1200 640 L1156 496 Z" fill="var(--snow-deep)" opacity=".85"/>
 
     <!-- drifting cloud band -->
     <g class="cloud" opacity=".5">
@@ -280,7 +281,8 @@
     <path d="M0 620 L260 576 L520 626 L820 576 L1120 628 L1440 586 L1440 760 L0 760 Z" fill="#0c1622"/>
     <path d="M0 690 L320 650 L660 700 L1000 654 L1440 702 L1440 900 L0 900 Z" fill="#070d15"/>
     <path d="M0 792 L1440 770 L1440 900 L0 900 Z" fill="#04070c"/>
-    <g id="poppies"></g>
+    <!-- yurts on the jailoo below the peaks -->
+    <g class="yurts" data-list="232,822,104|432,834,126|1074,830,112|1276,820,94"></g>
   </svg>
 
   <div class="veil"></div>
@@ -298,13 +300,7 @@
   </div>
 
   <div class="hero-inner wrap">
-    <span class="kicker"><span class="g"></span> Based in Kyrgyzstan · Decentralized AI compute</span>
     <h1 class="headline">Decentralized AI compute, paid in <span class="t">KGS</span></h1>
-    <p class="lede">Kyrgyz-built compute for the <b>KGS</b> ecosystem — Kyrgyz Som stablecoin.</p>
-    <div class="herostats">
-      <span class="chip"><b>1&nbsp;KGS&nbsp;=&nbsp;1&nbsp;<span class="tari">som</span></b></span>
-      <span class="chip"><span class="g"></span> Powered by the POH network</span>
-    </div>
   </div>
 </header>
 
@@ -392,7 +388,7 @@
       <!-- moon reflection -->
       <rect x="1128" y="664" width="24" height="150" fill="var(--moonglow)" opacity=".14"/>
       <!-- yurts (boz üy) on the near shore -->
-      <g class="yurts" data-list="300,648,120|560,656,150|980,652,132|1200,660,108"></g>
+      <g class="yurts" data-reflect="1" data-list="300,648,120|560,656,150|980,652,132|1200,660,108"></g>
       <!-- shoreline -->
       <path d="M0 740 Q 720 718 1440 740 L1440 900 L0 900 Z" fill="#0b0820"/>
     </svg>
@@ -742,7 +738,7 @@
       g.appendChild(el('path',{d:'M'+(cx-r)+' '+wallTop+' Q '+cx+' '+crown+' '+(cx+r)+' '+wallTop+' Q '+cx+' '+eaveDip+' '+(cx-r)+' '+wallTop+' Z',fill:'#37306a'}));
       g.appendChild(el('ellipse',{cx:cx,cy:(by-h*1.0).toFixed(0),rx:(r*0.16).toFixed(1),ry:(r*0.06).toFixed(1),fill:'#0b0820'}));
       g.appendChild(el('rect',{x:(cx-w*0.10).toFixed(0),y:(by-h*0.30).toFixed(0),width:(w*0.20).toFixed(0),height:(h*0.30).toFixed(0),rx:2,fill:'#f5b45a',opacity:'.85'}));
-      g.appendChild(el('rect',{x:(cx-3),y:(by+4),width:6,height:38,fill:'#f5b45a',opacity:'.16'}));
+      if(g.dataset.reflect==='1') g.appendChild(el('rect',{x:(cx-3),y:(by+4),width:6,height:38,fill:'#f5b45a',opacity:'.16'}));
     });
   });
 
