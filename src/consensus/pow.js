@@ -107,7 +107,7 @@ export function mineBlockThreaded(block, difficulty, abortSignal) {
 // were mined under the legacy floor of 5 and MUST keep validating against it; blocks
 // above use MIN_DIFFICULTY. Without this gate, lowering MIN_DIFFICULTY retroactively
 // invalidates the legacy blocks ("difficulty mismatch") and forks the chain.
-export const DIFFICULTY_REDUCTION_HEIGHT = 270;
+export const DIFFICULTY_REDUCTION_HEIGHT = 0;
 const LEGACY_MIN_DIFFICULTY = 5;
 function difficultyFloor(height) {
   return height > DIFFICULTY_REDUCTION_HEIGHT ? MIN_DIFFICULTY : LEGACY_MIN_DIFFICULTY;
