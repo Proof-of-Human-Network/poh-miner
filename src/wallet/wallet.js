@@ -295,6 +295,16 @@ export class WalletManager {
   // loop at 100% for minutes (frozen HTTP API). balance/nonce live top-level in plaintext
   // (sealWalletData only encrypts the key fields), so they can be edited in place.
   // Returns true if the file changed. Pass nonce=null to leave nonce untouched.
+  // Read {balance, nonce} from a wallet file WITHOUT unsealing (scrypt) the keys.
+  rawBalanceNonce(address) {
+    const file = path.join(this.walletsDir, `${address}.json`);
+    if (!fs.existsSync(file)) return { balance: 0, nonce: 0 };
+    try {
+      const raw = JSON.parse(fs.readFileSync(file, 'utf8'));
+      return { balance: raw.balance || 0, nonce: raw.nonce || 0 };
+    } catch { return { balance: 0, nonce: 0 }; }
+  }
+
   setBalanceNonceRaw(address, balance, nonce = null) {
     const file = path.join(this.walletsDir, `${address}.json`);
     if (!fs.existsSync(file)) return false;
@@ -373,10 +383,14 @@ export class WalletManager {
 
   // SHA-256 over sorted wallet states — deterministic fingerprint of account ledger
   getStateRoot() {
+    // Read balance/nonce raw (no scrypt-unseal). This runs on EVERY block production
+    // over every wallet file; going through loadWallet pinned the event loop at 100%
+    // and froze the API. The hashed data (address/balance/nonce) is identical, so the
+    // state-root value is unchanged — validators recompute the same hash.
     const entries = this.listWallets()
       .map(address => {
-        const w = this.loadWallet(address);
-        return { address, balance: w?.balance || 0, nonce: w?.nonce || 0 };
+        const { balance, nonce } = this.rawBalanceNonce(address);
+        return { address, balance, nonce };
       })
       .sort((a, b) => a.address.localeCompare(b.address));
     return crypto.createHash('sha256').update(JSON.stringify(entries)).digest('hex');
