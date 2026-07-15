@@ -1,6 +1,6 @@
 /**
  * SkillsManager — tracks on-chain skill lifecycle:
- *   proposed → staking (1,000 POH threshold) → graduated (active) → deprecated
+ *   proposed → staking (10 POH threshold) → graduated (active) → deprecated
  *
  * Mirrors how MethodsManager tracks the signals list.
  * Processes 'skill-proposed' and 'skill-deprecated' state transitions from blocks.
