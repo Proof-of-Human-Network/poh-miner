@@ -47,6 +47,15 @@ contextBridge.exposeInMainWorld('pohMinerAPI', {
     restart: () => ipcRenderer.invoke('app:restart'),
   },
 
+  // Public-job chat encryption (portable X25519+HKDF+AES-GCM; see CHAT-CRYPTO.md).
+  // For sealing prompts / opening replies when talking to a remote node; the local
+  // node already decrypts the owner's own history server-side.
+  crypto: {
+    seal: (recipientPubB64, plaintext) => ipcRenderer.invoke('crypto:seal', recipientPubB64, plaintext),
+    open: (envelope, privateKeyB64) => ipcRenderer.invoke('crypto:open', envelope, privateKeyB64),
+    deriveKeypair: (secret) => ipcRenderer.invoke('crypto:derive-keypair', secret),
+  },
+
   // QR code generation — delegated to main process (qrcode uses Node fs APIs, not safe in sandbox)
   generateQR: (text, size = 220) => ipcRenderer.invoke('generate-qr', text, size),
 

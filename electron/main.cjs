@@ -376,6 +376,17 @@ ipcMain.handle('generate-qr', async (_event, text, size = 220) => {
   const QRCode = require('qrcode');
   return QRCode.toDataURL(text, { width: size, margin: 2, color: { dark: '#000', light: '#fff' } });
 });
+
+// Public-job chat encryption (same X25519+HKDF+AES-GCM format as the node/SDK/mobile).
+// Local desktop usually never needs this — the local node decrypts the owner's own
+// history via its API — but it's exposed for talking to a REMOTE node where the app
+// must seal outgoing prompts / open sealed replies itself. See CHAT-CRYPTO.md.
+async function _chatCrypto() {
+  return import(pathToFileURL(path.join(__dirname, '../src/security/chat-crypto.js')).href);
+}
+ipcMain.handle('crypto:seal', async (_e, recipientPubB64, plaintext) => (await _chatCrypto()).seal(recipientPubB64, plaintext));
+ipcMain.handle('crypto:open', async (_e, envelope, privateKeyB64) => (await _chatCrypto()).open(envelope, privateKeyB64));
+ipcMain.handle('crypto:derive-keypair', async (_e, secret) => (await _chatCrypto()).deriveEncryptionKeypair(secret));
 ipcMain.handle('get-status', () => {
   if (!minerNode) return null;
 

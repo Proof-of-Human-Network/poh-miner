@@ -205,6 +205,24 @@ async function getModelId(requested) {
   }
 }
 
+// Rough prompt-token count for metering. QVAC's completion addon does not expose
+// a tokenizer, so we approximate at ~4 chars/token (ceil) plus a small per-message
+// role overhead. Conservative for billing: it never undercounts a real prompt by
+// much, and the output side is metered exactly from the stream.
+function estimatePromptTokens(history) {
+  let chars = 0;
+  for (const m of (history || [])) chars += (m?.content?.length || 0) + 4;
+  return Math.ceil(chars / 4);
+}
+
+// Same approximation over a raw messages[] payload (before history assembly) —
+// used by the fee pre-flight, where we only have the request body.
+function estimateMessagesTokens(messages, systemPrompt) {
+  const rows = [...(messages || [])];
+  if (systemPrompt) rows.push({ content: systemPrompt });
+  return estimatePromptTokens(rows);
+}
+
 // ── Chat completion (generic messages[] interface) ──────────────────────────
 // messages: [{ role: 'system'|'user'|'assistant', content: string }, ...]
 // Returns the assistant text, or null when QVAC is disabled/unavailable so
@@ -220,6 +238,8 @@ async function chat(messages, opts = {}) {
     jsonMode = false,
     noThink = true,           // Qwen3: suppress chain-of-thought tokens
     systemPrompt,
+    withUsage = false,        // when true, return { text, promptTokens, completionTokens, totalTokens }
+    hardTokenCap = 0,         // stop generation after this many OUTPUT tokens (0 = uncapped)
   } = opts;
 
   return enqueue(async () => {
@@ -252,10 +272,24 @@ async function chat(messages, opts = {}) {
 
       const run = sdk.completion({ modelId, history, stream: true });
       let text = '';
-      for await (const token of run.tokenStream) text += token;
+      let completionTokens = 0;           // exact: one stream chunk == one output token
+      for await (const token of run.tokenStream) {
+        text += token;
+        completionTokens++;
+        // No-refund hard cap: budget bounds output, so stop once we've generated
+        // every token the requester paid for (see gas-estimator.outputTokenCap).
+        if (hardTokenCap > 0 && completionTokens >= hardTokenCap) {
+          try { run.cancel?.(); } catch { /* best-effort — loop break is enough */ }
+          break;
+        }
+      }
 
       text = text.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
       _failures = 0;
+      if (withUsage) {
+        const promptTokens = estimatePromptTokens(history);
+        return { text, promptTokens, completionTokens, totalTokens: promptTokens + completionTokens };
+      }
       return text;
     } catch (err) {
       _failures++;
@@ -315,6 +349,8 @@ module.exports = {
   listModels,
   getModelId,
   status,
+  estimatePromptTokens,
+  estimateMessagesTokens,
   DEFAULT_MODEL,
   ENABLED,
 };

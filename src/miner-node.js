@@ -60,7 +60,7 @@ import { WalletManager, Wallet } from './wallet/wallet.js';
 import { RewardClaimStore } from './storage/reward-claim-store.js';
 import { skillsManager } from './skills/manager.js';
 import { loadAllSkills, writeSkillFile } from './skills/loader.js';
-import { estimateTokens, settleFee, timeoutFee, GAS } from './jobs/gas-estimator.js';
+import { estimateTokens, estimateChatTokens, outputTokenCap, settleFee, timeoutFee, GAS } from './jobs/gas-estimator.js';
 import { feedbackStore } from './jobs/feedback-store.js';
 import http from 'http';
 import { resolveRpcConfig } from './rpc/resolver.js';
@@ -79,6 +79,7 @@ import { serveHfDataset, pullHfDatasetFromPeer } from './datasets/hf-dataset-pee
 import { applyCorsHeaders, rejectNonLocalStateChange } from './security/api-security.js';
 import { normalizeSkillId } from './security/skill-id.js';
 import { buildWalletJobContext, promptPreviewFromJob, jobToSearchDocument, buildAllSearchDocuments, PROMPT_PREVIEW_MAX } from './chain/chain-job-index.js';
+import { seal as sealChat } from './security/chat-crypto.js';
 import { ChatHistorySearch } from './search/chat-history-search.js';
 import { ensureMeilisearch, getMeilisearchMasterKey, resolveMeilisearchUrl } from './search/meilisearch-server.js';
 
@@ -957,7 +958,7 @@ export class PohMinerNode {
       }
       await this.chatHistorySearch.init();
       const localRecords = this.jobResults ? Array.from(this.jobResults.values()) : [];
-      await this.chatHistorySearch.reindexAll(this.chain, localRecords);
+      await this.chatHistorySearch.reindexAll(this.chain, localRecords, this._encKeyFor(this.config.wallet));
     } catch (e) {
       console.warn(`[PoH-Miner] Chat-history search disabled — Meilisearch unavailable: ${e.message}`);
       console.warn('[PoH-Miner] Mining continues without search. Fix Meilisearch and restart to re-enable.');
@@ -1223,7 +1224,7 @@ export class PohMinerNode {
         req.on('data', c => body += c);
         req.on('end', () => {
           try {
-            const { address, signingPublicKey, proof, rotationProof } = JSON.parse(body);
+            const { address, signingPublicKey, encryptionPublicKey, proof, rotationProof } = JSON.parse(body);
             if (!address || !signingPublicKey || !proof) {
               res.statusCode = 400;
               return res.end(JSON.stringify({ error: 'address, signingPublicKey, and proof required' }));
@@ -1251,8 +1252,15 @@ export class PohMinerNode {
               return res.end(JSON.stringify({ error: 'invalid proof' }));
             }
             wallet.signingPublicKey = signingPublicKey;
+            // Register the wallet's X25519 encryption public key so miners can seal
+            // public-job chat records to it. Authenticated by the same signing proof
+            // above; it's a public value (32-byte raw, base64). Optional for back-compat.
+            if (encryptionPublicKey && /^[A-Za-z0-9+/=]+$/.test(encryptionPublicKey) &&
+                Buffer.from(encryptionPublicKey, 'base64').length === 32) {
+              wallet.encryptionPublicKey = encryptionPublicKey;
+            }
             this.walletManager.saveWallet(wallet);
-            return res.end(JSON.stringify({ ok: true }));
+            return res.end(JSON.stringify({ ok: true, encryptionPublicKey: wallet.encryptionPublicKey || null }));
           } catch (e) {
             res.statusCode = 400;
             res.end(JSON.stringify({ error: e.message }));
@@ -1658,7 +1666,11 @@ export class PohMinerNode {
             // Record for status polling immediately (non-blocking)
             this._recordJob(job);
 
-            // Commit job submission to chain so all nodes have the full job history
+            // Commit job submission to chain so all nodes have the full job history.
+            // Public jobs seal the prompt to the requester's key so the chain holds no
+            // cleartext; local/private jobs keep a cleartext preview for search.
+            const { encrypt: encJob, encPub: jobEncPub } = this._chatVisibility(job);
+            const jobPrompt = job.payload?.prompt || job.payload?.message || job.payload?.question || '';
             const jobSubmittedTransition = {
               type: 'job-submitted',
               jobId: job.id,
@@ -1667,7 +1679,9 @@ export class PohMinerNode {
               skillId: job.skillId || null,
               requesterAddress: job.requesterAddress || null,
               maxBudget: job.maxBudget || 0,
-              promptPreview: promptPreviewFromJob(job),
+              promptPreview: encJob ? null : promptPreviewFromJob(job),
+              promptCipher:  encJob && jobPrompt ? sealChat(jobEncPub, String(jobPrompt)) : null,
+              encrypted:     encJob,
               model: job.model || null,
               dataset: job.dataset || job.datasetId || null,
               timestamp: Date.now(),
@@ -2183,6 +2197,85 @@ export class PohMinerNode {
         return;
       }
 
+      // ── OpenAI-compatible API (/v1/models, /v1/chat/completions) ─────────────
+      // Public compute surface. Local/private calls run free on the operator's own
+      // node; REMOTE calls must carry a signed per-request bid (poh.paymentTx) and
+      // are billed in μPOH at the tokens consumed — no refund, the whole bid is the
+      // fee (overpaying buys queue priority, see the job-board fee race). The
+      // response carries an OpenAI-shaped `usage` block metered from the real run,
+      // plus X-POH-Fee / X-POH-Model headers.
+      if (url.pathname === '/v1/models') {
+        const sendJson = (code, obj) => { res.statusCode = code; res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify(obj)); };
+        (async () => {
+          try {
+            const qvac = await getQvacModels();
+            const list = qvac ? await qvac.listModels() : [];
+            sendJson(200, { object: 'list', data: list.map(m => ({ id: m.name, object: 'model', created: 0, owned_by: 'poh', label: m.label, loaded: m.loaded })) });
+          } catch (e) {
+            sendJson(502, { error: { message: 'QVAC unavailable: ' + e.message, type: 'server_error' } });
+          }
+        })();
+        return;
+      }
+
+      if (req.method === 'POST' && url.pathname === '/v1/chat/completions') {
+        const sendJson = (code, obj) => { res.statusCode = code; res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify(obj)); };
+        const oaiError = (code, message, type = 'invalid_request_error', extra = {}) => sendJson(code, { error: { message, type, ...extra } });
+        let body = '';
+        req.on('data', c => body += c);
+        req.on('end', async () => {
+          try {
+            const payload = body ? JSON.parse(body) : {};
+            const messages = Array.isArray(payload.messages) ? payload.messages : [];
+            if (!messages.length) return oaiError(400, 'messages[] is required');
+            if (payload.stream) return oaiError(400, 'stream:true is not yet supported on this endpoint — request a non-streaming completion', 'not_supported');
+
+            const qvac = await getQvacModels();
+            if (!qvac || !qvac.ENABLED) return oaiError(503, 'Inference backend (QVAC) is unavailable', 'server_error');
+            const model = payload.model || this.config.model || 'qwen3-1.7b';
+
+            // Payment envelope: body.poh { jobId, requesterAddress, maxBudget, paymentTx }
+            // (headers accepted as an alternative for OpenAI SDKs that can't extend the body).
+            const poh = payload.poh || {};
+            const jobId            = poh.jobId            || req.headers['x-poh-job-id'] || null;
+            const requesterAddress = poh.requesterAddress || req.headers['x-poh-requester'] || null;
+            const maxBudget        = Number(poh.maxBudget != null ? poh.maxBudget : req.headers['x-poh-max-budget']) || 0;
+            let   paymentTx        = poh.paymentTx || null;
+            if (!paymentTx && req.headers['x-poh-payment']) {
+              try { paymentTx = JSON.parse(req.headers['x-poh-payment']); } catch { /* malformed header — treated as missing proof */ }
+            }
+
+            const buildResponse = (text, usage) => ({
+              id: 'chatcmpl-' + crypto.randomBytes(12).toString('hex'),
+              object: 'chat.completion',
+              created: Math.floor(Date.now() / 1000),
+              model,
+              choices: [{ index: 0, message: { role: 'assistant', content: text }, finish_reason: 'stop' }],
+              usage: { prompt_tokens: usage.promptTokens, completion_tokens: usage.completionTokens, total_tokens: usage.totalTokens },
+            });
+
+            // Local/private operator use → free. Remote → paid.
+            if (isTrulyLocalRequest(req) && !requesterAddress) {
+              const usage = await qvac.chat(messages, { model, timeLimit: 90_000, withUsage: true });
+              if (usage == null || usage.text == null) return oaiError(503, `Model "${model}" produced no output`, 'server_error');
+              res.setHeader('X-POH-Model', model);
+              res.setHeader('X-POH-Fee', '0');
+              return sendJson(200, buildResponse(usage.text, usage));
+            }
+
+            // Remote → require a signed bid and bill it.
+            const r = await this._runPaidCompute({ jobId, requesterAddress, maxBudget, paymentTx, messages, model });
+            if (r.error) return oaiError(r.status || 402, r.error, 'payment_required', { code: r.code, minFee: r.minFee, minTokens: r.minTokens });
+            res.setHeader('X-POH-Model', r.model);
+            res.setHeader('X-POH-Fee', String(r.fee));
+            return sendJson(200, buildResponse(r.text, r.usage));
+          } catch (e) {
+            return oaiError(400, e.message);
+          }
+        });
+        return;
+      }
+
       // ── Network-wide model discovery (local Ollama models + models peers report) ──
       if (req.method === 'GET' && url.pathname === '/api/network-models') {
         (async () => {
@@ -2433,7 +2526,7 @@ export class PohMinerNode {
             let chainContext = null;
             if (!isPrivate && requesterAddress) {
               const localRecords = this.jobResults ? Array.from(this.jobResults.values()) : [];
-              chainContext = buildWalletJobContext(this.chain, requesterAddress, { limit: 20, localRecords, chatTurnLimit: 8 });
+              chainContext = buildWalletJobContext(this.chain, requesterAddress, { limit: 20, localRecords, chatTurnLimit: 8, decryptKey: this._encKeyFor(requesterAddress) });
             }
             const historyWithChain = _mergeHistoryWithChainTurns(history, chainContext?.chatTurns);
 
@@ -5312,7 +5405,7 @@ export class PohMinerNode {
   _getWalletJobContext(requesterAddress, limit = 20) {
     if (!requesterAddress) return { jobs: [], latestSkillMemory: null, chatTurns: [] };
     const localRecords = this.jobResults ? Array.from(this.jobResults.values()) : [];
-    return buildWalletJobContext(this.chain, requesterAddress, { limit, localRecords, chatTurnLimit: 8 });
+    return buildWalletJobContext(this.chain, requesterAddress, { limit, localRecords, chatTurnLimit: 8, decryptKey: this._encKeyFor(requesterAddress) });
   }
 
   _indexJobInSearch(jobOrRecord) {
@@ -5333,14 +5426,16 @@ export class PohMinerNode {
       reasoning: rec?.result?.reasoning || null,
       source: 'local',
     };
-    const doc = jobToSearchDocument(merged);
+    // Owner-local index: decrypt this requester's own sealed chats so they stay
+    // searchable on their own node (the public chain index never gets a key).
+    const doc = jobToSearchDocument(merged, this._encKeyFor(job.requesterAddress));
     if (doc) void this.chatHistorySearch.indexDocument(doc);
   }
 
   _indexBlockInSearch(block) {
     if (!this.chatHistorySearch?.enabled || !block) return;
     const localRecords = this.jobResults ? Array.from(this.jobResults.values()) : [];
-    const docs = buildAllSearchDocuments([block], localRecords);
+    const docs = buildAllSearchDocuments([block], localRecords, this._encKeyFor(this.config.wallet));
     for (const doc of docs) void this.chatHistorySearch.indexDocument(doc);
   }
 
@@ -6536,7 +6631,7 @@ export class PohMinerNode {
         let history = Array.isArray(job.payload?.history) ? job.payload.history : [];
         if (job.requesterAddress) {
           const localRecords = this.jobResults ? Array.from(this.jobResults.values()) : [];
-          const chainCtx = buildWalletJobContext(this.chain, job.requesterAddress, { limit: 20, localRecords, chatTurnLimit: 8 });
+          const chainCtx = buildWalletJobContext(this.chain, job.requesterAddress, { limit: 20, localRecords, chatTurnLimit: 8, decryptKey: this._encKeyFor(job.requesterAddress) });
           history = _mergeHistoryWithChainTurns(history, chainCtx.chatTurns);
         }
         for (const turn of history) {
@@ -6551,13 +6646,32 @@ export class PohMinerNode {
         // system message; otherwise give the model a light assistant persona.
         const qvac = await getQvacModels();
         if (!qvac || !qvac.ENABLED) throw new Error('Inference backend (QVAC) is unavailable on this miner');
-        const reply = await qvac.chat(messages, {
+
+        // No-refund policy: the escrowed budget is the hard compute allowance, so cap
+        // output generation at the tokens the requester paid for. Meter the run and
+        // settle on the ACTUAL token count (prompt measured + output counted exactly),
+        // not the pre-flight estimate.
+        const gasPrice   = this.config.gasPrice || GAS.DEFAULT_GAS_PRICE;
+        const isPaid     = job.requesterAddress && job.maxBudget > 0;
+        const promptEst  = qvac.estimateMessagesTokens(messages);
+        const hardCap    = isPaid ? outputTokenCap(job.maxBudget, gasPrice, promptEst) : 0;
+        const usage = await qvac.chat(messages, {
           model,
           timeLimit: 90_000,
           systemPrompt: datasetUsed ? undefined : 'You are a helpful, concise assistant. Answer in clear Markdown.',
+          withUsage: true,
+          hardTokenCap: hardCap,
         });
-        if (reply == null) throw new Error(`Model "${model}" produced no output on this miner (QVAC unavailable)`);
-        const tokensUsed = job.estimatedTokens || estimateTokens(0, null);
+        if (usage == null || usage.text == null) throw new Error(`Model "${model}" produced no output on this miner (QVAC unavailable)`);
+        const reply = usage.text;
+        const tokensUsed = usage.totalTokens || job.estimatedTokens || estimateTokens(0, null);
+
+        // Public jobs seal the reply to the requester's key; the chain stores only
+        // ciphertext. Local jobs keep cleartext computeOutput so search works.
+        const { encrypt: encReply, encPub: replyEncPub } = this._chatVisibility(job);
+        const profile = encReply
+          ? { computeOutput: null, replyCipher: sealChat(replyEncPub, reply), encrypted: true, model, dataset: datasetUsed }
+          : { computeOutput: reply, model, dataset: datasetUsed };
 
         const result = new ScanResult({
           requestId:         job.id,
@@ -6572,14 +6686,14 @@ export class PohMinerNode {
           methodsHash:       this.methodsManager?.getStatus().hash || 'compute',
           methodsCount:      0,
           realPohUsed:       false,
-          profile:           { computeOutput: reply, model, dataset: datasetUsed },
+          profile,
         });
 
         await this.submitResult(job, result);
         if (!this.jobQueue.completed.has(job.id)) this.jobQueue.markCompleted(job.id);
 
         if (job.requesterAddress && job.maxBudget > 0 && this.escrow.has(job.id)) {
-          const gasPrice         = this.config.gasPrice || GAS.DEFAULT_GAS_PRICE;
+          // No-refund: settleFee returns fee = maxBudget (the whole bid), refund = 0.
           const { fee, refund }  = settleFee(tokensUsed, gasPrice, job.maxBudget);
           const settled = { type: 'job-settled', jobId: job.id, requesterAddress: job.requesterAddress, minerAddress: this.config.wallet, actualTokens: tokensUsed, actualFee: fee, refund, gasPrice, completedAt: Date.now() };
           this.pendingBrainTransitions.push(settled);
@@ -6739,6 +6853,94 @@ export class PohMinerNode {
    * transition is nonce-bound — `_applyEscrow` will atomically verify the nonce
    * and debit (no replay of the same payment proof against a second job).
    */
+  /**
+   * Decide how a job's prompt/reply should be persisted on-chain.
+   *   local/private  → cleartext (computed on the requester's own node; searchable)
+   *   public         → sealed to the requester's X25519 key (raced by miners the
+   *                    requester doesn't control; only the requester can decrypt)
+   * A job is cleartext only when explicitly marked local/private; anything dispatched
+   * for paid/network compute defaults to public. Returns { encrypt, encPub }.
+   */
+  _chatVisibility(job) {
+    const explicit = job?.visibility || job?.payload?.visibility;
+    if (explicit === 'local' || explicit === 'private') return { encrypt: false, encPub: null };
+    // Public: prefer the requester's registered key (authoritative), else the one the
+    // client supplied in the payload (they seal to themselves, so a bad key only hurts them).
+    let encPub = null;
+    if (job?.requesterAddress) encPub = this.walletManager.loadWallet(job.requesterAddress)?.encryptionPublicKey || null;
+    encPub = encPub || job?.payload?.requesterEncryptionPublicKey || null;
+    return { encrypt: !!encPub, encPub };
+  }
+
+  /** The requester's X25519 private scalar, if this node holds their signing key (so it
+   *  can decrypt their own encrypted history for local search/context). Else null. */
+  _encKeyFor(address) {
+    if (!address) return null;
+    try { return this.walletManager.loadWallet(address)?.getEncryptionPrivateKey?.() || null; }
+    catch { return null; }
+  }
+
+  /**
+   * Shared paid public-compute path (used by the OpenAI-compatible /v1 API).
+   * Verifies a signed per-request bid, escrows it, runs the chat on QVAC capped at
+   * the budget, meters real tokens, and settles under the no-refund policy (the
+   * whole bid is the fee). On model failure after escrow, the bid is refunded (no
+   * work delivered — same as a job timeout). Returns { text, usage, fee, gasPrice }
+   * on success, or { status, code, error } on any rejection.
+   */
+  async _runPaidCompute({ jobId, requesterAddress, maxBudget, paymentTx, messages, model, systemPrompt }) {
+    const qvac = await getQvacModels();
+    if (!qvac || !qvac.ENABLED) return { status: 503, code: 'QVAC_UNAVAILABLE', error: 'Inference backend (QVAC) is unavailable' };
+    if (!jobId)            return { status: 400, code: 'JOBID_REQUIRED',     error: 'a client-generated jobId (the value signed by paymentTx) is required' };
+    if (!requesterAddress) return { status: 402, code: 'REQUESTER_REQUIRED', error: 'requesterAddress is required for paid compute' };
+    if (!(maxBudget > 0))  return { status: 402, code: 'FEE_REQUIRED',       error: 'maxBudget (μPOH) must be > 0 for paid compute' };
+
+    // Fee floor: the bid must cover at least the prompt tokens (gasPrice μPOH/token).
+    const gasPrice  = this.config.gasPrice || GAS.DEFAULT_GAS_PRICE;
+    const promptEst = qvac.estimateMessagesTokens(messages, systemPrompt);
+    const minTokens = estimateChatTokens(promptEst, 0);
+    const minFee    = minTokens * gasPrice;
+    if (maxBudget < minFee) {
+      return { status: 402, code: 'FEE_TOO_LOW', minFee, minTokens, gasPrice,
+        error: `maxBudget (${maxBudget} μPOH) is below the minimum compute cost of ${minFee} μPOH (~${minTokens} prompt tokens at ${gasPrice} μPOH/token).` };
+    }
+
+    // Strict signed-fee verification — an Ed25519 signature from the requester's
+    // registered signing key, over a hash bound to this exact jobId + miner + amount
+    // + nonce. No unverified fallback: rejected outright (never run) if it fails.
+    const senderWallet = this.walletManager.loadWallet(requesterAddress);
+    if (!senderWallet?.signingPublicKey) return { status: 403, code: 'NO_SIGNING_KEY', error: 'No signing key registered for requesterAddress. Call /api/wallet/register-key first.' };
+    if (!paymentTx?.signature)           return { status: 402, code: 'PAYMENT_PROOF_REQUIRED', error: 'A signed fee payment (paymentTx.signature) is required.' };
+
+    const nonce = this.walletManager.getNonce(requesterAddress);
+    const expectedHash = computeJobPaymentHash({ jobId, requesterAddress, minerAddress: this.config.wallet, amount: maxBudget, nonce });
+    if (paymentTx.txHash !== expectedHash) return { status: 403, code: 'PAYMENT_PROOF_MISMATCH', error: 'Payment proof does not match this request (jobId, amount, miner, or nonce mismatch).' };
+    if (!Wallet.verifySignature(senderWallet.signingPublicKey, expectedHash, paymentTx.signature)) return { status: 403, code: 'INVALID_PAYMENT_SIGNATURE', error: 'Invalid payment signature' };
+
+    // Atomic nonce-checked debit into escrow (rejects replay / stale nonce / low balance).
+    const job = { id: jobId, type: 'compute', requesterAddress, maxBudget, payload: {} };
+    const escrowTransition = this._buildEscrowTransition(job, expectedHash, false, nonce);
+    const applied = await this._applyEscrow(escrowTransition);
+    if (applied !== true) return { status: 402, code: 'PAYMENT_FAILED', error: applied || 'Payment failed' };
+    this.pendingBrainTransitions.push(escrowTransition);
+
+    // Run capped at the budget (no-refund ⇒ budget is the hard token allowance),
+    // then meter the actual tokens and settle.
+    const hardCap = outputTokenCap(maxBudget, gasPrice, promptEst);
+    const usage = await qvac.chat(messages, { model, timeLimit: 90_000, systemPrompt, withUsage: true, hardTokenCap: hardCap });
+    if (usage == null || usage.text == null) {
+      const timeout = { type: 'job-timeout', jobId, requesterAddress, minerAddress: this.config.wallet, reservationFee: 0, refund: maxBudget, completedAt: Date.now() };
+      this.pendingBrainTransitions.push(timeout);
+      this._applySettlement(timeout);
+      return { status: 503, code: 'NO_OUTPUT', error: `Model "${model}" produced no output` };
+    }
+    const { fee, refund } = settleFee(usage.totalTokens, gasPrice, maxBudget);
+    const settled = { type: 'job-settled', jobId, requesterAddress, minerAddress: this.config.wallet, actualTokens: usage.totalTokens, actualFee: fee, refund, gasPrice, completedAt: Date.now() };
+    this.pendingBrainTransitions.push(settled);
+    this._applySettlement(settled);
+    return { text: usage.text, usage, fee, gasPrice, model };
+  }
+
   _buildEscrowTransition(job, paymentTxHash, unverified, nonce) {
     const activeSignals = this.methodsManager?.getActiveMethods().length || 0;
     const estTokens = job.estimatedTokens || estimateTokens(activeSignals, job.payload?.address);
