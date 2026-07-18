@@ -27,16 +27,40 @@ const MAX_OPEN_JOBS         = 5_000;    // backpressure cap
 
 // Fairness: keep one fast-polling worker from claiming every job so home/NAT
 // nodes never get compute work (and never earn). Both guards are per-worker.
+// NOTE: these guards apply to FREE work-sharing only. PAID jobs run as a fee
+// auction (see below), where we deliberately want the fastest node to win.
 export const CLAIM_COOLDOWN_MS   = 5_000; // after a claim, a worker yields this long so slower pollers get a turn
 const MAX_INFLIGHT_PER_WORKER    = 1;     // a worker may hold at most this many un-resulted claims at once
 
+// Fee auction for PAID jobs: a paid job is a bid. It surfaces to every node
+// highest-bid-first, and up to RACE_REPLICAS distinct workers may hold it at
+// once and race — the first VALID result posted wins the whole fee, the rest are
+// rejected ('result already submitted'). Bounding the racers keeps the network
+// from burning N× GPU on every job while preserving "higher fee ⇒ served &
+// completed first". Set to a large number for an effectively unbounded race.
+export const RACE_REPLICAS = 3;
+
 export class JobBoard {
-  constructor({ leaseMs = CLAIM_LEASE_MS, claimCooldownMs = CLAIM_COOLDOWN_MS, maxInflightPerWorker = MAX_INFLIGHT_PER_WORKER } = {}) {
+  constructor({ leaseMs = CLAIM_LEASE_MS, claimCooldownMs = CLAIM_COOLDOWN_MS, maxInflightPerWorker = MAX_INFLIGHT_PER_WORKER, raceReplicas = RACE_REPLICAS } = {}) {
     this.leaseMs = leaseMs;
     this.claimCooldownMs = claimCooldownMs;
     this.maxInflightPerWorker = maxInflightPerWorker;
-    this.jobs = new Map(); // jobId → { job, status, claimedBy, claimedAt, result, resultBy, submittedAt, resultAt, resultIncluded }
+    this.raceReplicas = raceReplicas;
+    this.jobs = new Map(); // jobId → { job, status, claimedBy, claimedAt, racers, result, resultBy, submittedAt, resultAt, resultIncluded }
     this._lastClaimAt = new Map(); // worker → last successful claim time (fairness cooldown)
+  }
+
+  // A paid job (maxBudget > 0) runs as a fee race; a free job as cooperative
+  // work-sharing with the per-worker fairness guards.
+  _isRace(e) { return (e?.job?.maxBudget || 0) > 0; }
+
+  // Live racers holding a paid job (lease-bounded, like a claim). Used to bound
+  // the auction to raceReplicas concurrent workers.
+  _liveRacers(e, now = this._now()) {
+    if (!e.racers) return 0;
+    let n = 0;
+    for (const at of e.racers.values()) if (now - at <= this.leaseMs) n++;
+    return n;
   }
 
   _now() { return Date.now(); }
@@ -65,6 +89,7 @@ export class JobBoard {
       job: { ...job, id: jobId },
       status: 'open',
       claimedBy: null, claimedAt: 0,
+      racers: new Map(),          // worker → claim time (paid fee-race holders)
       result: null, resultBy: null, resultAt: 0,
       resultIncluded: false, handedOutAt: 0,
       submittedAt: this._now(),
@@ -82,13 +107,23 @@ export class JobBoard {
     const now = this._now();
     const out = [];
     for (const e of this.jobs.values()) {
-      const claimable = e.status === 'open'
-        || (e.status === 'claimed' && now - e.claimedAt > this.leaseMs);
+      if (e.status === 'done') continue;
+      let claimable;
+      if (this._isRace(e)) {
+        // Paid fee-race: claimable while the bounded racer slots aren't full.
+        claimable = this._liveRacers(e, now) < this.raceReplicas;
+      } else {
+        // Free work-sharing: exclusive claim with lease reclaim.
+        claimable = e.status === 'open'
+          || (e.status === 'claimed' && now - e.claimedAt > this.leaseMs);
+      }
       if (!claimable) continue;
       out.push(e.job);
     }
+    // Fee auction: highest bid first (maxBudget is the bid; fee breaks ties).
+    out.sort((a, b) => ((b.maxBudget || 0) - (a.maxBudget || 0)) || ((b.fee || 0) - (a.fee || 0)));
     if (region) {
-      // Stable partition: region-matching jobs first, order otherwise preserved.
+      // Stable partition: region-matching jobs first, fee order preserved within each group.
       out.sort((a, b) => (b.originCountry === region ? 1 : 0) - (a.originCountry === region ? 1 : 0));
     }
     return out.slice(0, limit);
@@ -108,6 +143,20 @@ export class JobBoard {
     const e = this.jobs.get(jobId);
     if (!e) return { error: 'job not found' };
     const now = this._now();
+    if (e.status === 'done') return { error: 'job already completed' };
+
+    // Paid fee-race: no exclusivity and no fairness guards — up to raceReplicas
+    // distinct workers may hold the job at once and race. The winner is decided
+    // at postResult (first valid result wins the whole fee).
+    if (this._isRace(e)) {
+      const alreadyRacing = e.racers.has(worker) && now - e.racers.get(worker) <= this.leaseMs;
+      if (!alreadyRacing && this._liveRacers(e, now) >= this.raceReplicas) {
+        return { error: 'race slots full — try a higher-fee job', code: 'RACE_FULL' };
+      }
+      e.racers.set(worker, now);
+      if (e.status === 'open') { e.status = 'claimed'; e.claimedBy = worker; e.claimedAt = now; }
+      return { job: e.job };
+    }
 
     // Re-claiming a job this worker already holds is idempotent (retried request):
     // renew the lease, don't count it against the cap or trip the cooldown.
@@ -144,15 +193,25 @@ export class JobBoard {
     return { job: e.job };
   }
 
-  /** Post a result for a claimed job. Only the current claimer may submit. */
+  /**
+   * Post a result. First valid result wins:
+   *  - Paid fee-race: any worker that holds (or held) a live racer slot may submit;
+   *    the first to arrive flips the job to `done` and wins the fee, the rest get
+   *    'result already submitted'.
+   *  - Free work-sharing: only the current exclusive claimer may submit.
+   */
   postResult(jobId, worker, result) {
     const e = this.jobs.get(jobId);
     if (!e) return { error: 'job not found' };
     if (e.status === 'done') return { error: 'result already submitted' };
-    if (e.claimedBy && e.claimedBy !== worker) return { error: 'job claimed by another worker' };
+    if (this._isRace(e)) {
+      if (!e.racers.has(worker)) return { error: 'worker did not claim this job', code: 'NOT_RACING' };
+    } else if (e.claimedBy && e.claimedBy !== worker) {
+      return { error: 'job claimed by another worker' };
+    }
     e.status = 'done';
     e.result = result;
-    e.resultBy = worker;
+    e.resultBy = worker;      // the winner — settlement pays this address
     e.resultAt = this._now();
     return { ok: true };
   }

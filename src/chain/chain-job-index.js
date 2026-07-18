@@ -1,12 +1,27 @@
 /**
  * Index public job history from on-chain stateTransitions + scanResults.
+ *
+ * Public-compute jobs store their prompt/reply as sealed envelopes (promptCipher /
+ * profile.replyCipher) instead of cleartext, so the chain holds no readable content.
+ * The requester's own node can pass `decryptKey` (its X25519 private scalar) to the
+ * extractors below to decrypt its own history for local search/context; everyone else
+ * only ever sees ciphertext + public metadata.
  */
+
+import { open as openSealed, isEnvelope } from '../security/chat-crypto.js';
 
 export const PROMPT_PREVIEW_MAX = 500;
 
 export function promptPreviewFromJob(job) {
   const raw = job?.payload?.prompt || job?.payload?.message || job?.payload?.question || '';
   return String(raw).slice(0, PROMPT_PREVIEW_MAX) || null;
+}
+
+// Best-effort decrypt of a sealed field with the owner's key. Returns null (never
+// throws) when there's no key, it isn't an envelope, or the key doesn't match.
+function tryDecrypt(cipher, decryptKey) {
+  if (!decryptKey || !isEnvelope(cipher)) return null;
+  try { return openSealed(cipher, decryptKey); } catch { return null; }
 }
 
 export function buildJobSubmittedIndex(chain) {
@@ -25,6 +40,8 @@ export function buildJobSubmittedIndex(chain) {
         requesterAddress: t.requesterAddress || null,
         maxBudget: t.maxBudget || 0,
         promptPreview: t.promptPreview || null,
+        promptCipher: t.promptCipher || null,   // sealed prompt for public jobs
+        encrypted: !!t.encrypted,
         model: t.model || null,
         dataset: t.dataset || null,
         address: t.address || null,
@@ -76,6 +93,8 @@ export function mergeWithLocalJobs(chainJobs, localRecords, requesterAddress, li
       skillId: job.skillId || null,
       requesterAddress: job.requesterAddress,
       promptPreview: promptPreviewFromJob(job),
+      promptCipher: existing?.promptCipher || null,
+      encrypted: existing?.encrypted || false,
       model: job.model || null,
       dataset: job.dataset || job.datasetId || null,
       submittedAt: rec.createdAt || rec.updatedAt || Date.now(),
@@ -116,14 +135,15 @@ export function extractSkillMemory(jobs) {
   return null;
 }
 
-export function extractComputeMemory(jobs) {
+export function extractComputeMemory(jobs, decryptKey = null) {
   if (!Array.isArray(jobs)) return null;
   for (const j of jobs) {
-    const reply = j.profile?.computeOutput;
+    const reply = j.profile?.computeOutput || tryDecrypt(j.profile?.replyCipher, decryptKey);
     if (reply && (j.jobType === 'compute' || j.verdict === 'COMPUTE_RESULT')) {
+      const promptPreview = j.promptPreview || tryDecrypt(j.promptCipher, decryptKey);
       return {
         skillId: '__compute__',
-        output: { computeOutput: reply, model: j.profile?.model || j.model, promptPreview: j.promptPreview },
+        output: { computeOutput: reply, model: j.profile?.model || j.model, promptPreview },
         at: j.submittedAt || Date.now(),
         jobId: j.jobId,
         fromChain: j.source === 'chain' && j.mined,
@@ -134,13 +154,16 @@ export function extractComputeMemory(jobs) {
   return null;
 }
 
-export function extractChatTurns(jobs, { limit = 8 } = {}) {
+// decryptKey (the owner's X25519 private scalar) lets the requester's own node fold
+// its encrypted public-job turns back into context. Without it, sealed turns are skipped.
+export function extractChatTurns(jobs, { limit = 8, decryptKey = null } = {}) {
   if (!Array.isArray(jobs) || !jobs.length) return [];
   const ordered = [...jobs].sort((a, b) => (a.submittedAt || 0) - (b.submittedAt || 0));
   const turns = [];
   for (const j of ordered) {
-    if (j.promptPreview) turns.push({ role: 'user', content: j.promptPreview, jobId: j.jobId, fromChain: j.source === 'chain' });
-    const reply = j.profile?.computeOutput || j.profile?.nlResponse;
+    const prompt = j.promptPreview || tryDecrypt(j.promptCipher, decryptKey);
+    if (prompt) turns.push({ role: 'user', content: prompt, jobId: j.jobId, fromChain: j.source === 'chain' });
+    const reply = j.profile?.computeOutput || j.profile?.nlResponse || tryDecrypt(j.profile?.replyCipher, decryptKey);
     if (reply) turns.push({ role: 'assistant', content: String(reply).slice(0, 8000), jobId: j.jobId, fromChain: j.source === 'chain' });
   }
   return turns.slice(-limit * 2);
@@ -148,19 +171,22 @@ export function extractChatTurns(jobs, { limit = 8 } = {}) {
 
 export function buildWalletJobContext(chain, requesterAddress, opts = {}) {
   const jobs = getWalletJobHistory(chain, requesterAddress, opts);
+  const decryptKey = opts.decryptKey || null;
   return {
     jobs,
-    latestSkillMemory: extractSkillMemory(jobs) || extractComputeMemory(jobs),
-    chatTurns: extractChatTurns(jobs, { limit: opts.chatTurnLimit || 8 }),
+    latestSkillMemory: extractSkillMemory(jobs) || extractComputeMemory(jobs, decryptKey),
+    chatTurns: extractChatTurns(jobs, { limit: opts.chatTurnLimit || 8, decryptKey }),
   };
 }
 
 /** Full assistant reply text from a merged job record (chain or local). */
-export function extractReplyText(job) {
+export function extractReplyText(job, decryptKey = null) {
   if (!job) return '';
   const profile = job.profile || {};
   if (profile.computeOutput) return String(profile.computeOutput);
   if (profile.nlResponse) return String(profile.nlResponse);
+  const decrypted = tryDecrypt(profile.replyCipher, decryptKey);
+  if (decrypted) return String(decrypted);
   if (profile.skillOutput) {
     const out = profile.skillOutput;
     if (out.analysis?.summary) return String(out.analysis.summary);
@@ -171,11 +197,15 @@ export function extractReplyText(job) {
   return '';
 }
 
-/** Flatten a job record into a search-index document. */
-export function jobToSearchDocument(job) {
+/**
+ * Flatten a job record into a search-index document. For encrypted public jobs this
+ * yields no plaintext unless `decryptKey` (the owner's key) is supplied — so a public
+ * index never holds readable content, while the requester's own node can index its own.
+ */
+export function jobToSearchDocument(job, decryptKey = null) {
   if (!job?.jobId) return null;
-  const promptPreview = job.promptPreview || '';
-  const replyText = extractReplyText(job);
+  const promptPreview = job.promptPreview || tryDecrypt(job.promptCipher, decryptKey) || '';
+  const replyText = extractReplyText(job, decryptKey);
   if (!promptPreview && !replyText) return null;
   return {
     id: job.jobId,
@@ -195,13 +225,13 @@ export function jobToSearchDocument(job) {
 }
 
 /** Build search documents from an entire chain + optional local job cache. */
-export function buildAllSearchDocuments(chain, localRecords = []) {
+export function buildAllSearchDocuments(chain, localRecords = [], decryptKey = null) {
   const submitted = buildJobSubmittedIndex(chain);
   const results = buildResultsIndex(chain);
   const docs = new Map();
   for (const [jobId, meta] of submitted) {
     const merged = { ...meta, ...(results.get(jobId) || { mined: false }) };
-    const doc = jobToSearchDocument(merged);
+    const doc = jobToSearchDocument(merged, decryptKey);
     if (doc) docs.set(jobId, doc);
   }
   for (const rec of localRecords || []) {
@@ -221,7 +251,7 @@ export function buildAllSearchDocuments(chain, localRecords = []) {
       reasoning: rec.result?.reasoning || existing?.reasoning || null,
       source: existing?.mined ? 'chain' : 'local',
     };
-    const doc = jobToSearchDocument({ ...existing, ...merged });
+    const doc = jobToSearchDocument({ ...existing, ...merged }, decryptKey);
     if (doc && (!existing?.mined || doc.replyText)) docs.set(job.id, doc);
   }
   return [...docs.values()];

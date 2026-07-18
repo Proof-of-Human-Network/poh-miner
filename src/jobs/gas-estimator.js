@@ -3,6 +3,7 @@ export const GAS = {
   TOKENS_PER_SIGNAL:    60,
   TOKENS_PER_CHAIN:    120,
   OUTPUT_TOKENS:       350,
+  OUTPUT_CAP:         2048,       // default ceiling on reserved output tokens for a chat estimate
   DEFAULT_GAS_PRICE:   1,          // μPOH per AI compute token (1 POH = 1e9 tokens).
                                    // μPOH is the smallest unit, so this is the price floor.
   TIMEOUT_RESERVE_PCT: 0.05,      // 5% of maxBudget kept on timeout
@@ -29,16 +30,35 @@ export function estimateFee(activeSignalCount, address, gasPrice = GAS.DEFAULT_G
   return estimateTokens(activeSignalCount, address) * gasPrice;
 }
 
-// A job always pays for at least every AI token it consumed:
-//   cost = actualTokens × gasPrice  (at the 1 μPOH/token default, 1000 tokens ⇒ ≥ 1000 μPOH).
-// The fee is never reduced below that cost. maxBudget is only the ceiling the requester
-// escrowed; the accept-time gate (see miner-node feeRequired path) rejects any job whose
-// budget can't cover its token cost, so `underfunded` should never trigger in practice.
+// Freeform-chat / public-compute estimate. Unlike estimateTokens() (a heuristic
+// tuned for verdict/scan jobs), this is the eth_estimateGas analog for chat: the
+// prompt tokens actually measured, plus the output the caller reserved (capped).
+// The result × gasPrice is the minimum budget a requester must escrow up front.
+export function estimateChatTokens(promptTokens, maxOutputTokens, cap = GAS.OUTPUT_CAP) {
+  const prompt = Math.max(0, Math.round(promptTokens || 0));
+  const out    = Math.min(Math.max(0, Math.round(maxOutputTokens || 0)), cap);
+  return prompt + out;
+}
+
+// No-refund policy: the escrowed bid IS the fee, so maxBudget doubles as the hard
+// compute allowance. Given the tokens already spent on the prompt, this is how many
+// OUTPUT tokens the job is still allowed to generate before it hits its budget.
+// Generation must stop at this count (see qvac hardTokenCap) — there is no refund
+// path and no over-charge path, so a job can never consume more than it paid for.
+export function outputTokenCap(maxBudget, gasPrice = GAS.DEFAULT_GAS_PRICE, promptTokens = 0) {
+  const totalTokens = Math.floor(maxBudget / Math.max(1, gasPrice));
+  return Math.max(0, totalTokens - Math.max(0, Math.round(promptTokens)));
+}
+
+// No-refund settlement. maxBudget is the requester's signed bid, and the whole bid
+// is taken as the fee — overpaying buys queue priority (see the fee-race in
+// job-board.js), never a rebate. The floor still holds two ways: the accept-time
+// gate rejects any bid below the job's token cost, and generation is capped at
+// outputTokenCap(maxBudget), so `cost` can never exceed maxBudget in practice
+// (`underfunded` is surfaced only as a diagnostic).
 export function settleFee(actualTokens, gasPrice, maxBudget) {
-  const cost   = Math.max(0, Math.round(actualTokens * gasPrice)); // FLOOR — used tokens
-  const fee    = Math.min(cost, maxBudget);
-  const refund = Math.max(0, maxBudget - fee);
-  return { fee, refund, cost, underfunded: cost > maxBudget };
+  const cost = Math.max(0, Math.round(actualTokens * gasPrice)); // tokens actually consumed
+  return { fee: maxBudget, refund: 0, cost, underfunded: cost > maxBudget };
 }
 
 export function timeoutFee(maxBudget, pct = GAS.TIMEOUT_RESERVE_PCT) {

@@ -13,6 +13,7 @@ import path from 'path';
 import crypto from 'crypto';
 import os from 'os';
 import { sealWalletData, unsealWalletData } from '../security/wallet-crypto.js';
+import { deriveEncryptionKeypair } from '../security/chat-crypto.js';
 
 const WALLETS_DIR = path.join(os.homedir(), '.poh-miner', 'wallets');
 
@@ -38,13 +39,19 @@ export function computeTxFieldsHash(tx) {
 }
 
 export class Wallet {
-  constructor({ address, privateKey, publicKey, createdAt = Date.now(), signingPublicKey, signingPrivateKey, balance = 0, nonce = 0 }) {
+  constructor({ address, privateKey, publicKey, createdAt = Date.now(), signingPublicKey, signingPrivateKey, encryptionPublicKey, balance = 0, nonce = 0 }) {
     this.address = address;
     this.privateKey = privateKey;
     this.publicKey = publicKey;
     this.createdAt = createdAt;
     this.signingPublicKey = signingPublicKey || null;
     this.signingPrivateKey = signingPrivateKey || null;
+    // Raw 32-byte X25519 public key (base64) used to encrypt public-job chat records
+    // to this wallet. The matching private scalar is never stored — it's derived on
+    // demand from signingPrivateKey (see getEncryptionPrivateKey), so it's exactly as
+    // protected as the signing key. For externally-registered wallets we only hold
+    // this public key (the owner registered it).
+    this.encryptionPublicKey = encryptionPublicKey || null;
     this.balance = (typeof balance === 'number') ? balance : 0;
     // Transaction nonce — incremented each time a tx from this address is mined.
     // Prevents replay attacks: a valid tx must have nonce === account.nonce + 1.
@@ -64,13 +71,15 @@ export class Wallet {
 
     const address = Wallet.deriveAddressFromSigningKey(spk);
 
-    return new Wallet({
+    const wallet = new Wallet({
       address,
       privateKey,
       publicKey,
       signingPublicKey: spk,
       signingPrivateKey: spr,
     });
+    wallet.ensureEncryptionKeys();
+    return wallet;
   }
 
   static fromJSON(data) {
@@ -85,6 +94,7 @@ export class Wallet {
       createdAt: this.createdAt,
       signingPublicKey: this.signingPublicKey,
       signingPrivateKey: this.signingPrivateKey,
+      encryptionPublicKey: this.encryptionPublicKey,
       balance: this.balance,
       nonce: this.nonce,
     };
@@ -102,6 +112,28 @@ export class Wallet {
     });
     this.signingPublicKey = publicKey;
     this.signingPrivateKey = privateKey;
+  }
+
+  /**
+   * Ensure this wallet's X25519 encryption public key is set. Derived deterministically
+   * from the signing private key, so it's reproducible and needs no separate storage.
+   * No-op for externally-registered wallets that already carry a registered public key.
+   */
+  ensureEncryptionKeys() {
+    if (this.encryptionPublicKey) return;
+    if (!this.signingPrivateKey) return; // watch-only / externally-registered wallet
+    this.ensureSigningKeys();
+    this.encryptionPublicKey = deriveEncryptionKeypair(this.signingPrivateKey).publicKeyB64;
+  }
+
+  /**
+   * The raw X25519 private scalar (base64) for opening chat records sealed to this
+   * wallet. Derived on demand from the signing private key; null if this node does not
+   * hold the signing key (i.e. it can't decrypt this wallet's private chats).
+   */
+  getEncryptionPrivateKey() {
+    if (!this.signingPrivateKey) return null;
+    return deriveEncryptionKeypair(this.signingPrivateKey).privateKeyB64;
   }
 
   /**
@@ -267,6 +299,12 @@ export class WalletManager {
     // overwrite the registered public key and break signature verification for that wallet.
     if (!w.signingPublicKey && !w.signingPrivateKey) {
       w.ensureSigningKeys();
+      this.saveWallet(w);
+    }
+    // Migrate wallets created before the X25519 encryption subkey existed. Derives from
+    // the signing private key we already hold — safe no-op for externally-registered keys.
+    if (!w.encryptionPublicKey && w.signingPrivateKey) {
+      w.ensureEncryptionKeys();
       this.saveWallet(w);
     }
     return this.ensureCanonicalAddress(w);

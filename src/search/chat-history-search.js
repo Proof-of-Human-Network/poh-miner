@@ -162,9 +162,11 @@ export class ChatHistorySearch {
     }
   }
 
-  async reindexAll(chain, localRecords = []) {
+  async reindexAll(chain, localRecords = [], decryptKey = null) {
     if (!this.enabled) return { count: 0 };
-    const docs = buildAllSearchDocuments(chain, localRecords);
+    // decryptKey (the node owner's X25519 key) lets this node index its own encrypted
+    // public-job chats; other requesters' sealed chats stay ciphertext (unindexed).
+    const docs = buildAllSearchDocuments(chain, localRecords, decryptKey);
     this.docs.clear();
     for (const doc of docs) this.docs.set(doc.id, doc);
     try {
