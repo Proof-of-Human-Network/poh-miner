@@ -25,10 +25,18 @@ const DONE_TTL_MS           = 10 * 60_000; // keep results this long for polling
 const HANDOUT_LEASE_MS      = 120_000;  // re-offer a result to a proposer if not confirmed included
 const MAX_OPEN_JOBS         = 5_000;    // backpressure cap
 
+// Fairness: keep one fast-polling worker from claiming every job so home/NAT
+// nodes never get compute work (and never earn). Both guards are per-worker.
+export const CLAIM_COOLDOWN_MS   = 5_000; // after a claim, a worker yields this long so slower pollers get a turn
+const MAX_INFLIGHT_PER_WORKER    = 1;     // a worker may hold at most this many un-resulted claims at once
+
 export class JobBoard {
-  constructor({ leaseMs = CLAIM_LEASE_MS } = {}) {
+  constructor({ leaseMs = CLAIM_LEASE_MS, claimCooldownMs = CLAIM_COOLDOWN_MS, maxInflightPerWorker = MAX_INFLIGHT_PER_WORKER } = {}) {
     this.leaseMs = leaseMs;
+    this.claimCooldownMs = claimCooldownMs;
+    this.maxInflightPerWorker = maxInflightPerWorker;
     this.jobs = new Map(); // jobId → { job, status, claimedBy, claimedAt, result, resultBy, submittedAt, resultAt, resultIncluded }
+    this._lastClaimAt = new Map(); // worker → last successful claim time (fairness cooldown)
   }
 
   _now() { return Date.now(); }
@@ -64,7 +72,11 @@ export class JobBoard {
     return { jobId };
   }
 
-  /** Jobs available to claim (open, or claimed with an expired lease). */
+  /**
+   * Jobs available to claim (open, or claimed with an expired lease). Every node
+   * sees every job — `region` is only a soft preference that sorts jobs matching
+   * the caller's region first, never a filter that hides work from a node.
+   */
   listOpen({ limit = 10, region = null } = {}) {
     this._sweep();
     const now = this._now();
@@ -73,11 +85,22 @@ export class JobBoard {
       const claimable = e.status === 'open'
         || (e.status === 'claimed' && now - e.claimedAt > this.leaseMs);
       if (!claimable) continue;
-      if (region && e.job.originCountry && e.job.originCountry !== region) continue;
       out.push(e.job);
-      if (out.length >= limit) break;
     }
-    return out;
+    if (region) {
+      // Stable partition: region-matching jobs first, order otherwise preserved.
+      out.sort((a, b) => (b.originCountry === region ? 1 : 0) - (a.originCountry === region ? 1 : 0));
+    }
+    return out.slice(0, limit);
+  }
+
+  /** Number of un-resulted jobs `worker` currently holds a live claim on. */
+  _inflightFor(worker, now = this._now()) {
+    let n = 0;
+    for (const e of this.jobs.values()) {
+      if (e.status === 'claimed' && e.claimedBy === worker && now - e.claimedAt <= this.leaseMs) n++;
+    }
+    return n;
   }
 
   /** Claim a job for `worker`. Returns { job } or { error }. */
@@ -85,15 +108,39 @@ export class JobBoard {
     const e = this.jobs.get(jobId);
     if (!e) return { error: 'job not found' };
     const now = this._now();
+
+    // Re-claiming a job this worker already holds is idempotent (retried request):
+    // renew the lease, don't count it against the cap or trip the cooldown.
+    if (e.status === 'claimed' && e.claimedBy === worker && now - e.claimedAt <= this.leaseMs) {
+      e.claimedAt = now;
+      return { job: e.job };
+    }
+
     const claimable = e.status === 'open'
       || (e.status === 'claimed' && now - e.claimedAt > this.leaseMs);
     if (!claimable) {
       if (e.status === 'done') return { error: 'job already completed' };
       return { error: 'job already claimed' };
     }
+
+    // Fairness guard 1 — in-flight cap: a worker sitting on an unfinished claim
+    // can't grab more, so it can't sweep the whole board while others wait.
+    if (this._inflightFor(worker, now) >= this.maxInflightPerWorker) {
+      return { error: 'worker already holds an unfinished job', code: 'WORKER_BUSY' };
+    }
+    // Fairness guard 2 — post-claim cooldown: after claiming, a worker yields for
+    // a short window so a slower-polling peer can take the next job. The job stays
+    // open meanwhile; if no peer claims it, this worker gets it on a later poll —
+    // so a lone worker is never starved, it just paces at one job per cooldown.
+    const sinceLast = now - (this._lastClaimAt.get(worker) || 0);
+    if (sinceLast < this.claimCooldownMs) {
+      return { error: 'claim cooldown — yielding to peers', code: 'CLAIM_COOLDOWN', retryAfterMs: this.claimCooldownMs - sinceLast };
+    }
+
     e.status = 'claimed';
     e.claimedBy = worker;
     e.claimedAt = now;
+    this._lastClaimAt.set(worker, now);
     return { job: e.job };
   }
 
@@ -170,6 +217,11 @@ export class JobBoard {
     const now = this._now();
     for (const [id, e] of this.jobs) {
       if (e.status === 'done' && now - e.resultAt > DONE_TTL_MS) this.jobs.delete(id);
+    }
+    // Expired cooldowns carry no meaning — drop them so the map tracks only
+    // recently-active workers.
+    for (const [w, t] of this._lastClaimAt) {
+      if (now - t > this.claimCooldownMs * 4) this._lastClaimAt.delete(w);
     }
   }
 

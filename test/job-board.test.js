@@ -102,3 +102,67 @@ describe('JobBoard', () => {
     expect(board.pendingResults()).toHaveLength(0);               // confirmed included → gone
   });
 });
+
+describe('JobBoard — fairness (every node sees & gets work)', () => {
+  it('region is a soft preference, never a filter — all nodes see all jobs', () => {
+    const board = new JobBoard();
+    board.submit({ id: 'ge', type: 'verdict', originCountry: 'GE' });
+    board.submit({ id: 'hk', type: 'verdict', originCountry: 'HK' });
+    board.submit({ id: 'any', type: 'verdict' }); // untagged
+
+    // A worker in HK still sees every job (not just HK), with its region first.
+    const seen = board.listOpen({ region: 'HK' }).map(j => j.id);
+    expect(seen).toContain('ge');
+    expect(seen).toContain('hk');
+    expect(seen).toContain('any');
+    expect(seen[0]).toBe('hk'); // preference: matching region sorts first
+
+    // A worker sending no region also sees all of them.
+    expect(board.listOpen().map(j => j.id).sort()).toEqual(['any', 'ge', 'hk']);
+  });
+
+  it('in-flight cap: a worker holding an unfinished job cannot claim another', () => {
+    const board = new JobBoard({ claimCooldownMs: 0 }); // isolate the cap from the cooldown
+    board.submit({ id: 'a' });
+    board.submit({ id: 'b' });
+
+    expect(board.claim('a', 'hog').job.id).toBe('a');
+    const second = board.claim('b', 'hog');
+    expect(second.error).toBeTruthy();
+    expect(second.code).toBe('WORKER_BUSY');
+
+    // 'b' is still open for a different worker to take.
+    expect(board.claim('b', 'other').job.id).toBe('b');
+
+    // Once 'hog' finishes 'a', it may claim again.
+    board.postResult('a', 'hog', { verdict: 'HUMAN' });
+    board.submit({ id: 'c' });
+    expect(board.claim('c', 'hog').job.id).toBe('c');
+  });
+
+  it('post-claim cooldown: fast poller yields the next job to a peer', async () => {
+    const board = new JobBoard({ claimCooldownMs: 60 });
+    board.submit({ id: 'a' });
+    board.submit({ id: 'b' });
+
+    // hk claims 'a', finishes it immediately, then races for 'b' during cooldown.
+    expect(board.claim('a', 'hk').job.id).toBe('a');
+    board.postResult('a', 'hk', { verdict: 'HUMAN' });
+    const racing = board.claim('b', 'hk');
+    expect(racing.code).toBe('CLAIM_COOLDOWN');     // hk is held back…
+    expect(board.claim('b', 'local').job.id).toBe('b'); // …so the slower node gets it
+
+    // After the cooldown a lone worker is never starved — it can claim again.
+    await new Promise(r => setTimeout(r, 80));
+    board.submit({ id: 'c' });
+    expect(board.claim('c', 'hk').job.id).toBe('c');
+  });
+
+  it('idempotent re-claim of a held job does not trip the cooldown or cap', () => {
+    const board = new JobBoard({ claimCooldownMs: 60 });
+    board.submit({ id: 'a' });
+    expect(board.claim('a', 'w').job.id).toBe('a');
+    // Re-claiming the same job the worker already holds just renews the lease.
+    expect(board.claim('a', 'w').job.id).toBe('a');
+  });
+});

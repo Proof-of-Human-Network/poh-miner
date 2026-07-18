@@ -6136,7 +6136,7 @@ export class PohMinerNode {
       return;
     }
     this._boardBase = bootnode.replace(/\/$/, '');
-    const intervalMs = this.config.boardPollMs || 15_000;
+    const intervalMs = this.config.boardPollMs || 4_000;
     this._boardBusy = false;
     this._boardWorkerTimer = setInterval(() => this._pollBoardOnce().catch(() => {}), intervalMs);
     console.log(`[PoH-Worker] Pull-based compute worker polling ${this._boardBase}/jobboard every ${intervalMs / 1000}s`);
@@ -6153,24 +6153,36 @@ export class PohMinerNode {
     if (this._boardBusy || this._syncInProgress) return;
     const base = this._boardBase;
     const region = this.myLatencyProfile?.region;
-    const listRes = await fetch(`${base}/jobboard/open?limit=1${region ? `&region=${encodeURIComponent(region)}` : ''}`,
+    // Fetch a small batch, not just the top job: if a faster peer already grabbed
+    // the first one (or the board is holding it back on our cooldown), we try the
+    // next instead of wasting the whole poll interval.
+    const listRes = await fetch(`${base}/jobboard/open?limit=5${region ? `&region=${encodeURIComponent(region)}` : ''}`,
       { signal: AbortSignal.timeout(10_000) });
     if (!listRes.ok) return;
     const { jobs } = await listRes.json();
     if (!jobs?.length) return;
-    const job = jobs[0];
 
     this._boardBusy = true;
     try {
-      // Claim (atomic on the board — a 409 means another worker won the race)
-      const ts = Date.now();
-      const claimRes = await fetch(`${base}/jobboard/claim`, {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ jobId: job.id, timestamp: ts, ...this._signBoardAction('claim-job', { jobId: job.id }, ts) }),
-        signal: AbortSignal.timeout(10_000),
-      });
-      if (!claimRes.ok) return;
-      const { job: claimed } = await claimRes.json();
+      let claimed = null;
+      for (const job of jobs) {
+        // Claim (atomic on the board — a non-ok means another worker won the race,
+        // or the board is enforcing our fairness cooldown; either way, try the next).
+        const ts = Date.now();
+        const claimRes = await fetch(`${base}/jobboard/claim`, {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ jobId: job.id, timestamp: ts, ...this._signBoardAction('claim-job', { jobId: job.id }, ts) }),
+          signal: AbortSignal.timeout(10_000),
+        });
+        if (claimRes.ok) { claimed = (await claimRes.json()).job; break; }
+        // A cooldown applies to us globally, not to this specific job — stop trying
+        // the rest of the batch this round.
+        if (claimRes.status === 409) {
+          const body = await claimRes.json().catch(() => ({}));
+          if (body.code === 'CLAIM_COOLDOWN' || body.code === 'WORKER_BUSY') break;
+        }
+      }
+      if (!claimed) return;
       console.log(`[PoH-Worker] Claimed board job ${claimed.id} (${claimed.type || 'verdict'}) — computing…`);
 
       const result = await this._computeBoardJob(claimed);
