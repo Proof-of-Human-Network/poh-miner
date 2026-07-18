@@ -141,19 +141,40 @@
       <div class="grid md:grid-cols-2 gap-8 md:gap-10 items-stretch">
         <!-- Left: what POH is worth -->
         <div class="glass card-hover p-8 md:p-10 rounded-[6px] reveal flex flex-col justify-center text-center md:text-left">
-          <div class="font-display text-[44px] sm:text-[62px] md:text-[88px] leading-none">1 POH ≈ <span class="neon">$2K–5K</span></div>
-          <p class="mt-8 text-[16px] sm:text-[20px] md:text-[23px] text-white/60">One POH is <span class="text-white/85">real demand</span> — priced by the <span class="text-white/85">1 billion AI compute tokens</span> it buys, not dictated by IT-monopolists. That's about $2,000–5,000 of inference at what ChatGPT, Gemini or Grok charge today. No fixed price: <span class="text-white/85">the market sets it</span> through the best peer-to-peer order.</p>
+          <div class="font-display text-[44px] sm:text-[62px] md:text-[88px] leading-none">1 POH ≈ <span class="neon">&#?%</span></div>
+          <p class="mt-8 text-[16px] sm:text-[20px] md:text-[23px] text-white/60">POH is priced by the open market via P2P. Today, 1,000,000,000 AI compute tokens worth $2,000–5,000 at ChatGPT, Gemini or Grok.</p>
         </div>
         <!-- Right: enterprise -->
         <div class="glass card-hover p-8 md:p-10 rounded-[6px] reveal flex flex-col justify-center text-center md:text-left">
           <div class="uppercase tracking-[3px] text-xs text-[#22c55e] mb-5">ENTERPRISE</div>
           <h3 class="font-display text-[34px] sm:text-[46px] md:text-[62px] leading-[0.95] mb-5">Need compute at scale?</h3>
-          <p class="text-[16px] sm:text-[20px] md:text-[23px] text-white/60 mb-9">Skip the volatility. Talk to us and lock a <span class="text-white/85">fixed quote</span> for enterprise AI compute across the network.</p>
+          <p class="text-[16px] sm:text-[20px] md:text-[23px] text-white/60 mb-9">Skip the volatility. Talk to us and lock a <span class="text-white/85">fixed quote</span> for enterprise AI compute.</p>
           <a href="https://www.linkedin.com/in/bogdan-sizov-00b736386/" target="_blank" rel="noopener"
              class="inline-flex items-center justify-center px-8 py-3 bg-[#22c55e] text-black text-[17px] sm:text-[21px] md:text-[25px] rounded-[4px] hover:bg-white transition self-center md:self-start">
             Contact us — get a fixed quote →
           </a>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Live Network Chart -->
+  <div class="border-t border-white/10 py-16 md:py-24">
+    <div class="max-w-5xl mx-auto px-4 sm:px-8">
+      <div class="flex items-end justify-between mb-6 gap-4 flex-wrap">
+        <div>
+          <div class="uppercase tracking-[3px] text-xs text-[#22c55e] mb-2">LIVE NETWORK</div>
+          <h2 class="font-display text-[32px] sm:text-[42px] leading-none">Compute &amp; nodes over time</h2>
+        </div>
+        <div class="flex items-center gap-6 text-sm">
+          <span class="flex items-center gap-2"><span class="inline-block w-3 h-3 rounded-full bg-[#22c55e]"></span><span class="text-white/60">TFLOPS</span></span>
+          <span class="flex items-center gap-2"><span class="inline-block w-3 h-3 rounded-full bg-[#f97316]"></span><span class="text-white/60">Nodes</span></span>
+          <span id="chart-last-updated" class="text-white/30 tabular-nums text-xs"></span>
+        </div>
+      </div>
+      <div id="net-chart-wrap" class="relative" style="height:450px">
+        <canvas id="net-chart" class="absolute inset-0 w-full h-full cursor-crosshair"></canvas>
+        <div id="chart-tooltip" class="pointer-events-none absolute z-20 hidden rounded-md border border-white/10 bg-[#141414]/95 px-3 py-2 text-xs shadow-lg backdrop-blur-sm tabular-nums"></div>
       </div>
     </div>
   </div>
@@ -331,7 +352,352 @@
       els.forEach(el => io.observe(el));
     }
 
-    window.onload = () => { initCoinMesh(); initReveal(); };
+    // ── Live network chart ────────────────────────────────────────────
+    function fmtNum(n) {
+      if (n >= 1_000_000_000) return (n / 1_000_000_000).toFixed(1).replace(/\.0$/, '') + 'M';
+      if (n >= 1_000)     return (n / 1_000).toFixed(1).replace(/\.0$/, '') + 'k';
+      return n.toLocaleString();
+    }
+
+    const MINER_API = 'https://miner.poh.ge';
+
+    async function fetchMinerApi(path) {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 6000);
+      try {
+        const res = await fetch(MINER_API + path, { cache: 'no-store', signal: controller.signal });
+        clearTimeout(timer);
+        if (!res.ok) return null;
+        return res;
+      } catch {
+        clearTimeout(timer);
+        return null;
+      }
+    }
+
+    const CHART_MAX_POINTS = 1440;
+    const chartData = { points: [] }; // { t, tflops, nodes }
+    let chartHoverIdx = null;
+    let chartLayout = null;
+
+    // Smooth Catmull-Rom spline through canvas points
+    function splinePath(ctx, pts, toX, toY) {
+      if (pts.length < 2) return;
+      ctx.moveTo(toX(0), toY(pts[0].v));
+      for (let i = 0; i < pts.length - 1; i++) {
+        const p0 = pts[Math.max(0, i - 1)];
+        const p1 = pts[i];
+        const p2 = pts[i + 1];
+        const p3 = pts[Math.min(pts.length - 1, i + 2)];
+        const cp1x = toX(i)     + (toX(i + 1) - toX(Math.max(0, i - 1))) / 6;
+        const cp1y = toY(p1.v)  + (toY(p2.v)  - toY(p0.v))  / 6;
+        const cp2x = toX(i + 1) - (toX(Math.min(pts.length - 1, i + 2)) - toX(i)) / 6;
+        const cp2y = toY(p2.v)  - (toY(p3.v)  - toY(p1.v))  / 6;
+        ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, toX(i + 1), toY(p2.v));
+      }
+    }
+
+    function fmtV(v) {
+      return v >= 1000 ? (v / 1000).toFixed(1) + 'k' : v % 1 === 0 ? String(v) : v.toFixed(1);
+    }
+
+    function fmtChartTime(t, spanMs) {
+      const d = new Date(t);
+      if (spanMs > 7 * 86_400_000) return (d.getMonth() + 1) + '/' + d.getDate() + '/' + String(d.getFullYear()).slice(2);
+      if (spanMs > 86_400_000) return (d.getMonth() + 1) + '/' + d.getDate() + ' ' + d.getHours().toString().padStart(2, '0') + ':00';
+      return d.getHours().toString().padStart(2, '0') + ':' + d.getMinutes().toString().padStart(2, '0');
+    }
+
+    function setChartPoints(rows) {
+      chartData.points = rows
+        .map(p => ({ t: p.t, tflops: p.tflops ?? 0, nodes: p.nodes ?? 0 }))
+        .sort((a, b) => a.t - b.t);
+    }
+
+    function appendLiveChartPoint(count, tflops) {
+      const t = Date.now();
+      const pts = chartData.points;
+      const nodes = count ?? 0;
+      const flops = tflops ?? 0;
+      if (pts.length && t - pts[pts.length - 1].t < 30_000) {
+        pts[pts.length - 1] = { t, nodes, tflops: flops };
+      } else {
+        pts.push({ t, nodes, tflops: flops });
+      }
+      if (pts.length > CHART_MAX_POINTS) pts.shift();
+    }
+
+    function nearestChartPoint(mouseX) {
+      if (!chartLayout?.points?.length) return null;
+      const { points, PAD, cW, tMin, tMax } = chartLayout;
+      const span = tMax - tMin || 1;
+      const clampedX = Math.max(PAD.left, Math.min(PAD.left + cW, mouseX));
+      const targetT = tMin + ((clampedX - PAD.left) / cW) * span;
+      let best = 0, bestDist = Infinity;
+      for (let i = 0; i < points.length; i++) {
+        const dist = Math.abs(points[i].t - targetT);
+        if (dist < bestDist) { bestDist = dist; best = i; }
+      }
+      return best;
+    }
+
+    function hideChartTooltip() {
+      const tip = document.getElementById('chart-tooltip');
+      if (tip) tip.classList.add('hidden');
+      chartHoverIdx = null;
+      drawNetChart();
+    }
+
+    function showChartTooltip(idx, clientX, clientY) {
+      const tip = document.getElementById('chart-tooltip');
+      const wrap = document.getElementById('net-chart-wrap');
+      const p = chartData.points[idx];
+      if (!tip || !wrap || !p || !chartLayout) return;
+
+      const spanMs = chartLayout.tMax - chartLayout.tMin;
+      tip.innerHTML =
+        '<div class="text-white/45 mb-1">' + fmtChartTime(p.t, spanMs) + '</div>' +
+        '<div class="text-[#f97316]">' + fmtV(p.nodes) + ' nodes</div>' +
+        '<div class="text-[#22c55e]">' + fmtV(p.tflops) + ' TFLOPS</div>';
+
+      const rect = wrap.getBoundingClientRect();
+      const tipW = 132, tipH = 68;
+      let left = clientX - rect.left + 14;
+      let top = clientY - rect.top - tipH - 10;
+      if (left + tipW > rect.width - 8) left = clientX - rect.left - tipW - 14;
+      if (top < 8) top = clientY - rect.top + 14;
+      tip.style.left = left + 'px';
+      tip.style.top = top + 'px';
+      tip.classList.remove('hidden');
+    }
+
+    function drawNetChart() {
+      const canvas = document.getElementById('net-chart');
+      if (!canvas) return;
+      const dpr = window.devicePixelRatio || 1;
+      const W = canvas.offsetWidth, H = canvas.offsetHeight;
+      if (!W || !H) return;
+      canvas.width = W * dpr; canvas.height = H * dpr;
+      const ctx = canvas.getContext('2d');
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+      ctx.fillStyle = '#0b0b0b';
+      ctx.fillRect(0, 0, W, H);
+
+      const PAD = { top: 18, right: 52, bottom: 30, left: 52 };
+      const cW = W - PAD.left - PAD.right;
+      const cH = H - PAD.top - PAD.bottom;
+      const points = chartData.points;
+
+      for (let i = 0; i <= 4; i++) {
+        const y = PAD.top + (cH / 4) * i;
+        ctx.strokeStyle = 'rgba(255,255,255,0.04)';
+        ctx.lineWidth = 1;
+        ctx.beginPath(); ctx.moveTo(PAD.left, y); ctx.lineTo(PAD.left + cW, y); ctx.stroke();
+      }
+
+      if (points.length < 2) {
+        chartLayout = null;
+        ctx.fillStyle = 'rgba(255,255,255,0.15)';
+        ctx.font = '13px system-ui,sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('Collecting data…', PAD.left + cW / 2, PAD.top + cH / 2 + 5);
+        return;
+      }
+
+      const tMin = points[0].t;
+      const tMax = points[points.length - 1].t;
+      const spanMs = tMax - tMin || 1;
+      const toX = i => PAD.left + ((points[i].t - tMin) / spanMs) * cW;
+      chartLayout = { points, PAD, cW, cH, W, H, tMin, tMax, toX };
+
+      ctx.fillStyle = 'rgba(255,255,255,0.2)';
+      ctx.font = '10px monospace';
+      ctx.textAlign = 'center';
+      const ticks = 6;
+      for (let k = 0; k < ticks; k++) {
+        const frac = ticks === 1 ? 0 : k / (ticks - 1);
+        const t = tMin + frac * spanMs;
+        const x = PAD.left + frac * cW;
+        ctx.fillText(fmtChartTime(t, spanMs), x, H - 8);
+      }
+
+      function drawSeries(key, color, side, unit, sharedMn, sharedMx) {
+        const series = points.map(p => ({ t: p.t, v: p[key] }));
+        if (series.length < 2) return;
+        const sn = series.length;
+        const mn = sharedMn, mx = sharedMx, range = mx - mn || 1;
+        const toY = v => PAD.top + cH - ((v - mn) / range) * cH;
+
+        ctx.fillStyle = color + 'cc';
+        ctx.font = '10px monospace';
+        ctx.textAlign = side === 'left' ? 'right' : 'left';
+        const xLbl = side === 'left' ? PAD.left - 6 : PAD.left + cW + 6;
+        const vals = series.map(p => p.v);
+        const sMin = Math.min(...vals), sMax = Math.max(...vals);
+        [sMin, (sMin + sMax) / 2, sMax].forEach(v => {
+          ctx.fillText(fmtV(v), xLbl, toY(v) + 3);
+        });
+        ctx.font = '9px monospace';
+        ctx.fillStyle = color + '88';
+        ctx.fillText(unit, xLbl, PAD.top - 5);
+
+        const rgb = color === '#22c55e' ? '34,197,94' : '249,115,22';
+        const grad = ctx.createLinearGradient(0, PAD.top, 0, PAD.top + cH);
+        grad.addColorStop(0, `rgba(${rgb},0.25)`);
+        grad.addColorStop(0.55, `rgba(${rgb},0.07)`);
+        grad.addColorStop(1, `rgba(${rgb},0.0)`);
+        ctx.beginPath();
+        splinePath(ctx, series, toX, toY);
+        ctx.lineTo(toX(sn - 1), PAD.top + cH);
+        ctx.lineTo(toX(0), PAD.top + cH);
+        ctx.closePath();
+        ctx.fillStyle = grad;
+        ctx.fill();
+
+        ctx.beginPath();
+        splinePath(ctx, series, toX, toY);
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 2;
+        ctx.lineJoin = 'round';
+        ctx.shadowColor = color;
+        ctx.shadowBlur = 8;
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+
+        const lx = toX(sn - 1), ly = toY(series[sn - 1].v);
+        ctx.shadowColor = color; ctx.shadowBlur = 14;
+        ctx.beginPath(); ctx.arc(lx, ly, 4, 0, Math.PI * 2);
+        ctx.fillStyle = color; ctx.fill();
+        ctx.shadowBlur = 0;
+      }
+
+      const _allVals = points.flatMap(p => [p.tflops, p.nodes]);
+      const _rawMin = Math.max(0, Math.min(..._allVals));
+      const _rawMax = Math.max(..._allVals);
+      const _pad = (_rawMax - _rawMin) * 0.12 || 1;
+      const _sharedMn = Math.max(0, _rawMin - _pad);
+      const _sharedMx = _rawMax + _pad;
+
+      drawSeries('tflops', '#22c55e', 'left', 'TFLOPS', _sharedMn, _sharedMx);
+      drawSeries('nodes', '#f97316', 'right', 'nodes', _sharedMn, _sharedMx);
+
+      if (chartHoverIdx != null && points[chartHoverIdx]) {
+        const hx = toX(chartHoverIdx);
+        const hp = points[chartHoverIdx];
+        ctx.strokeStyle = 'rgba(255,255,255,0.18)';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([4, 4]);
+        ctx.beginPath();
+        ctx.moveTo(hx, PAD.top);
+        ctx.lineTo(hx, PAD.top + cH);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        const toY = v => PAD.top + cH - ((v - _sharedMn) / (_sharedMx - _sharedMn || 1)) * cH;
+        ctx.beginPath();
+        ctx.arc(hx, toY(hp.tflops), 5, 0, Math.PI * 2);
+        ctx.fillStyle = '#22c55e';
+        ctx.fill();
+        ctx.beginPath();
+        ctx.arc(hx, toY(hp.nodes), 5, 0, Math.PI * 2);
+        ctx.fillStyle = '#f97316';
+        ctx.fill();
+      }
+    }
+
+    // Merge tiered history (daily → hourly → minutely) into one timeline,
+    // then auto-aggregate to at most ~300 points for chart rendering.
+    function mergeAndAggregate(daily, hourly, minutely) {
+      const map = new Map();
+      const add = pts => pts.forEach(p => map.set(Math.round(p.t / 60_000), p)); // key by minute
+      add(daily);
+      add(hourly);
+      add(minutely);
+      const sorted = [...map.values()].sort((a, b) => a.t - b.t);
+      if (!sorted.length) return [];
+
+      const TARGET = 300;
+      if (sorted.length <= TARGET) return sorted;
+
+      const span   = sorted[sorted.length - 1].t - sorted[0].t;
+      const bucket = Math.ceil(span / TARGET); // ms per bucket
+
+      const buckets = new Map();
+      for (const p of sorted) {
+        const k = Math.floor(p.t / bucket);
+        if (!buckets.has(k)) buckets.set(k, []);
+        buckets.get(k).push(p);
+      }
+      return [...buckets.values()].map(pts => ({
+        t:      pts[0].t,
+        nodes:  Math.round(pts.reduce((s, p) => s + p.nodes,  0) / pts.length),
+        tflops: Math.round(pts.reduce((s, p) => s + p.tflops, 0) / pts.length * 10) / 10,
+      })).sort((a, b) => a.t - b.t);
+    }
+
+    async function loadChartHistory() {
+      try {
+        const res = await fetchMinerApi('/network/history');
+        if (!res) return;
+        const data = await res.json();
+        const merged = (data.minutely || data.hourly || data.daily)
+          ? mergeAndAggregate(data.daily || [], data.hourly || [], data.minutely || [])
+          : (data.history || []);
+        if (!merged.length) return;
+        setChartPoints(merged);
+        drawNetChart();
+      } catch {}
+    }
+
+    async function tickChart() {
+      try {
+        const res = await fetchMinerApi('/peers');
+        if (res) {
+          const data = await res.json();
+          const count = data.count ?? (Array.isArray(data.peers) ? data.peers.length : null);
+          let tflops = data.totalTflops;
+          if (tflops == null && Array.isArray(data.peers))
+            tflops = Math.round(data.peers.reduce((s, p) => s + (p.tflops || 0), 0) * 10) / 10;
+
+          if (count != null || tflops != null)
+            appendLiveChartPoint(count ?? chartData.points.at(-1)?.nodes ?? 0, tflops ?? chartData.points.at(-1)?.tflops ?? 0);
+        }
+
+        drawNetChart();
+        const el = document.getElementById('chart-last-updated');
+        if (el) {
+          const d = new Date();
+          el.textContent = 'updated ' + d.getHours().toString().padStart(2,'0') + ':' + d.getMinutes().toString().padStart(2,'0') + ':' + d.getSeconds().toString().padStart(2,'0');
+        }
+      } catch {}
+    }
+
+    function initChartHover() {
+      const canvas = document.getElementById('net-chart');
+      if (!canvas) return;
+      canvas.addEventListener('mousemove', e => {
+        const rect = canvas.getBoundingClientRect();
+        const idx = nearestChartPoint(e.clientX - rect.left);
+        if (idx == null) return hideChartTooltip();
+        if (idx !== chartHoverIdx) {
+          chartHoverIdx = idx;
+          drawNetChart();
+        }
+        showChartTooltip(idx, e.clientX, e.clientY);
+      });
+      canvas.addEventListener('mouseleave', hideChartTooltip);
+    }
+
+    window.onload = () => {
+      initCoinMesh();
+      initReveal();
+      initChartHover();
+      loadChartHistory().then(() => tickChart());
+      setInterval(tickChart, 15000);
+      setInterval(loadChartHistory, 10 * 60 * 1000);
+      window.addEventListener('resize', () => { drawNetChart(); });
+    };
 
     // Mobile hamburger nav
     const hamburger = document.getElementById('hamburger');

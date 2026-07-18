@@ -2,7 +2,7 @@
 #
 # deploy-bootnode.sh
 #
-# Deploys the PoH Bootnode to the production server (bootnode.proofofhuman.ge)
+# Deploys the PoH Bootnode to the production server (miner.proofofhuman.ge)
 #
 # SSH alias: hk (217.60.38.159)
 #
@@ -191,7 +191,7 @@ echo ""
 echo "🔧 Deploying Nginx config for bootnode..."
 
 # Copy nginx config + snippets to the server
-if [ -f "nginx/sites-available/bootnode.proofofhuman.ge.conf" ]; then
+if [ -f "nginx/sites-available/miner.proofofhuman.ge.conf" ]; then
     echo "   Copying nginx config and snippets..."
 
     # Copy snippets
@@ -205,16 +205,16 @@ if [ -f "nginx/sites-available/bootnode.proofofhuman.ge.conf" ]; then
 
     # Copy main config
     $RSYNC_SSH_CMD -o StrictHostKeyChecking=accept-new \
-        nginx/sites-available/bootnode.proofofhuman.ge.conf \
-        "$REMOTE_HOST:/tmp/bootnode.proofofhuman.ge.conf"
+        nginx/sites-available/miner.proofofhuman.ge.conf \
+        "$REMOTE_HOST:/tmp/miner.proofofhuman.ge.conf"
 
-    $SSH_CMD "$REMOTE_HOST" 'sudo mv /tmp/bootnode.proofofhuman.ge.conf /etc/nginx/sites-available/ && \
-        sudo ln -sf /etc/nginx/sites-available/bootnode.proofofhuman.ge.conf /etc/nginx/sites-enabled/ && \
+    $SSH_CMD "$REMOTE_HOST" 'sudo mv /tmp/miner.proofofhuman.ge.conf /etc/nginx/sites-available/ && \
+        sudo ln -sf /etc/nginx/sites-available/miner.proofofhuman.ge.conf /etc/nginx/sites-enabled/ && \
         nginx -t && sudo systemctl reload nginx'
 
-    echo "✅ Nginx config + snippets deployed and enabled for bootnode.proofofhuman.ge"
+    echo "✅ Nginx config + snippets deployed and enabled for miner.proofofhuman.ge"
 else
-    echo "⚠️  nginx/sites-available/bootnode.proofofhuman.ge.conf not found locally. Skipping nginx deployment."
+    echo "⚠️  nginx/sites-available/miner.proofofhuman.ge.conf not found locally. Skipping nginx deployment."
 fi
 
 echo ""
@@ -223,11 +223,11 @@ echo ""
 echo "Next steps:"
 echo "  1. Check bootnode logs:   ssh hk 'sudo journalctl -u poh-bootnode -f'"
 echo "  2. Check nginx status:    ssh hk 'sudo nginx -t && sudo systemctl reload nginx'"
-echo "  3. Test the endpoint:     curl -I https://bootnode.proofofhuman.ge/chain/tip"
+echo "  3. Test the endpoint:     curl -I https://miner.proofofhuman.ge/chain/tip"
 echo "  4. Nodes register (protected): miners now POST /register with signature proof; GET /peers shows verified nodes + ports for direct /job verdict queries"
 echo ""
 echo "If you haven't obtained the SSL certificate yet, run on the server:"
-echo "  ssh hk 'sudo certbot --nginx -d bootnode.proofofhuman.ge'"
+echo "  ssh hk 'sudo certbot --nginx -d miner.proofofhuman.ge'"
 
 # Security: clear password from environment
 unset SSH_PASSWORD SSHPASS 2>/dev/null || true
