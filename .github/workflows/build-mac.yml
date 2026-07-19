@@ -1,0 +1,74 @@
+name: Build macOS (Electron)
+
+# Builds the PoH-Miner macOS app (.dmg, both Apple Silicon + Intel) on a GitHub
+# macOS runner — so you don't need a Mac locally. Trigger it manually from the
+# Actions tab ("Run workflow"), or push a version tag (v0.4.5, …).
+#
+# The build is UNSIGNED (no Apple Developer cert in CI). That's fine for your own
+# testing; on first launch macOS Gatekeeper will warn — right-click → Open, or
+#   xattr -dr com.apple.quarantine /Applications/PoH-Miner.app
+# To ship signed + notarized builds to others, see the commented section below.
+
+on:
+  workflow_dispatch: {}          # manual "Run workflow" button
+  push:
+    tags: ['v*']                 # also build when you push a version tag
+
+permissions:
+  contents: write                # lets the release step (on tags) upload assets
+
+jobs:
+  build-mac:
+    runs-on: macos-14            # Apple Silicon runner; builds arm64 AND x64 dmg
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build macOS app (unsigned)
+        env:
+          # No Apple certificate in CI — turn off auto-signing so electron-builder
+          # doesn't fail/hang looking for one. Produces an unsigned .dmg.
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npm run build:electron:mac
+
+      - name: List build output
+        run: ls -lh dist/ || true
+
+      - name: Upload .dmg artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: poh-miner-macos-dmg
+          path: |
+            dist/*.dmg
+            dist/*.dmg.blockmap
+          if-no-files-found: error
+          retention-days: 14
+
+      # On a version tag, also attach the .dmg files to a GitHub Release.
+      - name: Attach to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/*.dmg
+            dist/*.dmg.blockmap
+
+  # ── Signed + notarized builds (optional, for distributing to other people) ──
+  # Add these repo secrets, then move the env vars into the build step above and
+  # remove CSC_IDENTITY_AUTO_DISCOVERY:
+  #   CSC_LINK             base64 of your Developer ID Application .p12
+  #   CSC_KEY_PASSWORD     password for that .p12
+  #   APPLE_ID             your Apple ID email
+  #   APPLE_APP_SPECIFIC_PASSWORD   app-specific password (appleid.apple.com)
+  #   APPLE_TEAM_ID        your 10-char team id
+  # electron-builder auto-notarizes when APPLE_ID + APPLE_APP_SPECIFIC_PASSWORD +
+  # APPLE_TEAM_ID are present and the app is signed.
