@@ -6445,6 +6445,54 @@ export class PohMinerNode {
     }
   }
 
+  /**
+   * Auto-route a compute prompt through the skill-trigger matcher (the same
+   * `_routeMessage` used by /chat/ask), so "search the web: …" and other triggers work
+   * for API/board compute jobs — not just interactive chat. Returns
+   * { reply, skillId, skillOutput, tokensUsed } when a skill matched and produced an
+   * answer, or null to fall back to the raw LLM. Never throws (routing is best-effort).
+   */
+  async _routeComputePrompt(prompt, model) {
+    let route;
+    try { route = await this._routeMessage(prompt); } catch { return null; }
+    if (!route || route.type !== 'skill') return null;
+    const skillEntry = skillsManager.getSkill(route.skillId);
+    if (!skillEntry) return null;
+    try {
+      // Executable builtin skill: fetch its data, then let the LLM turn it into an answer.
+      if (skillEntry.private === true && skillEntry.code) {
+        const { output, tokensUsed: skillTokens = 0 } = await skillsManager.runSkill(route.skillId, route.input, this.config);
+        const systemContent = _skillLlmSystemPrompt(route.skillId, skillEntry.context);
+        const dataLimit = SOCIAL_SKILL_IDS.has(route.skillId) ? 12000 : 6000;
+        const dataStr = JSON.stringify(output, null, 2).slice(0, dataLimit);
+        const userContent = `Fetched data:\n${dataStr}\n\nUser question: ${prompt}`;
+        const llmReply = await this._llmChat(
+          [{ role: 'system', content: systemContent }, { role: 'user', content: userContent }],
+          { model, timeoutMs: 40_000 },
+        );
+        const reply = (llmReply || '').trim() || _formatSkillOutputFallback(route.skillId, output);
+        const tokensUsed = Math.max(skillTokens, Math.ceil((prompt.length + reply.length) / 4));
+        return { reply, skillId: route.skillId, skillOutput: output, tokensUsed };
+      }
+      // Knowledge-only skill: answer from its reference context (no fetch).
+      if (skillEntry.private === true && !skillEntry.code && skillEntry.context) {
+        const systemContent = [
+          'You are a helpful assistant with access to specialized reference documentation.',
+          'Answer using the reference material below. Be specific and practical. Write clear Markdown.',
+          `\nReference documentation (${route.skillId}):\n${skillEntry.context.slice(0, 8000)}`,
+        ].join('\n');
+        const reply = (await this._llmChat(
+          [{ role: 'system', content: systemContent }, { role: 'user', content: prompt }],
+          { model, timeoutMs: 40_000 },
+        )).trim();
+        if (reply) return { reply, skillId: route.skillId, skillOutput: null, tokensUsed: Math.ceil((prompt.length + reply.length) / 4) };
+      }
+    } catch (e) {
+      console.warn(`[compute-route] skill ${route.skillId} failed — falling back to raw LLM:`, e.message);
+    }
+    return null;
+  }
+
   async _computeBoardJob(job) {
     const start = Date.now();
     try {
@@ -6462,6 +6510,33 @@ export class PohMinerNode {
         const dataset = job.dataset || job.datasetId || null;
         const prompt  = job.payload?.prompt || job.payload?.message || job.payload?.question;
         if (!prompt) throw new Error('payload.prompt is required for compute jobs');
+
+        // Auto-route through skill triggers (unless the caller pinned a dataset or opted out
+        // with route:false) — so "search the web: …" reaches web_search via the API too.
+        if (!dataset && job.route !== false) {
+          const routed = await this._routeComputePrompt(prompt, model);
+          if (routed) {
+            const { encrypt: encR, encPub: encPubR } = this._chatVisibility(job);
+            const profileR = encR
+              ? { computeOutput: null, replyCipher: sealChat(encPubR, routed.reply), encrypted: true, model, skillId: routed.skillId }
+              : { computeOutput: routed.reply, model, skillId: routed.skillId };
+            return {
+              type: 'compute',
+              verdict: 'COMPUTE_RESULT',
+              address: job.payload?.address || 'compute-job',
+              confidence: 1,
+              reasoning: `Compute job routed to skill "${routed.skillId}"`,
+              profile: profileR,
+              modelUsed: model,
+              skillId: routed.skillId,
+              signalsUsed: [],
+              methodsHash: this.methodsManager?.getStatus().hash || 'compute',
+              methodsCount: 0,
+              realPohUsed: false,
+              computationTimeMs: Date.now() - start,
+            };
+          }
+        }
 
         const messages = [];
         let datasetUsed = null;
@@ -6684,74 +6759,85 @@ export class PohMinerNode {
         const prompt  = job.payload?.prompt || job.payload?.message || job.payload?.question;
         if (!prompt) throw new Error('payload.prompt is required for compute jobs');
 
-        const messages = [];
-        let datasetUsed = null;
+        const gasPrice = this.config.gasPrice || GAS.DEFAULT_GAS_PRICE;
+        let reply = null, tokensUsed = null, routedSkillId = null, datasetUsed = null;
 
-        if (dataset) {
-          const brainDataDir = getBrainDataDir();
-          if (!brainDataDir || !hfDatasetManager.isInstalled(brainDataDir, dataset)) {
-            throw new Error(`Dataset "${dataset}" is not installed on this miner`);
+        // Auto-route through skill triggers (unless a dataset is pinned or route:false),
+        // so "search the web: …" reaches web_search via the API just like /chat/ask.
+        if (!dataset && job.route !== false) {
+          const routed = await this._routeComputePrompt(prompt, model);
+          if (routed) { reply = routed.reply; tokensUsed = routed.tokensUsed; routedSkillId = routed.skillId; }
+        }
+
+        if (reply == null) {
+          const messages = [];
+          if (dataset) {
+            const brainDataDir = getBrainDataDir();
+            if (!brainDataDir || !hfDatasetManager.isInstalled(brainDataDir, dataset)) {
+              throw new Error(`Dataset "${dataset}" is not installed on this miner`);
+            }
+            const slice = hfDatasetManager.loadRelevantSlice(brainDataDir, dataset, prompt);
+            messages.push({
+              role: 'system',
+              content: `You are a helpful assistant answering using data from a Hugging Face dataset.\nUse the dataset rows below to answer the user's request. Write in clear, human-readable Markdown.\n\nDataset: ${dataset}\nRelevant rows:\n${slice || '(no matching rows found in the installed dataset)'}`,
+            });
+            datasetUsed = dataset;
           }
-          const slice = hfDatasetManager.loadRelevantSlice(brainDataDir, dataset, prompt);
-          messages.push({
-            role: 'system',
-            content: `You are a helpful assistant answering using data from a Hugging Face dataset.\nUse the dataset rows below to answer the user's request. Write in clear, human-readable Markdown.\n\nDataset: ${dataset}\nRelevant rows:\n${slice || '(no matching rows found in the installed dataset)'}`,
+
+          // Prior conversation turns — client history plus on-chain public job context.
+          let history = Array.isArray(job.payload?.history) ? job.payload.history : [];
+          if (job.requesterAddress) {
+            const localRecords = this.jobResults ? Array.from(this.jobResults.values()) : [];
+            const chainCtx = buildWalletJobContext(this.chain, job.requesterAddress, { limit: 20, localRecords, chatTurnLimit: 8, decryptKey: this._encKeyFor(job.requesterAddress) });
+            history = _mergeHistoryWithChainTurns(history, chainCtx.chatTurns);
+          }
+          for (const turn of history) {
+            if (turn?.role && turn?.content && ['user', 'assistant', 'system'].includes(turn.role)) {
+              messages.push({ role: turn.role, content: String(turn.content).slice(0, 8000) });
+            }
+          }
+
+          messages.push({ role: 'user', content: prompt });
+
+          // Run the job on QVAC (in-process). datasetUsed already prepended its own
+          // system message; otherwise give the model a light assistant persona.
+          const qvac = await getQvacModels();
+          if (!qvac || !qvac.ENABLED) throw new Error('Inference backend (QVAC) is unavailable on this miner');
+
+          // No-refund policy: the escrowed budget is the hard compute allowance, so cap
+          // output generation at the tokens the requester paid for. Meter the run and
+          // settle on the ACTUAL token count (prompt measured + output counted exactly).
+          const isPaid     = job.requesterAddress && job.maxBudget > 0;
+          const promptEst  = qvac.estimateMessagesTokens(messages);
+          const hardCap    = isPaid ? outputTokenCap(job.maxBudget, gasPrice, promptEst) : 0;
+          const usage = await qvac.chat(messages, {
+            model,
+            timeLimit: 90_000,
+            systemPrompt: datasetUsed ? undefined : 'You are a helpful, concise assistant. Answer in clear Markdown.',
+            withUsage: true,
+            hardTokenCap: hardCap,
           });
-          datasetUsed = dataset;
+          if (usage == null || usage.text == null) throw new Error(`Model "${model}" produced no output on this miner (QVAC unavailable)`);
+          reply = usage.text;
+          tokensUsed = usage.totalTokens || job.estimatedTokens || estimateTokens(0, null);
         }
-
-        // Prior conversation turns — client history plus on-chain public job context.
-        let history = Array.isArray(job.payload?.history) ? job.payload.history : [];
-        if (job.requesterAddress) {
-          const localRecords = this.jobResults ? Array.from(this.jobResults.values()) : [];
-          const chainCtx = buildWalletJobContext(this.chain, job.requesterAddress, { limit: 20, localRecords, chatTurnLimit: 8, decryptKey: this._encKeyFor(job.requesterAddress) });
-          history = _mergeHistoryWithChainTurns(history, chainCtx.chatTurns);
-        }
-        for (const turn of history) {
-          if (turn?.role && turn?.content && ['user', 'assistant', 'system'].includes(turn.role)) {
-            messages.push({ role: turn.role, content: String(turn.content).slice(0, 8000) });
-          }
-        }
-
-        messages.push({ role: 'user', content: prompt });
-
-        // Run the job on QVAC (in-process). datasetUsed already prepended its own
-        // system message; otherwise give the model a light assistant persona.
-        const qvac = await getQvacModels();
-        if (!qvac || !qvac.ENABLED) throw new Error('Inference backend (QVAC) is unavailable on this miner');
-
-        // No-refund policy: the escrowed budget is the hard compute allowance, so cap
-        // output generation at the tokens the requester paid for. Meter the run and
-        // settle on the ACTUAL token count (prompt measured + output counted exactly),
-        // not the pre-flight estimate.
-        const gasPrice   = this.config.gasPrice || GAS.DEFAULT_GAS_PRICE;
-        const isPaid     = job.requesterAddress && job.maxBudget > 0;
-        const promptEst  = qvac.estimateMessagesTokens(messages);
-        const hardCap    = isPaid ? outputTokenCap(job.maxBudget, gasPrice, promptEst) : 0;
-        const usage = await qvac.chat(messages, {
-          model,
-          timeLimit: 90_000,
-          systemPrompt: datasetUsed ? undefined : 'You are a helpful, concise assistant. Answer in clear Markdown.',
-          withUsage: true,
-          hardTokenCap: hardCap,
-        });
-        if (usage == null || usage.text == null) throw new Error(`Model "${model}" produced no output on this miner (QVAC unavailable)`);
-        const reply = usage.text;
-        const tokensUsed = usage.totalTokens || job.estimatedTokens || estimateTokens(0, null);
 
         // Public jobs seal the reply to the requester's key; the chain stores only
         // ciphertext. Local jobs keep cleartext computeOutput so search works.
         const { encrypt: encReply, encPub: replyEncPub } = this._chatVisibility(job);
+        const baseProfile = routedSkillId ? { model, skillId: routedSkillId } : { model, dataset: datasetUsed };
         const profile = encReply
-          ? { computeOutput: null, replyCipher: sealChat(replyEncPub, reply), encrypted: true, model, dataset: datasetUsed }
-          : { computeOutput: reply, model, dataset: datasetUsed };
+          ? { computeOutput: null, replyCipher: sealChat(replyEncPub, reply), encrypted: true, ...baseProfile }
+          : { computeOutput: reply, ...baseProfile };
 
         const result = new ScanResult({
           requestId:         job.id,
           address:           job.payload?.address || 'compute-job',
           verdict:           'COMPUTE_RESULT',
           confidence:        1,
-          reasoning:         `Compute job executed with model ${model}` + (datasetUsed ? ` over dataset ${datasetUsed}` : ''),
+          reasoning:         routedSkillId
+            ? `Compute job routed to skill "${routedSkillId}"`
+            : `Compute job executed with model ${model}` + (datasetUsed ? ` over dataset ${datasetUsed}` : ''),
           signalsUsed:       [],
           modelUsed:         model,
           computationTimeMs: Date.now() - start,
