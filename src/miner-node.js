@@ -6453,6 +6453,79 @@ export class PohMinerNode {
         const { output } = await skillsManager.runSkill(job.skillId, job.payload, this.config, job.maxBudget);
         return { type: 'skill', skillId: job.skillId, output, computationTimeMs: Date.now() - start };
       }
+      // Compute (LLM) board jobs — run QVAC just like the /job HTTP path. Without this
+      // branch a 'compute' job fell through to the verdict/scan path, which then read
+      // .startsWith on the (absent) payload.address and crashed. Mirrors the token
+      // metering + no-refund cap + public-job sealing used everywhere else.
+      if (job.type === 'compute') {
+        const model   = job.model || this.config.model || 'qwen3-1.7b';
+        const dataset = job.dataset || job.datasetId || null;
+        const prompt  = job.payload?.prompt || job.payload?.message || job.payload?.question;
+        if (!prompt) throw new Error('payload.prompt is required for compute jobs');
+
+        const messages = [];
+        let datasetUsed = null;
+        if (dataset) {
+          const brainDataDir = getBrainDataDir();
+          if (!brainDataDir || !hfDatasetManager.isInstalled(brainDataDir, dataset)) {
+            throw new Error(`Dataset "${dataset}" is not installed on this miner`);
+          }
+          const slice = hfDatasetManager.loadRelevantSlice(brainDataDir, dataset, prompt);
+          messages.push({
+            role: 'system',
+            content: `You are a helpful assistant answering using data from a Hugging Face dataset.\nUse the dataset rows below to answer the user's request. Write in clear, human-readable Markdown.\n\nDataset: ${dataset}\nRelevant rows:\n${slice || '(no matching rows found in the installed dataset)'}`,
+          });
+          datasetUsed = dataset;
+        }
+
+        let history = Array.isArray(job.payload?.history) ? job.payload.history : [];
+        if (job.requesterAddress) {
+          const localRecords = this.jobResults ? Array.from(this.jobResults.values()) : [];
+          const chainCtx = buildWalletJobContext(this.chain, job.requesterAddress, { limit: 20, localRecords, chatTurnLimit: 8, decryptKey: this._encKeyFor(job.requesterAddress) });
+          history = _mergeHistoryWithChainTurns(history, chainCtx.chatTurns);
+        }
+        for (const turn of history) {
+          if (turn?.role && turn?.content && ['user', 'assistant', 'system'].includes(turn.role)) {
+            messages.push({ role: turn.role, content: String(turn.content).slice(0, 8000) });
+          }
+        }
+        messages.push({ role: 'user', content: prompt });
+
+        const qvac = await getQvacModels();
+        if (!qvac || !qvac.ENABLED) throw new Error('Inference backend (QVAC) is unavailable on this miner');
+        const gasPrice  = this.config.gasPrice || GAS.DEFAULT_GAS_PRICE;
+        const isPaid    = job.requesterAddress && job.maxBudget > 0;
+        const promptEst = qvac.estimateMessagesTokens(messages);
+        const hardCap   = isPaid ? outputTokenCap(job.maxBudget, gasPrice, promptEst) : 0;
+        const usage = await qvac.chat(messages, {
+          model,
+          timeLimit: 90_000,
+          systemPrompt: datasetUsed ? undefined : 'You are a helpful, concise assistant. Answer in clear Markdown.',
+          withUsage: true,
+          hardTokenCap: hardCap,
+        });
+        if (usage == null || usage.text == null) throw new Error(`Model "${model}" produced no output on this miner`);
+
+        const { encrypt: encReply, encPub: replyEncPub } = this._chatVisibility(job);
+        const profile = encReply
+          ? { computeOutput: null, replyCipher: sealChat(replyEncPub, usage.text), encrypted: true, model, dataset: datasetUsed }
+          : { computeOutput: usage.text, model, dataset: datasetUsed };
+
+        return {
+          type: 'compute',
+          verdict: 'COMPUTE_RESULT',
+          address: job.payload?.address || 'compute-job',
+          confidence: 1,
+          reasoning: `Compute job executed with model ${model}` + (datasetUsed ? ` over dataset ${datasetUsed}` : ''),
+          profile,
+          modelUsed: model,
+          signalsUsed: [],
+          methodsHash: this.methodsManager?.getStatus().hash || 'compute',
+          methodsCount: 0,
+          realPohUsed: false,
+          computationTimeMs: Date.now() - start,
+        };
+      }
       const v = await computeVerdictWithExistingPoh(job, this.config);
       return {
         type: 'verdict',
