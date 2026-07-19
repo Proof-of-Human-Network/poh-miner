@@ -83,7 +83,7 @@ export class ChatHistorySearch {
     this._loadLocalStore();
     await this._connectMeilisearch();
     if (this._meiliReady && this.docs.size) {
-      try { await this._meiliIndex.addDocuments([...this.docs.values()]); } catch { /* best effort */ }
+      try { await this._meiliIndex.addDocuments([...this.docs.values()], { primaryKey: 'id' }); } catch { /* best effort */ }
     }
   }
 
@@ -158,7 +158,7 @@ export class ChatHistorySearch {
       } catch { /* non-fatal */ }
     }
     if (this._meiliReady) {
-      try { await this._meiliIndex.addDocuments([doc]); } catch { /* non-fatal */ }
+      try { await this._meiliIndex.addDocuments([doc], { primaryKey: 'id' }); } catch { /* non-fatal */ }
     }
   }
 
@@ -175,7 +175,9 @@ export class ChatHistorySearch {
     if (this._meiliReady) {
       try {
         await this._meiliIndex.deleteAllDocuments();
-        if (docs.length) await this._meiliIndex.addDocuments(docs);
+        // Meili 1.48+ refuses to infer the primary key when a doc has multiple *id
+        // fields (id + jobId), so pin it explicitly or every add fails on a PK-less index.
+        if (docs.length) await this._meiliIndex.addDocuments(docs, { primaryKey: 'id' });
       } catch (e) {
         console.warn('[PoH-Search] Meilisearch reindex failed:', e.message);
       }
