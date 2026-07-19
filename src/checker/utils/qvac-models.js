@@ -240,6 +240,7 @@ async function chat(messages, opts = {}) {
     systemPrompt,
     withUsage = false,        // when true, return { text, promptTokens, completionTokens, totalTokens }
     hardTokenCap = 0,         // stop generation after this many OUTPUT tokens (0 = uncapped)
+    onToken = null,           // optional callback(token) for live streaming to a client
   } = opts;
 
   return enqueue(async () => {
@@ -276,6 +277,7 @@ async function chat(messages, opts = {}) {
       for await (const token of run.tokenStream) {
         text += token;
         completionTokens++;
+        if (onToken) { try { onToken(token); } catch { /* client hung up — keep counting */ } }
         // No-refund hard cap: budget bounds output, so stop once we've generated
         // every token the requester paid for (see gas-estimator.outputTokenCap).
         if (hardTokenCap > 0 && completionTokens >= hardTokenCap) {

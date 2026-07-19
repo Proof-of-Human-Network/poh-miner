@@ -2181,6 +2181,21 @@ export class PohMinerNode {
 
             if (url.pathname === '/api/chat') {
               const messages = Array.isArray(payload.messages) ? payload.messages : [];
+              // Stream newline-delimited JSON when the client asks for it (Ollama shape +
+              // what the Electron chat UI parses). Each token is one line; a final
+              // {done:true} line closes it. Non-stream callers still get one JSON object.
+              if (payload.stream) {
+                res.statusCode = 200;
+                res.setHeader('Content-Type', 'application/x-ndjson');
+                const line = (obj) => { try { res.write(JSON.stringify(obj) + '\n'); } catch { /* client gone */ } };
+                const reply = await qvac.chat(messages, {
+                  model, timeLimit: 90_000,
+                  onToken: (t) => line({ model, message: { role: 'assistant', content: t }, done: false }),
+                });
+                if (reply == null) { line({ error: `Model "${model}" produced no output (QVAC unavailable)` }); return res.end(); }
+                line({ model, created_at: new Date().toISOString(), message: { role: 'assistant', content: '' }, done: true });
+                return res.end();
+              }
               const reply = await qvac.chat(messages, { model, timeLimit: 90_000 });
               if (reply == null) return sendJson(503, { error: `Model "${model}" produced no output (QVAC unavailable)` });
               return sendJson(200, { model, created_at: new Date().toISOString(), message: { role: 'assistant', content: reply }, done: true });

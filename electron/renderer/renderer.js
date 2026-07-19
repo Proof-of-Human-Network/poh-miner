@@ -3098,6 +3098,18 @@ async function sendChatMessage() {
       }
     }
 
+    // Flush a trailing line that wasn't newline-terminated — a non-streamed single
+    // JSON response (or the final chunk without a trailing "\n") lands in `buf`, not the
+    // loop above, and would otherwise be dropped and look like "no response".
+    if (!fullResponse && buf.trim()) {
+      try {
+        const evt = JSON.parse(buf);
+        const token = evt.message?.content || evt.response || '';
+        if (evt.error) { appendToLastBubble(`[Error: ${evt.error}]`); fullResponse += `[Error: ${evt.error}]`; }
+        else if (token) { appendToLastBubble(token); fullResponse += token; }
+      } catch { /* not a complete JSON object — ignore */ }
+    }
+
     if (!fullResponse) appendToLastBubble('[No response — the model may still be loading. Try again.]');
     finalizeLastBubble();
     chatHistory.push({ role: 'assistant', content: fullResponse || '[no response]' });
