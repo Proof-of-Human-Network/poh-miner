@@ -24,13 +24,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # NOTE: this repo gitignores package-lock.json / yarn.lock, so there is no
+      # lockfile in CI — hence no `cache: npm` (it errors "lock file is not found")
+      # and `npm install` rather than `npm ci` (which requires a lockfile).
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: 'npm'
 
       - name: Install dependencies
-        run: npm ci
+        run: npm install --no-audit --no-fund
 
       - name: Build macOS app (unsigned)
         env:
