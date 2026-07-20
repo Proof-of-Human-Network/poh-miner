@@ -470,6 +470,11 @@ export class PohMinerNode {
         console.warn('[PoH-Miner] Could not persist wallet to config:', e.message);
       }
     };
+    // Fresh-chain hard reset: if the on-disk genesis is stale, wipe chain + WALLETS +
+    // search BEFORE resolving the mining wallet, so this node starts completely clean on
+    // the new genesis (a brand-new wallet is minted just below).
+    this._hardResetIfGenesisStale();
+
     const candidateAddr = isNativePoH(this.config.pohWallet) ? this.config.pohWallet
                         : isNativePoH(this.config.wallet)    ? this.config.wallet
                         : null;
@@ -5668,6 +5673,51 @@ export class PohMinerNode {
   }
 
   /** Remove chain + chain-derived caches under the miner data dir. Never wallets/keys/config/brain. */
+  /**
+   * One-time TOTAL reset when the network switches to a new genesis. If the on-disk
+   * chain's genesis no longer matches EXPECTED_GENESIS_HASH — and we can reproduce the
+   * new genesis from the bundled snapshot — wipe everything derived from the old chain
+   * INCLUDING wallets and search, so the node comes up as a brand-new identity at 0.
+   * Runs in the constructor before wallet resolution (a fresh wallet is minted after).
+   * No-op on a fresh install and once already on the new genesis. Config (bootnodes,
+   * etc.) is kept; only the wallet pointer is cleared so a new one mints.
+   */
+  _hardResetIfGenesisStale() {
+    if (!EXPECTED_GENESIS_HASH) return;
+    try {
+      const chainFile = this.chainStore?.appendFile;
+      if (!chainFile || !fs.existsSync(chainFile)) return; // fresh install — nothing to reset
+      const fd = fs.openSync(chainFile, 'r');
+      const buf = Buffer.alloc(8192);
+      const n = fs.readSync(fd, buf, 0, buf.length, 0);
+      fs.closeSync(fd);
+      const firstLine = buf.subarray(0, n).toString('utf8').split('\n')[0];
+      if (!firstLine) return;
+      const onDisk = new PohBlock(JSON.parse(firstLine)).getHashSync();
+      if (onDisk === EXPECTED_GENESIS_HASH) return; // already on the new chain
+
+      // Safety: never wipe unless we can actually build the expected genesis from the
+      // snapshot (a missing/rogue snapshot must not trigger a destructive reset).
+      const snap = loadSnapshot(this.config.genesisSnapshot || defaultMigrationSnapshot());
+      if (!snap || buildMigrationGenesis(snap, { difficulty: 3 }).genesis.getHashSync() !== EXPECTED_GENESIS_HASH) return;
+
+      const base = path.dirname(this.chainStore.dataDir); // ~/.poh-miner
+      console.warn(`[PoH-Miner] ⛓ Fresh-chain hard reset → genesis ${EXPECTED_GENESIS_HASH.slice(0, 12)}…: ` +
+        'wiping chain, WALLETS, and search. A brand-new wallet will be created.');
+      for (const t of ['chain', 'wallets', 'search', 'meilisearch-data', 'rewards', 'p2p', 'data', 'ipfs', 'ipfs_cid_cache.json']) {
+        try { fs.rmSync(path.join(base, t), { recursive: true, force: true }); } catch { /* best effort */ }
+      }
+      // Recreate the empty dirs the managers expect + clear the wallet pointer so a fresh
+      // wallet is minted (config keeps everything else — bootnodes, model, etc.).
+      try { fs.mkdirSync(this.chainStore.dataDir, { recursive: true }); } catch { /* exists */ }
+      try { fs.mkdirSync(this.walletManager.walletsDir, { recursive: true }); } catch { /* exists */ }
+      this.config.wallet = null;
+      this.config.pohWallet = null;
+    } catch (e) {
+      console.warn('[PoH-Miner] hard-reset check failed (continuing normally):', e.message);
+    }
+  }
+
   _wipeStaleChainState() {
     try {
       const chainDir = this.chainStore?.dataDir;
