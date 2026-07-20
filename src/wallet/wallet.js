@@ -64,11 +64,16 @@ export class Wallet {
     const privateKey = crypto.randomBytes(32).toString('hex');
     const publicKey = crypto.createHash('sha256').update(privateKey).digest('hex').slice(0, 64);
 
-    const { publicKey: spk, privateKey: spr } = crypto.generateKeyPairSync('ed25519', {
+    const { publicKey: spkPem, privateKey: spr } = crypto.generateKeyPairSync('ed25519', {
       publicKeyEncoding: { type: 'spki', format: 'pem' },
       privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
     });
 
+    // Store signingPublicKey as the RAW 32-byte ed25519 key in base64 (not PEM), so the
+    // address derives identically on the desktop node and the mobile wallet (which uses
+    // nacl raw keys). verifySignature() already accepts raw-base64 keys. This makes every
+    // new wallet cross-device: the same key/seed imports into the phone as the same poh… address.
+    const spk = Wallet.rawBase64FromPubKey(spkPem);
     const address = Wallet.deriveAddressFromSigningKey(spk);
 
     const wallet = new Wallet({
@@ -80,6 +85,12 @@ export class Wallet {
     });
     wallet.ensureEncryptionKeys();
     return wallet;
+  }
+
+  /** Raw 32-byte ed25519 public key (base64) from a PEM/DER/KeyObject or raw-base64 input. */
+  static rawBase64FromPubKey(pub) {
+    if (typeof pub === 'string' && !pub.includes('BEGIN')) return pub; // already raw base64
+    return crypto.createPublicKey(pub).export({ type: 'spki', format: 'der' }).subarray(-32).toString('base64');
   }
 
   static fromJSON(data) {
@@ -110,7 +121,7 @@ export class Wallet {
       publicKeyEncoding: { type: 'spki', format: 'pem' },
       privateKeyEncoding: { type: 'pkcs8', format: 'pem' },
     });
-    this.signingPublicKey = publicKey;
+    this.signingPublicKey = Wallet.rawBase64FromPubKey(publicKey); // raw base64 = cross-device
     this.signingPrivateKey = privateKey;
   }
 
