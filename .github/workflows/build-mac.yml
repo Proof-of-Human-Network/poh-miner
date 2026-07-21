@@ -43,15 +43,16 @@ jobs:
         run: npm run build:electron:mac
 
       - name: List build output
-        run: ls -lh dist/ || true
+        # electron-builder writes to build.directories.output = dist/electron
+        run: ls -lhR dist/electron/ || ls -lh dist/ || true
 
       - name: Upload .dmg artifacts
         uses: actions/upload-artifact@v4
         with:
           name: poh-miner-macos-dmg
           path: |
-            dist/*.dmg
-            dist/*.dmg.blockmap
+            dist/electron/*.dmg
+            dist/electron/*.dmg.blockmap
           if-no-files-found: error
           retention-days: 14
 
@@ -61,8 +62,8 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            dist/*.dmg
-            dist/*.dmg.blockmap
+            dist/electron/*.dmg
+            dist/electron/*.dmg.blockmap
 
   # ── Signed + notarized builds (optional, for distributing to other people) ──
   # Add these repo secrets, then move the env vars into the build step above and
