@@ -1,7 +1,7 @@
 {
   "balances": {},
-  "genesisTimestamp": 1784505600000,
+  "genesisTimestamp": 1784592000000,
   "snapshotHash": null,
-  "note": "Fair-launch reset 2026-07-20 — all balances 0, POH earned by mining from block 1.",
-  "generatedAt": "2026-07-20T07:17:17.352Z"
+  "note": "Fresh chain 2026-07-21 — new genesis, all balances 0, POH earned by mining from block 1.",
+  "generatedAt": "2026-07-21T00:00:00.000Z"
 }
