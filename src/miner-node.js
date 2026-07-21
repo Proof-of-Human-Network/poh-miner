@@ -341,7 +341,7 @@ function isTrulyLocalRequest(req) {
 // Well-known production bootnodes. Used when no bootnodes are configured
 // (e.g. fresh GUI onboarding). Individual users can override via config.bootnodes.
 const DEFAULT_BOOTNODES = [
-  "https://miner.proofofhuman.ge",
+  "https://miner.poh.ge",
 ];
 
 export class PohMinerNode {
@@ -3727,6 +3727,21 @@ export class PohMinerNode {
     }
   }
 
+  /**
+   * Genesis-pin guard for IPFS chain snapshots. A snapshot is only adoptable when
+   * its height-0 block hashes to the pinned network genesis. Without this, a stale
+   * pre-fork snapshot still cached locally (or advertised by a lagging bootnode)
+   * would overwrite our fresh genesis every startup — the node then has to heal via
+   * bootnode sync. Returns true when there is no pin (dev builds).
+   */
+  _ipfsSnapshotGenesisOk(blocks) {
+    if (!EXPECTED_GENESIS_HASH) return true;
+    const g = blocks[0]?.getHashSync();
+    if (g === EXPECTED_GENESIS_HASH) return true;
+    console.warn(`[PoH-Miner] Ignoring IPFS chain snapshot — genesis ${g?.slice(0, 12) ?? 'none'}… ≠ pinned ${EXPECTED_GENESIS_HASH.slice(0, 12)}…`);
+    return false;
+  }
+
   async syncChain() {
     console.log('[PoH-Miner] Syncing chain...');
 
@@ -3801,7 +3816,9 @@ export class PohMinerNode {
       if (snap.height > localHeight) {
         try {
           const blocks = snap.blocks.map(b => PohBlock.fromJSON(b));
-          const chainCheck = validateBlockChain(blocks, []);
+          const chainCheck = this._ipfsSnapshotGenesisOk(blocks)
+            ? validateBlockChain(blocks, [])
+            : { valid: false };
           if (chainCheck.valid) {
             this.chain = chainCheck.chain;
             this.chainStore.saveChain(this.chain);
@@ -4028,7 +4045,9 @@ export class PohMinerNode {
         console.log(`[PoH-Miner] Applying IPFS chain snapshot (height ${snap.height})`);
         try {
           const blocks = snap.blocks.map(b => PohBlock.fromJSON ? PohBlock.fromJSON(b) : new PohBlock(b));
-          const chainCheck = validateBlockChain(blocks, []);
+          const chainCheck = this._ipfsSnapshotGenesisOk(blocks)
+            ? validateBlockChain(blocks, [])
+            : { valid: false };
           if (chainCheck.valid) {
             this.chain = chainCheck.chain;
             this.chainStore.saveChain(this.chain);
