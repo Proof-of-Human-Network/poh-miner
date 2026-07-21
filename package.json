@@ -1,6 +1,6 @@
 {
   "name": "poh-miner",
-  "version": "0.4.4",
+  "version": "0.4.5",
   "description": "Run the PoH Miner Network. Earn POH by contributing compute (great on Mac Mini, PCs, servers).",
   "author": {
     "name": "Bogdan Sizov",
