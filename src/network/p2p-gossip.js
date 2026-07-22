@@ -43,7 +43,7 @@ export class P2PGossip {
   constructor(nodeId, getPeers, getBootnodes, options = {}) {
     this.nodeId = nodeId;
     this.getPeers = getPeers;          // () => [{ host, walletApiPort, wallet }]
-    this.getBootnodes = getBootnodes;  // () => string[]  e.g. ['https://miner.proofofhuman.ge']
+    this.getBootnodes = getBootnodes;  // () => string[]  e.g. ['https://miner.poh.ge']
     this.getIdentityWallet = options.getIdentityWallet || null;
     this.requireSignatures = options.requireSignatures ?? !!this.getIdentityWallet;
     this.listeners = new Map();        // topic → [handler]

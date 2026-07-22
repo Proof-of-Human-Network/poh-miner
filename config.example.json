@@ -10,7 +10,7 @@
   "region": "auto",
 
   "bootnodes": [
-    "https://miner.proofofhuman.ge"
+    "https://miner.poh.ge"
   ],
 
   "rpc": {
