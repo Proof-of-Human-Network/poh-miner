@@ -411,8 +411,8 @@
 
     <div class="max-w-6xl mx-auto">
       <!-- One-click pre-built binary downloads -->
-      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <!-- Linux .deb -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <!-- Linux -->
         <div class="glass p-6 rounded-[4px] flex flex-col">
           <div class="flex items-center gap-x-3 mb-3">
             <span class="text-3xl leading-none">
@@ -509,31 +509,21 @@
               </svg>
             </span>
             <div>
-              <div class="font-semibold text-[30px]">Linux .deb</div>
-              <div class="text-xs text-white/50">Ubuntu • Debian • Pop!_OS • Mint</div>
+              <div class="font-semibold text-[30px]">Linux</div>
+              <div class="text-xs text-white/50">Ubuntu • Debian • Fedora • Any distro</div>
             </div>
           </div>
-          <div class="text-[22px] text-white/70 mb-4 flex-1">Double-click installer. Adds system menu entry, desktop icon, and CLI. Easiest for most Linux users.</div>
-          <a href="binaries/poh-miner-linux-x64.deb" download="poh-miner-linux-x64.deb"
-             class="block w-full text-center bg-[#22c55e] hover:bg-white hover:text-black transition text-black py-3 rounded-[4px] text-sm font-medium">
-            Download .deb (64-bit)
-          </a>
-        </div>
-
-        <!-- Linux AppImage -->
-        <div class="glass p-6 rounded-[4px] flex flex-col">
-          <div class="flex items-center gap-x-3 mb-3">
-            <span class="text-3xl leading-none">📦</span>
-            <div>
-              <div class="font-semibold text-[30px]">Linux AppImage</div>
-              <div class="text-xs text-white/50">Universal • Any distro</div>
-            </div>
+          <div class="text-sm text-white/70 mb-4 flex-1">Portable AppImage — one file, runs on any distro. Download → chmod +x → double-click or run from anywhere. No root install.</div>
+          <div class="flex flex-col gap-2">
+            <a href="binaries/poh-miner-linux-x64.AppImage" download="poh-miner-linux-x64.AppImage"
+               class="block w-full text-center bg-[#22c55e] hover:bg-white hover:text-black transition text-black py-3 rounded-[4px] text-sm font-medium">
+              Download AppImage (x64)
+            </a>
+            <a href="binaries/poh-miner-linux-arm64.AppImage" download="poh-miner-linux-arm64.AppImage"
+               class="block w-full text-center border border-white/30 hover:bg-white/5 py-3 rounded-[4px] text-sm font-medium transition">
+              Download AppImage (ARM64)
+            </a>
           </div>
-          <div class="text-sm text-white/70 mb-4 flex-1">Portable single file. No root install. Download → chmod +x → double-click or run from anywhere.</div>
-          <a href="binaries/poh-miner-linux-x64.AppImage" download="poh-miner-linux-x64.AppImage"
-             class="block w-full text-center border border-white/30 hover:bg-white/5 py-3 rounded-[4px] text-sm font-medium transition">
-            Download AppImage
-          </a>
         </div>
 
         <!-- macOS -->
