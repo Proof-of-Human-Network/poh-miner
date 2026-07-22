@@ -46,7 +46,9 @@ jobs:
       - name: Build (${{ matrix.platform }})
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'   # no signing cert in CI → unsigned
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # No GH_TOKEN here on purpose: it would make electron-builder auto-publish
+          # versioned names + latest-*.yml (auto-update metadata the app doesn't use).
+          # The "Attach to GitHub Release" step below owns the release, stable names only.
         run: npm run build:electron:${{ matrix.platform }}
 
       # electron-builder writes versioned names into dist/electron (build.directories.output).
