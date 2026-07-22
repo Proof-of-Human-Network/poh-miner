@@ -1674,8 +1674,8 @@ async function installHfDataset() {
 
 // ── Tab switching ──────────────────────────────────────────────────────────────
 
-const TAB_PANELS = { home: 'home-panel', logs: 'logs', chat: 'chat-panel', search: 'search-panel', send: 'send-panel', skills: 'skills-panel', settings: 'settings-panel', p2p: 'p2p-panel', explorer: 'explorer-panel' };
-const TAB_BTNS   = { home: 'tab-home-btn', logs: 'tab-logs-btn', chat: 'tab-chat-btn', search: 'tab-search-btn', send: 'tab-send-btn', skills: 'tab-skills-btn', settings: null, p2p: 'tab-p2p-btn', explorer: 'tab-explorer-btn' };
+const TAB_PANELS = { home: 'home-panel', logs: 'logs', chat: 'chat-panel', send: 'send-panel', skills: 'skills-panel', settings: 'settings-panel', p2p: 'p2p-panel', explorer: 'explorer-panel' };
+const TAB_BTNS   = { home: 'tab-home-btn', logs: 'tab-logs-btn', chat: 'tab-chat-btn', send: 'tab-send-btn', skills: 'tab-skills-btn', settings: null, p2p: 'tab-p2p-btn', explorer: 'tab-explorer-btn' };
 
 function switchTab(name) {
   Object.entries(TAB_PANELS).forEach(([key, panelId]) => {

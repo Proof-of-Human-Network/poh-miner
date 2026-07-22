@@ -1357,31 +1357,6 @@
   </div>
 
   <!-- ==================== SCANNER WELCOME OVERLAY ==================== -->
-  <div id="scanner-welcome" class="hidden fixed inset-0 bg-black/80 z-40 flex items-center justify-center p-6">
-    <div class="w-full max-w-md glass rounded-3xl p-8 border border-white/10 text-center">
-      <div class="inline-flex items-center justify-center w-14 h-14 rounded-full bg-[#22c55e]/10 border border-[#22c55e]/30 mb-6">
-        <span style="font-size:24px;">⊙</span>
-      </div>
-      <h2 class="font-display text-3xl tracking-tight mb-3">AI-powered Identities</h2>
-      <p class="text-zinc-300 mb-3 leading-relaxed">
-        Search by cryptocurrency wallet address, Web3 domain names, social accounts or names.
-      </p>
-      <p class="text-sm text-zinc-500 mb-8">
-        Scanner's results have better quality with RPC API Keys provided.
-      </p>
-      <div class="flex gap-3">
-        <button onclick="scannerWelcomeSkip()"
-                class="flex-1 py-3 rounded-2xl border border-white/20 hover:bg-white/5 text-zinc-300 font-medium transition">
-          Skip
-        </button>
-        <button onclick="scannerWelcomeSetup()"
-                class="flex-1 py-3 bg-white text-black font-semibold rounded-2xl hover:bg-[#22c55e] transition">
-          Setup
-        </button>
-      </div>
-    </div>
-  </div>
-
   <!-- ==================== MAIN APP ==================== -->
   <div id="main-app" class="hidden">
   <div class="app-layout">
@@ -1448,7 +1423,6 @@
         <button class="tab-btn active" id="tab-home-btn"   onclick="switchTab('home')"   data-i18n="tab.home">HOME</button>
         <button class="tab-btn"        id="tab-send-btn"   onclick="switchTab('send')"   data-i18n="tab.send">SEND</button>
         <button class="tab-btn"        id="tab-chat-btn"   onclick="switchTab('chat')"   data-i18n="tab.chat">CHAT</button>
-        <button class="tab-btn"        id="tab-search-btn" onclick="switchTab('search')" data-i18n="tab.scanner">SCANNER</button>
         <button class="tab-btn"        id="tab-skills-btn" onclick="switchTab('skills')" data-i18n="tab.skills">SKILLS</button>
         <button class="tab-btn"        id="tab-p2p-btn"      onclick="switchTab('p2p')">P2P</button>
         <button class="tab-btn"        id="tab-explorer-btn" onclick="switchTab('explorer')">EXPLORER</button>
@@ -1475,10 +1449,6 @@
             <button class="home-action-btn" onclick="switchTab('send');showReceiveView()">
               <span class="action-icon">↓</span>
               <span class="action-label" data-i18n="action.receive">RECEIVE</span>
-            </button>
-            <button class="home-action-btn" onclick="switchTab('search')">
-              <span class="action-icon">⊙</span>
-              <span class="action-label" data-i18n="action.scan">SCAN</span>
             </button>
           </div>
           <div class="home-section-label" style="display:flex;justify-content:space-between;align-items:center;">
@@ -1554,30 +1524,6 @@
       </div>
 
       <!-- SEARCH -->
-      <div class="panel" id="search-panel">
-        <div class="search-content">
-          <div class="panel-eyebrow" data-i18n="scanner.eye">IDENTITY SCANNER</div>
-          <h2 class="panel-title" data-i18n="scanner.title">Scan any address.</h2>
-          <div class="search-row">
-            <input id="search-input" type="text"
-                   placeholder="0x… / Solana / BTC / TON / ENS domain / @username"
-                   onkeydown="if(event.key==='Enter') handleScanClick()" />
-            <button class="scan-btn" id="search-btn" onclick="handleScanClick()" data-i18n="scanner.btn">SCAN</button>
-          </div>
-          <div class="budget-row">
-            <div class="budget-label"><span data-i18n="scanner.budget">Budget:</span> <span id="budget-display">0</span></div>
-            <input type="range" class="budget-slider" id="budget-slider"
-                   min="0" max="200" step="1" value="0"
-                   oninput="updateBudgetDisplay(this.value)" />
-          </div>
-          <div id="search-loading" class="search-loading" style="display:none;">
-            <div class="spinner"></div>
-            <span id="search-status-text" data-i18n="scanner.submitting">Submitting job…</span>
-          </div>
-          <div id="search-result" style="display:none;"></div>
-        </div>
-      </div>
-
       <!-- SEND / RECEIVE -->
       <div class="panel" id="send-panel">
         <div class="send-content">
