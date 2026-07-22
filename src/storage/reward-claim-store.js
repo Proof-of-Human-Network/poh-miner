@@ -49,6 +49,11 @@ export class RewardClaimStore {
 
   _save() {
     try {
+      // The rewards dir can be removed after construction — a fork reorg /
+      // genesis migration wipes `~/.poh-miner/rewards` (see _wipeStaleChainState),
+      // and reset()/markClaimedMany() then save into a now-missing dir. Recreate
+      // it before every write so the save can't ENOENT.
+      this._ensureDir();
       const data = {
         claimed: Array.from(this.claimed),
         lastUpdated: Date.now(),
