@@ -3434,7 +3434,7 @@ window.scannerWelcomeSetup = function() {
 // POH token has 9 decimals; slider value is in whole POH
 const BUDGET_DECIMALS = 1_000_000_000;
 // Fee slider: 1 μPOH (1e-9 POH) → 1 POH, logarithmic.
-const _BLOG_MIN = 0.000000001, _BLOG_MAX = 1, _BLOG_STEPS = 199;   // 199 => pct 1/3 lands exactly on 1000 μPOH
+const _BLOG_MIN = 0.000001, _BLOG_MAX = 1, _BLOG_STEPS = 200;   // 1 kPOH (=1000 μPOH) → 1 POH   // 199 => pct 1/3 lands exactly on 1000 μPOH
 
 function _sliderStepToPoh(step) {
   if (step <= 1) return _BLOG_MIN;
@@ -3448,7 +3448,8 @@ function _pctToSliderStep(pct) {
 
 function _formatPoh(poh) {
   if (poh <= 0)      return 'no fee';
-  if (poh < 0.001)   return Math.round(poh * 1e9).toLocaleString() + ' μPOH';
+  const k = poh * 1e6;                       // kPOH — 1 kPOH = 1000 μPOH = 1e-6 POH
+  if (k < 1000)      return (k < 10 ? String(Math.round(k * 10) / 10) : Math.round(k).toLocaleString()) + ' kPOH';
   if (poh < 1)       return poh.toPrecision(2) + ' POH';
   if (poh < 10)      return poh.toFixed(2) + ' POH';
   return Math.round(poh) + ' POH';
