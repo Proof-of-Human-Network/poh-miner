@@ -212,6 +212,33 @@
     background:linear-gradient(180deg,rgba(var(--veil,4,6,12),.72) 0%,rgba(var(--veil,4,6,12),.38) 34%,rgba(var(--veil,4,6,12),.48) 62%,rgba(var(--veil,4,6,12),.82) 100%)}
   .star2{animation:tw 4s ease-in-out infinite}
 
+  /* ---------- local stablecoin diagram: fiat -> {stable} -> compute/talent/experience ---------- */
+  .fx{margin:clamp(2.4rem,6vh,4rem) 0 0;display:flex;flex-direction:column;gap:1.6rem}
+  .fx-svg{width:100%;height:auto;display:block;overflow:visible}
+  .fx-svg .src-chip{fill:rgba(255,255,255,.04);stroke:var(--border-mid)}
+  .fx-svg .src-glyph{font-family:var(--display);font-size:38px;fill:var(--ink);text-anchor:middle;dominant-baseline:central}
+  .fx-svg .src-note{font-family:var(--mono);font-size:12px;letter-spacing:.18em;fill:var(--ink-muted);text-anchor:middle;text-transform:uppercase}
+  .fx-svg .flow{fill:none;stroke:url(#fxFlow);stroke-width:1.6;stroke-linecap:round;stroke-dasharray:5 9;animation:fxDash 2.6s linear infinite}
+  .fx-svg .core{fill:var(--green)} .fx-svg .halo{fill:url(#fxGlow)}
+  .fx-svg .ring{fill:none;stroke:var(--green);stroke-width:1.4;transform-box:fill-box;transform-origin:center;opacity:0;
+                animation:fxOut 3.6s cubic-bezier(.2,.7,.2,1) infinite}
+  .fx-svg .ring.b{animation-delay:1.2s}
+  .fx-svg .hq-panel{fill:rgba(34,197,94,.07);stroke:var(--green);stroke-opacity:.5;stroke-width:1.4}
+  .fx-svg .hq-tick{font-family:var(--mono);font-size:30px;font-weight:600;letter-spacing:.06em;fill:var(--green);text-anchor:middle}
+  .fx-svg .hq-sub{font-family:var(--mono);font-size:11.5px;letter-spacing:.13em;text-transform:uppercase;fill:var(--ink-muted);text-anchor:middle}
+  .fx-svg .out-label{font-family:var(--sans);font-size:19px;font-weight:600;fill:var(--ink);text-anchor:start}
+  @keyframes fxDash{to{stroke-dashoffset:-28}}
+  @keyframes fxOut{0%{transform:scale(.55);opacity:.5}70%{opacity:.1}100%{transform:scale(2.7);opacity:0}}
+  .fx-legend{display:flex;flex-wrap:wrap;gap:.6rem 1.6rem;justify-content:center;
+             font-family:var(--mono);font-size:.92rem;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-muted)}
+  .fx-legend b{color:var(--green);font-weight:600}
+  @media (max-width:720px){
+    .fx-svg .out-label{font-size:26px} .fx-svg .src-note{font-size:16px} .fx-svg .hq-sub{font-size:15px}
+  }
+  @media (prefers-reduced-motion:reduce){
+    .fx-svg .flow{animation:none} .fx-svg .ring{animation:none;opacity:.22}
+  }
+
   /* ---------- scroll reveal (mobile-safe: transform/opacity only, honours reduced-motion) ---------- */
   .rv{opacity:0;transform:translateY(26px);transition:opacity .8s cubic-bezier(.2,.7,.2,1),transform .8s cubic-bezier(.2,.7,.2,1)}
   .rv.in{opacity:1;transform:none}
@@ -344,26 +371,23 @@
   </div>
   <div class="wrap">
     <div class="center rv">
-      <span class="eyebrow">Where the compute lives</span>
-      <h2 class="h-sec">AI infra where power is cheapest.</h2>
+      <span class="eyebrow">What POH.am does</span>
+      <h2 class="h-sec">A network that computes.</h2>
     </div>
 
     <div class="grid3 rv-grid">
-      <a class="feat" style="text-decoration: none;" href="../kgs/">
-        <span class="ic" aria-hidden="true">🇰🇬</span>
-        <h3>Kyrgyzstan</h3>
-        <p>Hydro-cheap power in the Tian&nbsp;Shan.</p>
-      </a>
-      <a class="feat" style="text-decoration: none;" href="../etb/">
-        <span class="ic" aria-hidden="true">🇪🇹</span>
-        <h3>Ethiopia</h3>
-        <p>Grid-surplus hydro, among the world's cheapest.</p>
-      </a>
-      <a class="feat" style="text-decoration: none;" href="../btn/">
-        <span class="ic" aria-hidden="true">🇧🇹</span>
-        <h3>Bhutan</h3>
-        <p>100% hydropower, carbon-negative.</p>
-      </a>
+      <article class="feat">
+        <span class="ic" aria-hidden="true"><svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="2.4"/><circle cx="5" cy="6" r="2"/><circle cx="19" cy="6" r="2"/><circle cx="5" cy="18" r="2"/><circle cx="19" cy="18" r="2"/><path d="M6.6 7.2 10 10.4M17.4 7.2 14 10.4M6.6 16.8 10 13.6M17.4 16.8 14 13.6"/></svg></span>
+        <h3>Distributed nodes</h3>
+      </article>
+      <article class="feat">
+        <span class="ic" aria-hidden="true"><svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v5c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6z"/><path d="M9 12l2 2 4-4"/></svg></span>
+        <h3>Verifiable work</h3>
+      </article>
+      <article class="feat">
+        <span class="ic" aria-hidden="true"><svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/><path d="M12 8v8M9.5 9.6c0-1 1.1-1.6 2.5-1.6s2.5.7 2.5 1.7c0 2.3-5 1.3-5 3.6 0 1 1.1 1.7 2.5 1.7s2.5-.7 2.5-1.6"/></svg></span>
+        <h3>Pay per use</h3>
+      </article>
     </div>
   </div>
 </section>
@@ -421,7 +445,7 @@
   </div>
   <div class="wrap">
     <div class="center rv">
-      <span class="eyebrow">The money layer</span>
+      <span class="eyebrow">The payment layer</span>
       <h2 class="h-sec">Settled in AMD.</h2>
     </div>
 
@@ -502,8 +526,8 @@
   </div>
   <div class="wrap">
     <div class="center rv">
-      <span class="eyebrow">Why Armenia</span>
-      <h2 class="h-sec">The right jurisdiction.</h2>
+      <span class="eyebrow">Why here</span>
+      <h2 class="h-sec">Built in Armenia.</h2>
     </div>
 
     <div class="grid4 rv-grid">
@@ -570,27 +594,73 @@
   </div>
   <div class="wrap">
     <div class="center rv">
-      <span class="eyebrow">The pair</span>
-      <h2 class="h-sec">One network, two coins.</h2>
+      <span class="eyebrow">The local market</span>
+      <h2 class="h-sec">AMD&#8366; buys compute.</h2>
+      <p style="font-family:var(--sans);font-size:1.15rem;color:var(--ink-soft);line-height:1.5">
+        Dollars, euros and pounds settle into AMD&#8366; — and AMD&#8366; buys AI compute,
+        local talent and experience in Armenia.
+      </p>
     </div>
 
-    <div class="duo rv-grid">
-      <article class="card coin poh-c">
-        <span class="badge">POH</span>
-        <h3>POH</h3>
-        <p>The community coin. Earned by contributing compute.</p>
-        <span class="tag">Community · growth</span>
-      </article>
-      <article class="card coin amd">
-        <span class="badge">&#8366;</span>
-        <h3>AMD</h3>
-        <p>The liquidity rail. USDT-bridged, redeemable 1:1.</p>
-        <span class="tag">Stable · liquidity</span>
-      </article>
-    </div>
+    <figure class="fx rv">
+      <svg class="fx-svg" viewBox="0 0 1200 440" role="img"
+           aria-label="US dollars, euros and pounds settle into AMD₮, the Armenia stablecoin, which buys AI compute, local talent and experience.">
+        <defs>
+          <radialGradient id="fxGlow">
+            <stop offset="0" stop-color="#22c55e" stop-opacity=".5"/>
+            <stop offset="1" stop-color="#22c55e" stop-opacity="0"/>
+          </radialGradient>
+          <linearGradient id="fxFlow" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0" stop-color="#eeeeee" stop-opacity=".5"/>
+            <stop offset="1" stop-color="#22c55e" stop-opacity=".9"/>
+          </linearGradient>
+        </defs>
+
+        <!-- fiat in -->
+        <text class="src-note" x="125" y="30">Fiat in</text>
+        <rect class="src-chip" x="70" y="58"  width="110" height="60" rx="14"/>
+        <text class="src-glyph" x="125" y="88">$</text>
+        <rect class="src-chip" x="70" y="178" width="110" height="60" rx="14"/>
+        <text class="src-glyph" x="125" y="208">&euro;</text>
+        <rect class="src-chip" x="70" y="298" width="110" height="60" rx="14"/>
+        <text class="src-glyph" x="125" y="328">&pound;</text>
+
+        <path class="flow" d="M180 88 C 300 108 380 150 468 192"/>
+        <path class="flow" d="M180 208 C 300 208 380 208 468 208"/>
+        <path class="flow" d="M180 328 C 300 308 380 266 468 224"/>
+
+        <!-- the local stablecoin -->
+        <circle class="halo" cx="600" cy="208" r="122"/>
+        <rect class="hq-panel" x="468" y="156" width="264" height="104" rx="20"/>
+        <text class="hq-tick" x="600" y="204">AMD&#8366;</text>
+        <text class="hq-sub"  x="600" y="236">Armenia stablecoin</text>
+
+        <path class="flow" d="M732 192 C 820 150 900 108 992 88"/>
+        <path class="flow" d="M732 208 C 820 208 900 208 992 208"/>
+        <path class="flow" d="M732 224 C 820 266 900 308 992 328"/>
+
+        <!-- what you get -->
+        <text class="src-note" x="1080" y="30">What you get</text>
+        <circle class="core" cx="1000" cy="88" r="6"/>
+        <circle class="ring" cx="1000" cy="88" r="13"/>
+        <text class="out-label" x="1026" y="95">AI compute</text>
+        <circle class="core" cx="1000" cy="208" r="6"/>
+        <circle class="ring" cx="1000" cy="208" r="13"/>
+        <text class="out-label" x="1026" y="215">Local talent</text>
+        <circle class="core" cx="1000" cy="328" r="6"/>
+        <circle class="ring" cx="1000" cy="328" r="13"/>
+        <text class="out-label" x="1026" y="335">Experience</text>
+      </svg>
+
+      <figcaption class="fx-legend">
+        <span>Pair <b>USD</b> <b>EUR</b> <b>GBP</b> &rarr; <b>AMD&#8366;</b></span>
+        <span>Buy <b>AI compute</b></span>
+        <span>Reach <b>local talent</b></span>
+      </figcaption>
+    </figure>
 
     <p class="rv" style="text-align:center;margin-top:1.6rem;font-family:var(--sans);font-size:1.15rem;color:var(--ink-soft);line-height:1.5">
-      1&nbsp;POH&nbsp;&#8776;&nbsp;<b style="color:var(--green)">$2K&ndash;5K</b> &mdash; one POH buys up to ~1&nbsp;billion AI compute tokens.
+      1&nbsp;POH&nbsp;&#8776;&nbsp;<b style="color:var(--green)">$200&ndash;$500</b> &mdash; one POH buys up to ~1&nbsp;billion AI compute tokens.
       No fixed price: <span style="color:var(--ink)">the market sets it</span> via the best P2P order.
     </p>
   </div>
@@ -638,7 +708,7 @@
   </div>
   <div class="wrap center mid cta rv-grid">
     <span class="eyebrow">Get started</span>
-    <h2 class="h-sec">Plug into the hub.</h2>
+    <h2 class="h-sec">Put your compute to work.</h2>
     <p class="sub">Invest, trade P2P, or run a node — settle in AMD.</p>
     <div class="btns">
       <a class="btn primary" href="https://miner.poh.ge">Run a node</a>

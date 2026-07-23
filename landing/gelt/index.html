@@ -227,6 +227,10 @@
   .fx-svg .ring.b{animation-delay:1.2s}
   .fx-svg .ctry{font-family:var(--sans);font-size:17px;font-weight:600;fill:var(--ink);text-anchor:middle}
   .fx-svg .tick{font-family:var(--mono);font-size:14px;font-weight:600;letter-spacing:.12em;fill:var(--green);text-anchor:middle}
+  .fx-svg .hq-panel{fill:rgba(34,197,94,.07);stroke:var(--green);stroke-opacity:.5;stroke-width:1.4}
+  .fx-svg .hq-name{font-family:var(--sans);font-size:19px;font-weight:600;fill:var(--ink);text-anchor:middle}
+  .fx-svg .hq-tick{font-family:var(--mono);font-size:32px;font-weight:600;letter-spacing:.06em;fill:var(--green);text-anchor:middle}
+  .fx-svg .hq-sub{font-family:var(--mono);font-size:11.5px;letter-spacing:.13em;text-transform:uppercase;fill:var(--ink-muted);text-anchor:middle}
   @keyframes fxDash{to{stroke-dashoffset:-28}}
   @keyframes fxOut{0%{transform:scale(.55);opacity:.5}70%{opacity:.1}100%{transform:scale(2.7);opacity:0}}
   .fx-legend{display:flex;flex-wrap:wrap;gap:.6rem 1.6rem;justify-content:center;
@@ -367,11 +371,16 @@
       <h2 class="h-sec">AI infra where power is cheapest.</h2>
     </div>
 
-    <div class="grid3 rv-grid">
+    <div class="grid4 rv-grid">
       <a class="feat" style="text-decoration: none;" href="../kgs/">
         <span class="ic" aria-hidden="true">🇰🇬</span>
         <h3>Kyrgyzstan</h3>
         <p>Hydro-cheap power in the Tian&nbsp;Shan.</p>
+      </a>
+      <a class="feat" style="text-decoration: none;" href="../amd/">
+        <span class="ic" aria-hidden="true">🇦🇲</span>
+        <h3>Armenia</h3>
+        <p>CIS gateway — capital, talent and a crypto-friendly regime.</p>
       </a>
       <a class="feat" style="text-decoration: none;" href="../etb/">
         <span class="ic" aria-hidden="true">🇪🇹</span>
@@ -569,14 +578,14 @@
       <span class="eyebrow">The new market</span>
       <h2 class="h-sec">Exchange for AI compute.</h2>
       <p style="font-family:var(--sans);font-size:1.15rem;color:var(--ink-soft);line-height:1.5">
-        Dollars and euros settle into local stablecoins — a new pair for every hub. Buy AI compute
-        where power is cheapest, and reach the talent that runs it.
+        Dollars, euros and pounds get in through GEL&#8366; — Georgia is the HQ that issues the local
+        stables and makes the market for AI compute and talent across every hub.
       </p>
     </div>
 
     <figure class="fx rv">
-      <svg class="fx-svg" viewBox="0 0 1200 600" role="img"
-           aria-label="US dollars and euros flow into local stablecoin markets — GEL₮ Georgia, AMD₮ Armenia, KGS₮ Kyrgyzstan, BTN₮ Bhutan, ETB₮ Ethiopia — to buy AI compute and access local talent.">
+      <svg class="fx-svg" viewBox="0 0 1200 700" role="img"
+           aria-label="Fiat — US dollar, euro, pound and USDT — enters through GEL₮ in Georgia, the HQ that issues local stablecoins and makes the market for AI compute and local talent across Kyrgyzstan (KGS₮), Armenia (AMD₮), Ethiopia (ETB₮) and Bhutan (BTN₮).">
         <defs>
           <radialGradient id="fxGlow">
             <stop offset="0" stop-color="#22c55e" stop-opacity=".5"/>
@@ -588,75 +597,73 @@
           </linearGradient>
         </defs>
 
-        <!-- map hint: latitude arcs -->
-        <path class="lat" d="M40 330 C 320 292 880 292 1160 330"/>
-        <path class="lat" d="M40 420 C 320 376 880 376 1160 420"/>
-        <path class="lat" d="M40 510 C 320 462 880 462 1160 510"/>
-
         <!-- fiat in -->
-        <text class="src-note" x="600" y="18">Fiat in</text>
-        <rect class="src-chip" x="468" y="36" width="104" height="64" rx="16"/>
-        <text class="src-glyph" x="520" y="68">$</text>
-        <rect class="src-chip" x="628" y="36" width="104" height="64" rx="16"/>
-        <text class="src-glyph" x="680" y="68">&euro;</text>
+        <text class="src-note" x="600" y="18">Fiat in &middot; USDT</text>
+        <rect class="src-chip" x="418" y="36" width="104" height="64" rx="16"/>
+        <text class="src-glyph" x="470" y="68">$</text>
+        <rect class="src-chip" x="548" y="36" width="104" height="64" rx="16"/>
+        <text class="src-glyph" x="600" y="68">&euro;</text>
+        <rect class="src-chip" x="678" y="36" width="104" height="64" rx="16"/>
+        <text class="src-glyph" x="730" y="68">&pound;</text>
 
-        <!-- fiat -> p2p hub -->
-        <path class="flow" d="M520 100 C 520 146 566 172 600 200"/>
-        <path class="flow" d="M680 100 C 680 146 634 172 600 200"/>
-        <circle cx="600" cy="200" r="4.5" fill="#5a5a5a"/>
+        <!-- fiat -> HQ -->
+        <path class="flow" d="M470 100 C 470 150 540 178 588 210"/>
+        <path class="flow" d="M600 100 C 600 150 600 178 600 210"/>
+        <path class="flow" d="M730 100 C 730 150 660 178 612 210"/>
 
-        <!-- hub -> local markets -->
-        <path class="flow" d="M600 200 C 470 252 290 362 185 470"/>
-        <path class="flow" d="M600 200 C 540 262 428 342 378 402"/>
-        <path class="flow" d="M600 200 C 592 258 578 314 572 360"/>
-        <path class="flow" d="M600 200 C 682 258 780 344 822 398"/>
-        <path class="flow" d="M600 200 C 736 252 928 360 1022 468"/>
+        <!-- Georgia = HQ -->
+        <circle class="halo" cx="600" cy="272" r="140"/>
+        <rect class="hq-panel" x="326" y="214" width="548" height="116" rx="20"/>
+        <text class="hq-name" x="600" y="248">Georgia</text>
+        <text class="hq-tick" x="600" y="288">GEL&#8366;</text>
+        <text class="hq-sub"  x="600" y="315">HQ &middot; fiat access &middot; issues stables &middot; makes the market</text>
 
-        <!-- local markets: green shine + outgoing stroke -->
+        <!-- map hint -->
+        <path class="lat" d="M40 528 C 320 494 880 494 1160 528"/>
+        <path class="lat" d="M40 596 C 320 560 880 560 1160 596"/>
+
+        <!-- HQ -> hubs -->
+        <path class="flow" d="M600 332 C 520 404 300 476 190 552"/>
+        <path class="flow" d="M600 332 C 562 400 492 480 460 552"/>
+        <path class="flow" d="M600 332 C 638 400 708 480 730 552"/>
+        <path class="flow" d="M600 332 C 720 404 900 476 1000 552"/>
+
         <g>
-          <circle class="halo" cx="185" cy="470" r="54"/>
-          <circle class="ring" cx="185" cy="470" r="15"/>
-          <circle class="ring b" cx="185" cy="470" r="15"/>
-          <circle class="core" cx="185" cy="470" r="6.5"/>
-          <text class="ctry" x="185" y="518">Ethiopia</text>
-          <text class="tick" x="185" y="540">ETB&#8366;</text>
+          <circle class="halo" cx="190" cy="560" r="52"/>
+          <circle class="ring" cx="190" cy="560" r="15"/>
+          <circle class="ring b" cx="190" cy="560" r="15"/>
+          <circle class="core" cx="190" cy="560" r="6.5"/>
+          <text class="ctry" x="190" y="608">Kyrgyzstan</text>
+          <text class="tick" x="190" y="630">KGS&#8366;</text>
         </g>
         <g>
-          <circle class="halo" cx="378" cy="402" r="54"/>
-          <circle class="ring" cx="378" cy="402" r="15"/>
-          <circle class="ring b" cx="378" cy="402" r="15"/>
-          <circle class="core" cx="378" cy="402" r="6.5"/>
-          <text class="ctry" x="378" y="450">Armenia</text>
-          <text class="tick" x="378" y="472">AMD&#8366;</text>
+          <circle class="halo" cx="460" cy="560" r="52"/>
+          <circle class="ring" cx="460" cy="560" r="15"/>
+          <circle class="ring b" cx="460" cy="560" r="15"/>
+          <circle class="core" cx="460" cy="560" r="6.5"/>
+          <text class="ctry" x="460" y="608">Armenia</text>
+          <text class="tick" x="460" y="630">AMD&#8366;</text>
         </g>
         <g>
-          <circle class="halo" cx="572" cy="360" r="64"/>
-          <circle class="ring" cx="572" cy="360" r="17"/>
-          <circle class="ring b" cx="572" cy="360" r="17"/>
-          <circle class="core" cx="572" cy="360" r="8"/>
-          <text class="ctry" x="572" y="408">Georgia</text>
-          <text class="tick" x="572" y="430">GEL&#8366;</text>
+          <circle class="halo" cx="730" cy="560" r="52"/>
+          <circle class="ring" cx="730" cy="560" r="15"/>
+          <circle class="ring b" cx="730" cy="560" r="15"/>
+          <circle class="core" cx="730" cy="560" r="6.5"/>
+          <text class="ctry" x="730" y="608">Ethiopia</text>
+          <text class="tick" x="730" y="630">ETB&#8366;</text>
         </g>
         <g>
-          <circle class="halo" cx="822" cy="398" r="54"/>
-          <circle class="ring" cx="822" cy="398" r="15"/>
-          <circle class="ring b" cx="822" cy="398" r="15"/>
-          <circle class="core" cx="822" cy="398" r="6.5"/>
-          <text class="ctry" x="822" y="446">Kyrgyzstan</text>
-          <text class="tick" x="822" y="468">KGS&#8366;</text>
-        </g>
-        <g>
-          <circle class="halo" cx="1022" cy="468" r="54"/>
-          <circle class="ring" cx="1022" cy="468" r="15"/>
-          <circle class="ring b" cx="1022" cy="468" r="15"/>
-          <circle class="core" cx="1022" cy="468" r="6.5"/>
-          <text class="ctry" x="1022" y="516">Bhutan</text>
-          <text class="tick" x="1022" y="538">BTN&#8366;</text>
+          <circle class="halo" cx="1000" cy="560" r="52"/>
+          <circle class="ring" cx="1000" cy="560" r="15"/>
+          <circle class="ring b" cx="1000" cy="560" r="15"/>
+          <circle class="core" cx="1000" cy="560" r="6.5"/>
+          <text class="ctry" x="1000" y="608">Bhutan</text>
+          <text class="tick" x="1000" y="630">BTN&#8366;</text>
         </g>
       </svg>
 
       <figcaption class="fx-legend">
-        <span>New pairs <b>GEL&#8366;</b> <b>AMD&#8366;</b> <b>KGS&#8366;</b> <b>BTN&#8366;</b> <b>ETB&#8366;</b></span>
+        <span>Georgia issues <b>GEL&#8366;</b> &amp; the local stables</span>
         <span>Buy <b>AI compute</b></span>
         <span>Reach <b>local talent</b></span>
       </figcaption>
