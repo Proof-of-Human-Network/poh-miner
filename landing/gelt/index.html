@@ -212,6 +212,33 @@
     background:linear-gradient(180deg,rgba(var(--veil,4,6,12),.72) 0%,rgba(var(--veil,4,6,12),.38) 34%,rgba(var(--veil,4,6,12),.48) 62%,rgba(var(--veil,4,6,12),.82) 100%)}
   .star2{animation:tw 4s ease-in-out infinite}
 
+  /* ---------- FX market diagram: fiat -> local stablecoins -> compute ---------- */
+  .fx{margin:clamp(2.4rem,6vh,4rem) 0 0;display:flex;flex-direction:column;gap:1.6rem}
+  .fx-svg{width:100%;height:auto;display:block;overflow:visible}
+  .fx-svg .lat{fill:none;stroke:var(--ink-faint);stroke-width:1;opacity:.3}
+  .fx-svg .src-chip{fill:rgba(255,255,255,.04);stroke:var(--border-mid)}
+  .fx-svg .src-glyph{font-family:var(--display);font-size:44px;fill:var(--ink);text-anchor:middle;dominant-baseline:central}
+  .fx-svg .src-note{font-family:var(--mono);font-size:12px;letter-spacing:.18em;fill:var(--ink-muted);text-anchor:middle;text-transform:uppercase}
+  .fx-svg .flow{fill:none;stroke:url(#fxFlow);stroke-width:1.6;stroke-linecap:round;stroke-dasharray:5 9;animation:fxDash 2.6s linear infinite}
+  .fx-svg .core{fill:var(--green)}
+  .fx-svg .halo{fill:url(#fxGlow)}
+  .fx-svg .ring{fill:none;stroke:var(--green);stroke-width:1.4;transform-box:fill-box;transform-origin:center;opacity:0;
+                animation:fxOut 3.6s cubic-bezier(.2,.7,.2,1) infinite}
+  .fx-svg .ring.b{animation-delay:1.2s}
+  .fx-svg .ctry{font-family:var(--sans);font-size:17px;font-weight:600;fill:var(--ink);text-anchor:middle}
+  .fx-svg .tick{font-family:var(--mono);font-size:14px;font-weight:600;letter-spacing:.12em;fill:var(--green);text-anchor:middle}
+  @keyframes fxDash{to{stroke-dashoffset:-28}}
+  @keyframes fxOut{0%{transform:scale(.55);opacity:.5}70%{opacity:.1}100%{transform:scale(2.7);opacity:0}}
+  .fx-legend{display:flex;flex-wrap:wrap;gap:.6rem 1.6rem;justify-content:center;
+             font-family:var(--mono);font-size:.92rem;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-muted)}
+  .fx-legend b{color:var(--green);font-weight:600}
+  @media (max-width:720px){
+    .fx-svg .ctry{font-size:22px} .fx-svg .tick{font-size:19px} .fx-svg .src-note{font-size:15px}
+  }
+  @media (prefers-reduced-motion:reduce){
+    .fx-svg .flow{animation:none} .fx-svg .ring{animation:none;opacity:.22}
+  }
+
   /* ---------- scroll reveal (mobile-safe: transform/opacity only, honours reduced-motion) ---------- */
   .rv{opacity:0;transform:translateY(26px);transition:opacity .8s cubic-bezier(.2,.7,.2,1),transform .8s cubic-bezier(.2,.7,.2,1)}
   .rv.in{opacity:1;transform:none}
@@ -414,9 +441,9 @@
       </article>
       <article class="card poh-c">
         <span class="ic" aria-hidden="true"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="7" width="10" height="10" rx="2"/><path d="M12 3v4M12 17v4M3 12h4M17 12h4"/></svg></span>
-        <h3>USDT in, GEL&#8366; out</h3>
-        <p>Move capital in from Europe &amp; the CIS via USDT, settle in GEL&#8366;, tap global liquidity — instant, peer-to-peer.</p>
-        <span class="tag">P2P · sanction-free access</span>
+        <h3>USDT in, compute out</h3>
+        <p>Bring capital in from Europe &amp; the CIS via USDT, settle in GEL&#8366;, and buy AI compute right where the power is cheapest — instant, peer-to-peer.</p>
+        <span class="tag">P2P · buy compute</span>
       </article>
     </div>
 
@@ -539,27 +566,104 @@
   </div>
   <div class="wrap">
     <div class="center rv">
-      <span class="eyebrow">The pair</span>
-      <h2 class="h-sec">One network, two coins.</h2>
+      <span class="eyebrow">The new market</span>
+      <h2 class="h-sec">Exchange for AI compute.</h2>
+      <p style="font-family:var(--sans);font-size:1.15rem;color:var(--ink-soft);line-height:1.5">
+        Dollars and euros settle into local stablecoins — a new pair for every hub. Buy AI compute
+        where power is cheapest, and reach the talent that runs it.
+      </p>
     </div>
 
-    <div class="duo rv-grid">
-      <article class="card coin poh-c">
-        <span class="badge">POH</span>
-        <h3>POH</h3>
-        <p>The community coin. Earned by contributing compute.</p>
-        <span class="tag">Community · growth</span>
-      </article>
-      <article class="card coin gelt">
-        <span class="badge">&#8366;</span>
-        <h3>GEL&#8366;</h3>
-        <p>The liquidity rail. USDT-bridged, redeemable 1:1.</p>
-        <span class="tag">Stable · liquidity</span>
-      </article>
-    </div>
+    <figure class="fx rv">
+      <svg class="fx-svg" viewBox="0 0 1200 600" role="img"
+           aria-label="US dollars and euros flow into local stablecoin markets — GEL₮ Georgia, AMD₮ Armenia, KGS₮ Kyrgyzstan, BTN₮ Bhutan, ETB₮ Ethiopia — to buy AI compute and access local talent.">
+        <defs>
+          <radialGradient id="fxGlow">
+            <stop offset="0" stop-color="#22c55e" stop-opacity=".5"/>
+            <stop offset="1" stop-color="#22c55e" stop-opacity="0"/>
+          </radialGradient>
+          <linearGradient id="fxFlow" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#eeeeee" stop-opacity=".5"/>
+            <stop offset="1" stop-color="#22c55e" stop-opacity=".9"/>
+          </linearGradient>
+        </defs>
+
+        <!-- map hint: latitude arcs -->
+        <path class="lat" d="M40 330 C 320 292 880 292 1160 330"/>
+        <path class="lat" d="M40 420 C 320 376 880 376 1160 420"/>
+        <path class="lat" d="M40 510 C 320 462 880 462 1160 510"/>
+
+        <!-- fiat in -->
+        <text class="src-note" x="600" y="18">Fiat in</text>
+        <rect class="src-chip" x="468" y="36" width="104" height="64" rx="16"/>
+        <text class="src-glyph" x="520" y="68">$</text>
+        <rect class="src-chip" x="628" y="36" width="104" height="64" rx="16"/>
+        <text class="src-glyph" x="680" y="68">&euro;</text>
+
+        <!-- fiat -> p2p hub -->
+        <path class="flow" d="M520 100 C 520 146 566 172 600 200"/>
+        <path class="flow" d="M680 100 C 680 146 634 172 600 200"/>
+        <circle cx="600" cy="200" r="4.5" fill="#5a5a5a"/>
+
+        <!-- hub -> local markets -->
+        <path class="flow" d="M600 200 C 470 252 290 362 185 470"/>
+        <path class="flow" d="M600 200 C 540 262 428 342 378 402"/>
+        <path class="flow" d="M600 200 C 592 258 578 314 572 360"/>
+        <path class="flow" d="M600 200 C 682 258 780 344 822 398"/>
+        <path class="flow" d="M600 200 C 736 252 928 360 1022 468"/>
+
+        <!-- local markets: green shine + outgoing stroke -->
+        <g>
+          <circle class="halo" cx="185" cy="470" r="54"/>
+          <circle class="ring" cx="185" cy="470" r="15"/>
+          <circle class="ring b" cx="185" cy="470" r="15"/>
+          <circle class="core" cx="185" cy="470" r="6.5"/>
+          <text class="ctry" x="185" y="518">Ethiopia</text>
+          <text class="tick" x="185" y="540">ETB&#8366;</text>
+        </g>
+        <g>
+          <circle class="halo" cx="378" cy="402" r="54"/>
+          <circle class="ring" cx="378" cy="402" r="15"/>
+          <circle class="ring b" cx="378" cy="402" r="15"/>
+          <circle class="core" cx="378" cy="402" r="6.5"/>
+          <text class="ctry" x="378" y="450">Armenia</text>
+          <text class="tick" x="378" y="472">AMD&#8366;</text>
+        </g>
+        <g>
+          <circle class="halo" cx="572" cy="360" r="64"/>
+          <circle class="ring" cx="572" cy="360" r="17"/>
+          <circle class="ring b" cx="572" cy="360" r="17"/>
+          <circle class="core" cx="572" cy="360" r="8"/>
+          <text class="ctry" x="572" y="408">Georgia</text>
+          <text class="tick" x="572" y="430">GEL&#8366;</text>
+        </g>
+        <g>
+          <circle class="halo" cx="822" cy="398" r="54"/>
+          <circle class="ring" cx="822" cy="398" r="15"/>
+          <circle class="ring b" cx="822" cy="398" r="15"/>
+          <circle class="core" cx="822" cy="398" r="6.5"/>
+          <text class="ctry" x="822" y="446">Kyrgyzstan</text>
+          <text class="tick" x="822" y="468">KGS&#8366;</text>
+        </g>
+        <g>
+          <circle class="halo" cx="1022" cy="468" r="54"/>
+          <circle class="ring" cx="1022" cy="468" r="15"/>
+          <circle class="ring b" cx="1022" cy="468" r="15"/>
+          <circle class="core" cx="1022" cy="468" r="6.5"/>
+          <text class="ctry" x="1022" y="516">Bhutan</text>
+          <text class="tick" x="1022" y="538">BTN&#8366;</text>
+        </g>
+      </svg>
+
+      <figcaption class="fx-legend">
+        <span>New pairs <b>GEL&#8366;</b> <b>AMD&#8366;</b> <b>KGS&#8366;</b> <b>BTN&#8366;</b> <b>ETB&#8366;</b></span>
+        <span>Buy <b>AI compute</b></span>
+        <span>Reach <b>local talent</b></span>
+      </figcaption>
+    </figure>
 
     <p class="rv" style="text-align:center;margin-top:1.6rem;font-family:var(--sans);font-size:1.15rem;color:var(--ink-soft);line-height:1.5">
-      1&nbsp;POH&nbsp;&#8776;&nbsp;<b style="color:var(--green)">$2K&ndash;5K</b> &mdash; one POH buys up to ~1&nbsp;billion AI compute tokens.
+      1&nbsp;POH&nbsp;&#8776;&nbsp;<b style="color:var(--green)">$200&ndash;$500</b> &mdash; one POH buys up to ~1&nbsp;billion AI compute tokens.
       No fixed price: <span style="color:var(--ink)">the market sets it</span> via the best P2P order.
     </p>
   </div>
