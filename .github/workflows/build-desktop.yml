@@ -7,7 +7,8 @@ name: Build Desktop (Electron)
 # which always resolves to the newest release — so no manual uploads, ever.
 #
 # Trigger: push a version tag (v0.4.6, …) or run manually from the Actions tab.
-# Builds are UNSIGNED (no Apple/Windows certs in CI). macOS first launch:
+# macOS builds are AD-HOC signed (no Apple cert needed; required for arm64), NOT
+# notarized. Windows/Linux are unsigned. macOS first launch:
 #   right-click → Open, or  xattr -dr com.apple.quarantine /Applications/PoH-Miner.app
 
 on:
@@ -45,7 +46,14 @@ jobs:
 
       - name: Build (${{ matrix.platform }})
         env:
-          CSC_IDENTITY_AUTO_DISCOVERY: 'false'   # no signing cert in CI → unsigned
+          # No Apple Developer cert in CI. We do NOT go fully unsigned: an arm64
+          # app with no signature is rejected by macOS with "contains malware"
+          # (can't even be bypassed). Instead mac.identity:"-" in package.json
+          # forces an ad-hoc signature, which arm64 requires. Users still get the
+          # normal "unidentified developer" prompt (right-click → Open / xattr).
+          # Leaving auto-discovery ON is fine: the CI keychain has no cert, so it
+          # finds nothing real and honors the explicit ad-hoc identity.
+          CSC_IDENTITY_AUTO_DISCOVERY: 'true'
           # No GH_TOKEN here on purpose: it would make electron-builder auto-publish
           # versioned names + latest-*.yml (auto-update metadata the app doesn't use).
           # The "Attach to GitHub Release" step below owns the release, stable names only.
