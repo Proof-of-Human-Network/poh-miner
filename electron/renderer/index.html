@@ -1475,6 +1475,7 @@
         <div class="chat-toolbar">
           <span class="chat-model-label">Model</span>
           <select id="chat-model-select" onchange="onChatModelSelect(this.value)" title="Models from local QVAC and network peers"></select>
+          <button class="chat-clear-btn" id="chat-model-install-btn" onclick="installChatModel()" style="display:none; color:#34d399; border-color:#34d399;" title="No local model is installed. Download one so private (on-device) chat works.">⬇ Download model</button>
           <span id="chat-queue-pill" style="display:none;font-size:10px;color:#60a5fa;font-family:monospace;"></span>
           <span id="chat-context-pill" title="Social context active — LLM knows recent activity for this address" style="display:none;"></span>
           <button class="chat-clear-btn" onclick="clearChat()" data-i18n="chat.clear">Clear</button>

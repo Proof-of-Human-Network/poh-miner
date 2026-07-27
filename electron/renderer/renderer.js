@@ -2074,9 +2074,14 @@ async function loadChatModels(force = false) {
     window._cachedModelEntries = entries;
     window._cachedModels = window._cachedModelEntries.map(m => m.name);
     sel.innerHTML = '';
+    // Offer a one-click download only when private mode has nothing installed
+    // locally (public mode can still use network peers, so no install needed).
+    const installBtn = document.getElementById('chat-model-install-btn');
+    const noneInstalled = isPrivate && !window._cachedModelEntries.length;
+    if (installBtn) installBtn.style.display = noneInstalled ? '' : 'none';
     if (!window._cachedModelEntries.length) {
       sel.innerHTML = isPrivate
-        ? '<option value="">No models installed — download one first</option>'
+        ? '<option value="">No models installed</option>'
         : '<option value="">No models found</option>';
       return;
     }
@@ -2292,6 +2297,42 @@ window.toggleChatPrivacy = function() {
   if (typeof loadChatModels === 'function') loadChatModels(true);
 };
 
+// One-click download of a default on-device model when private mode has none
+// installed. Uses the same setup pull flow as onboarding, then refreshes the
+// picker so the freshly-downloaded model is selectable.
+window.installChatModel = async function(model = 'qwen3-1.7b') {
+  const btn = document.getElementById('chat-model-install-btn');
+  if (!window.pohMinerAPI?.setup?.pullModel) {
+    alert('Model download is only available in the desktop app.');
+    return;
+  }
+  const orig = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = '⬇ Downloading…'; }
+  // Surface SDK download progress on the button if the setup channel emits it.
+  let offProgress = null;
+  try {
+    if (window.pohMinerAPI.setup.onProgress) {
+      window.pohMinerAPI.setup.onProgress((msg) => {
+        if (btn && msg) btn.textContent = `⬇ ${String(msg).slice(0, 24)}`;
+      });
+    }
+    // warmUpQvacModel resolves { ok, error } rather than throwing, so inspect it.
+    const res = await window.pohMinerAPI.setup.pullModel(model);
+    if (res && res.ok === false) {
+      throw new Error(res.error || 'inference backend could not load the model');
+    }
+    if (btn) btn.textContent = '✓ Installed';
+    await loadChatModels(true);
+    if (typeof setActiveModel === 'function') setActiveModel(model);
+  } catch (e) {
+    if (btn) btn.textContent = '⬇ Download model';
+    alert(`Model download failed: ${e?.message || e}\n\nIf this machine can't run local inference (e.g. no GPU/Vulkan support), use Public mode instead — it runs the job on network miners.`);
+  } finally {
+    if (btn) { btn.disabled = false; if (btn.textContent === '⬇ Downloading…') btn.textContent = orig; }
+    if (offProgress) try { offProgress(); } catch {}
+  }
+};
+
 // ── File upload ────────────────────────────────────────────────────────────────
 
 window._chatAttachedFile = null;
@@ -2434,6 +2475,12 @@ async function submitComputeJob(promptText, jobCtx = {}) {
       throw new Error(err.error || `Job submit failed (HTTP ${jobRes.status})`);
     }
 
+    // Compute can be slow on CPU-only miners (a small Qwen3 turn has been seen
+    // taking ~4 min on a VPS). Poll every 2s for up to POLL_MAX attempts so a
+    // slow-but-successful job still delivers instead of the client bailing at
+    // 60s and showing "timed out" while the answer is still generating.
+    const POLL_MS = 2000;
+    const POLL_MAX = 210;                 // 210 × 2s = 7 min ceiling
     let attempts = 0;
     const result = await new Promise(resolve => {
       const t = setInterval(async () => {
@@ -2447,15 +2494,18 @@ async function submitComputeJob(promptText, jobCtx = {}) {
               resolve({ _jobError: data.status, error: data.message || data.error });
               return;
             }
+            // Surface progress: a dot every 10s, plus an elapsed nudge each ~30s
+            // so a long wait reads as "still working", not "stuck".
             if (attempts % 5 === 0) append('.');
-            if (attempts > 30) { clearInterval(t); resolve(null); }
+            if (attempts % 15 === 0) append(` (${attempts * POLL_MS / 1000 | 0}s)`);
+            if (attempts >= POLL_MAX) { clearInterval(t); resolve(null); }
             return;
           }
           if (!r.ok || !data.verdict) return;
           clearInterval(t);
           resolve(data);
-        } catch { if (attempts > 30) { clearInterval(t); resolve(null); } }
-      }, 2000);
+        } catch { if (attempts >= POLL_MAX) { clearInterval(t); resolve(null); } }
+      }, POLL_MS);
     });
 
     finalize();
@@ -2467,7 +2517,7 @@ async function submitComputeJob(promptText, jobCtx = {}) {
       showReply(reply);
       _renderJobFeedbackStars(jobId);
     } else {
-      showReply('Compute job timed out waiting for a miner. It may still complete — check Explorer.');
+      showReply('Compute job is taking longer than 7 minutes — the miner may be on slow CPU-only hardware. It may still complete; check the Explorer for the result.');
     }
   } catch (e) {
     finalize();

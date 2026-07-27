@@ -104,6 +104,61 @@ function localBlobPath(descriptor) {
   }
 }
 
+// Model descriptors read straight from the SDK's static registry data file
+// (dist/models/registry/models.js) — pure `export const` data with NO native
+// imports. This lets us map a constant → { modelId } for on-disk detection even
+// when the full SDK (native inference addon) fails to load, which is exactly the
+// case on a Windows box missing Vulkan/MSVC runtime: inference is dead, but a
+// model may still be downloaded from an earlier run and should be detectable.
+let _registryDescriptors = null;   // null = not tried; {} = tried, unavailable
+async function getRegistryDescriptors() {
+  if (_registryDescriptors) return _registryDescriptors;
+  try {
+    const fs = require('fs');
+    const path = require('path');
+    const url = require('url');
+    // Find node_modules/@qvac/sdk by walking up from this file (the package's
+    // `exports` map blocks subpath imports, so we import the file by absolute
+    // URL, which bypasses the map entirely).
+    let dir = __dirname, root = null;
+    for (let i = 0; i < 8 && !root; i++) {
+      const cand = path.join(dir, 'node_modules', '@qvac', 'sdk');
+      if (fs.existsSync(path.join(cand, 'package.json'))) root = cand;
+      const parent = path.dirname(dir);
+      if (parent === dir) break;
+      dir = parent;
+    }
+    if (!root) { _registryDescriptors = {}; return _registryDescriptors; }
+    const file = path.join(root, 'dist', 'models', 'registry', 'models.js');
+    if (!fs.existsSync(file)) { _registryDescriptors = {}; return _registryDescriptors; }
+    const mod = await import(url.pathToFileURL(file).href);
+    // Named exports are the constants (QWEN3_… = { modelId, … }); drop the
+    // aggregate `models` array so it doesn't masquerade as a descriptor.
+    const out = {};
+    for (const [k, v] of Object.entries(mod)) {
+      if (v && typeof v === 'object' && v.modelId) out[k] = v;
+    }
+    _registryDescriptors = out;
+  } catch {
+    _registryDescriptors = {};
+  }
+  return _registryDescriptors;
+}
+
+// Resolve a model constant to a { modelId } descriptor for on-disk detection.
+// Order matters: an already-resident SDK first (free), then the static registry
+// data (fast, no native), and only as a last resort a fresh getSdk() — which can
+// hang or throw when the native addon is broken. Detection must never hang, so
+// the registry path is what carries Windows-without-inference.
+async function descriptorFor(constant) {
+  if (!constant) return null;
+  if (_sdk && _sdk[constant]) return _sdk[constant];
+  const reg = await getRegistryDescriptors();
+  if (reg[constant]) return reg[constant];
+  try { const sdk = await getSdk(); if (sdk && sdk[constant]) return sdk[constant]; } catch { /* addon dead */ }
+  return null;
+}
+
 function resolveModel(sdk, requested) {
   const raw = (requested || '').trim() || DEFAULT_MODEL;
 
@@ -317,13 +372,14 @@ async function complete(prompt, opts = {}) {
 // private-mode picker never advertises a model that can't run here. A currently
 // loaded model is installed by definition (it came off disk).
 async function isInstalled(name) {
-  if (!ENABLED) return false;              // backend can't run anything here
+  if (!ENABLED) return false;              // explicitly disabled (QVAC_DISABLED=1)
   if (_loaded.has(name)) return true;
   const aliased = ALIASES[(name || '').toLowerCase()] || name;
   if (_loaded.has(aliased)) return true;
-  let sdk;
-  try { sdk = await getSdk(); } catch { return false; }
-  const descriptor = sdk[aliased] || sdk[name];
+  // Detect the on-disk blob via a descriptor sourced from the static registry
+  // when needed — so a model downloaded by an earlier run is still found even if
+  // the native inference addon can't load on this machine (Windows w/o Vulkan).
+  const descriptor = (await descriptorFor(aliased)) || (await descriptorFor(name));
   return descriptor ? !!localBlobPath(descriptor) : false;
 }
 
@@ -334,10 +390,13 @@ async function isInstalled(name) {
 async function listModels() {
   const out = new Map();
   let sdk = null;
-  if (ENABLED) { try { sdk = await getSdk(); } catch { /* backend unavailable — installed:false */ } }
+  if (ENABLED) { try { sdk = await getSdk(); } catch { /* backend unavailable — fall back to registry data */ } }
+  // Descriptor source that survives a dead native addon: live SDK if present,
+  // else the static registry data file (see getRegistryDescriptors).
+  const reg = (sdk && Object.keys(sdk).length) ? null : await getRegistryDescriptors();
   const installedFor = (constant) => {
-    if (!sdk || !sdk[constant]) return false;
-    return !!localBlobPath(sdk[constant]);
+    const descriptor = (sdk && sdk[constant]) || (reg && reg[constant]);
+    return descriptor ? !!localBlobPath(descriptor) : false;
   };
   for (const m of BUILTIN_MODELS) {
     out.set(m.name, {

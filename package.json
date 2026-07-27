@@ -1,6 +1,6 @@
 {
   "name": "poh-miner",
-  "version": "0.4.9",
+  "version": "0.4.10",
   "description": "Run the PoH Miner Network. Earn POH by contributing compute (great on Mac Mini, PCs, servers).",
   "author": {
     "name": "Bogdan Sizov",
@@ -26,7 +26,7 @@
     "outputPath": "dist/bin"
   },
   "scripts": {
-    "postinstall": "node scripts/verify-electron.cjs",
+    "postinstall": "node scripts/verify-electron.cjs && node scripts/codesign-native-deps.cjs",
     "start": "electron --no-sandbox .",
     "start:headless": "node start.js",
     "dev": "node --watch start.js",
@@ -84,7 +84,7 @@
     "qrcode": "^1.5.4"
   },
   "optionalDependencies": {
-    "@qvac/sdk": "^0.13.5"
+    "@qvac/sdk": "^0.16.0"
   },
   "build": {
     "appId": "ge.proofofhuman.pohminer",
@@ -116,10 +116,11 @@
       "!node_modules/@qvac/*/prebuilds/android-*/**/*",
       "!node_modules/@qvac/*/prebuilds/ios-*/**/*"
     ],
+    "afterPack": "scripts/afterPack.cjs",
     "mac": {
       "category": "public.app-category.utilities",
       "icon": "assets/icons/poh-miner-1024.png",
-      "identity": "-",
+      "identity": null,
       "target": [
         {
           "target": "dmg",
