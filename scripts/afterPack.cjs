@@ -42,123 +42,35 @@ module.exports = async function afterPack(context) {
     return;
   }
 
-  console.log('[afterPack] Ad-hoc signing .app bundle:', appPath);
+  console.log('[afterPack] Ad-hoc signing .app bundle (--deep):', appPath);
 
-  // Collect all Mach-O files inside the bundle (sign inside-out)
-  const machoFiles = [];
-  const contentsDir = path.join(appPath, 'Contents');
-
-  function walk(dir) {
-    let entries;
-    try {
-      entries = fs.readdirSync(dir, { withFileTypes: true });
-    } catch {
-      return;
-    }
-    for (const entry of entries) {
-      const full = path.join(dir, entry.name);
-      if (entry.isDirectory()) {
-        // Skip .app bundles inside (they get signed as a unit)
-        if (entry.name.endsWith('.app')) continue;
-        walk(full);
-      } else if (entry.isFile() || entry.isSymbolicLink()) {
-        if (isMachO(full)) {
-          machoFiles.push(full);
-        }
-      }
-    }
-  }
-
-  function isMachO(filePath) {
-    try {
-      const realPath = fs.realpathSync(filePath);
-      if (!fs.statSync(realPath).isFile()) return false;
-      const fd = fs.openSync(realPath, 'r');
-      const buf = Buffer.alloc(4);
-      fs.readSync(fd, buf, 0, 4, 0);
-      fs.closeSync(fd);
-      // Mach-O magic numbers (little-endian and big-endian, 32 and 64 bit, fat/universal)
-      const magic = buf.readUInt32BE(0);
-      return [
-        0xfeedface, // MH_MAGIC (32-bit)
-        0xfeedfacf, // MH_MAGIC_64 (64-bit)
-        0xcefaedfe, // MH_CIGAM (32-bit, reversed)
-        0xcffaedfe, // MH_CIGAM_64 (64-bit, reversed)
-        0xcafebabe, // FAT_MAGIC (universal)
-        0xbebafeca, // FAT_CIGAM (universal, reversed)
-      ].includes(magic);
-    } catch {
-      return false;
-    }
-  }
-
-  walk(contentsDir);
-
-  // Sign all nested binaries first (inside-out is required for valid signatures)
-  let signed = 0;
-  for (const file of machoFiles) {
-    try {
-      execFileSync('codesign', ['--force', '--sign', '-', '--timestamp=none', file], {
-        stdio: ['ignore', 'ignore', 'pipe'],
-      });
-      signed++;
-    } catch (e) {
-      const stderr = e.stderr ? e.stderr.toString().trim() : '';
-      console.warn(`[afterPack] warning: ${path.relative(appPath, file)}: ${stderr}`);
-    }
-  }
-
-  // Sign any nested .app helpers (Electron Helper, GPU Helper, etc.)
-  const helpers = [];
-  function findApps(dir) {
-    let entries;
-    try {
-      entries = fs.readdirSync(dir, { withFileTypes: true });
-    } catch {
-      return;
-    }
-    for (const entry of entries) {
-      const full = path.join(dir, entry.name);
-      if (entry.isDirectory() && entry.name.endsWith('.app') && full !== appPath) {
-        helpers.push(full);
-        findApps(full); // recurse into nested .apps
-      } else if (entry.isDirectory()) {
-        findApps(full);
-      }
-    }
-  }
-  findApps(contentsDir);
-
-  // Sign helpers inside-out (deepest first)
-  helpers.sort((a, b) => b.length - a.length);
-  for (const helper of helpers) {
-    try {
-      execFileSync('codesign', ['--force', '--sign', '-', '--timestamp=none', helper], {
-        stdio: ['ignore', 'ignore', 'pipe'],
-      });
-      signed++;
-    } catch (e) {
-      const stderr = e.stderr ? e.stderr.toString().trim() : '';
-      console.warn(`[afterPack] warning: helper ${path.basename(helper)}: ${stderr}`);
-    }
-  }
-
-  // Finally sign the outer .app bundle
+  // Ad-hoc sign the WHOLE bundle with --deep. codesign then signs every piece
+  // of nested code — frameworks (and their internal dylibs), helper .apps, loose
+  // Mach-O libraries, and the main executable — in the correct inside-out order.
+  //
+  // The previous approach signed each Mach-O individually. That corrupts a
+  // framework's seal: signing "Electron Framework.framework/…/Electron Framework"
+  // as a bare file (rather than the framework bundle) leaves the bundle invalid,
+  // so the final whole-app sign aborted with "code object is not signed at all".
+  //
+  // --deep has entitlement/identifier caveats that make Apple discourage it for
+  // cert-based *distribution* signing, but none of those apply to an ad-hoc
+  // signature with no entitlements. We only need a valid ad-hoc signature to
+  // satisfy the arm64 code-execution requirement (avoid the "malware" block).
   try {
-    execFileSync('codesign', ['--force', '--sign', '-', '--timestamp=none', appPath], {
+    execFileSync('codesign', ['--force', '--deep', '--sign', '-', '--timestamp=none', appPath], {
       stdio: ['ignore', 'ignore', 'pipe'],
     });
-    signed++;
-    console.log(`[afterPack] ✓ Ad-hoc signed ${signed} items (app + nested binaries)`);
+    console.log('[afterPack] ✓ Ad-hoc signed bundle (--deep)');
   } catch (e) {
     const stderr = e.stderr ? e.stderr.toString().trim() : '';
     console.error(`[afterPack] ERROR signing .app bundle: ${stderr}`);
     throw new Error(`Ad-hoc signing failed: ${stderr}`);
   }
 
-  // Verify the final result
+  // Verify the final result (deep + strict so an unsigned nested binary fails).
   try {
-    execFileSync('codesign', ['--verify', '--verbose', appPath], {
+    execFileSync('codesign', ['--verify', '--deep', '--strict', '--verbose=2', appPath], {
       stdio: ['ignore', 'ignore', 'pipe'],
     });
     console.log('[afterPack] ✓ Signature verified');
