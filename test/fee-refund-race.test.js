@@ -33,6 +33,18 @@ describe('chat estimate + budget hard cap', () => {
     expect(outputTokenCap(1000, 1, 400)).toBe(600);
     expect(outputTokenCap(300, 1, 400)).toBe(0);   // prompt alone exhausts the bid
   });
+
+  it('outputTokenCap: spare budget stretches output only up to the quality ceiling', () => {
+    // A huge budget does NOT buy unbounded output — capped at OUTPUT_HARD_MAX so
+    // small models stay coherent (extra uPOH buys queue priority, not tokens).
+    expect(outputTokenCap(1_000_000, 1, 0)).toBe(GAS.OUTPUT_HARD_MAX);
+  });
+
+  it('outputTokenCap: context window binds before budget/quality when prompt is large', () => {
+    // prompt=6000 → ctx headroom = 8192 - 256 - 6000 = 1936, which is < both the
+    // budget-derived cap and OUTPUT_HARD_MAX, so it wins.
+    expect(outputTokenCap(1_000_000, 1, 6000)).toBe(GAS.CONTEXT_TOKENS - GAS.CONTEXT_MARGIN - 6000);
+  });
 });
 
 describe('fee-race board (change 2)', () => {

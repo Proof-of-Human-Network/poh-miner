@@ -429,6 +429,7 @@ export class PohMinerNode {
     this.isTemporarilyRestricted = false;
     this.escrow = new Map(); // jobId → { amount, requesterAddress, minerAddress }
     this._appliedEscrowJobIds = new Set(); // prevents double-debit when block replay re-runs job-escrow
+    this._supersededJobs = new Set(); // jobIds a peer already published a result for → stop local compute (first-result-wins)
     this._appliedP2PIds = new Set(); // prevents double-apply of p2p-order/trade transitions during block replay
     this._appliedStateTransitionHeights = new Set(); // prevents double-apply of brain/skill transitions on self-mined blocks
     this._gossipedJobTransitions = new Set(); // jobId:type keys — prevents duplicate pendingBrainTransitions from gossip
@@ -4968,6 +4969,31 @@ export class PohMinerNode {
       }
     });
 
+    // First-result-wins. The first miner to finish publishes 'job-result'; it
+    // reaches everyone — including a NAT'd requester via the bootnode /inbox relay
+    // — so the requester gets the FASTEST answer, not whichever node it happens to
+    // be able to dial. Every other node: (a) adopts the result for local polling /
+    // chain-history parity, and (b) stops computing this job (drops it from the
+    // queue; flags an in-flight run to cancel + skip settlement). Settlement still
+    // goes to the winner alone — a superseded run neither overwrites the result nor
+    // emits job-settled (see computeAndSubmitJob), and the escrow guard makes a
+    // near-simultaneous double-settle a no-op on replay.
+    this.gossip.subscribe('job-result', ({ jobId, result }) => {
+      if (!jobId || !result || !result.verdict) return;
+      const rec = this.jobResults?.get(jobId);
+      if (rec && rec.status === 'done' && rec.result) return;   // already have a winner — ignore
+      if (rec) {
+        rec.result = result;
+        rec.status = 'done';
+        rec.updatedAt = Date.now();
+      }
+      this.jobQueue.completed.add(jobId);
+      this.jobQueue.removeJob(jobId);
+      const idx = this._pendingJobQueue.findIndex(j => j.id === jobId);
+      if (idx !== -1) this._pendingJobQueue.splice(idx, 1);
+      if (this._activeJobId === jobId) this._supersededJobs.add(jobId);  // cancel the in-flight run
+    });
+
     // Job lifecycle transitions — economic types must originate locally, not via gossip
     this.gossip.subscribe('job-transition', (t) => {
       if (!t?.type || !t?.jobId) return;
@@ -6926,10 +6952,22 @@ export class PohMinerNode {
             systemPrompt: datasetUsed ? undefined : 'You are a helpful, concise assistant. Answer in clear Markdown.',
             withUsage: true,
             hardTokenCap: hardCap,
+            shouldStop: () => this._supersededJobs.has(job.id),  // bail if a peer wins mid-generation
           });
           if (usage == null || usage.text == null) throw new Error(`Model "${model}" produced no output on this miner (QVAC unavailable)`);
           reply = usage.text;
           tokensUsed = usage.totalTokens || job.estimatedTokens || estimateTokens(0, null);
+        }
+
+        // First-result-wins: a peer published the winning result while we were
+        // generating. Discard ours — the requester already has the answer (adopted
+        // by the 'job-result' handler) and the fee belongs to the winner. Not
+        // submitting + not settling here is exactly what keeps "first wins" true.
+        if (this._supersededJobs.has(job.id)) {
+          this._supersededJobs.delete(job.id);
+          console.log(`[PoH-Miner] Job ${job.id} superseded by a peer's result — discarding local compute (no settlement)`);
+          if (!this.jobQueue.completed.has(job.id)) this.jobQueue.markCompleted(job.id);
+          return null;
         }
 
         // Public jobs seal the reply to the requester's key; the chain stores only
@@ -6960,6 +6998,13 @@ export class PohMinerNode {
 
         await this.submitResult(job, result);
         if (!this.jobQueue.completed.has(job.id)) this.jobQueue.markCompleted(job.id);
+
+        // We finished first — publish the result so it reaches the requester
+        // (even behind NAT, via the bootnode /inbox relay) and so peer miners
+        // still computing this job stop and adopt it. First publish wins.
+        if (job.requesterAddress) {
+          this.gossip.publish('job-result', { jobId: job.id, result, miner: this.config.wallet, ts: Date.now() }).catch(() => {});
+        }
 
         if (job.requesterAddress && job.maxBudget > 0 && this.escrow.has(job.id)) {
           // No-refund: settleFee returns fee = maxBudget (the whole bid), refund = 0.
@@ -7336,6 +7381,7 @@ export class PohMinerNode {
     } catch (e) {
       this._updateJob(jobId, { status: 'error', error: e.message });
     } finally {
+      this._supersededJobs.delete(jobId);
       this._activeJobId = null;
       this._drainJobQueue();
     }

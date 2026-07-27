@@ -296,6 +296,7 @@ async function chat(messages, opts = {}) {
     withUsage = false,        // when true, return { text, promptTokens, completionTokens, totalTokens }
     hardTokenCap = 0,         // stop generation after this many OUTPUT tokens (0 = uncapped)
     onToken = null,           // optional callback(token) for live streaming to a client
+    shouldStop = null,        // optional () => bool, checked per token: true → cancel early
   } = opts;
 
   return enqueue(async () => {
@@ -333,6 +334,9 @@ async function chat(messages, opts = {}) {
         text += token;
         completionTokens++;
         if (onToken) { try { onToken(token); } catch { /* client hung up — keep counting */ } }
+        // Cooperative cancel: a peer already published the winning result, so stop
+        // burning compute on a job we've lost (see miner-node first-result-wins).
+        if (shouldStop) { let stop = false; try { stop = !!shouldStop(); } catch { /* ignore */ } if (stop) { try { run.cancel?.(); } catch { /* */ } break; } }
         // No-refund hard cap: budget bounds output, so stop once we've generated
         // every token the requester paid for (see gas-estimator.outputTokenCap).
         if (hardTokenCap > 0 && completionTokens >= hardTokenCap) {

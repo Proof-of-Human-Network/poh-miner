@@ -4,7 +4,7 @@
  * bundled/downloaded binary under ~/.poh-miner/bin/.
  */
 
-import { spawn, execSync } from 'child_process';
+import { spawn, execSync, execFileSync } from 'child_process';
 import crypto from 'crypto';
 import fs from 'fs';
 import net from 'net';
@@ -150,12 +150,23 @@ function downloadFile(url, dest) {
   });
 }
 
+// macOS Gatekeeper kills a downloaded, unsigned binary on exec (arm64 requires a
+// signature; the com.apple.quarantine xattr triggers the check). A meilisearch
+// binary we fetch at runtime hits exactly that — the spawn dies immediately and
+// search reports "unavailable (fetch failed)". Strip quarantine + ad-hoc sign it
+// (same trick as the app bundle) so it can run. No-op off macOS / on failure.
+function ensureMacExecutable(bin) {
+  if (process.platform !== 'darwin' || !bin) return;
+  try { execFileSync('xattr', ['-c', bin], { stdio: 'ignore' }); } catch { /* no xattr / already clean */ }
+  try { execFileSync('codesign', ['--force', '--sign', '-', bin], { stdio: 'ignore' }); } catch { /* codesign missing */ }
+}
+
 export async function ensureMeilisearchBinary(customPath) {
-  if (customPath && fs.existsSync(customPath)) return customPath;
+  if (customPath && fs.existsSync(customPath)) { ensureMacExecutable(customPath); return customPath; }
   const local = defaultBinaryPath();
-  if (local && fs.existsSync(local)) return local;
+  if (local && fs.existsSync(local)) { ensureMacExecutable(local); return local; }
   const inPath = meilisearchInPath();
-  if (inPath) return inPath;
+  if (inPath) return inPath;   // system-installed (brew/apt) — already runnable
 
   const asset = platformAsset();
   if (!asset) throw new Error(`Meilisearch binary not supported on ${process.platform}/${process.arch}`);
@@ -170,6 +181,7 @@ export async function ensureMeilisearchBinary(customPath) {
   await downloadFile(url, tmp);
   fs.renameSync(tmp, dest);
   if (process.platform !== 'win32') fs.chmodSync(dest, 0o755);
+  ensureMacExecutable(dest);   // dequarantine + ad-hoc sign so macOS will run it
   console.log(`[PoH-Meili] Installed binary → ${dest}`);
   return dest;
 }

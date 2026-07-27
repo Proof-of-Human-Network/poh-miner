@@ -7,6 +7,19 @@ export const GAS = {
   DEFAULT_GAS_PRICE:   1,          // μPOH per AI compute token (1 POH = 1e9 tokens).
                                    // μPOH is the smallest unit, so this is the price floor.
   TIMEOUT_RESERVE_PCT: 0.05,      // 5% of maxBudget kept on timeout
+
+  // Hard ceilings on how far a big budget can stretch the OUTPUT length. Spare
+  // uPOH buys more output tokens (see outputTokenCap) — but only up to here.
+  // Two reasons it must be bounded, not "budget ÷ price" unbounded:
+  //   1. Context window: total tokens (prompt + output) can't exceed the model's
+  //      ctx (QVAC_CTX_SIZE, default 8192). Overshooting truncates or corrupts.
+  //   2. Quality: small instruct models (qwen3-0.6b..8b) stay coherent for a
+  //      bounded reply and then degrade into repetition/rambling if pushed to
+  //      keep generating. Past OUTPUT_HARD_MAX a longer cap buys worse output,
+  //      not more value — so extra budget becomes queue priority only.
+  CONTEXT_TOKENS:     8192,       // must match QVAC_CTX_SIZE in qvac-models.js
+  CONTEXT_MARGIN:      256,       // headroom so we never brush the ctx limit
+  OUTPUT_HARD_MAX:    4096,       // quality ceiling on generated output tokens
 };
 
 export function detectChainCount(address) {
@@ -45,9 +58,16 @@ export function estimateChatTokens(promptTokens, maxOutputTokens, cap = GAS.OUTP
 // OUTPUT tokens the job is still allowed to generate before it hits its budget.
 // Generation must stop at this count (see qvac hardTokenCap) — there is no refund
 // path and no over-charge path, so a job can never consume more than it paid for.
+//
+// Spare uPOH stretches this cap, but it is bounded by the context window and a
+// quality ceiling (GAS.OUTPUT_HARD_MAX): beyond that a longer cap only degrades
+// the reply, so extra budget buys queue priority, not more tokens. The requester
+// still pays the full bid (no refund) — this only bounds generation length.
 export function outputTokenCap(maxBudget, gasPrice = GAS.DEFAULT_GAS_PRICE, promptTokens = 0) {
-  const totalTokens = Math.floor(maxBudget / Math.max(1, gasPrice));
-  return Math.max(0, totalTokens - Math.max(0, Math.round(promptTokens)));
+  const prompt = Math.max(0, Math.round(promptTokens));
+  const budgetTokens = Math.floor(maxBudget / Math.max(1, gasPrice)) - prompt;
+  const contextTokens = GAS.CONTEXT_TOKENS - GAS.CONTEXT_MARGIN - prompt;
+  return Math.max(0, Math.min(budgetTokens, contextTokens, GAS.OUTPUT_HARD_MAX));
 }
 
 // No-refund settlement. maxBudget is the requester's signed bid, and the whole bid
