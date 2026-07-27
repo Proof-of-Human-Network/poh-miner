@@ -2162,7 +2162,7 @@ export class PohMinerNode {
             try {
               const qvac = await getQvacModels();
               const list = qvac ? await qvac.listModels() : [];
-              sendJson(200, { models: list.map(m => ({ name: m.name, model: m.name, label: m.label, loaded: m.loaded })) });
+              sendJson(200, { models: list.map(m => ({ name: m.name, model: m.name, label: m.label, loaded: m.loaded, installed: m.installed })) });
             } catch (e) {
               sendJson(502, { error: 'QVAC unavailable: ' + e.message });
             }
@@ -2177,11 +2177,17 @@ export class PohMinerNode {
           try {
             const payload = body ? JSON.parse(body) : {};
             const qvac = await getQvacModels();
-            if (!qvac || !qvac.ENABLED) return sendJson(503, { error: 'Inference backend (QVAC) is unavailable' });
+            if (!qvac || !qvac.ENABLED) return sendJson(503, { error: 'Inference backend (QVAC) is unavailable on this device' });
             const model = payload.model || this.config.model || 'qwen3-1.7b';
 
             if (url.pathname === '/api/embeddings') {
               return sendJson(501, { error: 'Embeddings are not available in QVAC-only mode' });
+            }
+
+            // Distinguish "not downloaded" from "backend can't run it" up front, so
+            // the user gets an actionable message instead of "produced no output".
+            if (qvac.isInstalled && !(await qvac.isInstalled(model))) {
+              return sendJson(503, { error: `Model "${model}" is not installed on this device. Download it first, or pick an installed model.`, code: 'MODEL_NOT_INSTALLED' });
             }
 
             if (url.pathname === '/api/chat') {
@@ -5906,6 +5912,7 @@ export class PohMinerNode {
 
   // Poll peer miners for a job result (used when local compute is unavailable).
   async _fetchJobResultFromPeers(jobId) {
+    // 1) Direct dial reachable peers (fast path when both ends are routable).
     try {
       const peers = await this._getComputePeers();
       for (const base of peers) {
@@ -5916,6 +5923,25 @@ export class PohMinerNode {
             if (data.verdict || data.profile) return data;
           }
         } catch { /* try next peer */ }
+      }
+    } catch { /* ignore */ }
+
+    // 2) Job-board fallback via the bootnode. This is the ONLY path that works
+    //    when the compute node is behind NAT (reachable:false): the worker POSTs
+    //    its result to /jobboard/result and the submitter pulls it here. Without
+    //    this, a NAT→NAT job computes fine but the requester only ever sees
+    //    "not ready yet" because a direct dial can never land.
+    try {
+      for (const bootnode of (this.config.bootnodes || [])) {
+        try {
+          const base = bootnode.endsWith('/') ? bootnode.slice(0, -1) : bootnode;
+          const r = await fetch(`${base}/jobboard/status?jobId=${encodeURIComponent(jobId)}`, { signal: AbortSignal.timeout(6000) });
+          if (!r.ok) continue;
+          const s = await r.json();
+          if (s && s.status === 'done' && s.result && (s.result.verdict || s.result.profile)) {
+            return s.result;
+          }
+        } catch { /* try next bootnode */ }
       }
     } catch { /* ignore */ }
     return null;

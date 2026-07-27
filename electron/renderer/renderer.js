@@ -2053,21 +2053,31 @@ async function loadChatModels(force = false) {
       const data = await localRes.json();
       for (const m of (data.models || [])) {
         const name = m.name || m.model;
-        if (name) byName.set(name, { name, local: true, peerCount: 0 });
+        // `installed` may be absent on older nodes → treat as installed so we
+        // don't hide everything when talking to a node that predates the flag.
+        if (name) byName.set(name, { name, local: true, installed: m.installed !== false, peerCount: 0 });
       }
     }
     if (netRes?.ok) {
       const data = await netRes.json();
       for (const m of (data.models || [])) {
         const existing = byName.get(m.name);
-        byName.set(m.name, { name: m.name, local: existing?.local || m.local, peerCount: m.peerCount || 0 });
+        byName.set(m.name, { name: m.name, local: existing?.local || m.local, installed: existing?.installed || false, peerCount: m.peerCount || 0 });
       }
     }
-    window._cachedModelEntries = [...byName.values()];
+    // Private mode runs entirely on this device, so only offer models whose
+    // weights are actually installed locally — never network-only or catalog
+    // entries the machine can't run (that's what caused "produced no output").
+    const isPrivate = window._chatPrivate !== false;
+    let entries = [...byName.values()];
+    if (isPrivate) entries = entries.filter(m => m.local && m.installed);
+    window._cachedModelEntries = entries;
     window._cachedModels = window._cachedModelEntries.map(m => m.name);
     sel.innerHTML = '';
     if (!window._cachedModelEntries.length) {
-      sel.innerHTML = '<option value="">No models found</option>';
+      sel.innerHTML = isPrivate
+        ? '<option value="">No models installed — download one first</option>'
+        : '<option value="">No models found</option>';
       return;
     }
     for (const m of window._cachedModelEntries) {
@@ -2277,6 +2287,9 @@ window.toggleChatPrivacy = function() {
     }
   }
   _updateChatBudgetVisibility();
+  // Private vs public offer different model sets (private = installed-local only),
+  // so rebuild the picker on every toggle.
+  if (typeof loadChatModels === 'function') loadChatModels(true);
 };
 
 // ── File upload ────────────────────────────────────────────────────────────────

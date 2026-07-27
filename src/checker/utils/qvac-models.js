@@ -311,24 +311,51 @@ async function complete(prompt, opts = {}) {
   return chat([{ role: 'user', content: String(prompt) }], opts);
 }
 
+// True when the model's weights are actually downloaded on this machine (≥1 MB
+// blob under ~/.qvac/models). Needs the SDK to map the friendly/constant name to
+// a modelId descriptor; returns false when the backend can't be loaded so the
+// private-mode picker never advertises a model that can't run here. A currently
+// loaded model is installed by definition (it came off disk).
+async function isInstalled(name) {
+  if (!ENABLED) return false;              // backend can't run anything here
+  if (_loaded.has(name)) return true;
+  const aliased = ALIASES[(name || '').toLowerCase()] || name;
+  if (_loaded.has(aliased)) return true;
+  let sdk;
+  try { sdk = await getSdk(); } catch { return false; }
+  const descriptor = sdk[aliased] || sdk[name];
+  return descriptor ? !!localBlobPath(descriptor) : false;
+}
+
 // ── Model listing (for the picker / /api/models) ────────────────────────────
-// Returns [{ name, label, loaded }] — built-ins + currently loaded + registry.
+// Returns [{ name, label, loaded, installed }] — built-ins + currently loaded +
+// registry. `loaded` = resident in RAM right now; `installed` = weights are on
+// disk. Private/local mode must filter on `installed`, not `loaded`.
 async function listModels() {
   const out = new Map();
+  let sdk = null;
+  if (ENABLED) { try { sdk = await getSdk(); } catch { /* backend unavailable — installed:false */ } }
+  const installedFor = (constant) => {
+    if (!sdk || !sdk[constant]) return false;
+    return !!localBlobPath(sdk[constant]);
+  };
   for (const m of BUILTIN_MODELS) {
-    out.set(m.name, { name: m.name, label: m.label, loaded: _loaded.has(m.constant) });
+    out.set(m.name, {
+      name: m.name, label: m.label,
+      loaded: _loaded.has(m.constant),
+      installed: _loaded.has(m.constant) || installedFor(m.constant),
+    });
   }
   for (const name of _loaded.keys()) {
-    if (!out.has(name)) out.set(name, { name, label: name, loaded: true });
+    if (!out.has(name)) out.set(name, { name, label: name, loaded: true, installed: true });
   }
   // Best-effort: enrich with the distributed registry (non-fatal if offline).
   try {
-    const sdk = await getSdk();
-    if (typeof sdk.modelRegistrySearch === 'function') {
+    if (sdk && typeof sdk.modelRegistrySearch === 'function') {
       const entries = await sdk.modelRegistrySearch({ addon: 'llamacpp-completion' });
       for (const e of (entries || [])) {
         const name = e.id || e.name;
-        if (name && !out.has(name)) out.set(name, { name, label: e.label || name, loaded: false });
+        if (name && !out.has(name)) out.set(name, { name, label: e.label || name, loaded: false, installed: false });
       }
     }
   } catch { /* registry offline — built-ins are enough */ }
@@ -349,6 +376,7 @@ module.exports = {
   chat,
   complete,
   listModels,
+  isInstalled,
   getModelId,
   status,
   estimatePromptTokens,
