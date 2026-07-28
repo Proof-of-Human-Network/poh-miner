@@ -4709,17 +4709,17 @@ async function pollSkillAuditResult(jobId, skillId, resultEl, attempt = 0) {
     const stillPending = !data || ['queued', 'running', 'computing', 'ignored'].includes(data.status);
     if (stillPending) {
       const dots = '.'.repeat((attempt % 3) + 1);
-      resultEl.textContent = `Auditing skill code on network${dots} (${window._skillEconomics?.proposeFeePoh || 100} POH escrowed)`;
+      resultEl.textContent = `Auditing skill code on network${dots} (${window._skillEconomics?.proposeFeePoh || 1} POH escrowed)`;
       pollSkillAuditResult(jobId, skillId, resultEl, attempt + 1);
       return;
     }
     if (data.rejected || data.verdict === 'REJECTED') {
       showAuditRejectionModal(data.reason || 'Dangerous code detected', data.issues || []);
       resultEl.style.color = '#ef4444';
-      resultEl.textContent = `Skill rejected by network audit · ${window._skillEconomics?.proposeFeePoh || 100} POH refunded`;
+      resultEl.textContent = `Skill rejected by network audit · ${window._skillEconomics?.proposeFeePoh || 1} POH refunded`;
     } else if (data.status === 'done' || data.verdict === 'SKILL_RESULT') {
       resultEl.style.color = '#22c55e';
-      resultEl.textContent = `Proposed: ${skillId} · audit passed · ${window._skillEconomics?.proposeFeePoh || 100} POH paid to auditing miner`;
+      resultEl.textContent = `Proposed: ${skillId} · audit passed · ${window._skillEconomics?.proposeFeePoh || 1} POH paid to auditing miner`;
       skillsView('browse');
     } else {
       // Error or unexpected state
@@ -4763,11 +4763,11 @@ async function submitSkill() {
     } else if (data.pending && data.jobId) {
       // Skill submitted for network audit — poll until the auditing miner returns a result
       resultEl.style.color = '#f59e0b';
-      resultEl.textContent = `Auditing skill code on network… ${window._skillEconomics?.proposeFeePoh || 100} POH escrowed`;
+      resultEl.textContent = `Auditing skill code on network… ${window._skillEconomics?.proposeFeePoh || 1} POH escrowed`;
       pollSkillAuditResult(data.jobId, id, resultEl);
     } else if (data.ok) {
       resultEl.style.color = '#22c55e';
-      resultEl.textContent = `Proposed: ${id} · ${window._skillEconomics?.proposeFeePoh || 100} POH deducted`;
+      resultEl.textContent = `Proposed: ${id} · ${window._skillEconomics?.proposeFeePoh || 1} POH deducted`;
       skillsView('browse');
     } else {
       resultEl.style.color = '#ef4444';
