@@ -10,7 +10,12 @@
  * Usage:
  *   node scripts/genesis/export-snapshot.mjs --data-dir ~/.poh-bootnode \
  *        [--height H] [--out snap.json] [--exclude addr1,addr2] [--include-system] \
- *        [--genesis-timestamp <ms>]
+ *        [--genesis-timestamp <ms>] \
+ *        [--mint-stables] [--treasury <pohAddr>]
+ *
+ * --mint-stables adds the initial stablecoin supply (INITIAL_STABLE_SUPPLY_RAW
+ * from src/assets.js) to the treasury row (--treasury overrides the address).
+ * Existing per-asset balances in the replayed ledger are always carried over.
  *
  * By default the finalized tip is used (reorg-safe) and known system addresses
  * (e.g. the audit vault) are dropped. Pass --include-system to keep them.
@@ -25,6 +30,7 @@ const { ChainStore }             = await import(path.join(NODE, 'src/storage/cha
 const { PohBlock }               = await import(path.join(NODE, 'src/core/block.js'));
 const { replayChainLedgerAsync } = await import(path.join(NODE, 'src/consensus/tx-ledger.js'));
 const { FINALITY_DEPTH }         = await import(path.join(NODE, 'src/consensus/finality.js'));
+const { TREASURY_ADDRESS, INITIAL_STABLE_SUPPLY_RAW } = await import(path.join(NODE, 'src/assets.js'));
 
 // System / non-user addresses excluded by default (kept with --include-system).
 const SYSTEM_ADDRESSES = new Set([
@@ -62,20 +68,42 @@ async function main() {
   const ledger = await replayChainLedgerAsync(chain, { applyP2P: true });
 
   const addrs = new Set([...ledger.balances.keys(), ...ledger.nonces.keys()]);
+  if (ledger.assetBalances) for (const m of ledger.assetBalances.values()) for (const a of m.keys()) addrs.add(a);
+
+  // Optional stablecoin genesis mint to the treasury (fresh-reset only).
+  const mintStables = argv.includes('--mint-stables');
+  const treasury = arg('--treasury', TREASURY_ADDRESS);
+  if (mintStables) {
+    if (!treasury || treasury.includes('TODO')) {
+      console.error('[snapshot] --mint-stables requires a real treasury address (set src/assets.js TREASURY_ADDRESS or pass --treasury)');
+      process.exit(2);
+    }
+    addrs.add(treasury);
+  }
+
   const entries = [];
   let sumBalances = 0, excludedRaw = 0;
   for (const a of addrs) {
     const balance = ledger.balances.get(a) || 0;
     const nonce = ledger.nonces.get(a) || 0;
-    if (balance === 0 && nonce === 0) continue;
+    // Carry over any existing per-asset holdings; add the genesis mint on the treasury row.
+    const held = ledger.getAssetBalances ? ledger.getAssetBalances(a) : {};
+    if (mintStables && a === treasury) {
+      for (const [t, v] of Object.entries(INITIAL_STABLE_SUPPLY_RAW)) held[t] = (held[t] || 0) + v;
+    }
+    const hasAssets = Object.keys(held).length > 0;
+    if (balance === 0 && nonce === 0 && !hasAssets) continue;
     if (exclude.has(a)) { excludedRaw += balance; continue; }
-    entries.push([a, { balance, nonce }]);
+    entries.push([a, { balance, nonce, ...(hasAssets ? { assets: Object.fromEntries(Object.keys(held).sort().map(t => [t, held[t]])) } : {}) }]);
     sumBalances += balance;
   }
   entries.sort((x, y) => (x[0] < y[0] ? -1 : x[0] > y[0] ? 1 : 0)); // canonical key order
   const balancesObj = Object.fromEntries(entries);
 
-  const canonical = JSON.stringify(entries.map(([a, v]) => [a, v.balance, v.nonce]));
+  // Canonical hash: [addr, balance, nonce] tuples, with assets appended ONLY for
+  // rows that hold any — a POH-only snapshot hashes exactly as it always did.
+  const canonical = JSON.stringify(entries.map(([a, v]) =>
+    v.assets ? [a, v.balance, v.nonce, v.assets] : [a, v.balance, v.nonce]));
   const snapshotHash = crypto.createHash('sha256').update(canonical).digest('hex');
 
   const totalMinted = ledger.totalMinted;

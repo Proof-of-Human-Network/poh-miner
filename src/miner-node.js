@@ -60,7 +60,8 @@ import { WalletManager, Wallet } from './wallet/wallet.js';
 import { RewardClaimStore } from './storage/reward-claim-store.js';
 import { skillsManager } from './skills/manager.js';
 import { loadAllSkills, writeSkillFile } from './skills/loader.js';
-import { estimateTokens, estimateChatTokens, outputTokenCap, settleFee, timeoutFee, GAS } from './jobs/gas-estimator.js';
+import { estimateTokens, estimateChatTokens, outputTokenCap, settleFee, timeoutFee, GAS, gasPriceFor } from './jobs/gas-estimator.js';
+import { ASSETS, STABLE_TICKERS, normalizeCurrency, isKnownAsset, decimalsOf, listAssets, fromRaw as assetFromRaw } from './assets.js';
 import { feedbackStore } from './jobs/feedback-store.js';
 import http from 'http';
 import { resolveRpcConfig } from './rpc/resolver.js';
@@ -1196,6 +1197,12 @@ export class PohMinerNode {
         }));
       }
 
+      // Asset registry — tickers, decimals, display names for every on-chain asset.
+      if (url.pathname === '/api/assets') {
+        return res.end(JSON.stringify({ assets: listAssets(), gasPrices: Object.fromEntries(
+          Object.keys(ASSETS).map(t => [t, gasPriceFor(t, this.config)])) }));
+      }
+
       if (url.pathname === '/api/wallet/balance') {
         const address = url.searchParams.get('address');
         if (!address) {
@@ -1203,12 +1210,20 @@ export class PohMinerNode {
           return res.end(JSON.stringify({ error: 'address required' }));
         }
         const confirmed  = this._confirmedBalance(address);
-        const pendingOut = this.txMempool ? (this.txMempool.pendingOut.get(address) || 0) : 0;
+        const pendingOut = this.txMempool ? (this.txMempool.pendingOut.get(`${address}:POH`) || 0) : 0;
         const pendingIn  = this.txMempool
-          ? this.txMempool.getPending(1000).filter(tx => tx.to === address).reduce((s, tx) => s + tx.amount, 0)
+          ? this.txMempool.getPending(1000).filter(tx => tx.to === address && normalizeCurrency(tx.currency) === 'POH').reduce((s, tx) => s + tx.amount, 0)
           : 0;
         const balance = Math.max(0, confirmed - pendingOut + pendingIn);
-        return res.end(JSON.stringify({ address, balance, confirmed, pendingOut, pendingIn }));
+        // Per-asset balances (stablecoins). Raw integer units + display value.
+        const assetsOut = {};
+        const held = this._confirmedAssets(address);
+        for (const [t, raw] of Object.entries(held)) {
+          const pOut = this.txMempool ? (this.txMempool.pendingOut.get(`${address}:${t}`) || 0) : 0;
+          const eff = Math.max(0, raw - pOut);
+          assetsOut[t] = { raw: eff, display: assetFromRaw(t, eff) };
+        }
+        return res.end(JSON.stringify({ address, balance, confirmed, pendingOut, pendingIn, assets: assetsOut }));
       }
 
       if (url.pathname === '/api/wallet/nonce') {
@@ -1411,8 +1426,14 @@ export class PohMinerNode {
         req.on('data', chunk => body += chunk);
         req.on('end', async () => {
           try {
-            const { from, to, amount, fee = 0, memo = '', idempotencyKey } = JSON.parse(body);
-            const amt = Math.round(parseFloat(amount) * POH_DECIMALS);
+            const { from, to, amount, fee = 0, memo = '', currency = 'POH', idempotencyKey } = JSON.parse(body);
+            const cur = normalizeCurrency(currency);
+            if (!isKnownAsset(cur)) {
+              res.statusCode = 400;
+              return res.end(JSON.stringify({ error: `Unknown currency "${currency}". See /api/assets.` }));
+            }
+            // Display → raw units at the asset's own decimals (POH ×1e9, stables ×100)
+            const amt = Math.round(parseFloat(amount) * 10 ** decimalsOf(cur));
 
             if (!from || !to || !amt || amt <= 0) {
               res.statusCode = 400;
@@ -1436,7 +1457,8 @@ export class PohMinerNode {
               }
             } else {
               const dup = this.txMempool.getPending(1000).find(t =>
-                t.from === from && t.to === to && t.amount === amt && (t.memo || '') === (memo || ''));
+                t.from === from && t.to === to && t.amount === amt && (t.memo || '') === (memo || '') &&
+                (t.currency || 'POH') === cur);
               if (dup) {
                 return res.end(JSON.stringify({ success: true, txHash: dup.txHash, status: 'pending', idempotent: true, message: 'Identical transfer already pending — not resent' }));
               }
@@ -1451,7 +1473,7 @@ export class PohMinerNode {
             const confirmedNonce = this._confirmedNonce(from);
             const pendingNonce   = this.txMempool.accountPendingNonce.get(from) ?? confirmedNonce;
             const nonce = pendingNonce + 1;
-            const tx = new PoHTransaction({ from, to, amount: amt, fee, nonce, memo });
+            const tx = new PoHTransaction({ from, to, amount: amt, fee, nonce, memo, currency: cur });
             tx.sign(senderWallet);
 
             const submitResult = this.txMempool.submit(tx);
@@ -5212,16 +5234,17 @@ export class PohMinerNode {
       const tx = PoHTransaction.fromJSON(txData);
       const result = this.walletManager.applyTransaction(tx);
       if (result === true) {
+        const txCur = tx.currency || 'POH';
         appliedTxHashes.push(tx.txHash);
-        this.balanceJournal.record(block.height, tx.from, -(tx.amount + tx.fee), 1, tx.txHash);
-        this.balanceJournal.record(block.height, tx.to, tx.amount, 0, tx.txHash);
+        this.balanceJournal.record(block.height, tx.from, -(tx.amount + tx.fee), 1, tx.txHash, txCur);
+        this.balanceJournal.record(block.height, tx.to, tx.amount, 0, tx.txHash, txCur);
         if (tx.fee > 0 && block.minerWallet) {
-          this.walletManager.credit(block.minerWallet, tx.fee);
-          this.balanceJournal.record(block.height, block.minerWallet, tx.fee, 0, tx.txHash);
+          this.walletManager.credit(block.minerWallet, tx.fee, txCur);
+          this.balanceJournal.record(block.height, block.minerWallet, tx.fee, 0, tx.txHash, txCur);
         }
         this.submissionHistory.push({
           id: tx.txHash, type: 'send', from: tx.from, to: tx.to,
-          amount: tx.amount, fee: tx.fee || 0, timestamp: tx.timestamp,
+          amount: tx.amount, fee: tx.fee || 0, currency: txCur, timestamp: tx.timestamp,
           blockHeight: block.height, status: 'mined',
         });
       } else {
@@ -5281,8 +5304,13 @@ export class PohMinerNode {
   // replay), which never drifts from the chain. Per-wallet files are a cache that
   // can lag after reorgs/rebuilds, so they're only a fallback before the ledger
   // is built (early startup).
-  _confirmedBalance(address) {
-    return this.txLedger ? this.txLedger.getBalance(address) : this.walletManager.getBalance(address);
+  _confirmedBalance(address, currency = 'POH') {
+    return this.txLedger ? this.txLedger.getBalance(address, currency) : this.walletManager.getAssetBalance(address, currency);
+  }
+
+  /** Non-POH holdings for an address from the canonical ledger (wallet-file fallback). */
+  _confirmedAssets(address) {
+    return this.txLedger ? this.txLedger.getAssetBalances(address) : this.walletManager.getAssetBalances(address);
   }
 
   _confirmedNonce(address) {
@@ -5399,31 +5427,35 @@ export class PohMinerNode {
     // Persist all claim keys in one write
     this.rewardClaimStore.markClaimedMany(claimKeys);
 
-    // Flush accumulated balances + nonces to disk in one pass.
+    // Flush accumulated balances + nonces + per-asset holdings to disk in one pass.
     // Yield to the event loop every 50 wallets so HTTP requests aren't starved.
     const allAddrs = new Set([...balances.keys(), ...nonces.keys()]);
+    for (const m of ledger.assetBalances.values()) for (const a of m.keys()) allAddrs.add(a);
     let _flushCount = 0;
     for (const addr of allAddrs) {
       const balance = balances.get(addr) ?? 0;
       const nonce   = nonces.get(addr) ?? 0;
+      const held    = ledger.getAssetBalances(addr);           // {} when none
+      const assets  = Object.keys(held).length ? held : null;  // null clears the map
       // Raw balance/nonce write — never scrypt-unseal a wallet's keys just to persist a
       // balance (there can be thousands of wallet files; loadWallet per wallet freezes
       // the event loop). Only fall back to credit() to create a stub for unseen addresses.
       if (this.walletManager.walletExists(addr)) {
-        this.walletManager.setBalanceNonceRaw(addr, balance, nonce);
+        this.walletManager.setBalanceNonceRaw(addr, balance, nonce, assets);
       } else {
         this.walletManager.credit(addr, balance);
-        if (nonce > 0) this.walletManager.setBalanceNonceRaw(addr, balance, nonce);
+        this.walletManager.setBalanceNonceRaw(addr, balance, nonce, assets);
       }
       if (++_flushCount % 50 === 0) await new Promise(r => setImmediate(r));
     }
-    // Zero wallets that earned nothing (so stale balances from old forks are cleared)
+    // Zero wallets that earned nothing (so stale balances from old forks are cleared) —
+    // including any stale per-asset holdings (assets=null wipes the map).
     let _zeroCount = 0;
     for (const addr of this.walletManager.listWallets()) {
       if (!allAddrs.has(addr)) {
         // Raw zero — no scrypt-unseal. setBalanceNonceRaw skips the write when already 0,
         // so this is a cheap JSON read for the (many) already-zero stale wallet files.
-        this.walletManager.setBalanceNonceRaw(addr, 0);
+        this.walletManager.setBalanceNonceRaw(addr, 0, null, null);
       }
       if (++_zeroCount % 50 === 0) await new Promise(r => setImmediate(r));
     }
@@ -7655,16 +7687,17 @@ export class PohMinerNode {
       for (const txData of (newBlock.transactions || [])) {
         const tx = PoHTransaction.fromJSON(txData);
         if (this.walletManager.applyTransaction(tx) === true) {
+          const txCur = tx.currency || 'POH';
           appliedTxHashes.push(tx.txHash);
-          this.balanceJournal.record(newBlock.height, tx.from, -(tx.amount + tx.fee), 1, tx.txHash);
-          this.balanceJournal.record(newBlock.height, tx.to, tx.amount, 0, tx.txHash);
+          this.balanceJournal.record(newBlock.height, tx.from, -(tx.amount + tx.fee), 1, tx.txHash, txCur);
+          this.balanceJournal.record(newBlock.height, tx.to, tx.amount, 0, tx.txHash, txCur);
           if (tx.fee > 0) {
-            this.walletManager.credit(newBlock.minerWallet, tx.fee);
-            this.balanceJournal.record(newBlock.height, newBlock.minerWallet, tx.fee, 0, tx.txHash);
+            this.walletManager.credit(newBlock.minerWallet, tx.fee, txCur);
+            this.balanceJournal.record(newBlock.height, newBlock.minerWallet, tx.fee, 0, tx.txHash, txCur);
           }
           this.submissionHistory.push({
             id: tx.txHash, type: 'send', from: tx.from, to: tx.to,
-            amount: tx.amount, fee: tx.fee || 0, timestamp: tx.timestamp,
+            amount: tx.amount, fee: tx.fee || 0, currency: txCur, timestamp: tx.timestamp,
             blockHeight: newBlock.height, status: 'mined',
           });
         }

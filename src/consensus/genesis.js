@@ -36,15 +36,29 @@ export function defaultMigrationSnapshot() {
 export const LEGACY_GENESIS_TIMESTAMP = 1780700000000;
 export const GENESIS_MINER = 'bootnode-genesis';
 
-/** Canonical, deterministic allocation array from a snapshot's balances map. */
+/** Canonical, deterministic allocation array from a snapshot's balances map.
+ *  Entry values may be a raw μPOH number or { balance, nonce, assets? } where
+ *  `assets` is { ticker: rawInt } (stablecoin genesis supply — normally only the
+ *  treasury row). The assets key is emitted ONLY when non-empty, with sorted
+ *  tickers, so POH-only allocations serialize exactly as before. */
 export function buildAllocations(balances) {
   return Object.entries(balances)
-    .map(([address, v]) => ({
-      address,
-      balance: typeof v === 'object' ? Number(v.balance) || 0 : Number(v) || 0,
-      nonce: typeof v === 'object' ? Number(v.nonce) || 0 : 0,
-    }))
-    .filter(a => a.balance > 0 || a.nonce > 0)
+    .map(([address, v]) => {
+      const isObj = typeof v === 'object' && v !== null;
+      const entry = {
+        address,
+        balance: isObj ? Number(v.balance) || 0 : Number(v) || 0,
+        nonce: isObj ? Number(v.nonce) || 0 : 0,
+      };
+      if (isObj && v.assets && typeof v.assets === 'object') {
+        const tickers = Object.keys(v.assets).filter(t => (Number(v.assets[t]) || 0) > 0).sort();
+        if (tickers.length) {
+          entry.assets = Object.fromEntries(tickers.map(t => [t, Number(v.assets[t])]));
+        }
+      }
+      return entry;
+    })
+    .filter(a => a.balance > 0 || a.nonce > 0 || a.assets)
     .sort((x, y) => (x.address < y.address ? -1 : x.address > y.address ? 1 : 0));
 }
 
@@ -57,6 +71,12 @@ export function buildMigrationGenesis(snapshot, { timestamp, difficulty = 4 } = 
   if (!snapshot || !snapshot.balances) throw new Error('snapshot.balances required');
   const genesisAllocations = buildAllocations(snapshot.balances);
   const total = genesisAllocations.reduce((s, a) => s + a.balance, 0);
+  // Per-asset genesis supply totals (stablecoins) — reported for the reset log/audit.
+  const assetTotals = {};
+  for (const a of genesisAllocations) {
+    if (!a.assets) continue;
+    for (const [t, v] of Object.entries(a.assets)) assetTotals[t] = (assetTotals[t] || 0) + v;
+  }
 
   const genesis = new PohBlock({
     height: 0,
@@ -74,7 +94,7 @@ export function buildMigrationGenesis(snapshot, { timestamp, difficulty = 4 } = 
     chainWork: computeChainWork('0', difficulty),
     genesisAllocations,
   });
-  return { genesis, total, count: genesisAllocations.length };
+  return { genesis, total, assetTotals, count: genesisAllocations.length };
 }
 
 /** Load a snapshot from a path (or pass through an object). Returns null when falsy. */

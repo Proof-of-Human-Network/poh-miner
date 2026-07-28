@@ -30,16 +30,21 @@ function ensureDir(dir) {
 // actually being applied. Without recomputing and comparing, an attacker could replay
 // any previously-seen valid (txHash, signature) pair from a sender — e.g. from a tiny,
 // publicly visible past transfer — with a forged `to`/`amount` and drain the account.
+// KEEP IN SYNC with PoHTransaction._computeHash (src/core/transaction.js), the
+// mobile wallet signer (dev/wallet/src/services/signing.js) and sdk signers.
+// `currency` enters the preimage ONLY when set and !== 'POH' — every historical
+// POH tx keeps its exact hash and signature validity.
 export function computeTxFieldsHash(tx) {
   const payload = JSON.stringify({
     from: tx.from, to: tx.to, amount: tx.amount,
     fee: tx.fee, nonce: tx.nonce, timestamp: tx.timestamp, memo: tx.memo,
+    ...(tx.currency && tx.currency !== 'POH' ? { currency: tx.currency } : {}),
   });
   return crypto.createHash('sha256').update(payload).digest('hex');
 }
 
 export class Wallet {
-  constructor({ address, privateKey, publicKey, createdAt = Date.now(), signingPublicKey, signingPrivateKey, encryptionPublicKey, balance = 0, nonce = 0 }) {
+  constructor({ address, privateKey, publicKey, createdAt = Date.now(), signingPublicKey, signingPrivateKey, encryptionPublicKey, balance = 0, nonce = 0, assets = null }) {
     this.address = address;
     this.privateKey = privateKey;
     this.publicKey = publicKey;
@@ -55,7 +60,26 @@ export class Wallet {
     this.balance = (typeof balance === 'number') ? balance : 0;
     // Transaction nonce — incremented each time a tx from this address is mined.
     // Prevents replay attacks: a valid tx must have nonce === account.nonce + 1.
+    // ONE nonce sequence per address, shared across every asset.
     this.nonce = (typeof nonce === 'number') ? nonce : 0;
+    // Per-asset balances in raw integer units (stablecoins, 2dp → ×100).
+    // POH stays in the legacy scalar `balance` (μPOH). Empty map ⇒ omitted from
+    // toJSON/state root so POH-only wallets keep their historical shape.
+    this.assets = (assets && typeof assets === 'object') ? { ...assets } : {};
+  }
+
+  /** True when this wallet holds any non-POH asset. */
+  hasAssets() {
+    return Object.keys(this.assets).some(t => this.assets[t] > 0);
+  }
+
+  /** Sorted-key copy of non-zero asset balances (deterministic for hashing). */
+  sortedAssets() {
+    const out = {};
+    for (const t of Object.keys(this.assets).sort()) {
+      if (this.assets[t] > 0) out[t] = this.assets[t];
+    }
+    return out;
   }
 
   static generate() {
@@ -108,6 +132,8 @@ export class Wallet {
       encryptionPublicKey: this.encryptionPublicKey,
       balance: this.balance,
       nonce: this.nonce,
+      // Omitted entirely when empty so legacy POH-only wallet files are unchanged.
+      ...(this.hasAssets() ? { assets: this.sortedAssets() } : {}),
     };
   }
 
@@ -347,49 +373,72 @@ export class WalletManager {
   // Read {balance, nonce} from a wallet file WITHOUT unsealing (scrypt) the keys.
   rawBalanceNonce(address) {
     const file = path.join(this.walletsDir, `${address}.json`);
-    if (!fs.existsSync(file)) return { balance: 0, nonce: 0 };
+    if (!fs.existsSync(file)) return { balance: 0, nonce: 0, assets: null };
     try {
       const raw = JSON.parse(fs.readFileSync(file, 'utf8'));
-      return { balance: raw.balance || 0, nonce: raw.nonce || 0 };
-    } catch { return { balance: 0, nonce: 0 }; }
+      return { balance: raw.balance || 0, nonce: raw.nonce || 0, assets: raw.assets || null };
+    } catch { return { balance: 0, nonce: 0, assets: null }; }
   }
 
-  setBalanceNonceRaw(address, balance, nonce = null) {
+  // Pass assets=undefined to leave the assets map untouched; an object (or null
+  // to clear) replaces it. Assets ride the same plaintext fast path as balance.
+  setBalanceNonceRaw(address, balance, nonce = null, assets = undefined) {
     const file = path.join(this.walletsDir, `${address}.json`);
     if (!fs.existsSync(file)) return false;
     let raw;
     try { raw = JSON.parse(fs.readFileSync(file, 'utf8')); } catch { return false; }
     const newNonce = nonce == null ? (raw.nonce || 0) : nonce;
-    if ((raw.balance || 0) === balance && (raw.nonce || 0) === newNonce) return false; // no change → no write
+    const newAssets = assets === undefined ? (raw.assets || null) : assets;
+    const assetsChanged = JSON.stringify(raw.assets || null) !== JSON.stringify(newAssets || null);
+    if ((raw.balance || 0) === balance && (raw.nonce || 0) === newNonce && !assetsChanged) return false; // no change → no write
     raw.balance = balance;
     raw.nonce = newNonce;
+    if (newAssets && Object.keys(newAssets).length) raw.assets = newAssets;
+    else delete raw.assets;
     const tmp = file + '.tmp';
     fs.writeFileSync(tmp, JSON.stringify(raw, null, 2));
     fs.renameSync(tmp, file);
     return true;
   }
 
+  // ── Asset routing helpers ──────────────────────────────────────────────────
+  // POH lives in the legacy scalar `balance` (μPOH); every other currency in
+  // wallet.assets[ticker] (raw integer units). One nonce covers all assets.
+  static _isPoh(currency) { return !currency || currency === 'POH'; }
+
+  static _getBal(wallet, currency) {
+    if (WalletManager._isPoh(currency)) return wallet.balance || 0;
+    return (wallet.assets && wallet.assets[currency]) || 0;
+  }
+
+  static _setBal(wallet, currency, value) {
+    if (WalletManager._isPoh(currency)) { wallet.balance = value; return; }
+    if (!wallet.assets) wallet.assets = {};
+    if (value > 0) wallet.assets[currency] = value;
+    else delete wallet.assets[currency];   // drop zero balances → toJSON omits empty maps
+  }
+
   // Credit balance (used when receiving rewards or transfers)
   // Auto-creates a stub wallet file for the address if none exists (so remote workerIds or
   // alternate identity addresses like solana addrs used as pohWallet still get balances recorded).
-  credit(address, amount) {
+  credit(address, amount, currency = 'POH') {
     return this._withLock(address, () => {
       let wallet = this.loadWallet(address);
       if (!wallet) {
         wallet = new Wallet({ address, privateKey: null, publicKey: null, createdAt: Date.now() });
       }
-      wallet.balance = (wallet.balance || 0) + amount;
+      WalletManager._setBal(wallet, currency, WalletManager._getBal(wallet, currency) + amount);
       this.saveWallet(wallet);
       return true;
     });
   }
 
   // Debit balance (for sending)
-  debit(address, amount) {
+  debit(address, amount, currency = 'POH') {
     return this._withLock(address, () => {
       const wallet = this.loadWallet(address);
-      if (!wallet || (wallet.balance || 0) < amount) return false;
-      wallet.balance = (wallet.balance || 0) - amount;
+      if (!wallet || WalletManager._getBal(wallet, currency) < amount) return false;
+      WalletManager._setBal(wallet, currency, WalletManager._getBal(wallet, currency) - amount);
       this.saveWallet(wallet);
       return true;
     });
@@ -399,15 +448,15 @@ export class WalletManager {
   // Used for off-chain job fee payments authorized by a nonce-bound signature
   // (see miner-node.js job payment verification) — prevents the same signed
   // payment proof from being replayed against a second job.
-  debitWithNonce(address, amount, expectedNonce) {
+  debitWithNonce(address, amount, expectedNonce, currency = 'POH') {
     return this._withLock(address, () => {
       const wallet = this.loadWallet(address);
       if (!wallet) return { error: 'wallet not found' };
       if ((wallet.nonce || 0) !== expectedNonce) {
         return { error: `nonce mismatch: expected ${wallet.nonce || 0}, got ${expectedNonce}` };
       }
-      if ((wallet.balance || 0) < amount) return { error: 'insufficient balance' };
-      wallet.balance -= amount;
+      if (WalletManager._getBal(wallet, currency) < amount) return { error: 'insufficient balance' };
+      WalletManager._setBal(wallet, currency, WalletManager._getBal(wallet, currency) - amount);
       wallet.nonce = (wallet.nonce || 0) + 1;
       this.saveWallet(wallet);
       return true;
@@ -415,13 +464,25 @@ export class WalletManager {
   }
 
   // Transfer between two local wallets (for testing / future full tx system)
-  transfer(fromAddress, toAddress, amount) {
-    if (!this.debit(fromAddress, amount)) return false;
-    if (!this.credit(toAddress, amount)) {
-      this.credit(fromAddress, amount);
+  transfer(fromAddress, toAddress, amount, currency = 'POH') {
+    if (!this.debit(fromAddress, amount, currency)) return false;
+    if (!this.credit(toAddress, amount, currency)) {
+      this.credit(fromAddress, amount, currency);
       return false;
     }
     return true;
+  }
+
+  /** Per-asset balance (currency='POH' → legacy μPOH scalar). */
+  getAssetBalance(address, currency = 'POH') {
+    const w = this.loadWallet(address);
+    return w ? WalletManager._getBal(w, currency) : 0;
+  }
+
+  /** All non-POH holdings for an address: { ticker: rawInt } (empty when none). */
+  getAssetBalances(address) {
+    const { assets } = this.rawBalanceNonce(address);
+    return assets || {};
   }
 
   // ── Nonce helpers ─────────────────────────────────────────────────────────
@@ -438,8 +499,13 @@ export class WalletManager {
     // state-root value is unchanged — validators recompute the same hash.
     const entries = this.listWallets()
       .map(address => {
-        const { balance, nonce } = this.rawBalanceNonce(address);
-        return { address, balance, nonce };
+        const { balance, nonce, assets } = this.rawBalanceNonce(address);
+        // `assets` key included ONLY when non-empty (sorted keys) — POH-only
+        // wallets serialize exactly as before, keeping historical roots stable.
+        const held = assets && Object.keys(assets).filter(t => assets[t] > 0).sort();
+        return (held && held.length)
+          ? { address, balance, nonce, assets: Object.fromEntries(held.map(t => [t, assets[t]])) }
+          : { address, balance, nonce };
       })
       .sort((a, b) => a.address.localeCompare(b.address));
     return crypto.createHash('sha256').update(JSON.stringify(entries)).digest('hex');
@@ -456,8 +522,9 @@ export class WalletManager {
     if (!tx.txHash || tx.txHash !== computeTxFieldsHash(tx)) {
       return 'txHash does not match transaction fields';
     }
+    const txCur = (!tx.currency || tx.currency === 'POH') ? 'POH' : tx.currency;
     const total = tx.amount + (tx.fee || 0);
-    if ((sender.balance || 0) < total) return 'insufficient balance';
+    if (WalletManager._getBal(sender, txCur) < total) return 'insufficient balance';
     // Verify signature against the sender's STORED public key — not the key
     // claimed inside the transaction. This prevents an attacker from signing
     // with their own key while claiming to spend from someone else's address.
@@ -482,7 +549,7 @@ export class WalletManager {
       }
     }
 
-    sender.balance -= total;
+    WalletManager._setBal(sender, txCur, WalletManager._getBal(sender, txCur) - total);
     sender.nonce   += 1;
     this.saveWallet(sender);
 
@@ -491,32 +558,33 @@ export class WalletManager {
     if (!recipient) {
       recipient = new Wallet({ address: tx.to, privateKey: null, publicKey: null, createdAt: Date.now() });
     }
-    recipient.balance = (recipient.balance || 0) + tx.amount;
+    WalletManager._setBal(recipient, txCur, WalletManager._getBal(recipient, txCur) + tx.amount);
     this.saveWallet(recipient);
-    // Fee goes to block proposer — caller handles this separately
+    // Fee goes to block proposer — caller handles this separately (same currency as the tx)
     return true;
   }
 
   // Reverse a previously applied transaction (used during reorg — Fix 6)
   revertTransaction(tx, proposerAddress) {
+    const txCur = (!tx.currency || tx.currency === 'POH') ? 'POH' : tx.currency;
     // Undo debit on sender
     const sender = this.loadWallet(tx.from);
     if (sender) {
-      sender.balance = (sender.balance || 0) + tx.amount + (tx.fee || 0);
+      WalletManager._setBal(sender, txCur, WalletManager._getBal(sender, txCur) + tx.amount + (tx.fee || 0));
       sender.nonce   = Math.max(0, (sender.nonce || 1) - 1);
       this.saveWallet(sender);
     }
     // Undo credit on recipient (synchronous — paired with applyTransaction)
     const recipient = this.loadWallet(tx.to);
     if (recipient) {
-      recipient.balance = Math.max(0, (recipient.balance || 0) - tx.amount);
+      WalletManager._setBal(recipient, txCur, Math.max(0, WalletManager._getBal(recipient, txCur) - tx.amount));
       this.saveWallet(recipient);
     }
-    // Undo fee credit on proposer
+    // Undo fee credit on proposer (fee was paid in the tx currency)
     if (proposerAddress && tx.fee > 0) {
       const proposer = this.loadWallet(proposerAddress);
       if (proposer) {
-        proposer.balance = Math.max(0, (proposer.balance || 0) - tx.fee);
+        WalletManager._setBal(proposer, txCur, Math.max(0, WalletManager._getBal(proposer, txCur) - tx.fee));
         this.saveWallet(proposer);
       }
     }

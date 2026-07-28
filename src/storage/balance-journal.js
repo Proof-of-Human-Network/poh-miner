@@ -42,11 +42,15 @@ export class BalanceJournal {
     fs.writeFileSync(this.file, lines + (lines ? '\n' : ''));
   }
 
-  // Record a balance change made while applying a block
-  record(height, address, delta, nonceDelta = 0, txHash = null) {
-    this._entries.push({ height, address, delta, nonceDelta, txHash, ts: Date.now() });
+  // Record a balance change made while applying a block. `currency` is omitted
+  // for POH (legacy entries have none) and set for stablecoin movements — one
+  // journal entry per asset moved.
+  record(height, address, delta, nonceDelta = 0, txHash = null, currency = null) {
+    const entry = { height, address, delta, nonceDelta, txHash, ts: Date.now() };
+    if (currency && currency !== 'POH') entry.currency = currency;
+    this._entries.push(entry);
     // Append only (no full rewrite on every entry)
-    fs.appendFileSync(this.file, JSON.stringify({ height, address, delta, nonceDelta, txHash, ts: Date.now() }) + '\n');
+    fs.appendFileSync(this.file, JSON.stringify(entry) + '\n');
   }
 
   // Roll back all changes made at height > targetHeight.
@@ -58,7 +62,14 @@ export class BalanceJournal {
     for (const entry of toUndo) {
       const wallet = this.walletManager.loadWallet(entry.address);
       if (!wallet) continue;
-      wallet.balance = (wallet.balance || 0) - entry.delta;   // undo delta
+      const cur = entry.currency || 'POH';
+      if (cur === 'POH') {
+        wallet.balance = (wallet.balance || 0) - entry.delta;   // undo delta
+      } else {
+        if (!wallet.assets) wallet.assets = {};
+        const next = ((wallet.assets[cur] || 0) - entry.delta);
+        if (next > 0) wallet.assets[cur] = next; else delete wallet.assets[cur];
+      }
       if (entry.nonceDelta) wallet.nonce = Math.max(0, (wallet.nonce || 0) - entry.nonceDelta);
       this.walletManager.saveWallet(wallet);
     }

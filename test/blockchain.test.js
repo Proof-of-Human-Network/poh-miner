@@ -376,10 +376,12 @@ describe('Fix 4 — Transactions & Double-Spend Protection', () => {
     const tx = new PoHTransaction({ from: alice.address, to: bob.address, amount: 100, fee: 0, nonce: 1, timestamp: Date.now() });
     tx.sign(alice);
     mempool.submit(tx);
-    expect(mempool.pendingOut.get(alice.address) || 0).toBe(100);
+    // pendingOut is keyed "address:currency" so a pending stablecoin send never
+    // locks the sender's POH (and vice versa).
+    expect(mempool.pendingOut.get(`${alice.address}:POH`) || 0).toBe(100);
 
     mempool.onBlockApplied([tx.txHash]);
-    expect(mempool.pendingOut.get(alice.address) || 0).toBe(0);
+    expect(mempool.pendingOut.get(`${alice.address}:POH`) || 0).toBe(0);
   });
 
   it('sequential nonces queue correctly', () => {

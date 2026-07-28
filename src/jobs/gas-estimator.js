@@ -1,3 +1,32 @@
+// Per-currency price per AI token, in RAW units of that currency. POH: 1 μPOH
+// per token (unchanged, μPOH is the floor unit). Stablecoin defaults are derived
+// from their fx rate under a placeholder 1 POH ≈ $1 assumption — they come out
+// fractional, so fees floor at 1 raw unit (0.01) via feeFor(). Node operators
+// can override any entry with config.gasPrices = { aiGEL: <number>, ... }.
+// NOT consensus: the accepting miner enforces its own floor; settlement pays
+// whatever was escrowed in exactly the currency paid.
+export const GAS_PRICES = {
+  POH:   1,          // μPOH / token
+  aiGEL: 2.7e-7,     // raw (0.01 GEL) units / token
+  aiKGS: 8.7e-6,
+  aiAMD: 3.85e-5,
+  aiETB: 1.28e-5,
+  aiBTN: 8.4e-6,
+};
+
+/** Effective per-token gas price for a currency, honouring config.gasPrices overrides. */
+export function gasPriceFor(currency = 'POH', config = {}) {
+  const cur = (!currency || currency === 'POH') ? 'POH' : currency;
+  const o = config && config.gasPrices;
+  if (o && typeof o[cur] === 'number' && o[cur] > 0) return o[cur];
+  return GAS_PRICES[cur] ?? GAS_PRICES.POH;
+}
+
+/** Minimum acceptable fee for a token count in a currency (floors at 1 raw unit). */
+export function feeFor(tokens, currency = 'POH', config = {}) {
+  return Math.max(1, Math.ceil(Math.max(0, tokens) * gasPriceFor(currency, config)));
+}
+
 export const GAS = {
   BASE_TOKENS:         400,
   TOKENS_PER_SIGNAL:    60,
@@ -65,7 +94,10 @@ export function estimateChatTokens(promptTokens, maxOutputTokens, cap = GAS.OUTP
 // still pays the full bid (no refund) — this only bounds generation length.
 export function outputTokenCap(maxBudget, gasPrice = GAS.DEFAULT_GAS_PRICE, promptTokens = 0) {
   const prompt = Math.max(0, Math.round(promptTokens));
-  const budgetTokens = Math.floor(maxBudget / Math.max(1, gasPrice)) - prompt;
+  // gasPrice may be fractional (stablecoin raw units per token) — guard against
+  // zero/negative only; flooring fractional prices to 1 would understate the cap.
+  const price = (typeof gasPrice === 'number' && gasPrice > 0) ? gasPrice : GAS.DEFAULT_GAS_PRICE;
+  const budgetTokens = Math.floor(maxBudget / price) - prompt;
   const contextTokens = GAS.CONTEXT_TOKENS - GAS.CONTEXT_MARGIN - prompt;
   return Math.max(0, Math.min(budgetTokens, contextTokens, GAS.OUTPUT_HARD_MAX));
 }
