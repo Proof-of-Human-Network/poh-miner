@@ -2251,17 +2251,74 @@ function finalizeLastBubble(bubble) {
 
 // ── Send + stream ──────────────────────────────────────────────────────────────
 
+// ── Fee currency ──────────────────────────────────────────────────────────────
+// Jobs can be paid in POH or any on-chain stablecoin (the miner receives exactly
+// what is paid). The asset list comes from GET /api/assets; the picker shows the
+// Greek display ticker (αιGEL) while the wire uses the ASCII code (aiGEL).
+window._feeCurrency = 'POH';
+window._assetRegistry = null;    // { ticker → {ticker,decimals,display,sign} }
+
+async function loadAssetRegistry() {
+  if (window._assetRegistry) return window._assetRegistry;
+  try {
+    const port = window._minerApiPort || 3456;
+    const r = await fetch(`http://localhost:${port}/api/assets`);
+    const data = await r.json();
+    window._assetRegistry = Object.fromEntries((data.assets || []).map(a => [a.ticker, a]));
+  } catch {
+    window._assetRegistry = { POH: { ticker: 'POH', decimals: 9, display: 'POH', sign: '' } };
+  }
+  const sel = document.getElementById('chat-fee-currency');
+  if (sel && !sel.options.length) {
+    for (const a of Object.values(window._assetRegistry)) {
+      const opt = document.createElement('option');
+      opt.value = a.ticker;
+      opt.textContent = a.display;
+      sel.appendChild(opt);
+    }
+    sel.value = window._feeCurrency;
+  }
+  return window._assetRegistry;
+}
+
+window.onFeeCurrencyChange = function(ticker) {
+  window._feeCurrency = ticker || 'POH';
+  const slider = document.getElementById('chat-budget-slider');
+  if (slider) window.updateChatBudgetDisplay(slider.value);
+};
+
+function _feeAsset() {
+  return (window._assetRegistry && window._assetRegistry[window._feeCurrency])
+    || { ticker: 'POH', decimals: 9, display: 'POH' };
+}
+
+// Budget in RAW units of the selected fee currency. POH keeps the log slider
+// (1 kPOH → 1 POH); stablecoins map the same slider onto 0.01 → 100.00 units.
 function getChatBudget() {
   // Slider min is 1 (= 0.01 POH) — 0/"no fee" is no longer a selectable value.
   const step = Math.max(1, parseInt(document.getElementById('chat-budget-slider')?.value || '1', 10));
-  return Math.round(_sliderStepToPoh(step) * BUDGET_DECIMALS);
+  const asset = _feeAsset();
+  if (asset.ticker === 'POH') return Math.round(_sliderStepToPoh(step) * BUDGET_DECIMALS);
+  // Stablecoin: log scale 0.01 → 100.00 display units, in raw (×10^decimals).
+  const frac = step / _BLOG_STEPS;
+  const display = 0.01 * Math.pow(100 / 0.01, frac);   // 0.01 … 100
+  return Math.max(1, Math.round(display * 10 ** asset.decimals));
 }
+
+/** Currency the current chat budget is denominated in (wire ticker). */
+function getChatFeeCurrency() { return _feeAsset().ticker; }
 
 window.updateChatBudgetDisplay = function(val) {
   const step = Math.max(1, parseInt(val, 10) || 1);
   const el = document.getElementById('chat-budget-display');
   if (!el) return;
-  el.textContent = _formatPoh(_sliderStepToPoh(step));
+  const asset = _feeAsset();
+  if (asset.ticker === 'POH') {
+    el.textContent = _formatPoh(_sliderStepToPoh(step));
+  } else {
+    const raw = getChatBudget();
+    el.textContent = `${(raw / 10 ** asset.decimals).toFixed(asset.decimals)} ${asset.display}`;
+  }
   const slider = document.getElementById('chat-budget-slider');
   if (slider) slider.style.setProperty('--fill', `${(step / _BLOG_STEPS) * 100}%`);
 };
@@ -2292,6 +2349,8 @@ window.toggleChatPrivacy = function() {
     }
   }
   _updateChatBudgetVisibility();
+  // Public mode shows the fee row — make sure the currency picker is populated.
+  if (!window._chatPrivate) loadAssetRegistry().catch(() => {});
   // Private vs public offer different model sets (private = installed-local only),
   // so rebuild the picker on every toggle.
   if (typeof loadChatModels === 'function') loadChatModels(true);
@@ -2376,7 +2435,7 @@ async function _signJobPayment(jobId, amount) {
   const r = await fetch(`http://localhost:${port}/api/wallet/sign-job-payment`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ jobId, amount }),
+    body: JSON.stringify({ jobId, amount, currency: getChatFeeCurrency() }),
   });
   if (!r.ok) {
     const err = await r.json().catch(() => ({}));
@@ -2460,6 +2519,7 @@ async function submitComputeJob(promptText, jobCtx = {}) {
       model,
       payload: { prompt: promptText, history: hist },
       maxBudget: budget,
+      currency: getChatFeeCurrency(),
       requesterAddress,
       paymentTx: { txHash, signature },
     };
@@ -2608,6 +2668,7 @@ async function sendChatMessage() {
       const { requesterAddress, txHash, signature } = await _signJobPayment(jobId, budget);
       body.id = jobId;
       body.maxBudget = budget;
+      body.currency = getChatFeeCurrency();
       body.requesterAddress = requesterAddress;
       body.paymentTx = { txHash, signature };
     }
@@ -4298,21 +4359,57 @@ function submitFeedback(type) {
 let _sendWalletAddr = '';
 let _sendWalletPoh  = 0;
 
+// Currently selected send asset (ticker). Balance shown/validated in it.
+window._sendCurrency = 'POH';
+
+function _sendAsset() {
+  return (window._assetRegistry && window._assetRegistry[window._sendCurrency])
+    || { ticker: 'POH', decimals: 9, display: 'POH', sign: '' };
+}
+
+window.onSendCurrencyChange = function(ticker) {
+  window._sendCurrency = ticker || 'POH';
+  const unitEl = document.getElementById('amount-display-unit');
+  if (unitEl) unitEl.textContent = _sendAsset().display;
+  syncSendWallet();
+  updateSendSummary();
+};
+
+async function _populateSendCurrencySelect() {
+  const sel = document.getElementById('send-currency');
+  if (!sel || sel.options.length) return;
+  const reg = await loadAssetRegistry();
+  for (const a of Object.values(reg)) {
+    const opt = document.createElement('option');
+    opt.value = a.ticker;
+    opt.textContent = a.display + (a.sign ? ` (${a.sign})` : '');
+    sel.appendChild(opt);
+  }
+  sel.value = window._sendCurrency;
+}
+
 function syncSendWallet() {
   const addr = window._localWallet || '';
   _sendWalletAddr = addr;
   const fromEl = document.getElementById('send-from-addr');
   if (fromEl) fromEl.textContent = addr || 'Not available';
+  _populateSendCurrencySelect().catch(() => {});
 
-  // Fetch current balance
+  // Fetch current balance — shown in the selected send asset
   const port = window._minerApiPort || 3456;
   if (!addr) return;
   fetch(`http://localhost:${port}/api/wallet/balance?address=${encodeURIComponent(addr)}`)
     .then(r => r.json())
     .then(data => {
-      const POH_DECIMALS = 1_000_000_000;
-      _sendWalletPoh = (data.balance || 0) / POH_DECIMALS;
-      const str = _sendWalletPoh.toFixed(4) + ' POH';
+      const asset = _sendAsset();
+      if (asset.ticker === 'POH') {
+        const POH_DECIMALS = 1_000_000_000;
+        _sendWalletPoh = (data.balance || 0) / POH_DECIMALS;
+      } else {
+        const raw = data.assets?.[asset.ticker]?.raw || 0;
+        _sendWalletPoh = raw / 10 ** asset.decimals;   // balance in DISPLAY units of the asset
+      }
+      const str = `${_sendWalletPoh.toFixed(asset.decimals === 2 ? 2 : 4)} ${asset.display}`;
       const el = document.getElementById('send-balance');
       if (el) el.textContent = str;
       const rel = document.getElementById('receive-balance');
@@ -4328,18 +4425,28 @@ function setSendAmount(n) {
 
 function setSendMax() {
   const el = document.getElementById('send-amount');
-  if (el) { el.value = Math.max(0, _sendWalletPoh - 0.001).toFixed(4); updateSendSummary(); }
+  if (!el) return;
+  const asset = _sendAsset();
+  const v = asset.ticker === 'POH' ? Math.max(0, _sendWalletPoh - 0.001) : _sendWalletPoh;
+  el.value = v.toFixed(asset.decimals === 2 ? 2 : 4);
+  updateSendSummary();
 }
 
 function updateSendSummary() {
   const amount = parseFloat(document.getElementById('send-amount')?.value || '0') || 0;
   const to = (document.getElementById('send-to')?.value || '').trim();
+  const asset = _sendAsset();
+  const dp = asset.decimals === 2 ? 2 : 4;
   const dispEl = document.getElementById('amount-display');
   if (dispEl) dispEl.textContent = amount > 0 ? amount.toFixed(2) : '0.00';
+  const unitEl = document.getElementById('amount-display-unit');
+  if (unitEl) unitEl.textContent = asset.display;
   const sumAmt = document.getElementById('summary-amount');
   const sumTo  = document.getElementById('summary-to');
-  if (sumAmt) sumAmt.textContent = amount > 0 ? amount.toFixed(4) + ' POH' : '—';
+  const sumFee = document.getElementById('summary-fee');
+  if (sumAmt) sumAmt.textContent = amount > 0 ? `${amount.toFixed(dp)} ${asset.display}` : '—';
   if (sumTo)  sumTo.textContent  = to.length > 16 ? to.slice(0, 8) + '…' + to.slice(-6) : (to || '—');
+  if (sumFee) sumFee.textContent = asset.ticker === 'POH' ? '0.001 POH' : `0.01 ${asset.display}`;
 }
 
 function syncHomeBalance() {
@@ -4350,6 +4457,31 @@ function syncHomeBalance() {
   if (numEl && bal) numEl.textContent = bal.replace(' POH', '');
   if (addrEl && addr) addrEl.textContent = addr.length > 16 ? addr.slice(0, 8) + '…' + addr.slice(-6) : addr;
   _updateUsdBalanceDisplay();
+  _refreshAssetList();
+}
+
+// Stablecoin rows on the home balance card — shown only when the wallet holds any.
+async function _refreshAssetList() {
+  const listEl = document.getElementById('home-asset-list');
+  const addr = window._localWallet;
+  if (!listEl || !addr) return;
+  try {
+    const port = window._minerApiPort || 3456;
+    const [reg, r] = await Promise.all([
+      loadAssetRegistry(),
+      fetch(`http://localhost:${port}/api/wallet/balance?address=${addr}`),
+    ]);
+    const data = await r.json();
+    const held = Object.entries(data.assets || {}).filter(([, v]) => (v.raw || 0) > 0);
+    if (!held.length) { listEl.style.display = 'none'; listEl.innerHTML = ''; return; }
+    listEl.innerHTML = held.map(([t, v]) => {
+      const a = reg[t] || { display: t, sign: '', decimals: 2 };
+      return `<div style="display:flex;justify-content:space-between;padding:2px 0;">` +
+             `<span style="color:#9ca3af;">${a.display}</span>` +
+             `<span style="font-family:monospace;">${(v.display ?? (v.raw / 10 ** a.decimals)).toFixed(2)} ${a.sign || ''}</span></div>`;
+    }).join('');
+    listEl.style.display = '';
+  } catch { /* offline — leave as-is */ }
 }
 
 async function executeSend() {
@@ -4363,7 +4495,8 @@ async function executeSend() {
   if (!to)               { showSendResult(res, false, 'Enter a recipient address'); return; }
   if (!isValidAddr(to))  { showSendResult(res, false, 'Invalid address — must be a PoH or Solana wallet address'); return; }
   if (!(amount > 0))     { showSendResult(res, false, 'Enter a valid amount'); return; }
-  if (amount > _sendWalletPoh) { showSendResult(res, false, `Insufficient balance (${_sendWalletPoh.toFixed(4)} POH available)`); return; }
+  const sendAsset = _sendAsset();
+  if (amount > _sendWalletPoh) { showSendResult(res, false, `Insufficient balance (${_sendWalletPoh.toFixed(sendAsset.decimals === 2 ? 2 : 4)} ${sendAsset.display} available)`); return; }
 
   btn.disabled = true;
   btn.textContent = 'Sending…';
@@ -4376,12 +4509,12 @@ async function executeSend() {
     const r = await fetch(`http://localhost:${port}/api/wallet/send`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ from: _sendWalletAddr, to, amount }),
+      body: JSON.stringify({ from: _sendWalletAddr, to, amount, currency: sendAsset.ticker }),
     });
     const data = await r.json();
     if (r.ok && data.success) {
       const hashShort = data.txHash ? data.txHash.slice(0, 12) + '…' : '';
-      showSendResult(res, true, `Submitted ${amount} POH → ${to.slice(0, 12)}… ${hashShort ? '(tx: ' + hashShort + ')' : ''} — pending block`);
+      showSendResult(res, true, `Submitted ${amount} ${sendAsset.display} → ${to.slice(0, 12)}… ${hashShort ? '(tx: ' + hashShort + ')' : ''} — pending block`);
       document.getElementById('send-to').value = '';
       document.getElementById('send-amount').value = '';
       updateSendSummary();
@@ -4783,7 +4916,27 @@ async function submitSkill() {
 
 // ── P2P Exchange ───────────────────────────────────────────────────────────────
 
-const QUOTE_CURRENCIES = ['USDT-ERC20','USDT-TRC20','USDT-TON','USDT-SOL','USDT-BEP20','USDC-ERC20','BTC','ETH','SOL'];
+// Static fallback only — the live lists come from GET /api/p2p/currencies
+// (off-chain quote legs + on-chain assets) via _p2pLoadCurrencies().
+let QUOTE_CURRENCIES = ['USDT-ERC20','USDT-TRC20','USDT-TON','USDT-SOL','USDT-BEP20','USDC-ERC20','BTC','ETH','SOL','Bank Transfer'];
+let P2P_ONCHAIN = ['POH'];
+async function _p2pLoadCurrencies() {
+  try {
+    const data = await _p2pApiFetch('/api/p2p/currencies');
+    if (Array.isArray(data.quote) && data.quote.length) QUOTE_CURRENCIES = data.quote;
+    if (Array.isArray(data.onchain) && data.onchain.length) P2P_ONCHAIN = data.onchain;
+  } catch { /* offline — fallbacks above */ }
+}
+function _p2pAssetMeta(ticker) {
+  return (window._assetRegistry && window._assetRegistry[ticker])
+    || { ticker, decimals: ticker === 'POH' ? 9 : 2, display: ticker, sign: '' };
+}
+// Format a raw base amount in the order's base asset (μPOH for POH, ×100 for stables).
+function _p2pFmtBase(order) {
+  const t = order.baseAsset || 'POH';
+  const a = _p2pAssetMeta(t);
+  return `${(order.pohAmount / 10 ** a.decimals).toFixed(a.decimals === 2 ? 2 : 3)} ${a.display}`;
+}
 const POH_DECIMALS_P2P = 1_000_000_000;
 
 let _p2pCurrency = '';
@@ -4875,6 +5028,11 @@ function _p2pRenderPaymentMethodList() {
 }
 
 function p2pInit() {
+  // Load asset metadata + currency lists first so pills/labels render stablecoins.
+  Promise.all([
+    _p2pLoadCurrencies(),
+    (typeof loadAssetRegistry === 'function' ? loadAssetRegistry() : Promise.resolve()),
+  ]).catch(() => {});
   p2pShowBook();
   p2pLoadOrders();
   if (_p2pPollTimer) clearInterval(_p2pPollTimer);
@@ -4897,11 +5055,38 @@ function p2pShowDetail() {
   document.getElementById('p2p-activity-view').style.display = 'none';
 }
 
-function p2pShowCreateOrder() {
+window.p2pOnBaseChange = function(base) {
+  const lbl = document.getElementById('p2p-form-amount-label');
+  if (lbl) lbl.textContent = `${_p2pAssetMeta(base).display} AMOUNT`;
+  // Quote list must exclude the base itself
+  _p2pPopulateQuoteSelect(base);
+};
+
+function _p2pPopulateQuoteSelect(base) {
   const currSel = document.getElementById('p2p-form-currency');
-  if (currSel && !currSel.options.length) {
-    QUOTE_CURRENCIES.forEach(c => { const o = document.createElement('option'); o.value = c; o.textContent = c; currSel.appendChild(o); });
+  if (!currSel) return;
+  const prev = currSel.value;
+  currSel.innerHTML = '';
+  // On-chain quotes first (atomic swaps), then off-chain rails
+  for (const c of [...P2P_ONCHAIN.filter(c => c !== base), ...QUOTE_CURRENCIES]) {
+    const o = document.createElement('option');
+    o.value = c;
+    o.textContent = P2P_ONCHAIN.includes(c) ? `${_p2pAssetMeta(c).display} (on-chain, atomic)` : c;
+    currSel.appendChild(o);
   }
+  if ([...currSel.options].some(op => op.value === prev)) currSel.value = prev;
+}
+
+function p2pShowCreateOrder() {
+  Promise.all([_p2pLoadCurrencies(), (typeof loadAssetRegistry === 'function' ? loadAssetRegistry() : Promise.resolve())]).then(() => {
+    const baseSel = document.getElementById('p2p-form-base');
+    if (baseSel && !baseSel.options.length) {
+      for (const c of P2P_ONCHAIN) {
+        const o = document.createElement('option'); o.value = c; o.textContent = _p2pAssetMeta(c).display; baseSel.appendChild(o);
+      }
+    }
+    _p2pPopulateQuoteSelect(baseSel?.value || 'POH');
+  }).catch(() => {});
   _p2pPaymentMethods = [];
   _p2pRenderPaymentMethodList();
   document.getElementById('p2p-book-view').style.display = 'none';
@@ -4923,7 +5108,7 @@ function p2pBuildCurrencyPills() {
   const container = document.getElementById('p2p-currency-pills');
   if (!container) return;
   container.innerHTML = '';
-  const all = ['', ...QUOTE_CURRENCIES];
+  const all = ['', ...P2P_ONCHAIN.filter(c => c !== 'POH'), ...QUOTE_CURRENCIES];
   all.forEach(c => {
     const btn = document.createElement('button');
     btn.textContent = c || 'ALL';
@@ -4971,10 +5156,10 @@ function p2pRenderOrders() {
     card.style.cssText = 'background:#111;border:1px solid #1e1e1e;border-radius:6px;padding:10px;cursor:pointer;';
     card.innerHTML = `
       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px;">
-        <span style="font-size:12px;color:#fff;font-family:monospace;">${_p2pFmt(order.pohAmount)} POH</span>
+        <span style="font-size:12px;color:#fff;font-family:monospace;">${_p2pFmtBase(order)}</span>
         <span style="font-size:9px;padding:2px 6px;border-radius:3px;background:#7f1d1d22;color:#fca5a5;font-family:monospace;">SELL</span>
       </div>
-      <div style="font-size:11px;color:#22c55e;font-family:monospace;margin-bottom:3px;">${order.pricePerPOH} ${order.quoteCurrency}/POH</div>
+      <div style="font-size:11px;color:#22c55e;font-family:monospace;margin-bottom:3px;">${order.pricePerPOH} ${order.quoteCurrency}/${_p2pAssetMeta(order.baseAsset||'POH').display}</div>
       <div style="font-size:10px;color:#555;font-family:monospace;">Limit ${order.minTrade}–${(order.maxTrade||0).toFixed(2)} ${order.quoteCurrency}</div>
       ${order.paymentMethods?.length ? `<div style="font-size:10px;color:#444;font-family:monospace;margin-top:2px;">${order.paymentMethods.map(m=>typeof m==='string'?m:(m.network||'?')).join(', ')}</div>` : ''}
       <div style="font-size:9px;color:#374151;font-family:monospace;margin-top:4px;">${_p2pTimeAgo(order.createdAt)} · ${order.maker.slice(0,10)}…</div>
@@ -5001,11 +5186,11 @@ async function p2pOpenOrder(order) {
     <div style="background:#0a0a0a;border:1px solid #1e1e1e;border-radius:6px;padding:12px;display:flex;flex-direction:column;gap:6px;">
       <div style="display:flex;justify-content:space-between;">
         <span style="font-size:10px;color:#555;font-family:monospace;">AMOUNT</span>
-        <span style="font-size:12px;color:#fff;font-family:monospace;">${_p2pFmt(order.pohAmount)} POH</span>
+        <span style="font-size:12px;color:#fff;font-family:monospace;">${_p2pFmtBase(order)}</span>
       </div>
       <div style="display:flex;justify-content:space-between;">
         <span style="font-size:10px;color:#555;font-family:monospace;">PRICE</span>
-        <span style="font-size:12px;color:#22c55e;font-family:monospace;">${order.pricePerPOH} ${order.quoteCurrency}/POH</span>
+        <span style="font-size:12px;color:#22c55e;font-family:monospace;">${order.pricePerPOH} ${order.quoteCurrency}/${_p2pAssetMeta(order.baseAsset||'POH').display}</span>
       </div>
       <div style="display:flex;justify-content:space-between;">
         <span style="font-size:10px;color:#555;font-family:monospace;">LIMIT</span>
@@ -5022,23 +5207,34 @@ async function p2pOpenOrder(order) {
       </div>
     </div>
     ${isMine && isOpen ? `<button id="p2p-cancel-order-btn" onclick="p2pCancelOrder('${order.id}')" style="width:100%;padding:8px;border:1px solid #7f1d1d44;background:#7f1d1d11;color:#fca5a5;border-radius:4px;cursor:pointer;font-size:11px;font-family:monospace;">CANCEL ORDER</button>` : ''}
-    ${!isMine && isOpen ? `
+    ${!isMine && isOpen ? (() => {
+      const baseT = order.baseAsset || 'POH';
+      const baseMeta = _p2pAssetMeta(baseT);
+      const atomic = P2P_ONCHAIN.includes(order.quoteCurrency);
+      const baseDisp = order.pohAmount / 10 ** baseMeta.decimals;
+      return `
     <div>
-      <div style="font-size:10px;color:#444;margin-bottom:4px;letter-spacing:0.1em;">POH AMOUNT TO TRADE</div>
-      <input id="p2p-select-amount" type="number" min="0" step="any" value="${_p2pFmt(order.pohAmount)}"
+      <div style="font-size:10px;color:#444;margin-bottom:4px;letter-spacing:0.1em;">${baseMeta.display.toUpperCase()} AMOUNT TO TRADE</div>
+      <input id="p2p-select-amount" type="number" min="0" step="any" value="${baseDisp}"
              style="width:100%;background:#111;border:1px solid #252525;border-radius:4px;color:#e5e7eb;font-size:12px;font-family:monospace;padding:8px 10px;outline:none;box-sizing:border-box;" />
       <div id="p2p-select-quote" style="font-size:10px;color:#555;font-family:monospace;margin-top:3px;"></div>
     </div>
+    ${atomic ? `<div style="font-size:10px;color:#22c55e;font-family:monospace;">⚡ Atomic on-chain swap — settles instantly to your wallet address, no payment step.</div>` : ''}
     <button onclick="p2pSelectOrder('${order.id}','${order.pricePerPOH}','${order.quoteCurrency}')"
-            style="width:100%;padding:10px;border:none;background:#22c55e;color:#000;border-radius:4px;font-weight:600;cursor:pointer;font-size:12px;font-family:monospace;">BUY POH</button>
-    <div id="p2p-select-result" style="font-size:11px;display:none;padding:8px;border-radius:4px;font-family:monospace;"></div>` : ''}
+            style="width:100%;padding:10px;border:none;background:#22c55e;color:#000;border-radius:4px;font-weight:600;cursor:pointer;font-size:12px;font-family:monospace;">${atomic ? 'SWAP' : `BUY ${baseMeta.display}`}</button>
+    <div id="p2p-select-result" style="font-size:11px;display:none;padding:8px;border-radius:4px;font-family:monospace;"></div>`;
+    })() : ''}
     ${order.status === 'locked' && order.tradeId ? `<button onclick="p2pOpenTrade('${order.tradeId}','${order.id}')" style="width:100%;padding:8px;border:1px solid #1e3a5f;background:#0a1929;color:#60a5fa;border-radius:4px;cursor:pointer;font-size:11px;font-family:monospace;">VIEW ACTIVE TRADE →</button>` : ''}
   `;
 
   const amtInput = document.getElementById('p2p-select-amount');
   const quoteEl  = document.getElementById('p2p-select-quote');
   if (amtInput && quoteEl) {
-    const updateQuote = () => { const poh = parseFloat(amtInput.value)||0; quoteEl.textContent = `You pay ≈ ${(poh*order.pricePerPOH).toFixed(4)} ${order.quoteCurrency}`; };
+    const qMeta = P2P_ONCHAIN.includes(order.quoteCurrency) ? _p2pAssetMeta(order.quoteCurrency) : null;
+    const updateQuote = () => {
+      const amt = parseFloat(amtInput.value)||0;
+      quoteEl.textContent = `You pay ≈ ${(amt*order.pricePerPOH).toFixed(qMeta && qMeta.decimals === 2 ? 2 : 4)} ${qMeta ? qMeta.display : order.quoteCurrency}`;
+    };
     amtInput.addEventListener('input', updateQuote);
     updateQuote();
   }
@@ -5063,8 +5259,14 @@ async function p2pCancelOrder(orderId) {
 async function p2pSelectOrder(orderId, pricePerPOH, quoteCurrency) {
   const amtInput  = document.getElementById('p2p-select-amount');
   const resultEl  = document.getElementById('p2p-select-result');
-  const pohAmount = Math.round(parseFloat(amtInput?.value||'0') * POH_DECIMALS_P2P);
-  const quoteAmount = parseFloat(amtInput?.value||'0') * parseFloat(pricePerPOH);
+  // Base amount in RAW units of the order's base asset; on-chain quote amounts in raw units too.
+  const order = _p2pOrders.find(o => o.id === orderId) || {};
+  const baseMeta = _p2pAssetMeta(order.baseAsset || 'POH');
+  const pohAmount = Math.round(parseFloat(amtInput?.value||'0') * 10 ** baseMeta.decimals);
+  const quoteIsOnchain = P2P_ONCHAIN.includes(quoteCurrency);
+  const quoteMeta = quoteIsOnchain ? _p2pAssetMeta(quoteCurrency) : null;
+  const quoteDisplay = parseFloat(amtInput?.value||'0') * parseFloat(pricePerPOH);
+  const quoteAmount = quoteIsOnchain ? Math.round(quoteDisplay * 10 ** quoteMeta.decimals) : quoteDisplay;
   if (!pohAmount) { if (resultEl) { resultEl.style.display='block'; resultEl.style.color='#ef4444'; resultEl.textContent='Enter POH amount'; } return; }
   if (resultEl) { resultEl.style.display='block'; resultEl.style.color='#888'; resultEl.textContent='Processing…'; }
   try {
@@ -5073,6 +5275,13 @@ async function p2pSelectOrder(orderId, pricePerPOH, quoteCurrency) {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...auth, pohAmount, quoteAmount }),
     });
     if (data.error) throw new Error(data.error);
+    if (data.atomic) {
+      // Swap already settled — both legs moved on-chain, nothing left to confirm.
+      if (resultEl) { resultEl.style.display='block'; resultEl.style.color='#22c55e'; resultEl.textContent='⚡ Swap completed — assets are in your wallet.'; }
+      p2pLoadOrders(true);
+      if (typeof syncHomeBalance === 'function') setTimeout(syncHomeBalance, 800);
+      return;
+    }
     const tradeId = data.trade?.id;
     if (tradeId) p2pOpenTrade(tradeId, orderId);
     else { if (resultEl) { resultEl.style.color='#22c55e'; resultEl.textContent='Order selected!'; } p2pLoadOrders(true); }
@@ -5105,7 +5314,7 @@ function p2pRenderTrade(body, trade, order) {
   body.innerHTML = `
     <div style="background:#0a0a0a;border:1px solid #1e1e1e;border-radius:6px;padding:12px;display:flex;flex-direction:column;gap:6px;">
       <div style="display:flex;justify-content:space-between;"><span style="font-size:10px;color:#555;font-family:monospace;">STATUS</span><span style="font-size:11px;color:${color};font-family:monospace;">${trade.status.replace('_',' ').toUpperCase()}</span></div>
-      <div style="display:flex;justify-content:space-between;"><span style="font-size:10px;color:#555;font-family:monospace;">AMOUNT</span><span style="font-size:12px;color:#fff;font-family:monospace;">${_p2pFmt(trade.pohAmount)} POH</span></div>
+      <div style="display:flex;justify-content:space-between;"><span style="font-size:10px;color:#555;font-family:monospace;">AMOUNT</span><span style="font-size:12px;color:#fff;font-family:monospace;">${(() => { const m = _p2pAssetMeta(order?.baseAsset || 'POH'); return `${(trade.pohAmount / 10 ** m.decimals).toFixed(m.decimals === 2 ? 2 : 3)} ${m.display}`; })()}</span></div>
       <div style="display:flex;justify-content:space-between;"><span style="font-size:10px;color:#555;font-family:monospace;">TOTAL</span><span style="font-size:12px;color:#22c55e;font-family:monospace;">${(trade.quoteAmount||0).toFixed(4)} ${order?.quoteCurrency||''}</span></div>
       <div style="display:flex;justify-content:space-between;"><span style="font-size:10px;color:#555;font-family:monospace;">ROLE</span><span style="font-size:11px;color:#aaa;font-family:monospace;">${isMaker?'Maker':'Taker'} · ${isSeller?'Seller':'Buyer'}</span></div>
       ${deadline}
@@ -5146,7 +5355,7 @@ async function _p2pTradeAction(tradeId, action, extraFields = {}) {
   }
 }
 
-function p2pMarkPaymentSent(tradeId) { _p2pTradeAction(tradeId, 'payment_sent'); }
+function p2pMarkPaymentSent(tradeId) { _p2pTradeAction(tradeId, 'payment-sent'); }
 function p2pReleaseTrade(tradeId)    { _p2pTradeAction(tradeId, 'release'); }
 function p2pCancelTrade(tradeId)     { _p2pTradeAction(tradeId, 'cancel'); }
 function p2pDisputeTrade(tradeId)    { const r = prompt('Dispute reason:'); if (r) _p2pTradeAction(tradeId, 'dispute', { reason: r }); }
@@ -5160,14 +5369,18 @@ async function p2pSubmitCreateOrder() {
   const maxT      = parseFloat(document.getElementById('p2p-form-max')?.value || '0');
   const refCode   = (document.getElementById('p2p-form-referral')?.value || '').trim().toUpperCase();
   const methods   = _p2pPaymentMethods;
+  const baseAsset = document.getElementById('p2p-form-base')?.value || 'POH';
+  const atomic    = P2P_ONCHAIN.includes(currency);
   if (!pohAmt || !currency || !price) {
     resultEl.style.display='block'; resultEl.style.color='#ef4444'; resultEl.textContent='Fill in amount, currency, and price.'; return;
   }
-  if (!methods.length) {
+  // Atomic on-chain swaps settle automatically — no payment method needed.
+  if (!atomic && !methods.length) {
     resultEl.style.display='block'; resultEl.style.color='#ef4444'; resultEl.textContent='Add at least one payment method.'; return;
   }
   resultEl.style.display='block'; resultEl.style.color='#888'; resultEl.textContent='Posting order…';
-  const pohAmountRaw = Math.round(pohAmt * POH_DECIMALS_P2P);
+  const baseMeta = _p2pAssetMeta(baseAsset);
+  const pohAmountRaw = Math.round(pohAmt * 10 ** baseMeta.decimals);
   try {
     // Apply referral code if provided (non-blocking)
     if (refCode && window._localWallet) {
@@ -5176,7 +5389,7 @@ async function p2pSubmitCreateOrder() {
         body: JSON.stringify({ address: window._localWallet, code: refCode }),
       }).catch(() => {});
     }
-    const orderFields = { side: 'sell', pohAmount: pohAmountRaw, quoteCurrency: currency, pricePerPOH: price, minTrade: minT||0, maxTrade: maxT||pohAmt*price, paymentMethods: methods };
+    const orderFields = { side: 'sell', pohAmount: pohAmountRaw, baseAsset, baseDecimals: baseMeta.decimals, quoteCurrency: currency, pricePerPOH: price, minTrade: minT||0, maxTrade: maxT||pohAmt*price, paymentMethods: atomic ? [] : methods };
     const auth = await _p2pLocalAuth('create-order', { side: 'sell', pohAmount: pohAmountRaw });
     const data = await _p2pApiFetch('/api/p2p/orders', {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...auth, ...orderFields }),
@@ -5266,10 +5479,10 @@ async function p2pLoadActivity() {
         card.style.cssText = 'background:#111;border:1px solid #1e1e1e;border-radius:6px;padding:10px;cursor:pointer;';
         card.innerHTML = `
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
-            <span style="font-size:12px;color:#fff;font-family:monospace;">${_p2pFmt(order.pohAmount)} POH</span>
+            <span style="font-size:12px;color:#fff;font-family:monospace;">${_p2pFmtBase(order)}</span>
             <span style="font-size:9px;padding:2px 6px;border-radius:3px;background:${sc}22;color:${sc};font-family:monospace;">${order.status.toUpperCase()}</span>
           </div>
-          <div style="font-size:11px;color:#22c55e;font-family:monospace;">${order.pricePerPOH} ${order.quoteCurrency}/POH</div>
+          <div style="font-size:11px;color:#22c55e;font-family:monospace;">${order.pricePerPOH} ${order.quoteCurrency}/${_p2pAssetMeta(order.baseAsset||'POH').display}</div>
           <div style="font-size:10px;color:#555;font-family:monospace;margin-top:2px;">${order.side.toUpperCase()} · ${_p2pTimeAgo(order.createdAt)}</div>
         `;
         card.onclick = () => p2pOpenOrder(order);
@@ -5308,9 +5521,10 @@ async function p2pApplyReferral() {
   if (!code || !myAddr) return;
   if (result) { result.style.display='block'; result.style.color='#888'; result.textContent='Applying…'; }
   try {
+    const auth = await _p2pLocalAuth('apply-referral', { code });
     const data = await _p2pApiFetch('/api/p2p/referral/apply', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ address: myAddr, code }),
+      body: JSON.stringify({ ...auth, code }),
     });
     if (data.error) throw new Error(data.error);
     if (result) { result.style.color='#22c55e'; result.textContent=`Applied! Referred by ${data.referrer?.slice(0,12)}…`; }
