@@ -2,7 +2,7 @@
  * Real POH Adapter
  *
  * This bridges the miner network to the EXISTING POH codebase
- * located at ../../dev (the original proofofhuman.ge stack).
+ * located at ../../dev (the original poh.ge stack).
  *
  * The miner now uses the network-synchronized set of verified signals
  * (via MethodsManager) instead of whatever happens to be on disk in dev/.

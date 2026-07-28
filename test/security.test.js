@@ -192,7 +192,7 @@ describe('Bootnode auth', () => {
   it('rejects private hosts unless explicitly allowed', () => {
     expect(isPublicPeerHost('192.168.1.5')).toBe(false);
     expect(isPublicPeerHost('192.168.1.5', { allowLocal: true })).toBe(true);
-    expect(isPublicPeerHost('miner.proofofhuman.ge')).toBe(true);
+    expect(isPublicPeerHost('miner.poh.ge')).toBe(true);
   });
 
   it('accepts a NAT follower registration (reachable:false) without a public host', () => {

@@ -68,7 +68,7 @@ import { resolveRpcConfig } from './rpc/resolver.js';
 import crypto from 'crypto';
 import os from 'os';
 import { buildManifest, serveDataset, pullDataset } from './storage/dataset-sync.js';
-import { OrderStore, QUOTE_CURRENCIES } from './p2p/order-store.js';
+import { OrderStore, QUOTE_CURRENCIES, ONCHAIN_ASSETS, isOnChainAsset } from './p2p/order-store.js';
 import { EscrowManager, ESCROW_ADDRESS } from './p2p/escrow.js';
 import { ReferralStore } from './p2p/referral-store.js';
 import { tryExternalProviders } from './ai/external-providers.js';
@@ -316,9 +316,15 @@ const FEE_REQUIRED_JOB_TYPES = new Set(['skill', 'compute']);
 
 // Canonical hash committing a fee payment to one specific job + miner + amount + nonce,
 // so a signature over it can't be replayed against a different job or a higher budget.
-function computeJobPaymentHash({ jobId, requesterAddress, minerAddress, amount, nonce }) {
+// KEEP IN SYNC with the mobile wallet (dev/wallet/src/services/signing.js
+// buildJobPaymentTx) and every SDK signer. `currency` joins the preimage as the
+// SIXTH key ONLY when non-POH — existing POH signers stay valid unmodified.
+function computeJobPaymentHash({ jobId, requesterAddress, minerAddress, amount, nonce, currency }) {
+  const payload = (currency && currency !== 'POH')
+    ? { jobId, requesterAddress, minerAddress, amount, nonce, currency }
+    : { jobId, requesterAddress, minerAddress, amount, nonce };
   return crypto.createHash('sha256')
-    .update(JSON.stringify({ jobId, requesterAddress, minerAddress, amount, nonce }))
+    .update(JSON.stringify(payload))
     .digest('hex');
 }
 
@@ -1303,10 +1309,15 @@ export class PohMinerNode {
         req.on('data', c => body += c);
         req.on('end', () => {
           try {
-            const { jobId, amount } = JSON.parse(body);
+            const { jobId, amount, currency = 'POH' } = JSON.parse(body);
             if (!jobId || !(amount > 0)) {
               res.statusCode = 400;
               return res.end(JSON.stringify({ error: 'jobId and amount (>0) are required' }));
+            }
+            const payCur = normalizeCurrency(currency);
+            if (!isKnownAsset(payCur)) {
+              res.statusCode = 400;
+              return res.end(JSON.stringify({ error: `Unknown currency "${currency}". See /api/assets.` }));
             }
             let wallet = this.identityWallet;
             if (wallet) wallet = this.walletManager.ensureCanonicalAddress(wallet);
@@ -1326,9 +1337,10 @@ export class PohMinerNode {
               minerAddress: this.config.wallet,
               amount,
               nonce,
+              currency: payCur,
             });
             const signature = wallet.sign(txHash);
-            return res.end(JSON.stringify({ requesterAddress, amount, txHash, signature, signingPublicKey: wallet.signingPublicKey }));
+            return res.end(JSON.stringify({ requesterAddress, amount, currency: payCur, txHash, signature, signingPublicKey: wallet.signingPublicKey }));
           } catch (e) {
             res.statusCode = 400;
             res.end(JSON.stringify({ error: e.message }));
@@ -1573,18 +1585,28 @@ export class PohMinerNode {
               return res.end(JSON.stringify({ error: 'payload.address is required for verdict jobs' }));
             }
 
+            // Fee currency — POH by default; any registered stablecoin accepted.
+            // The miner receives EXACTLY the currency paid (no conversion).
+            job.currency = normalizeCurrency(job.currency);
+            if (!isKnownAsset(job.currency)) {
+              res.statusCode = 400;
+              return res.end(JSON.stringify({ error: `Unknown fee currency "${job.currency}". See /api/assets.`, code: 'UNKNOWN_CURRENCY' }));
+            }
+
             if (feeRequired) {
               // Fee floor: the escrowed budget must cover at least the AI tokens this job
-              // will use (gasPrice μPOH/token). A job can never be settled for less than the
-              // tokens it consumes, so reject up front if the budget is below that cost.
-              const gasPrice = this.config.gasPrice || GAS.DEFAULT_GAS_PRICE;
+              // will use, priced per currency (config.gasPrices overridable). A job can
+              // never be settled for less than the tokens it consumes.
+              const gasPrice = job.currency === 'POH'
+                ? (this.config.gasPrice || GAS.DEFAULT_GAS_PRICE)
+                : gasPriceFor(job.currency, this.config);
               const minTokens = estimateTokens(0, job.payload?.address);
-              const minFee = minTokens * gasPrice;
+              const minFee = Math.max(1, Math.ceil(minTokens * gasPrice));
               if (job.maxBudget < minFee) {
                 res.statusCode = 402;
                 return res.end(JSON.stringify({
-                  error: `maxBudget (${job.maxBudget} μPOH) is below the minimum compute cost of ${minFee} μPOH (~${minTokens} tokens at ${gasPrice} μPOH/token).`,
-                  code: 'FEE_TOO_LOW', minFee, minTokens, gasPrice,
+                  error: `maxBudget (${job.maxBudget} raw ${job.currency}) is below the minimum compute cost of ${minFee} (~${minTokens} tokens at ${gasPrice}/token).`,
+                  code: 'FEE_TOO_LOW', minFee, minTokens, gasPrice, currency: job.currency,
                 }));
               }
               // Strict path: the fee MUST be backed by a valid Ed25519 signature from a
@@ -1617,6 +1639,7 @@ export class PohMinerNode {
                 minerAddress:      this.config.wallet,
                 amount:            job.maxBudget,
                 nonce,
+                currency:          job.currency,
               });
               if (paymentTx.txHash !== expectedHash) {
                 res.statusCode = 403;
@@ -1661,11 +1684,11 @@ export class PohMinerNode {
                 unverified = true; // no sig provided
               }
 
-              // Balance check
-              const balance = this.walletManager.getBalance(job.requesterAddress);
+              // Balance check — in the job's fee currency
+              const balance = this._confirmedBalance(job.requesterAddress, job.currency || 'POH');
               if (balance < job.maxBudget) {
                 res.statusCode = 402;
-                return res.end(JSON.stringify({ error: 'Insufficient balance', balance, required: job.maxBudget }));
+                return res.end(JSON.stringify({ error: 'Insufficient balance', balance, required: job.maxBudget, currency: job.currency || 'POH' }));
               }
 
               job._paymentTxHash = paymentTx?.txHash || null;
@@ -3375,28 +3398,36 @@ export class PohMinerNode {
         return { address: boundAddress };
       };
 
-      // GET /api/p2p/currencies — list supported quote currencies
+      // GET /api/p2p/currencies — supported quote currencies + on-chain assets.
+      // `currencies` kept for legacy clients (off-chain quotes only).
       if (req.method === 'GET' && url.pathname === '/api/p2p/currencies') {
-        return res.end(JSON.stringify({ currencies: QUOTE_CURRENCIES }));
-      }
-
-      // GET /api/p2p/price — POH reference price. POH has NO fixed price; this is derived
-      // ONLY from the best open P2P order(s). ?quoteCurrency=USDT-TRC20 for a single quote,
-      // omit for a per-currency map.
-      if (req.method === 'GET' && url.pathname === '/api/p2p/price') {
-        const quoteCurrency = url.searchParams.get('quoteCurrency') || null;
         return res.end(JSON.stringify({
-          poh: this.p2pOrderStore.getReferencePrice(quoteCurrency),
-          note: 'POH has no fixed price — the market (best P2P order) defines it.',
+          currencies: QUOTE_CURRENCIES,
+          quote: QUOTE_CURRENCIES,
+          onchain: ONCHAIN_ASSETS,
+          baseAssets: ONCHAIN_ASSETS,
         }));
       }
 
-      // GET /api/p2p/orders — list open orders (filters: side, quoteCurrency)
+      // GET /api/p2p/price — reference price for a (baseAsset, quoteCurrency) pair,
+      // derived ONLY from the best open P2P order(s). ?quoteCurrency= for a single
+      // quote, ?baseAsset= to price a stablecoin (default POH), omit for a map.
+      if (req.method === 'GET' && url.pathname === '/api/p2p/price') {
+        const quoteCurrency = url.searchParams.get('quoteCurrency') || null;
+        const baseAsset     = url.searchParams.get('baseAsset') || 'POH';
+        return res.end(JSON.stringify({
+          poh: this.p2pOrderStore.getReferencePrice(quoteCurrency, baseAsset),
+          note: 'On-chain assets have no fixed price — the market (best P2P order) defines it.',
+        }));
+      }
+
+      // GET /api/p2p/orders — list open orders (filters: side, quoteCurrency, baseAsset)
       if (req.method === 'GET' && url.pathname === '/api/p2p/orders') {
         const side         = url.searchParams.get('side') || undefined;
         const quoteCurrency= url.searchParams.get('quoteCurrency') || undefined;
+        const baseAsset    = url.searchParams.get('baseAsset') || undefined;
         const status       = url.searchParams.get('status') || 'open';
-        const orders = this.p2pOrderStore.listOrders({ side, quoteCurrency, status });
+        const orders = this.p2pOrderStore.listOrders({ side, quoteCurrency, baseAsset, status });
         return res.end(JSON.stringify({ orders }));
       }
 
@@ -3424,16 +3455,26 @@ export class PohMinerNode {
           if (auth.error) { res.statusCode = 401; return res.end(JSON.stringify(auth)); }
           const ownerAddress = auth.address;
 
-          // For sell orders: lock POH in escrow now
+          const baseAsset = orderFields.baseAsset || 'POH';
+          // Atomic (on-chain quote) swaps are sell-side only: the maker escrows the
+          // base at creation and the taker's quote debits at select — both parties'
+          // authorizations exist at the moment funds move. A "buy X with Y" is the
+          // same trade expressed as "sell Y for X".
+          if (orderFields.side === 'buy' && isOnChainAsset(orderFields.quoteCurrency)) {
+            res.statusCode = 400;
+            return res.end(JSON.stringify({ error: `on-chain quote pairs are sell-side only — create a sell order of ${orderFields.quoteCurrency} for ${baseAsset} instead` }));
+          }
+
+          // For sell orders: lock the BASE asset in escrow now
           if (orderFields.side === 'sell') {
-            const lockResult = this.p2pEscrow.lock(this.walletManager, ownerAddress, orderFields.pohAmount);
+            const lockResult = this.p2pEscrow.lock(this.walletManager, ownerAddress, orderFields.pohAmount, baseAsset);
             if (lockResult !== true) { res.statusCode = 400; return res.end(JSON.stringify(lockResult)); }
           }
 
           const result = this.p2pOrderStore.createOrder({ maker: ownerAddress, ...orderFields });
           if (result.error) {
             // Refund escrow if order creation failed after locking
-            if (orderFields.side === 'sell') this.p2pEscrow.release(this.walletManager, ownerAddress, orderFields.pohAmount);
+            if (orderFields.side === 'sell') this.p2pEscrow.release(this.walletManager, ownerAddress, orderFields.pohAmount, baseAsset);
             res.statusCode = 400; return res.end(JSON.stringify(result));
           }
 
@@ -3466,17 +3507,18 @@ export class PohMinerNode {
 
             // Capture before cancelOrder mutates the object in-place via Object.assign
             const { side: orderSide, escrowLocked: wasEscrowLocked, pohAmount: orderPohAmount } = order;
+            const cancelBase = order.baseAsset || 'POH';
 
             const result = this.p2pOrderStore.cancelOrder(orderId);
             if (result.error) { res.statusCode = 400; return res.end(JSON.stringify(result)); }
 
-            // Refund escrow for sell orders
+            // Refund escrow for sell orders (in the order's base asset)
             if (orderSide === 'sell' && wasEscrowLocked) {
-              this.p2pEscrow.release(this.walletManager, ownerAddress, orderPohAmount);
+              this.p2pEscrow.release(this.walletManager, ownerAddress, orderPohAmount, cancelBase);
             }
             // Refund escrow for buy orders where taker locked (handled in trade cancel)
             this._appliedP2PIds.add(`order-cancel-${orderId}`);
-            this.pendingBrainTransitions.push({ type: 'p2p-order-cancelled', orderId, maker: ownerAddress, side: orderSide, escrowLocked: wasEscrowLocked, pohAmount: orderPohAmount, updatedAt: Date.now() });
+            this.pendingBrainTransitions.push({ type: 'p2p-order-cancelled', orderId, maker: ownerAddress, side: orderSide, escrowLocked: wasEscrowLocked, pohAmount: orderPohAmount, ...(cancelBase !== 'POH' ? { baseAsset: cancelBase } : {}), updatedAt: Date.now() });
             this.gossip.publish('p2p-order', result.order).catch(() => {});
             return res.end(JSON.stringify(result));
           }).catch(e => { res.statusCode = 400; res.end(JSON.stringify({ error: e.message })); });
@@ -3494,21 +3536,69 @@ export class PohMinerNode {
 
             const order = this.p2pOrderStore.getOrder(orderId);
             if (!order) { res.statusCode = 404; return res.end(JSON.stringify({ error: 'order not found' })); }
+            const baseAsset = order.baseAsset || 'POH';
 
-            // For buy orders: taker is selling POH, so lock taker's POH in escrow
+            // ── Atomic on-chain swap ────────────────────────────────────────────
+            // Sell order whose quote is another on-chain asset (e.g. aiKGS/aiGEL):
+            // maker's base already sits in escrow; the taker's quote debits here.
+            // Both legs settle in ONE p2p-swap-filled transition — no payment-sent
+            // step, no receival wallet: the taker's own poh address receives the
+            // base, the maker's address receives the quote.
+            if (order.side === 'sell' && isOnChainAsset(order.quoteCurrency)) {
+              const quoteAsset = order.quoteCurrency;
+              const takerQuoteBal = this._confirmedBalance(ownerAddress, quoteAsset);
+              if (takerQuoteBal < quoteAmount) {
+                res.statusCode = 402;
+                return res.end(JSON.stringify({ error: `insufficient ${quoteAsset} balance: have ${takerQuoteBal}, need ${quoteAmount}`, currency: quoteAsset }));
+              }
+
+              const result = this.p2pOrderStore.selectOrder(orderId, { taker: ownerAddress, pohAmount, quoteAmount });
+              if (result.error) { res.statusCode = 400; return res.end(JSON.stringify(result)); }
+              const tradeId = result.trade.id;
+
+              // Referral fee (0.3% of the base leg), same policy as manual release.
+              const referrer = this.p2pReferral.getReferrer(ownerAddress);
+              const referralFee = referrer ? this.p2pReferral.creditFee(referrer, pohAmount) : 0;
+
+              // Move both legs locally (wallet files); the transition replays the
+              // same movement on the canonical ledger everywhere else.
+              this.walletManager.debit(ownerAddress, quoteAmount, quoteAsset);
+              this.walletManager.credit(order.maker, quoteAmount, quoteAsset);
+              this.p2pEscrow.release(this.walletManager, ownerAddress, pohAmount - referralFee, baseAsset);
+              if (referralFee > 0) this.p2pEscrow.release(this.walletManager, referrer, referralFee, baseAsset);
+
+              const done = this.p2pOrderStore.completeTrade(tradeId);
+              const swapTransition = {
+                type: 'p2p-swap-filled', tradeId, orderId,
+                maker: order.maker, taker: ownerAddress,
+                ...(baseAsset !== 'POH' ? { baseAsset } : {}),
+                baseAmount: pohAmount, quoteAsset, quoteAmount,
+                baseRecipient: ownerAddress, quoteRecipient: order.maker,
+                referrer: referrer || null, referralFee,
+                updatedAt: Date.now(),
+              };
+              this._appliedP2PIds.add(`swap-${tradeId}`);
+              this.pendingBrainTransitions.push(swapTransition);
+              this.gossip.publish('p2p-order', this.p2pOrderStore.getOrder(orderId)).catch(() => {});
+              this.gossip.publish('p2p-trade', done.trade || result.trade).catch(() => {});
+              return res.end(JSON.stringify({ ...done, atomic: true, referralFee }));
+            }
+
+            // ── Manual flow (off-chain quote) ───────────────────────────────────
+            // For buy orders: taker is selling the base, so lock taker's base in escrow
             if (order.side === 'buy') {
-              const lockResult = this.p2pEscrow.lock(this.walletManager, ownerAddress, pohAmount);
+              const lockResult = this.p2pEscrow.lock(this.walletManager, ownerAddress, pohAmount, baseAsset);
               if (lockResult !== true) { res.statusCode = 400; return res.end(JSON.stringify(lockResult)); }
             }
 
             const result = this.p2pOrderStore.selectOrder(orderId, { taker: ownerAddress, pohAmount, quoteAmount });
             if (result.error) {
-              if (order.side === 'buy') this.p2pEscrow.release(this.walletManager, ownerAddress, pohAmount);
+              if (order.side === 'buy') this.p2pEscrow.release(this.walletManager, ownerAddress, pohAmount, baseAsset);
               res.statusCode = 400; return res.end(JSON.stringify(result));
             }
 
             this._appliedP2PIds.add(`trade-${result.trade.id}`);
-            this.pendingBrainTransitions.push({ type: 'p2p-trade-created', ...result.trade, orderSide: order.side });
+            this.pendingBrainTransitions.push({ type: 'p2p-trade-created', ...result.trade, orderSide: order.side, ...(baseAsset !== 'POH' ? { baseAsset } : {}) });
             this.gossip.publish('p2p-order', this.p2pOrderStore.getOrder(orderId)).catch(() => {});
             this.gossip.publish('p2p-trade', result.trade).catch(() => {});
             return res.end(JSON.stringify(result));
@@ -3580,16 +3670,17 @@ export class PohMinerNode {
             const referralFee = referrer ? this.p2pReferral.creditFee(referrer, trade.pohAmount) : 0;
             const releaseAmount = trade.pohAmount - referralFee;
 
-            const releaseResult = this.p2pEscrow.release(this.walletManager, recipient, releaseAmount);
+            const relBase = order?.baseAsset || 'POH';
+            const releaseResult = this.p2pEscrow.release(this.walletManager, recipient, releaseAmount, relBase);
             if (releaseResult !== true) { res.statusCode = 400; return res.end(JSON.stringify(releaseResult)); }
             if (referralFee > 0) {
-              this.p2pEscrow.release(this.walletManager, referrer, referralFee);
+              this.p2pEscrow.release(this.walletManager, referrer, referralFee, relBase);
             }
 
             const result = this.p2pOrderStore.completeTrade(tradeId);
             if (result.error) { res.statusCode = 400; return res.end(JSON.stringify(result)); }
             this._appliedP2PIds.add(`trade-${tradeId}-release`);
-            this.pendingBrainTransitions.push({ type: 'p2p-trade-release', tradeId, recipient, pohAmount: releaseAmount, referrer: referrer || null, referralFee, updatedAt: Date.now() });
+            this.pendingBrainTransitions.push({ type: 'p2p-trade-release', tradeId, recipient, pohAmount: releaseAmount, referrer: referrer || null, referralFee, ...(relBase !== 'POH' ? { baseAsset: relBase } : {}), updatedAt: Date.now() });
             this.gossip.publish('p2p-trade', result.trade).catch(() => {});
             this.gossip.publish('p2p-order', this.p2pOrderStore.getOrder(trade.orderId)).catch(() => {});
             return res.end(JSON.stringify({ ...result, referralFee }));
@@ -3604,14 +3695,15 @@ export class PohMinerNode {
             // Buy orders: taker locked at selectOrder time (no flag on order).
             const locker = order?.side === 'sell' ? order?.maker : trade.taker;
             const lockAmt = trade.pohAmount;
+            const cnclBase = order?.baseAsset || 'POH';
             const hadEscrow = order?.side === 'sell' ? !!order?.escrowLocked : true;
             if (hadEscrow) {
-              this.p2pEscrow.release(this.walletManager, locker, lockAmt);
+              this.p2pEscrow.release(this.walletManager, locker, lockAmt, cnclBase);
             }
             const result = this.p2pOrderStore.cancelTrade(tradeId);
             if (result.error) { res.statusCode = 400; return res.end(JSON.stringify(result)); }
             this._appliedP2PIds.add(`trade-${tradeId}-cancel`);
-            this.pendingBrainTransitions.push({ type: 'p2p-trade-cancel', tradeId, locker, pohAmount: lockAmt, escrowLocked: hadEscrow, updatedAt: Date.now() });
+            this.pendingBrainTransitions.push({ type: 'p2p-trade-cancel', tradeId, locker, pohAmount: lockAmt, escrowLocked: hadEscrow, ...(cnclBase !== 'POH' ? { baseAsset: cnclBase } : {}), updatedAt: Date.now() });
             this.gossip.publish('p2p-trade', result.trade).catch(() => {});
             this.gossip.publish('p2p-order', this.p2pOrderStore.getOrder(trade.orderId)).catch(() => {});
             return res.end(JSON.stringify(result));
@@ -6900,7 +6992,7 @@ export class PohMinerNode {
           const proposerAddress = (!job.payload?._isProposalAudit && skillEntry?.proposerAddress) ? skillEntry.proposerAddress : null;
           const proposerFee = proposerAddress ? Math.floor(fee * 0.2) : 0;
           const minerFee    = fee - proposerFee;
-          const settled = { type: 'job-settled', jobId: job.id, requesterAddress: job.requesterAddress, minerAddress: this.config.wallet, actualTokens: tokensUsed, actualFee: minerFee, proposerAddress, proposerFee, refund, gasPrice, completedAt: Date.now() };
+          const settled = { type: 'job-settled', jobId: job.id, requesterAddress: job.requesterAddress, minerAddress: this.config.wallet, actualTokens: tokensUsed, actualFee: minerFee, proposerAddress, proposerFee, refund, gasPrice, ...(job.currency && job.currency !== 'POH' ? { currency: job.currency } : {}), completedAt: Date.now() };
           this.pendingBrainTransitions.push(settled);
           this._gossipedJobTransitions.add(`${job.id}:job-settled`);
           this.gossip.publish('job-transition', settled).catch(() => {});
@@ -6911,7 +7003,7 @@ export class PohMinerNode {
         console.error(`[PoH-Miner] Skill job ${job.id} failed:`, err.message);
         this._updateJob(job.id, { status: 'error', error: err.message });
         if (job.requesterAddress && job.maxBudget > 0 && this.escrow.has(job.id)) {
-          const timeout = { type: 'job-timeout', jobId: job.id, requesterAddress: job.requesterAddress, minerAddress: this.config.wallet, reservationFee: 0, refund: job.maxBudget, completedAt: Date.now() };
+          const timeout = { type: 'job-timeout', jobId: job.id, requesterAddress: job.requesterAddress, minerAddress: this.config.wallet, reservationFee: 0, refund: job.maxBudget, ...(job.currency && job.currency !== 'POH' ? { currency: job.currency } : {}), completedAt: Date.now() };
           this.pendingBrainTransitions.push(timeout);
           this._applySettlement(timeout);
         }
@@ -7041,7 +7133,7 @@ export class PohMinerNode {
         if (job.requesterAddress && job.maxBudget > 0 && this.escrow.has(job.id)) {
           // No-refund: settleFee returns fee = maxBudget (the whole bid), refund = 0.
           const { fee, refund }  = settleFee(tokensUsed, gasPrice, job.maxBudget);
-          const settled = { type: 'job-settled', jobId: job.id, requesterAddress: job.requesterAddress, minerAddress: this.config.wallet, actualTokens: tokensUsed, actualFee: fee, refund, gasPrice, completedAt: Date.now() };
+          const settled = { type: 'job-settled', jobId: job.id, requesterAddress: job.requesterAddress, minerAddress: this.config.wallet, actualTokens: tokensUsed, actualFee: fee, refund, gasPrice, ...(job.currency && job.currency !== 'POH' ? { currency: job.currency } : {}), completedAt: Date.now() };
           this.pendingBrainTransitions.push(settled);
           this._gossipedJobTransitions.add(`${job.id}:job-settled`);
           this.gossip.publish('job-transition', settled).catch(() => {});
@@ -7052,7 +7144,7 @@ export class PohMinerNode {
         console.error(`[PoH-Miner] Compute job ${job.id} failed:`, err.message);
         this._updateJob(job.id, { status: 'error', error: err.message });
         if (job.requesterAddress && job.maxBudget > 0 && this.escrow.has(job.id)) {
-          const timeout = { type: 'job-timeout', jobId: job.id, requesterAddress: job.requesterAddress, minerAddress: this.config.wallet, reservationFee: 0, refund: job.maxBudget, completedAt: Date.now() };
+          const timeout = { type: 'job-timeout', jobId: job.id, requesterAddress: job.requesterAddress, minerAddress: this.config.wallet, reservationFee: 0, refund: job.maxBudget, ...(job.currency && job.currency !== 'POH' ? { currency: job.currency } : {}), completedAt: Date.now() };
           this.pendingBrainTransitions.push(timeout);
           this._applySettlement(timeout);
         }
@@ -7152,7 +7244,7 @@ export class PohMinerNode {
         rec.updatedAt = Date.now();
       }
       if (job.requesterAddress && job.maxBudget > 0 && this.escrow.has(job.id)) {
-        const timeout = { type: 'job-timeout', jobId: job.id, requesterAddress: job.requesterAddress, minerAddress: this.config.wallet, reservationFee: 0, refund: job.maxBudget, completedAt: Date.now() };
+        const timeout = { type: 'job-timeout', jobId: job.id, requesterAddress: job.requesterAddress, minerAddress: this.config.wallet, reservationFee: 0, refund: job.maxBudget, ...(job.currency && job.currency !== 'POH' ? { currency: job.currency } : {}), completedAt: Date.now() };
         this.pendingBrainTransitions.push(timeout);
         this._applySettlement(timeout);
       }
@@ -7290,6 +7382,7 @@ export class PohMinerNode {
   _buildEscrowTransition(job, paymentTxHash, unverified, nonce) {
     const activeSignals = this.methodsManager?.getActiveMethods().length || 0;
     const estTokens = job.estimatedTokens || estimateTokens(activeSignals, job.payload?.address);
+    const cur = normalizeCurrency(job.currency);
     return {
       type:              'job-escrow',
       jobId:             job.id,
@@ -7297,11 +7390,15 @@ export class PohMinerNode {
       minerAddress:      this.config.wallet,
       amount:            job.maxBudget,
       maxWait:           job.maxWait,
-      gasPrice:          this.config.gasPrice || GAS.DEFAULT_GAS_PRICE,
+      gasPrice:          cur === 'POH'
+        ? (this.config.gasPrice || GAS.DEFAULT_GAS_PRICE)
+        : gasPriceFor(cur, this.config),
       estimatedTokens:   estTokens,
       paymentTxHash:     paymentTxHash || null,
       unverified:        unverified || false,
       nonce,
+      // Fee currency — omitted for POH so historical transitions keep their shape.
+      ...(cur !== 'POH' ? { currency: cur } : {}),
       timestamp:         Date.now(),
     };
   }
@@ -7319,6 +7416,7 @@ export class PohMinerNode {
    */
   async _applyEscrow(transition) {
     const { jobId, requesterAddress, amount, minerAddress, nonce } = transition;
+    const cur = normalizeCurrency(transition.currency);
     if (!requesterAddress || !amount) return 'missing requesterAddress/amount';
     if (this._appliedEscrowJobIds.has(jobId)) return true; // block replay — already debited locally
 
@@ -7331,28 +7429,28 @@ export class PohMinerNode {
     // validated against the file value the client signed). Bump-up only, so it
     // never erases a locally-decremented (escrow-in-progress) balance.
     if (!this._escrowReconciled) this._escrowReconciled = new Set();
-    if (this.txLedger && !this._escrowReconciled.has(requesterAddress)) {
+    if (this.txLedger && !this._escrowReconciled.has(`${requesterAddress}:${cur}`)) {
       const w = this.walletManager.loadWallet(requesterAddress);
-      const ledgerBal = this.txLedger.getBalance(requesterAddress);
-      if (w && ledgerBal > (w.balance || 0)) {
-        w.balance = ledgerBal;
+      const ledgerBal = this.txLedger.getBalance(requesterAddress, cur);
+      if (w && ledgerBal > WalletManager._getBal(w, cur)) {
+        WalletManager._setBal(w, cur, ledgerBal);
         this.walletManager.saveWallet(w);
         // Mark reconciled ONLY after a real bump — so a wallet touched before the
         // ledger finished syncing (ledgerBal still 0) is retried on the next job
         // instead of being stuck at the stale stub balance for the whole session.
-        this._escrowReconciled.add(requesterAddress);
+        this._escrowReconciled.add(`${requesterAddress}:${cur}`);
       }
     }
 
     if (typeof nonce === 'number') {
-      const result = await this.walletManager.debitWithNonce(requesterAddress, amount, nonce);
+      const result = await this.walletManager.debitWithNonce(requesterAddress, amount, nonce, cur);
       if (result !== true) return result.error || 'payment failed';
     } else {
-      await this.walletManager.debit(requesterAddress, amount);
+      await this.walletManager.debit(requesterAddress, amount, cur);
     }
 
     this._appliedEscrowJobIds.add(jobId);
-    this.escrow.set(jobId, { amount, requesterAddress, minerAddress });
+    this.escrow.set(jobId, { amount, requesterAddress, minerAddress, currency: cur });
     return true;
   }
 
@@ -7360,14 +7458,17 @@ export class PohMinerNode {
     const entry = this.escrow.get(transition.jobId);
     if (!entry) return;
     this.escrow.delete(transition.jobId);
+    // Settle in the currency the job escrowed — the miner (and proposer cut, and
+    // any refund) receive EXACTLY what was paid; no conversion ever happens here.
+    const cur = normalizeCurrency(transition.currency || entry.currency);
     if (transition.type === 'job-settled') {
-      if (transition.actualFee > 0)  this.walletManager.credit(transition.minerAddress, transition.actualFee);
+      if (transition.actualFee > 0)  this.walletManager.credit(transition.minerAddress, transition.actualFee, cur);
       if (transition.proposerFee > 0 && transition.proposerAddress)
-        this.walletManager.credit(transition.proposerAddress, transition.proposerFee);
-      if (transition.refund > 0)     this.walletManager.credit(transition.requesterAddress, transition.refund);
+        this.walletManager.credit(transition.proposerAddress, transition.proposerFee, cur);
+      if (transition.refund > 0)     this.walletManager.credit(transition.requesterAddress, transition.refund, cur);
     } else if (transition.type === 'job-timeout') {
-      if (transition.reservationFee > 0) this.walletManager.credit(transition.minerAddress, transition.reservationFee);
-      if (transition.refund > 0)         this.walletManager.credit(transition.requesterAddress, transition.refund);
+      if (transition.reservationFee > 0) this.walletManager.credit(transition.minerAddress, transition.reservationFee, cur);
+      if (transition.refund > 0)         this.walletManager.credit(transition.requesterAddress, transition.refund, cur);
     }
   }
 
@@ -7990,7 +8091,7 @@ export class PohMinerNode {
       if (this._appliedP2PIds.has(`order-${transition.id}`)) return;
       this.p2pOrderStore.ingestGossipOrder(transition);
       if (transition.side === 'sell' && transition.escrowLocked) {
-        this.p2pEscrow.lock(this.walletManager, transition.maker, transition.pohAmount);
+        this.p2pEscrow.lock(this.walletManager, transition.maker, transition.pohAmount, transition.baseAsset || 'POH');
       }
       return;
     }
@@ -8000,7 +8101,7 @@ export class PohMinerNode {
       if (cancelOrder && cancelOrder.status !== 'cancelled') {
         this.p2pOrderStore.cancelOrder(transition.orderId);
         if (transition.side === 'sell' && transition.escrowLocked) {
-          this.p2pEscrow.release(this.walletManager, transition.maker, transition.pohAmount);
+          this.p2pEscrow.release(this.walletManager, transition.maker, transition.pohAmount, transition.baseAsset || 'POH');
         }
       }
       return;
@@ -8009,7 +8110,7 @@ export class PohMinerNode {
       if (this._appliedP2PIds.has(`trade-${transition.id}`)) return;
       this.p2pOrderStore.ingestGossipTrade(transition);
       if (transition.orderSide === 'buy') {
-        this.p2pEscrow.lock(this.walletManager, transition.taker, transition.pohAmount);
+        this.p2pEscrow.lock(this.walletManager, transition.taker, transition.pohAmount, transition.baseAsset || 'POH');
       }
       return;
     }
@@ -8022,9 +8123,10 @@ export class PohMinerNode {
       if (this._appliedP2PIds.has(`trade-${transition.tradeId}-release`)) return;
       const releaseTrade = this.p2pOrderStore.getTrade(transition.tradeId);
       if (releaseTrade) {
-        this.p2pEscrow.release(this.walletManager, transition.recipient, transition.pohAmount);
+        const relBase = transition.baseAsset || 'POH';
+        this.p2pEscrow.release(this.walletManager, transition.recipient, transition.pohAmount, relBase);
         if (transition.referralFee > 0 && transition.referrer) {
-          this.p2pEscrow.release(this.walletManager, transition.referrer, transition.referralFee);
+          this.p2pEscrow.release(this.walletManager, transition.referrer, transition.referralFee, relBase);
           this.p2pReferral.recordFee(transition.referrer, transition.referralFee);
         }
         this.p2pOrderStore.completeTrade(transition.tradeId);
@@ -8036,10 +8138,31 @@ export class PohMinerNode {
       const cancelTrade = this.p2pOrderStore.getTrade(transition.tradeId);
       if (cancelTrade) {
         if (transition.escrowLocked) {
-          this.p2pEscrow.release(this.walletManager, transition.locker, transition.pohAmount);
+          this.p2pEscrow.release(this.walletManager, transition.locker, transition.pohAmount, transition.baseAsset || 'POH');
         }
         this.p2pOrderStore.cancelTrade(transition.tradeId);
       }
+      return;
+    }
+    // Atomic on-chain swap: both legs move in one transition. Mirrors the
+    // canonical-ledger branch in tx-ledger.applyP2PEscrowTransition; the escrow
+    // already holds the base (locked at order create on every node).
+    if (transition.type === 'p2p-swap-filled') {
+      if (this._appliedP2PIds.has(`swap-${transition.tradeId}`)) return;
+      this._appliedP2PIds.add(`swap-${transition.tradeId}`);
+      const base  = transition.baseAsset  || 'POH';
+      const quote = transition.quoteAsset || 'POH';
+      const refFee = transition.referralFee || 0;
+      // Quote leg: taker -> maker
+      this.walletManager.debit(transition.taker, transition.quoteAmount, quote);
+      this.walletManager.credit(transition.quoteRecipient || transition.maker, transition.quoteAmount, quote);
+      // Base leg: escrow -> taker (minus referral fee)
+      this.p2pEscrow.release(this.walletManager, transition.baseRecipient || transition.taker, transition.baseAmount - refFee, base);
+      if (refFee > 0 && transition.referrer) {
+        this.p2pEscrow.release(this.walletManager, transition.referrer, refFee, base);
+        this.p2pReferral.recordFee(transition.referrer, refFee);
+      }
+      this.p2pOrderStore.completeTrade(transition.tradeId);
       return;
     }
     if (transition.type === 'p2p-trade-dispute') {

@@ -7,7 +7,7 @@
  *
  * Sources (in priority order):
  * 1. Published signals transactions received via the PoH chain / gossip
- * 2. Direct fetch from https://proofofhuman.ge/methods/verifyer (and fallbacks)
+ * 2. Direct fetch from https://poh.ge/methods/verifyer (and fallbacks)
  * 3. Locally cached copy (~/.poh-miner/methods.json)
  *
  * All miners compute a deterministic `methodsHash` so the network can
@@ -28,10 +28,10 @@ const METHODS_FILE = path.join(CONFIG_DIR, 'methods.json');
 const PRIMARY_SOURCE = 'https://poh.ge/methods/verifyer';
 
 // Robust list of HTTP gateways (in priority order). poh.ge is primary (reliable
-// DNS); proofofhuman.ge kept as a fallback. Both proxy the same backend.
+// DNS); poh.ge kept as a fallback. Both proxy the same backend.
 const GATEWAYS = [
   'https://poh.ge/methods/verifyer',
-  'https://proofofhuman.ge/methods/verifyer',
+  'https://poh.ge/methods/verifyer',
 ];
 
 // Public IPFS gateways used when lastKnownCID is set

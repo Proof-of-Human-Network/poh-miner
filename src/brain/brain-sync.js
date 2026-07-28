@@ -110,7 +110,7 @@ export class BrainSync {
         }
 
       } else if (event.type === 'new_method') {
-        // A new signal was listed on proofofhuman.ge — evaluate it on this node too
+        // A new signal was listed on poh.ge — evaluate it on this node too
         const { id, type, description, address, expression } = event.data;
         if (!id || !description) return false;
         if (brain?.onNewMethod) {

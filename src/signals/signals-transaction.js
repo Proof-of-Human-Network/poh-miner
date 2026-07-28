@@ -1,7 +1,7 @@
 /**
  * Published Signals Transaction (future on-chain mechanism)
  *
- * When a new verified signal/method is accepted on proofofhuman.ge,
+ * When a new verified signal/method is accepted on poh.ge,
  * it can be emitted as a "published signals transaction".
  *
  * Miners include these in blocks via `stateTransitions`.
@@ -13,7 +13,7 @@
  *   type: 'methods-update' | 'methods-weight-update',
  *   hash: string,                    // deterministic hash of the methods array
  *   count: number,
- *   source: 'proofofhuman.ge' | 'governance',
+ *   source: 'poh.ge' | 'governance',
  *   timestamp: number,
  *   signature?: string,              // optional governance signature
  *   cid?: string,                    // IPFS CID of the full list (future)

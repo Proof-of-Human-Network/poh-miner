@@ -2,11 +2,23 @@ import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
 import os from 'os';
+import { STABLE_TICKERS } from '../assets.js';
 
+// Off-chain quote legs — external crypto/fiat the counterparty pays outside the
+// PoH chain (settled manually with payment proof + release).
 export const QUOTE_CURRENCIES = [
   'USDT-ERC20', 'USDT-TRC20', 'USDT-TON', 'USDT-SOL', 'USDT-BEP20',
   'USDC-ERC20', 'BTC', 'ETH', 'SOL',
+  'Bank Transfer',
 ];
+
+// On-chain assets — usable as the order's BASE asset (what the maker sells) and
+// as a quote leg. When BOTH legs are on-chain the trade settles atomically
+// (p2p-swap-filled), with no payment-sent/confirm step.
+export const ONCHAIN_ASSETS = ['POH', ...STABLE_TICKERS];
+
+export function isOnChainAsset(c) { return ONCHAIN_ASSETS.includes(c); }
+export function isValidQuote(c)   { return QUOTE_CURRENCIES.includes(c) || ONCHAIN_ASSETS.includes(c); }
 
 const ORDER_EXPIRY_MS    = 24 * 60 * 60 * 1000;  // 24 h
 const PAYMENT_TIMEOUT_MS = 15 * 60 * 1000;        // 15 min
@@ -44,26 +56,33 @@ export class OrderStore {
 
   // ─── Orders ──────────────────────────────────────────────────────────────
 
-  createOrder({ maker, side, pohAmount, quoteCurrency, pricePerPOH, minTrade = 0, maxTrade, paymentMethods = [] }) {
+  createOrder({ maker, side, pohAmount, baseAsset = 'POH', quoteCurrency, pricePerPOH, minTrade = 0, maxTrade, paymentMethods = [], baseDecimals }) {
     if (!['buy', 'sell'].includes(side))            return { error: 'side must be buy or sell' };
-    if (!QUOTE_CURRENCIES.includes(quoteCurrency))  return { error: `unsupported currency: ${quoteCurrency}` };
+    if (!isOnChainAsset(baseAsset))                 return { error: `unsupported base asset: ${baseAsset}` };
+    if (!isValidQuote(quoteCurrency))               return { error: `unsupported currency: ${quoteCurrency}` };
+    if (baseAsset === quoteCurrency)                return { error: 'base and quote must differ' };
     if (!(pohAmount > 0))                           return { error: 'pohAmount must be positive' };
     if (!(pricePerPOH > 0))                         return { error: 'pricePerPOH must be positive' };
-    if (!Array.isArray(paymentMethods) || paymentMethods.length === 0) {
+    // Atomic on-chain/on-chain swaps settle automatically — no external payment
+    // rail is involved, so payment methods are waived for them.
+    const atomic = isOnChainAsset(quoteCurrency);
+    if (!atomic && (!Array.isArray(paymentMethods) || paymentMethods.length === 0)) {
       return { error: 'at least one payment method required' };
     }
 
     const now = Date.now();
+    const divisor = baseDecimals != null ? 10 ** baseDecimals : (baseAsset === 'POH' ? 1e9 : 100);
     const order = {
       id: crypto.randomUUID(),
       maker,
       side,
-      pohAmount,        // μPOH
+      pohAmount,        // BASE amount in raw units of baseAsset (μPOH for POH; ×100 for stables). Field name kept for wire compat.
+      ...(baseAsset !== 'POH' ? { baseAsset } : {}),   // omitted for POH — legacy orders unchanged
       quoteCurrency,
-      pricePerPOH,      // price per 1 display POH in quoteCurrency
+      pricePerPOH,      // quote units per 1 DISPLAY unit of baseAsset
       minTrade,         // min quote amount per trade
-      maxTrade: maxTrade ?? ((pohAmount / 1e9) * pricePerPOH),
-      paymentMethods,   // [{ network, address, details }]
+      maxTrade: maxTrade ?? ((pohAmount / divisor) * pricePerPOH),
+      paymentMethods: atomic ? [] : paymentMethods,   // [{ network, address, details }]
       status: 'open',
       escrowLocked: false,
       tradeId: null,
@@ -78,7 +97,7 @@ export class OrderStore {
 
   getOrder(id) { return this.orders[id] || null; }
 
-  listOrders({ side, quoteCurrency, maker, status } = {}) {
+  listOrders({ side, quoteCurrency, baseAsset, maker, status } = {}) {
     const now = Date.now();
     return Object.values(this.orders).filter(o => {
       const effectiveStatus = status || 'open';
@@ -86,6 +105,7 @@ export class OrderStore {
       if (o.status !== effectiveStatus) return false;
       if (side && o.side !== side) return false;
       if (quoteCurrency && o.quoteCurrency !== quoteCurrency) return false;
+      if (baseAsset && (o.baseAsset || 'POH') !== baseAsset) return false;
       if (maker && o.maker !== maker) return false;
       return true;
     }).sort((a, b) => b.createdAt - a.createdAt);
@@ -100,18 +120,19 @@ export class OrderStore {
   // POH has no fixed/oracle price — the ONLY reference is the best open P2P order.
   // For one currency: best bid = highest a buyer will pay, best ask = lowest a seller
   // will take; `price` is the mid when both sides exist, else the single best order.
-  _priceFor(quoteCurrency) {
-    const open = this.listOrders({ quoteCurrency, status: 'open' });
+  _priceFor(quoteCurrency, baseAsset = 'POH') {
+    const open = this.listOrders({ quoteCurrency, baseAsset, status: 'open' });
     const buys  = open.filter(o => o.side === 'buy').sort((a, b) => b.pricePerPOH - a.pricePerPOH);
     const sells = open.filter(o => o.side === 'sell').sort((a, b) => a.pricePerPOH - b.pricePerPOH);
     const bestBid = buys[0] || null;
     const bestAsk = sells[0] || null;
-    if (!bestBid && !bestAsk) return { price: null, quoteCurrency, source: 'none' };
+    if (!bestBid && !bestAsk) return { price: null, quoteCurrency, baseAsset, source: 'none' };
     const price = (bestBid && bestAsk) ? (bestBid.pricePerPOH + bestAsk.pricePerPOH) / 2
                 : bestAsk ? bestAsk.pricePerPOH : bestBid.pricePerPOH;
     return {
       price,
       quoteCurrency,
+      baseAsset,
       bestBid: bestBid && { price: bestBid.pricePerPOH, orderId: bestBid.id, pohAmount: bestBid.pohAmount },
       bestAsk: bestAsk && { price: bestAsk.pricePerPOH, orderId: bestAsk.id, pohAmount: bestAsk.pohAmount },
       source: 'p2p-best-order',
@@ -119,13 +140,15 @@ export class OrderStore {
     };
   }
 
-  // Reference POH price, derived only from the best P2P order(s). Pass a currency for a
-  // single quote, or omit for a per-currency map of everything currently quoted.
-  getReferencePrice(quoteCurrency = null) {
-    if (quoteCurrency) return this._priceFor(quoteCurrency);
+  // Reference price for a (baseAsset, quoteCurrency) pair, derived only from the
+  // best open P2P order(s). Pass a currency for a single quote (base defaults to
+  // POH), or omit for a per-currency map of everything quoted against the base.
+  getReferencePrice(quoteCurrency = null, baseAsset = 'POH') {
+    if (quoteCurrency) return this._priceFor(quoteCurrency, baseAsset);
     const out = {};
-    for (const c of QUOTE_CURRENCIES) {
-      const r = this._priceFor(c);
+    for (const c of [...QUOTE_CURRENCIES, ...ONCHAIN_ASSETS]) {
+      if (c === baseAsset) continue;
+      const r = this._priceFor(c, baseAsset);
       if (r.price != null) out[c] = r;
     }
     return out;
@@ -164,6 +187,9 @@ export class OrderStore {
       pohAmount,
       quoteAmount,
       status: 'selected',
+      // Atomic on-chain swap: both legs settle in one chain transition — no
+      // payment-sent/confirm phase, no payment deadline.
+      ...(isOnChainAsset(order.quoteCurrency) ? { atomic: true } : {}),
       paymentDeadline: now + PAYMENT_TIMEOUT_MS,
       disputeReason: null,
       createdAt: now,

@@ -125,14 +125,7 @@ export class TxLedgerState {
       return { valid: false, reason: `tx already spent (${tx.txHash.slice(0, 12)})` };
     }
 
-    if (!tx.verify()) {
-      return { valid: false, reason: 'invalid tx signature' };
-    }
-
-    if (tx.txHash !== computeTxFieldsHash(tx)) {
-      return { valid: false, reason: 'txHash does not match transaction fields' };
-    }
-
+    // Cheap structural checks first (fields + currency), then crypto.
     if (!tx.from || !tx.to || tx.amount <= 0) {
       return { valid: false, reason: 'invalid tx fields' };
     }
@@ -140,6 +133,14 @@ export class TxLedgerState {
     const txCur = normalizeCurrency(tx.currency);
     if (txCur !== 'POH' && !isKnownAsset(txCur)) {
       return { valid: false, reason: `unknown currency ${txCur}` };
+    }
+
+    if (!tx.verify()) {
+      return { valid: false, reason: 'invalid tx signature' };
+    }
+
+    if (tx.txHash !== computeTxFieldsHash(tx)) {
+      return { valid: false, reason: 'txHash does not match transaction fields' };
     }
 
     const expectedNonce = this.getNonce(tx.from) + 1;

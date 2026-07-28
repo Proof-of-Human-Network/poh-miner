@@ -287,7 +287,7 @@ async function main() {
   poh-miner wallet <subcmd>    Wallet commands: create | list | balance <addr> | send <from> <to> <amt>
   poh-miner init [--global]    Create default config (local by default when in source tree)
   poh-miner status             Show protection stats, reputation, and submission history
-  poh-miner sync-methods       Force refresh of verified signals from proofofhuman.ge
+  poh-miner sync-methods       Force refresh of verified signals from poh.ge
   poh-miner set-mode <mode>    Change inference mode (auto|gpu|cpu)
   poh-miner demo               Run geographic job preference demo
   poh-miner landing            Serve the promotional landing page
