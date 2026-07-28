@@ -460,9 +460,9 @@ describe('Fix 5 — Proof of Work', () => {
 
   it('getNextDifficulty preserves current difficulty for short chain (no reset to MIN)', async () => {
     const { getNextDifficulty } = await import('../src/consensus/pow.js');
-    expect(getNextDifficulty([])).toBe(5);                                  // MIN when chain empty
-    expect(getNextDifficulty([{ difficulty: 7 }])).toBe(7);                // keeps tip difficulty
-    expect(getNextDifficulty([{ difficulty: 3 }])).toBe(5);                // clamps up to MIN
+    expect(getNextDifficulty([])).toBe(5);                                  // empty chain → height 0 uses the legacy floor (5)
+    expect(getNextDifficulty([{ difficulty: 7 }])).toBe(7);                // keeps tip difficulty (above the floor)
+    expect(getNextDifficulty([{ difficulty: 2 }])).toBe(3);                // clamps up to the MIN floor (now 3)
   });
 
   it('getNextDifficulty increases when blocks are too fast', async () => {
@@ -480,13 +480,13 @@ describe('Fix 5 — Proof of Work', () => {
   it('getNextDifficulty decreases when blocks are too slow', async () => {
     const { getNextDifficulty } = await import('../src/consensus/pow.js');
     const now = Date.now();
-    // 11 blocks at 300s each — over 4× the 60s target, steps -2 but clamps
-    // at MIN_DIFFICULTY (5).
+    // 11 blocks at 300s each — over 4× the 60s target, steps -2 (4→2) but
+    // clamps at the MIN floor (now 3).
     const slowChain = Array.from({ length: 11 }, (_, i) => ({
       timestamp: now + i * 300_000,
-      difficulty: 6,
+      difficulty: 4,
     }));
-    expect(getNextDifficulty(slowChain)).toBe(5);
+    expect(getNextDifficulty(slowChain)).toBe(3);
   });
 
   it('block hash is deterministic for same nonce', async () => {

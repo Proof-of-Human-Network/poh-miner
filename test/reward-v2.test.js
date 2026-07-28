@@ -120,6 +120,15 @@ describe('reward v2 — validateCoinbase', () => {
 
   it('boundary: a v2-shaped coinbase is rejected in the legacy regime', () => {
     const v2cb = calculateBlockRewards(subsFrom(results), V2, []);
+    // After the genesis reset REWARD_V2_HEIGHT is 0, so the only "legacy" height
+    // is genesis — which validateCoinbase exempts outright. There's no
+    // non-genesis legacy block left to reject a v2 shape, so assert the exemption.
+    // This flips back to the real 60/40 rejection check the moment a non-zero
+    // flag-day is set again (LEGACY > 0).
+    if (LEGACY <= 0) {
+      expect(validateCoinbase(mkBlock({ height: 0, results, coinbase: v2cb })).valid).toBe(true);
+      return;
+    }
     // same reward object presented at a legacy height must fail the 60/40 checks
     expect(validateCoinbase(mkBlock({ height: LEGACY, results, coinbase: v2cb })).valid).toBe(false);
   });

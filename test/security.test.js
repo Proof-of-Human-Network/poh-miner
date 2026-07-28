@@ -3,7 +3,7 @@ import { isLocalRequest, rejectNonLocalStateChange, isPublicPostPath } from '../
 import { normalizeSkillId } from '../src/security/skill-id.js';
 import { skillsManager } from '../src/skills/manager.js';
 import { validateCoinbase } from '../src/consensus/coinbase-validator.js';
-import { BLOCK_REWARD_UPOH } from '../src/rewards/reward.js';
+import { BLOCK_REWARD_UPOH, calculateBlockRewards } from '../src/rewards/reward.js';
 import {
   verifyBrainEvent,
   verifyIpfsUpdate,
@@ -77,16 +77,15 @@ describe('Coinbase validation', () => {
   });
 
   it('accepts valid empty-block coinbase', () => {
+    // Under reward-v2 (active from height 1) an idle block is keepalive-only: it
+    // mints KEEPALIVE_UPOH to the proposer, not a full block reward. Build the
+    // canonical idle coinbase the same way the miner does, so it validates.
     const block = new PohBlock({
       height: 1,
       previousHash: '0'.repeat(64),
       timestamp: Date.now(),
       minerWallet: 'pohabc',
-      coinbaseReward: {
-        totalNewSupply: BLOCK_REWARD_UPOH,
-        proposerReward: BLOCK_REWARD_UPOH,
-        workerRewards: [],
-      },
+      coinbaseReward: calculateBlockRewards([], 1, []),
     });
     expect(validateCoinbase(block).valid).toBe(true);
   });
