@@ -75,3 +75,19 @@ The genesis source is config/arg-gated (absent → legacy empty genesis, unchang
 Before `--apply`, everything is reversible (services just restart on the old
 data). After `--apply`, restore from the `genesis-backup-*` tarballs the script
 wrote (and re-remove the `genesisSnapshot` config/arg) to return to the old chain.
+
+## Stablecoin genesis mint (fresh reset)
+
+The multi-currency reset follows the same procedure with two additions:
+
+1. Set the real `TREASURY_ADDRESS` and `INITIAL_STABLE_SUPPLY_RAW` in
+   `src/assets.js` (raw units: 2 decimals → ×100).
+2. Export with `--mint-stables`:
+   `node scripts/genesis/export-snapshot.mjs --data-dir ~/.poh-bootnode --out snap.json --mint-stables [--treasury poh…]`
+   The treasury row gains an `assets` map; existing per-asset balances (if any)
+   are carried over automatically.
+3. Build the genesis, pin the new `EXPECTED_GENESIS_HASH`, bundle the snapshot —
+   unchanged from the standard runbook.
+
+Snapshot rows with assets extend the canonical hash tuple to
+`[addr, balance, nonce, assets]`; POH-only snapshots hash exactly as before.

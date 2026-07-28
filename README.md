@@ -8,7 +8,7 @@ Decentralized compute layer for the Proof of Human network. Miners race to evalu
 
 ### GUI (recommended for non-technical users)
 
-Download the latest `.deb` / `.AppImage` / Windows installer from [miner.proofofhuman.ge](https://miner.proofofhuman.ge).
+Download the latest `.deb` / `.AppImage` / Windows installer from [miner.poh.ge](https://miner.poh.ge).
 
 Inference runs in-process via **QVAC** (the `@qvac/sdk` dependency) — there's no
 separate engine to install. On first launch the model (default `qwen3-1.7b`) is
@@ -54,7 +54,7 @@ Minimal example:
 
 ```json
 {
-  "bootnodes": ["https://miner.proofofhuman.ge"],
+  "bootnodes": ["https://miner.poh.ge"],
   "inferenceMode": "auto",
   "model": "qwen3-1.7b",
   "walletApiPort": 3456
@@ -82,7 +82,7 @@ RPC endpoints can be configured per-chain under the `rpc` key — see `config.ex
 
 ```
 ┌──────────────────────────────────────────────────────────────────┐
-│                   App Layer  (proofofhuman.ge)                   │
+│                   App Layer  (poh.ge)                   │
 │   Frontend  ·  Profiles  ·  Voting  ·  Feedback        │
 └───────────────────────────┬──────────────────────────────────────┘
                             │  submits scan jobs  ▼  reads results
@@ -128,7 +128,7 @@ Each block contains:
 | Pending transactions | P2P gossip `new-tx` |
 | Node status (methodsHash, region, load) | P2P gossip `node-status` |
 | Chain history (cold start) | HTTP pull from bootnode `/chain/blocks` + IPFS snapshot fallback |
-| Verified signals (canonical set + hash) | HTTP from proofofhuman.ge + IPFS fallback |
+| Verified signals (canonical set + hash) | HTTP from poh.ge + IPFS fallback |
 | Brain feedback events | Peer-to-peer push + bootnode `/brain/events` |
 | Signal weight updates | Same as brain feedback |
 | Peer records (host:port) | Bootnode `/peers` + IPFS peer directory |
@@ -160,7 +160,8 @@ Every miner exposes an HTTP API for the mobile wallet and external tools. Amount
 |---|---|
 | `GET /status` | Node status, chain height, reputation |
 | `GET /api/miner/info` | Detailed miner info (version, uptime, peers) |
-| `GET /api/wallet/balance?address=<addr>` | Balance in μPOH |
+| `GET /api/wallet/balance?address=<addr>` | Balance in μPOH + `assets` map of stablecoin holdings (`{ aiGEL: { raw, display } }`) |
+| `GET /api/assets` | On-chain asset registry: POH + the 5 stablecoins (tickers, decimals, display names, per-currency gas prices) |
 | `GET /api/wallet/nonce?address=<addr>` | Current nonce for transaction signing |
 | `GET /api/wallet/transactions?address=<addr>` | Transaction history |
 | `GET /api/wallet/history?address=<addr>` | Full history with block confirmations |
@@ -223,6 +224,27 @@ Meilisearch listens on **localhost only**; expose search to the network via `wal
 
 The mobile **PoH Wallet** app uses the same APIs on any connected miner (`Ask AI` tab).
 
+### Stablecoins (multi-currency)
+
+The chain carries five regional stablecoins alongside POH — `aiGEL`, `aiKGS`,
+`aiAMD`, `aiETB`, `aiBTN` (displayed as αιGEL, αιKGS, …). They use **2
+decimals** (1 aiGEL = 100 raw units); POH keeps 9 (1 POH = 1e9 μPOH). Supply is
+minted once in the genesis allocation to the treasury address — there is no
+runtime mint; future supply changes are network upgrades.
+
+- **Transfers**: `POST /api/wallet/send` and `/api/tx/submit` accept a
+  `currency` field (omit for POH). A transaction's hash includes `currency`
+  ONLY when non-POH, so every historical POH tx/signature stays valid.
+- **Job fees**: any job payload may set `currency` — the fee floor is priced
+  per currency (`config.gasPrices` overridable) and **the miner receives
+  exactly the currency paid** (no conversion). The signed payment proof binds
+  the currency (6th key of the payment hash when non-POH).
+- **P2P**: stablecoins are tradable base assets. When both legs are on-chain
+  (e.g. aiKGS/aiGEL) the trade settles **atomically** in one `p2p-swap-filled`
+  transition — no payment-sent step, proceeds go directly to the taker's own
+  poh address (no receival-wallet input). Off-chain legs (bank transfer, USDT…)
+  keep the manual escrow/release flow.
+
 ### Jobs (scan requests, skills, compute)
 
 | Endpoint | Description |
@@ -233,7 +255,8 @@ The mobile **PoH Wallet** app uses the same APIs on any connected miner (`Ask AI
 | `GET /jobs` | List active jobs |
 | `POST /gossip` | Receive P2P gossip envelopes from peers |
 
-`skill` and `compute` jobs always require a fee (`maxBudget > 0` μPOH) and a
+`skill` and `compute` jobs always require a fee (`maxBudget > 0`, in raw units
+of the job's `currency` — μPOH for POH, the default) and a
 signed payment proof — the node rejects the request outright (the job never
 runs) unless it includes a valid Ed25519 signature, from a key already
 registered via `POST /api/wallet/register-key`, over a hash binding the

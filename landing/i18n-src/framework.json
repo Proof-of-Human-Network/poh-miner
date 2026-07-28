@@ -1,0 +1,29 @@
+{
+  "en": {
+    "fw.hero.sub": "White-label, sovereign <span class=\"text-white/90\">AI compute</span> stablecoins"
+  },
+  "ka": {
+    "fw.hero.sub": "White-label, სუვერენული სტეიბლქოინები <span class=\"text-white/90\">AI გამოთვლისთვის</span>"
+  },
+  "hy": {
+    "fw.hero.sub": "White-label, ինքնիշխան սթեյբլքոիններ <span class=\"text-white/90\">AI հաշվարկի</span> համար"
+  },
+  "ky": {
+    "fw.hero.sub": "White-label, эгемен стейблкоиндер <span class=\"text-white/90\">AI эсептөө</span> үчүн"
+  },
+  "ru": {
+    "fw.hero.sub": "White-label суверенные стейблкоины для <span class=\"text-white/90\">ИИ-вычислений</span>"
+  },
+  "de": {
+    "fw.hero.sub": "White-Label, souveräne Stablecoins für <span class=\"text-white/90\">KI-Rechenleistung</span>"
+  },
+  "fr": {
+    "fw.hero.sub": "Des stablecoins white-label et souverains pour le <span class=\"text-white/90\">calcul IA</span>"
+  },
+  "it": {
+    "fw.hero.sub": "Stablecoin white-label e sovrane per il <span class=\"text-white/90\">calcolo IA</span>"
+  },
+  "es": {
+    "fw.hero.sub": "Stablecoins white-label y soberanas de <span class=\"text-white/90\">cómputo IA</span>"
+  }
+}

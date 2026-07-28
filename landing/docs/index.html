@@ -9,6 +9,7 @@
   <link rel="icon" type="image/svg+xml" href="../poh-miner.svg">
   <link rel="icon" type="image/png" sizes="32x32" href="../favicon-32.png">
   <link rel="shortcut icon" href="../favicon.ico">
+  <script src="../i18n.js" defer></script>
   <style>
     body {
       font-family: 'Iceland', sans-serif;
@@ -79,9 +80,10 @@
         <span class="text-[28px] sm:text-[40px] leading-none">Miner API</span>
       </a>
       <div class="flex items-center gap-6 text-[18px] sm:text-[20px]">
-        <a href="upgrade-guide.html" class="text-white/60 hover:text-white transition">Upgrade Guide</a>
-        <a href="../" class="text-white/60 hover:text-white transition">← Landing</a>
+        <a href="upgrade-guide.html" class="text-white/60 hover:text-white transition" data-i18n="doc.nav.upgrade">Upgrade Guide</a>
+        <a href="../" class="text-white/60 hover:text-white transition" data-i18n-html="doc.nav.landing">← Landing</a>
         <a href="https://github.com/Proof-of-Human-Network/poh-miner" target="_blank" class="text-white/60 hover:text-white transition">GitHub</a>
+        <div data-i18n-switch></div>
       </div>
     </div>
   </nav>
@@ -90,45 +92,45 @@
     <div class="lg:grid lg:grid-cols-[220px_1fr] lg:gap-12">
 
       <aside class="toc mb-10 lg:mb-0">
-        <div class="text-white/40 text-sm uppercase tracking-widest mb-4">Contents</div>
-        <a href="#overview">Overview</a>
-        <a href="#generate-wallet">Generate Wallet</a>
-        <a href="#chain-wallet">Chain &amp; Wallet</a>
-        <a href="#jobs">Jobs</a>
-        <a href="#chat">Chat &amp; Routing</a>
-        <a href="#search">History Search</a>
-        <a href="#explorer">Explorer</a>
-        <a href="#skills">Skills</a>
-        <a href="#hf-datasets">HF Datasets</a>
-        <a href="#llm-brain">LLM &amp; Brain</a>
-        <a href="#p2p">P2P Exchange</a>
-        <a href="#push">Push</a>
-        <a href="#errors">Errors &amp; Auth</a>
+        <div class="text-white/40 text-sm uppercase tracking-widest mb-4" data-i18n="doc.toc.title">Contents</div>
+        <a href="#overview" data-i18n="doc.toc.overview">Overview</a>
+        <a href="#generate-wallet" data-i18n="doc.toc.generate">Generate Wallet</a>
+        <a href="#chain-wallet" data-i18n-html="doc.toc.chain">Chain &amp; Wallet</a>
+        <a href="#jobs" data-i18n="doc.toc.jobs">Jobs</a>
+        <a href="#chat" data-i18n-html="doc.toc.chat">Chat &amp; Routing</a>
+        <a href="#search" data-i18n="doc.toc.search">History Search</a>
+        <a href="#explorer" data-i18n="doc.toc.explorer">Explorer</a>
+        <a href="#skills" data-i18n="doc.toc.skills">Skills</a>
+        <a href="#hf-datasets" data-i18n="doc.toc.hf">HF Datasets</a>
+        <a href="#llm-brain" data-i18n-html="doc.toc.llm">LLM &amp; Brain</a>
+        <a href="#p2p" data-i18n="doc.toc.p2p">P2P Exchange</a>
+        <a href="#push" data-i18n="doc.toc.push">Push</a>
+        <a href="#errors" data-i18n-html="doc.toc.errors">Errors &amp; Auth</a>
       </aside>
 
       <div>
 
         <section id="overview" class="mb-16">
-          <h1 class="text-[40px] sm:text-[52px] mb-4">Wallet API Reference</h1>
-          <p class="text-white/60 text-[20px] mb-6 max-w-3xl">
+          <h1 class="text-[40px] sm:text-[52px] mb-4" data-i18n="doc.overview.title">Wallet API Reference</h1>
+          <p class="text-white/60 text-[20px] mb-6 max-w-3xl" data-i18n-html="doc.overview.intro">
             Every PoH miner exposes an HTTP API on <span class="neon">walletApiPort</span> (default <strong>3456</strong>).
             <strong>Balance responses</strong> are in <strong>μPOH</strong> (raw) — 1 POH = 1&nbsp;000&nbsp;000&nbsp;000 μPOH.
             <strong>Input amounts</strong> for <code>/api/wallet/send</code> and staking endpoints are in <strong>POH</strong> (the server converts internally).
           </p>
           <div class="glass rounded-md p-5 mb-6">
-            <div class="text-white/40 text-sm mb-2">Base URL</div>
+            <div class="text-white/40 text-sm mb-2" data-i18n="doc.overview.baseurl">Base URL</div>
             <div class="code-block" id="base-url">http://127.0.0.1:3456</div>
           </div>
-          <p class="text-white/50 text-[18px]">
-            Public miners (e.g. <a href="https://miner.proofofhuman.ge" class="neon hover:underline">miner.proofofhuman.ge</a>)
+          <p class="text-white/50 text-[18px]" data-i18n-html="doc.overview.public">
+            Public miners (e.g. <a href="https://miner.poh.ge" class="neon hover:underline">miner.poh.ge</a>)
             expose the same routes over HTTPS. CORS is open for browser clients.
           </p>
         </section>
 
         <!-- Generate Wallet -->
         <section id="generate-wallet" class="mb-16">
-          <h2 class="text-[32px] mb-2 neon">Generate Wallet</h2>
-          <p class="text-white/55 text-[18px] mb-8">
+          <h2 class="text-[32px] mb-2 neon" data-i18n="doc.gen.title">Generate Wallet</h2>
+          <p class="text-white/55 text-[18px] mb-8" data-i18n-html="doc.gen.intro">
             A PoH wallet is an <strong>ed25519 keypair</strong>. The address is derived from the signing public key —
             no seed phrases, no custodians. Follow these four steps to create a wallet and start submitting jobs.
           </p>
@@ -137,9 +139,9 @@
           <div class="mb-8">
             <div class="flex items-center gap-3 mb-3">
               <span class="text-[13px] font-mono bg-green-500/10 text-green-400 border border-green-500/30 rounded px-2 py-0.5">STEP 1</span>
-              <span class="text-[20px]">Generate the keypair</span>
+              <span class="text-[20px]" data-i18n="doc.gen.s1.title">Generate the keypair</span>
             </div>
-            <p class="text-white/50 text-[17px] mb-3">
+            <p class="text-white/50 text-[17px] mb-3" data-i18n-html="doc.gen.s1.desc">
               Run this Node.js script (requires <code>tweetnacl</code> — <code>npm i tweetnacl</code>).
               It deterministically derives an ed25519 signing keypair from 32 random bytes, then
               computes the canonical PoH address as <code>'poh' + sha256(signingPublicKey).slice(0,40)</code>.
@@ -178,7 +180,7 @@ require('fs').writeFileSync('poh-wallet.json', JSON.stringify(wallet, null, 2));
 console.log('Address:', address);</div>
             <div class="code-block mt-3">node generate-wallet.js
 # Address: pohaf4c36bfb8ee60d019251b613d1e5cd18a241d76</div>
-            <p class="text-white/40 text-[15px] mt-2">
+            <p class="text-white/40 text-[15px] mt-2" data-i18n-html="doc.gen.s1.note">
               <strong class="text-white/60">Keep <code>poh-wallet.json</code> secret.</strong>
               The <code>signingSecretKeyB64</code> is the private signing key — never share or commit it.
             </p>
@@ -188,14 +190,14 @@ console.log('Address:', address);</div>
           <div class="mb-8">
             <div class="flex items-center gap-3 mb-3">
               <span class="text-[13px] font-mono bg-green-500/10 text-green-400 border border-green-500/30 rounded px-2 py-0.5">STEP 2</span>
-              <span class="text-[20px]">Register the signing key on-chain</span>
+              <span class="text-[20px]" data-i18n="doc.gen.s2.title">Register the signing key on-chain</span>
             </div>
-            <p class="text-white/50 text-[17px] mb-3">
+            <p class="text-white/50 text-[17px] mb-3" data-i18n-html="doc.gen.s2.desc">
               Post your address, <code>signingPublicKey</code>, and the <code>proof</code> from Step 1 to any miner.
               The proof is an ed25519 signature over your address — it proves you hold the private key.
               This binds your key to your address so the network can verify your job payment signatures.
             </p>
-            <div class="code-block">curl -X POST https://miner.proofofhuman.ge/api/wallet/register-key \
+            <div class="code-block">curl -X POST https://miner.poh.ge/api/wallet/register-key \
   -H 'Content-Type: application/json' \
   -d '{
     "address":          "poh...",
@@ -204,12 +206,12 @@ console.log('Address:', address);</div>
   }'
 
 # Response: { "ok": true }</div>
-            <p class="text-white/40 text-[15px] mt-2">
+            <p class="text-white/40 text-[15px] mt-2" data-i18n-html="doc.gen.s2.errors">
               Missing the proof returns <code>400 { "error": "address, signingPublicKey, and proof required" }</code>.
               An invalid proof returns <code>403 { "error": "invalid proof" }</code>. To rotate to a new key later,
               include a <code>rotationProof</code> signed by your <em>existing</em> key.
             </p>
-            <p class="text-white/40 text-[15px] mt-2">
+            <p class="text-white/40 text-[15px] mt-2" data-i18n="doc.gen.s2.free">
               Registration is free and only needs to happen once per keypair. It does not require any POH balance.
             </p>
           </div>
@@ -218,14 +220,14 @@ console.log('Address:', address);</div>
           <div class="mb-8">
             <div class="flex items-center gap-3 mb-3">
               <span class="text-[13px] font-mono bg-green-500/10 text-green-400 border border-green-500/30 rounded px-2 py-0.5">STEP 3</span>
-              <span class="text-[20px]">Fund the address</span>
+              <span class="text-[20px]" data-i18n="doc.gen.s3.title">Fund the address</span>
             </div>
-            <p class="text-white/50 text-[17px] mb-3">
+            <p class="text-white/50 text-[17px] mb-3" data-i18n-html="doc.gen.s3.desc">
               Compute and skill jobs require a signed <code>paymentTx</code> with sufficient budget. Fund your address
               via the P2P exchange, a transfer from another wallet, or a faucet.
               Check your balance at any time:
             </p>
-            <div class="code-block">curl "https://miner.proofofhuman.ge/api/wallet/balance?address=poh..."
+            <div class="code-block">curl "https://miner.poh.ge/api/wallet/balance?address=poh..."
 
 # Response: { "balance": 5000000000 }
 # 5 000 000 000 μPOH = 5 POH  (1 POH = 1 000 000 000 μPOH)</div>
@@ -235,9 +237,9 @@ console.log('Address:', address);</div>
           <div class="mb-8">
             <div class="flex items-center gap-3 mb-3">
               <span class="text-[13px] font-mono bg-green-500/10 text-green-400 border border-green-500/30 rounded px-2 py-0.5">STEP 4</span>
-              <span class="text-[20px]">Submit your first compute job</span>
+              <span class="text-[20px]" data-i18n="doc.gen.s4.title">Submit your first compute job</span>
             </div>
-            <p class="text-white/50 text-[17px] mb-3">
+            <p class="text-white/50 text-[17px] mb-3" data-i18n-html="doc.gen.s4.desc">
               Sign a payment proof and post to <code>/job</code>. The snippet below uses the wallet file from Step 1.
             </p>
             <div class="code-block">// submit-job.js  (requires tweetnacl)
@@ -246,7 +248,7 @@ const nacl   = require('tweetnacl');
 const wallet = JSON.parse(require('fs').readFileSync('poh-wallet.json'));
 const secretKey = new Uint8Array(Buffer.from(wallet.signingSecretKeyB64, 'base64'));
 
-const MINER = 'https://miner.proofofhuman.ge';
+const MINER = 'https://miner.poh.ge';
 const sha256hex = (s) =&gt; crypto.createHash('sha256').update(s).digest('hex');
 const sign = (data, sk) =&gt; {
   const msg = new TextEncoder().encode(typeof data === 'string' ? data : JSON.stringify(data));
@@ -303,60 +305,67 @@ run();</div>
 
           <!-- Summary table -->
           <div class="glass rounded-md p-5 text-[17px]">
-            <div class="text-white/40 text-sm uppercase tracking-widest mb-4">Quick reference</div>
+            <div class="text-white/40 text-sm uppercase tracking-widest mb-4" data-i18n="doc.gen.quickref.title">Quick reference</div>
             <div class="space-y-2 font-mono text-[15px]">
-              <div class="flex gap-3"><span class="text-green-400 w-6 shrink-0">1</span><span class="text-white/60">Generate keypair &amp; address locally — no network needed</span></div>
-              <div class="flex gap-3"><span class="text-green-400 w-6 shrink-0">2</span><span class="text-white/60">POST /api/wallet/register-key — once, free, any miner</span></div>
-              <div class="flex gap-3"><span class="text-green-400 w-6 shrink-0">3</span><span class="text-white/60">Fund address — GET /api/wallet/balance to verify</span></div>
-              <div class="flex gap-3"><span class="text-green-400 w-6 shrink-0">4</span><span class="text-white/60">POST /job with signed paymentTx — poll /job/:id/status</span></div>
+              <div class="flex gap-3"><span class="text-green-400 w-6 shrink-0">1</span><span class="text-white/60" data-i18n="doc.gen.quickref.1">Generate keypair &amp; address locally — no network needed</span></div>
+              <div class="flex gap-3"><span class="text-green-400 w-6 shrink-0">2</span><span class="text-white/60" data-i18n="doc.gen.quickref.2">POST /api/wallet/register-key — once, free, any miner</span></div>
+              <div class="flex gap-3"><span class="text-green-400 w-6 shrink-0">3</span><span class="text-white/60" data-i18n="doc.gen.quickref.3">Fund address — GET /api/wallet/balance to verify</span></div>
+              <div class="flex gap-3"><span class="text-green-400 w-6 shrink-0">4</span><span class="text-white/60" data-i18n="doc.gen.quickref.4">POST /job with signed paymentTx — poll /job/:id/status</span></div>
             </div>
           </div>
         </section>
 
         <!-- Chain & Wallet -->
         <section id="chain-wallet" class="mb-16">
-          <h2 class="text-[32px] mb-6 neon">Chain &amp; Wallet</h2>
+          <h2 class="text-[32px] mb-6 neon" data-i18n="doc.chain.title">Chain &amp; Wallet</h2>
+
+          <div class="glass rounded-[4px] p-5 mb-6 text-[17px] text-white/70">
+            <div class="neon mb-2 text-[20px]" data-i18n="doc.assets.title">Stablecoins &amp; multi-currency</div>
+            <p class="mb-2" data-i18n-html="doc.assets.p1">Five regional stablecoins ride on the chain alongside POH: <strong>αιGEL, αιKGS, αιAMD, αιETB, αιBTN</strong> (wire tickers <code>aiGEL</code>, <code>aiKGS</code>, <code>aiAMD</code>, <code>aiETB</code>, <code>aiBTN</code>). Stablecoins use <strong>2 decimals</strong> (1 unit = 100 raw); POH keeps 9 (1&nbsp;POH&nbsp;=&nbsp;1e9&nbsp;μPOH).</p>
+            <p class="mb-2" data-i18n-html="doc.assets.p2"><code>GET /api/assets</code> lists every asset with decimals, display names and per-currency gas prices. <code>GET /api/wallet/balance</code> returns an additional <code>assets</code> map with each stablecoin's raw and display balance.</p>
+            <p data-i18n-html="doc.assets.p3">Transfers: <code>POST /api/wallet/send</code> (and <code>/api/tx/submit</code>) accept a <code>currency</code> field — omit it for POH. A transaction's signed hash includes <code>currency</code> ONLY when non-POH, so existing POH transactions and signatures remain valid unchanged.</p>
+          </div>
 
           <div class="endpoint-card">
             <div class="mb-2"><span class="method method-get">GET</span> <code class="text-white/90">/status</code></div>
-            <p class="text-white/55 text-[18px]">Node status — chain height, sync state, reputation.</p>
+            <p class="text-white/55 text-[18px]" data-i18n="doc.chain.status">Node status — chain height, sync state, reputation.</p>
             <div class="code-block mt-3">curl http://127.0.0.1:3456/status</div>
           </div>
 
           <div class="endpoint-card">
             <div class="mb-2"><span class="method method-get">GET</span> <code class="text-white/90">/api/miner/info</code></div>
-            <p class="text-white/55 text-[18px]">Version, uptime, peer count, wallet address.</p>
+            <p class="text-white/55 text-[18px]" data-i18n="doc.chain.info">Version, uptime, peer count, wallet address.</p>
           </div>
 
           <div class="endpoint-card">
             <div class="mb-2"><span class="method method-get">GET</span> <code class="text-white/90">/api/wallet/balance?address=&lt;addr&gt;</code></div>
-            <p class="text-white/55 text-[18px]">Balance in μPOH for a PoH wallet address.</p>
+            <p class="text-white/55 text-[18px]" data-i18n="doc.chain.balance">Balance in μPOH for a PoH wallet address.</p>
             <div class="code-block mt-3">curl "http://127.0.0.1:3456/api/wallet/balance?address=poh..."</div>
           </div>
 
           <div class="endpoint-card">
             <div class="mb-2"><span class="method method-get">GET</span> <code class="text-white/90">/api/wallet/nonce?address=&lt;addr&gt;</code></div>
-            <p class="text-white/55 text-[18px]">Current nonce for transaction / payment signing.</p>
+            <p class="text-white/55 text-[18px]" data-i18n="doc.chain.nonce">Current nonce for transaction / payment signing.</p>
           </div>
 
           <div class="endpoint-card">
             <div class="mb-2"><span class="method method-get">GET</span> <code class="text-white/90">/api/wallet/transactions?address=&lt;addr&gt;</code></div>
-            <p class="text-white/55 text-[18px]">POH transfer history.</p>
+            <p class="text-white/55 text-[18px]" data-i18n="doc.chain.transactions">POH transfer history.</p>
           </div>
 
           <div class="endpoint-card">
             <div class="mb-2"><span class="method method-get">GET</span> <code class="text-white/90">/api/wallet/history?address=&lt;addr&gt;</code></div>
-            <p class="text-white/55 text-[18px]">Full history with block confirmations.</p>
+            <p class="text-white/55 text-[18px]" data-i18n="doc.chain.history">Full history with block confirmations.</p>
           </div>
 
           <div class="endpoint-card">
             <div class="mb-2"><span class="method method-get">GET</span> <code class="text-white/90">/api/wallet/jobs?address=&lt;addr&gt;&amp;limit=20</code></div>
-            <p class="text-white/55 text-[18px]">Public job history — joins <code>job-submitted</code> transitions with mined <code>scanResults</code>. Returns <code>{ jobs, latestSkillMemory, chatTurns }</code>.</p>
+            <p class="text-white/55 text-[18px]" data-i18n-html="doc.chain.jobs">Public job history — joins <code>job-submitted</code> transitions with mined <code>scanResults</code>. Returns <code>{ jobs, latestSkillMemory, chatTurns }</code>.</p>
           </div>
 
           <div class="endpoint-card">
             <div class="mb-2"><span class="method method-post">POST</span> <code class="text-white/90">/api/wallet/register-key</code></div>
-            <p class="text-white/55 text-[18px]">Register an ed25519 signing key for an address. Required before signed job payments. See <a href="#generate-wallet" class="neon hover:underline">Generate Wallet</a> for how to produce the proof. <code>proof</code> = ed25519 signature over the address string.</p>
+            <p class="text-white/55 text-[18px]" data-i18n-html="doc.chain.register">Register an ed25519 signing key for an address. Required before signed job payments. See <a href="#generate-wallet" class="neon hover:underline">Generate Wallet</a> for how to produce the proof. <code>proof</code> = ed25519 signature over the address string.</p>
             <div class="code-block mt-3">{
   "address": "poh...",
   "signingPublicKey": "base64...",
@@ -367,7 +376,7 @@ run();</div>
 
           <div class="endpoint-card">
             <div class="mb-2"><span class="method method-post">POST</span> <code class="text-white/90">/api/wallet/send</code></div>
-            <p class="text-white/55 text-[18px]">Transfer POH between wallets. The sender wallet must be stored on this node (loaded via <code>walletManager</code>). Amount is in <strong>POH</strong> (not μPOH). Optional <code>fee</code> and <code>memo</code> fields.</p>
+            <p class="text-white/55 text-[18px]" data-i18n-html="doc.chain.send">Transfer POH between wallets. The sender wallet must be stored on this node (loaded via <code>walletManager</code>). Amount is in <strong>POH</strong> (not μPOH). Optional <code>fee</code> and <code>memo</code> fields.</p>
             <div class="code-block mt-3">{
   "from": "poh...",
   "to": "poh...",
@@ -378,39 +387,40 @@ run();</div>
 
           <div class="endpoint-card">
             <div class="mb-2"><span class="method method-post">POST</span> <code class="text-white/90">/api/tx/submit</code></div>
-            <p class="text-white/55 text-[18px]">Submit a pre-signed <code>PoHTransaction</code> to the mempool.</p>
+            <p class="text-white/55 text-[18px]" data-i18n-html="doc.chain.txsubmit">Submit a pre-signed <code>PoHTransaction</code> to the mempool.</p>
           </div>
 
           <div class="endpoint-card">
             <div class="mb-2"><span class="method method-get">GET</span> <code class="text-white/90">/api/tx/pending</code></div>
-            <p class="text-white/55 text-[18px]">Inspect pending mempool transactions.</p>
+            <p class="text-white/55 text-[18px]" data-i18n="doc.chain.txpending">Inspect pending mempool transactions.</p>
           </div>
 
           <div class="endpoint-card">
             <div class="mb-2"><span class="method method-get">GET</span> <code class="text-white/90">/api/chain/supply-audit</code></div>
-            <p class="text-white/55 text-[18px]">Chain supply audit — total issued vs. accounted balances.</p>
+            <p class="text-white/55 text-[18px]" data-i18n="doc.chain.supply">Chain supply audit — total issued vs. accounted balances.</p>
           </div>
         </section>
 
         <!-- Jobs -->
         <section id="jobs" class="mb-16">
-          <h2 class="text-[32px] mb-6 neon">Jobs</h2>
-          <p class="text-white/55 text-[18px] mb-6">
+          <h2 class="text-[32px] mb-6 neon" data-i18n="doc.jobs.title">Jobs</h2>
+          <p class="text-white/55 text-[18px] mb-6" data-i18n-html="doc.jobs.intro">
             Submit compute work to the network. Types: <code>verdict</code> (identity scan, free), <code>skill</code>, <code>compute</code>.
             <code>skill</code> and <code>compute</code> jobs require a signed payment proof (<code>maxBudget</code> in μPOH).
           </p>
 
           <div class="glass rounded-[4px] p-5 mb-6 text-[17px] text-white/70">
-            <div class="neon mb-2 text-[20px]">Pricing &amp; fees</div>
-            <p class="mb-2">Paid jobs are metered per AI compute token at <strong>1&nbsp;μPOH&nbsp;per&nbsp;token</strong> (the default <code>gasPrice</code>; μPOH is the smallest unit, so this is the floor). Since <strong>1&nbsp;POH&nbsp;=&nbsp;1&nbsp;000&nbsp;000&nbsp;000&nbsp;μPOH</strong>, one POH buys up to <strong>1&nbsp;billion&nbsp;tokens</strong>.</p>
-            <p class="mb-2">The fee is <code>tokensUsed × gasPrice</code> and is <strong>never less than the tokens actually used</strong> (1&nbsp;000 tokens ⇒ ≥ 1&nbsp;000&nbsp;μPOH). Unused budget is refunded. A <code>maxBudget</code> too small to cover the job's token cost is rejected with <code>402 FEE_TOO_LOW</code>.</p>
-            <p class="mb-2"><strong>Block reward.</strong> On top of the fee, each block's ~1&nbsp;POH subsidy is <strong>split among the workers who completed jobs, weighted by delivered compute</strong> (a deterministic token estimate — splitting into many nodes earns nothing extra), minus a small (~10%) proposer cut. Blocks with no real work mint only a small keepalive, so emission tracks demand.</p>
-            <p>POH has no fixed price — the market defines it via the best open P2P order (see <code>GET /api/p2p/price</code>).</p>
+            <div class="neon mb-2 text-[20px]" data-i18n="doc.jobs.pricing.title">Pricing &amp; fees</div>
+            <p class="mb-2" data-i18n-html="doc.jobs.pricing.p1">Paid jobs are metered per AI compute token at <strong>1&nbsp;μPOH&nbsp;per&nbsp;token</strong> (the default <code>gasPrice</code>; μPOH is the smallest unit, so this is the floor). Since <strong>1&nbsp;POH&nbsp;=&nbsp;1&nbsp;000&nbsp;000&nbsp;000&nbsp;μPOH</strong>, one POH buys up to <strong>1&nbsp;billion&nbsp;tokens</strong>.</p>
+            <p class="mb-2" data-i18n-html="doc.jobs.pricing.p2">The fee is <code>tokensUsed × gasPrice</code> and is <strong>never less than the tokens actually used</strong> (1&nbsp;000 tokens ⇒ ≥ 1&nbsp;000&nbsp;μPOH). Unused budget is refunded. A <code>maxBudget</code> too small to cover the job's token cost is rejected with <code>402 FEE_TOO_LOW</code>.</p>
+            <p class="mb-2" data-i18n-html="doc.jobs.pricing.p3"><strong>Block reward.</strong> On top of the fee, each block's ~1&nbsp;POH subsidy is <strong>split among the workers who completed jobs, weighted by delivered compute</strong> (a deterministic token estimate — splitting into many nodes earns nothing extra), minus a small (~10%) proposer cut. Blocks with no real work mint only a small keepalive, so emission tracks demand.</p>
+            <p class="mb-2" data-i18n-html="doc.jobs.pricing.p4">POH has no fixed price — the market defines it via the best open P2P order (see <code>GET /api/p2p/price</code>).</p>
+            <p data-i18n-html="doc.jobs.pricing.currency">Job fees can be paid in POH or any stablecoin: set <code>currency</code> on the job payload. The fee floor is priced per currency, and <strong>the miner receives exactly the currency paid</strong> — no conversion.</p>
           </div>
 
           <div class="endpoint-card">
             <div class="mb-2"><span class="method method-post">POST</span> <code class="text-white/90">/job</code></div>
-            <p class="text-white/55 text-[18px]">Submit a job. Returns <code>{ jobId, statusUrl, resultUrl }</code>. <code>paymentTx.txHash</code> is a SHA-256 of <code>{ jobId, requesterAddress, minerAddress, amount, nonce }</code> — not a blockchain transaction hash.</p>
+            <p class="text-white/55 text-[18px]" data-i18n-html="doc.jobs.submit">Submit a job. Returns <code>{ jobId, statusUrl, resultUrl }</code>. <code>paymentTx.txHash</code> is a SHA-256 of <code>{ jobId, requesterAddress, minerAddress, amount, nonce }</code> — not a blockchain transaction hash.</p>
             <div class="code-block mt-3">{
   "type": "compute",
   "model": "llama3.1:8b",
@@ -423,38 +433,38 @@ run();</div>
 
           <div class="endpoint-card">
             <div class="mb-2"><span class="method method-get">GET</span> <code class="text-white/90">/job/:id/status</code></div>
-            <p class="text-white/55 text-[18px]">Poll job state: <code>queued</code>, <code>computing</code>, <code>done</code>, <code>error</code>.</p>
+            <p class="text-white/55 text-[18px]" data-i18n-html="doc.jobs.status">Poll job state: <code>queued</code>, <code>computing</code>, <code>done</code>, <code>error</code>.</p>
           </div>
 
           <div class="endpoint-card">
             <div class="mb-2"><span class="method method-get">GET</span> <code class="text-white/90">/job/:id/result</code></div>
-            <p class="text-white/55 text-[18px]">Full result when the job is done.</p>
+            <p class="text-white/55 text-[18px]" data-i18n="doc.jobs.result">Full result when the job is done.</p>
           </div>
 
           <div class="endpoint-card">
             <div class="mb-2"><span class="method method-get">GET</span> <code class="text-white/90">/jobs</code></div>
-            <p class="text-white/55 text-[18px]">List active jobs on this node.</p>
+            <p class="text-white/55 text-[18px]" data-i18n="doc.jobs.list">List active jobs on this node.</p>
           </div>
 
           <div class="endpoint-card">
             <div class="mb-2"><span class="method method-post">POST</span> <code class="text-white/90">/gossip</code></div>
-            <p class="text-white/55 text-[18px]">Receive P2P gossip envelopes from peer miners.</p>
+            <p class="text-white/55 text-[18px]" data-i18n="doc.jobs.gossip">Receive P2P gossip envelopes from peer miners.</p>
           </div>
         </section>
 
         <!-- Chat -->
         <section id="chat" class="mb-16">
-          <h2 class="text-[32px] mb-6 neon">Chat &amp; Routing</h2>
+          <h2 class="text-[32px] mb-6 neon" data-i18n="doc.chat.title">Chat &amp; Routing</h2>
 
           <div class="endpoint-card">
             <div class="mb-2"><span class="method method-post">POST</span> <code class="text-white/90">/chat/route</code></div>
-            <p class="text-white/55 text-[18px]">Route a message to the best matching skill.</p>
+            <p class="text-white/55 text-[18px]" data-i18n="doc.chat.route">Route a message to the best matching skill.</p>
             <div class="code-block mt-3">{ "message": "audit this skill code", "budget": 0, "wallet": "poh..." }</div>
           </div>
 
           <div class="endpoint-card">
             <div class="mb-2"><span class="method method-post">POST</span> <code class="text-white/90">/chat/ask</code></div>
-            <p class="text-white/55 text-[18px]">Full AI reply — routes to a skill or free chat. May return <code>{ fromChainHistory: true }</code> for cached on-chain replies.</p>
+            <p class="text-white/55 text-[18px]" data-i18n-html="doc.chat.ask">Full AI reply — routes to a skill or free chat. May return <code>{ fromChainHistory: true }</code> for cached on-chain replies.</p>
             <div class="code-block mt-3">{
   "message": "What is my on-chain reputation?",
   "wallet": "poh...",
@@ -463,7 +473,7 @@ run();</div>
 }</div>
           </div>
 
-          <div class="glass rounded-md p-5 mt-4 text-[17px] text-white/50">
+          <div class="glass rounded-md p-5 mt-4 text-[17px] text-white/50" data-i18n-html="doc.chat.context">
             <strong class="text-white/70">Private vs public context</strong><br>
             Private chat uses in-memory session history. Public (paid) jobs also pull on-chain history via
             <code>/api/wallet/jobs</code> so follow-ups work across devices.
@@ -472,146 +482,146 @@ run();</div>
 
         <!-- Search -->
         <section id="search" class="mb-16">
-          <h2 class="text-[32px] mb-6 neon">Chat History Search</h2>
-          <p class="text-white/55 text-[18px] mb-6">
+          <h2 class="text-[32px] mb-6 neon" data-i18n="doc.search.title">Chat History Search</h2>
+          <p class="text-white/55 text-[18px] mb-6" data-i18n="doc.search.intro">
             Meilisearch runs locally on each miner (port 7700). Remote clients call these wallet API routes — not Meilisearch directly.
           </p>
 
           <div class="endpoint-card">
             <div class="mb-2"><span class="method method-get">GET</span> <code class="text-white/90">/api/search/suggest?q=&lt;prefix&gt;&amp;wallet=&lt;addr&gt;&amp;limit=8</code></div>
-            <p class="text-white/55 text-[18px]">Autocomplete from indexed blockchain job history — past prompts and reply snippets.</p>
+            <p class="text-white/55 text-[18px]" data-i18n="doc.search.suggest">Autocomplete from indexed blockchain job history — past prompts and reply snippets.</p>
           </div>
 
           <div class="endpoint-card">
             <div class="mb-2"><span class="method method-get">GET</span> <code class="text-white/90">/api/search/history-match?q=&lt;message&gt;&amp;wallet=&lt;addr&gt;</code></div>
-            <p class="text-white/55 text-[18px]">Return a full cached reply when the prompt closely matches prior on-chain history (similarity ≥ 0.86).</p>
+            <p class="text-white/55 text-[18px]" data-i18n="doc.search.match">Return a full cached reply when the prompt closely matches prior on-chain history (similarity ≥ 0.86).</p>
           </div>
         </section>
 
         <!-- Explorer -->
         <section id="explorer" class="mb-16">
-          <h2 class="text-[32px] mb-6 neon">Blockchain Explorer</h2>
+          <h2 class="text-[32px] mb-6 neon" data-i18n="doc.explorer.title">Blockchain Explorer</h2>
 
           <div class="endpoint-card">
             <div class="mb-2"><span class="method method-get">GET</span> <code class="text-white/90">/api/explorer/blocks?page=0&amp;limit=20</code></div>
-            <p class="text-white/55 text-[18px]">Recent blocks (newest first). Each entry includes <code>jobCount</code> when the block contains mined results.</p>
+            <p class="text-white/55 text-[18px]" data-i18n-html="doc.explorer.blocks">Recent blocks (newest first). Each entry includes <code>jobCount</code> when the block contains mined results.</p>
           </div>
 
           <div class="endpoint-card">
             <div class="mb-2"><span class="method method-get">GET</span> <code class="text-white/90">/api/explorer/block/:height</code></div>
-            <p class="text-white/55 text-[18px]">Full block JSON — <code>scanResults</code>, <code>stateTransitions</code>, hash, miner, reward.</p>
+            <p class="text-white/55 text-[18px]" data-i18n-html="doc.explorer.block">Full block JSON — <code>scanResults</code>, <code>stateTransitions</code>, hash, miner, reward.</p>
           </div>
 
           <div class="endpoint-card">
             <div class="mb-2"><span class="method method-get">GET</span> <code class="text-white/90">/api/explorer/search?q=&lt;query&gt;</code></div>
-            <p class="text-white/55 text-[18px]">Lookup by block height, tx/block hash, or wallet address. Address search returns balance, transfers, and completed jobs.</p>
+            <p class="text-white/55 text-[18px]" data-i18n="doc.explorer.search">Lookup by block height, tx/block hash, or wallet address. Address search returns balance, transfers, and completed jobs.</p>
           </div>
         </section>
 
         <!-- Skills -->
         <section id="skills" class="mb-16">
-          <h2 class="text-[32px] mb-6 neon">Skills</h2>
-          <p class="text-white/55 text-[18px] mb-6">
+          <h2 class="text-[32px] mb-6 neon" data-i18n="doc.skills.title">Skills</h2>
+          <p class="text-white/55 text-[18px] mb-6" data-i18n-html="doc.skills.intro">
             On-demand agent modules. Deploy a public skill for <strong>1 POH</strong>; community staking reaches <strong>10 POH</strong> to graduate a skill network-wide.
           </p>
 
           <div class="endpoint-card">
             <div class="mb-2"><span class="method method-get">GET</span> <code class="text-white/90">/api/skills</code></div>
-            <p class="text-white/55 text-[18px]">List skills with staking totals and <code>economics: { proposeFeePoh, graduationThresholdPoh }</code>.</p>
-            <div class="code-block mt-3">curl https://miner.proofofhuman.ge/api/skills</div>
+            <p class="text-white/55 text-[18px]" data-i18n-html="doc.skills.list">List skills with staking totals and <code>economics: { proposeFeePoh, graduationThresholdPoh }</code>.</p>
+            <div class="code-block mt-3">curl https://miner.poh.ge/api/skills</div>
           </div>
 
           <div class="endpoint-card">
             <div class="mb-2"><span class="method method-get">GET</span> <code class="text-white/90">/api/skills/prefs?address=&lt;addr&gt;</code></div>
-            <p class="text-white/55 text-[18px]">Skill enable/disable and staking preferences for a wallet.</p>
+            <p class="text-white/55 text-[18px]" data-i18n="doc.skills.prefs">Skill enable/disable and staking preferences for a wallet.</p>
           </div>
 
           <div class="endpoint-card">
             <div class="mb-2"><span class="method method-post">POST</span> <code class="text-white/90">/api/skills/propose</code></div>
-            <p class="text-white/55 text-[18px]">Propose a new skill. Public proposals cost 1 POH (escrowed for <code>code_audit</code>).</p>
+            <p class="text-white/55 text-[18px]" data-i18n-html="doc.skills.propose">Propose a new skill. Public proposals cost 1 POH (escrowed for <code>code_audit</code>).</p>
             <div class="code-block mt-3">{ "manifest": { ... }, "code": "...", "private": false }</div>
           </div>
 
           <div class="endpoint-card">
             <div class="mb-2"><span class="method method-post">POST</span> <code class="text-white/90">/api/skills/:id/stake</code></div>
-            <p class="text-white/55 text-[18px]">Stake POH toward skill graduation. Amount is in <strong>POH</strong> (not μPOH). Uses the node's own wallet.</p>
+            <p class="text-white/55 text-[18px]" data-i18n-html="doc.skills.stake">Stake POH toward skill graduation. Amount is in <strong>POH</strong> (not μPOH). Uses the node's own wallet.</p>
             <div class="code-block mt-3">{ "amount": 1000 }</div>
           </div>
 
           <div class="endpoint-card">
             <div class="mb-2"><span class="method method-post">POST</span> <code class="text-white/90">/api/skills/:id/unstake</code></div>
-            <p class="text-white/55 text-[18px]">Withdraw staked POH from a proposed skill.</p>
+            <p class="text-white/55 text-[18px]" data-i18n="doc.skills.unstake">Withdraw staked POH from a proposed skill.</p>
           </div>
 
           <div class="endpoint-card">
             <div class="mb-2"><span class="method method-post">POST</span> <code class="text-white/90">/api/skills/:id/enable</code> &nbsp;|&nbsp; <code class="text-white/90">/disable</code></div>
-            <p class="text-white/55 text-[18px]">Toggle whether this node runs a skill.</p>
+            <p class="text-white/55 text-[18px]" data-i18n="doc.skills.toggle">Toggle whether this node runs a skill.</p>
           </div>
         </section>
 
         <!-- HF Datasets -->
         <section id="hf-datasets" class="mb-16">
-          <h2 class="text-[32px] mb-6 neon">HF Datasets</h2>
-          <p class="text-white/55 text-[18px] mb-6">
+          <h2 class="text-[32px] mb-6 neon" data-i18n="doc.hf.title">HF Datasets</h2>
+          <p class="text-white/55 text-[18px] mb-6" data-i18n-html="doc.hf.intro">
             Hugging Face datasets installed on this node. Compute jobs can reference them by ID. Chat will suggest installs when a dataset is missing.
             Datasets are stored under <code>~/.poh-miner/brain-data/hf-datasets/</code>.
           </p>
 
           <div class="endpoint-card">
             <div class="mb-2"><span class="method method-get">GET</span> <code class="text-white/90">/api/hf-dataset</code></div>
-            <p class="text-white/55 text-[18px]">List installed datasets. Returns <code>{ datasets: [{ id, files, rowCount, source }] }</code>.</p>
+            <p class="text-white/55 text-[18px]" data-i18n-html="doc.hf.list">List installed datasets. Returns <code>{ datasets: [{ id, files, rowCount, source }] }</code>.</p>
           </div>
 
           <div class="endpoint-card">
             <div class="mb-2"><span class="method method-post">POST</span> <code class="text-white/90">/api/hf-dataset/:id/download</code></div>
-            <p class="text-white/55 text-[18px]">Install a dataset by Hugging Face ID. Falls back to pulling from a peer miner if HF is unreachable. Returns <code>{ ok: true, manifest }</code> on success.</p>
+            <p class="text-white/55 text-[18px]" data-i18n-html="doc.hf.download">Install a dataset by Hugging Face ID. Falls back to pulling from a peer miner if HF is unreachable. Returns <code>{ ok: true, manifest }</code> on success.</p>
             <div class="code-block mt-3">curl -X POST http://127.0.0.1:3456/api/hf-dataset/imdb/download</div>
           </div>
 
           <div class="endpoint-card">
             <div class="mb-2"><span class="method method-get">DELETE</span> <code class="text-white/90">/api/hf-dataset/:id</code></div>
-            <p class="text-white/55 text-[18px]">Remove an installed dataset from this node.</p>
+            <p class="text-white/55 text-[18px]" data-i18n="doc.hf.delete">Remove an installed dataset from this node.</p>
           </div>
         </section>
 
         <!-- LLM & Brain -->
         <section id="llm-brain" class="mb-16">
-          <h2 class="text-[32px] mb-6 neon">LLM &amp; Brain</h2>
-          <p class="text-white/55 text-[18px] mb-6">Inference runs in-process via QVAC. Brain state stores human feedback and signal weights.</p>
+          <h2 class="text-[32px] mb-6 neon" data-i18n="doc.llm.title">LLM &amp; Brain</h2>
+          <p class="text-white/55 text-[18px] mb-6" data-i18n="doc.llm.intro">Inference runs in-process via QVAC. Brain state stores human feedback and signal weights.</p>
 
           <div class="endpoint-card">
             <div class="mb-2"><span class="method method-post">POST</span> <code class="text-white/90">/api/chat</code></div>
-            <p class="text-white/55 text-[18px]">Streaming chat via local QVAC (Ollama-compatible body).</p>
+            <p class="text-white/55 text-[18px]" data-i18n="doc.llm.chat">Streaming chat via local QVAC (Ollama-compatible body).</p>
           </div>
 
           <div class="endpoint-card">
             <div class="mb-2"><span class="method method-post">POST</span> <code class="text-white/90">/api/generate</code></div>
-            <p class="text-white/55 text-[18px]">QVAC generate endpoint (Ollama-compatible body).</p>
+            <p class="text-white/55 text-[18px]" data-i18n="doc.llm.generate">QVAC generate endpoint (Ollama-compatible body).</p>
           </div>
 
           <div class="endpoint-card">
             <div class="mb-2"><span class="method method-get">GET</span> <code class="text-white/90">/api/models</code></div>
-            <p class="text-white/55 text-[18px]">Models available on this node (built-in + loaded + registry).</p>
+            <p class="text-white/55 text-[18px]" data-i18n="doc.llm.models">Models available on this node (built-in + loaded + registry).</p>
           </div>
 
           <div class="endpoint-card">
             <div class="mb-2"><span class="method method-get">GET</span> <code class="text-white/90">/api/network-models</code></div>
-            <p class="text-white/55 text-[18px]">Aggregated model list from connected peers.</p>
+            <p class="text-white/55 text-[18px]" data-i18n="doc.llm.networkmodels">Aggregated model list from connected peers.</p>
           </div>
 
           <div class="endpoint-card">
             <div class="mb-2"><span class="method method-get">GET</span> <code class="text-white/90">/api/brain/state</code></div>
-            <p class="text-white/55 text-[18px]">Weights count, feedback count, model info.</p>
+            <p class="text-white/55 text-[18px]" data-i18n="doc.llm.brainstate">Weights count, feedback count, model info.</p>
           </div>
 
           <div class="endpoint-card">
             <div class="mb-2"><span class="method method-get">GET</span> <code class="text-white/90">/api/brain/weights</code></div>
-            <p class="text-white/55 text-[18px]">Full <code>weights.json</code> for the identity brain.</p>
+            <p class="text-white/55 text-[18px]" data-i18n-html="doc.llm.weights">Full <code>weights.json</code> for the identity brain.</p>
           </div>
 
           <div class="endpoint-card">
             <div class="mb-2"><span class="method method-post">POST</span> <code class="text-white/90">/api/brain/feedback</code></div>
-            <p class="text-white/55 text-[18px]">Submit a human correction to improve signal weights.</p>
+            <p class="text-white/55 text-[18px]" data-i18n="doc.llm.feedback">Submit a human correction to improve signal weights.</p>
             <div class="code-block mt-3">{
   "address": "poh...",
   "aiVerdict": "human",
@@ -623,85 +633,89 @@ run();</div>
 
           <div class="endpoint-card">
             <div class="mb-2"><span class="method method-post">POST</span> <code class="text-white/90">/api/brain/vote</code></div>
-            <p class="text-white/55 text-[18px]">Vote on signal weight adjustments.</p>
+            <p class="text-white/55 text-[18px]" data-i18n="doc.llm.vote">Vote on signal weight adjustments.</p>
           </div>
         </section>
 
         <!-- P2P -->
         <section id="p2p" class="mb-16">
-          <h2 class="text-[32px] mb-6 neon">P2P Exchange</h2>
-          <p class="text-white/55 text-[18px] mb-6">Peer-to-peer POH trading with on-chain escrow.</p>
+          <h2 class="text-[32px] mb-6 neon" data-i18n="doc.p2p.title">P2P Exchange</h2>
+
+          <div class="glass rounded-[4px] p-5 mb-6 text-[17px] text-white/70">
+            <p data-i18n-html="doc.p2p.swap">Stablecoins trade as base assets. When both legs are on-chain (e.g. <code>aiKGS/aiGEL</code>, or POH for aiGEL) the trade settles <strong>atomically</strong> in one step — no payment-sent/confirm phase, and proceeds go directly to the taker's own poh wallet address (no receival-wallet input). Off-chain legs (bank transfer, USDT…) keep the manual escrow flow.</p>
+          </div>
+          <p class="text-white/55 text-[18px] mb-6" data-i18n="doc.p2p.intro">Peer-to-peer POH trading with on-chain escrow.</p>
 
           <div class="endpoint-card">
             <div class="mb-2"><span class="method method-get">GET</span> <code class="text-white/90">/api/p2p/currencies</code></div>
-            <p class="text-white/55 text-[18px]">Supported quote currencies.</p>
+            <p class="text-white/55 text-[18px]" data-i18n="doc.p2p.currencies">Supported quote currencies.</p>
           </div>
 
           <div class="endpoint-card">
             <div class="mb-2"><span class="method method-get">GET</span> <code class="text-white/90">/api/p2p/price?quoteCurrency=&lt;cur&gt;</code></div>
-            <p class="text-white/55 text-[18px]">Reference POH price — the market price derived <strong>only</strong> from the best open P2P order(s): <code>{ price (mid), bestBid, bestAsk, source }</code>. Omit <code>quoteCurrency</code> for a per-currency map. POH has no oracle/fixed price.</p>
+            <p class="text-white/55 text-[18px]" data-i18n-html="doc.p2p.price">Reference POH price — the market price derived <strong>only</strong> from the best open P2P order(s): <code>{ price (mid), bestBid, bestAsk, source }</code>. Omit <code>quoteCurrency</code> for a per-currency map. POH has no oracle/fixed price.</p>
           </div>
 
           <div class="endpoint-card">
             <div class="mb-2"><span class="method method-get">GET</span> <code class="text-white/90">/api/p2p/orders</code></div>
-            <p class="text-white/55 text-[18px]">Open order book. Filters: <code>side</code>, <code>quoteCurrency</code>.</p>
+            <p class="text-white/55 text-[18px]" data-i18n-html="doc.p2p.orders">Open order book. Filters: <code>side</code>, <code>quoteCurrency</code>.</p>
           </div>
 
           <div class="endpoint-card">
             <div class="mb-2"><span class="method method-get">GET</span> <code class="text-white/90">/api/p2p/orders/my?address=&lt;addr&gt;</code></div>
-            <p class="text-white/55 text-[18px]">Orders created by this address.</p>
+            <p class="text-white/55 text-[18px]" data-i18n="doc.p2p.myorders">Orders created by this address.</p>
           </div>
 
           <div class="endpoint-card">
             <div class="mb-2"><span class="method method-post">POST</span> <code class="text-white/90">/api/p2p/orders</code></div>
-            <p class="text-white/55 text-[18px]">Create a buy or sell order.</p>
+            <p class="text-white/55 text-[18px]" data-i18n="doc.p2p.createorder">Create a buy or sell order.</p>
           </div>
 
           <div class="endpoint-card">
             <div class="mb-2"><span class="method method-post">POST</span> <code class="text-white/90">/api/p2p/orders/:id/cancel</code></div>
-            <p class="text-white/55 text-[18px]">Cancel an open order.</p>
+            <p class="text-white/55 text-[18px]" data-i18n="doc.p2p.cancel">Cancel an open order.</p>
           </div>
 
           <div class="endpoint-card">
             <div class="mb-2"><span class="method method-post">POST</span> <code class="text-white/90">/api/p2p/orders/:id/select</code></div>
-            <p class="text-white/55 text-[18px]">Taker selects an order to begin a trade.</p>
+            <p class="text-white/55 text-[18px]" data-i18n="doc.p2p.select">Taker selects an order to begin a trade.</p>
           </div>
 
           <div class="endpoint-card">
             <div class="mb-2"><span class="method method-get">GET</span> <code class="text-white/90">/api/p2p/trades/my?address=&lt;addr&gt;</code></div>
-            <p class="text-white/55 text-[18px]">Active and completed trades for an address.</p>
+            <p class="text-white/55 text-[18px]" data-i18n="doc.p2p.mytrades">Active and completed trades for an address.</p>
           </div>
 
           <div class="endpoint-card">
             <div class="mb-2"><span class="method method-post">POST</span> <code class="text-white/90">/api/p2p/trades/:id/:action</code></div>
-            <p class="text-white/55 text-[18px]">Advance trade: <code>payment-sent</code>, <code>release</code>, <code>cancel</code>, <code>dispute</code>.</p>
+            <p class="text-white/55 text-[18px]" data-i18n-html="doc.p2p.advance">Advance trade: <code>payment-sent</code>, <code>release</code>, <code>cancel</code>, <code>dispute</code>.</p>
           </div>
         </section>
 
         <!-- Push -->
         <section id="push" class="mb-16">
-          <h2 class="text-[32px] mb-6 neon">Push Notifications</h2>
+          <h2 class="text-[32px] mb-6 neon" data-i18n="doc.push.title">Push Notifications</h2>
 
           <div class="endpoint-card">
             <div class="mb-2"><span class="method method-post">POST</span> <code class="text-white/90">/api/push/register</code></div>
-            <p class="text-white/55 text-[18px]">Register an Expo push token for a wallet address.</p>
+            <p class="text-white/55 text-[18px]" data-i18n="doc.push.register">Register an Expo push token for a wallet address.</p>
             <div class="code-block mt-3">{ "address": "poh...", "token": "ExponentPushToken[...]" }</div>
           </div>
 
           <div class="endpoint-card">
             <div class="mb-2"><span class="method method-post">POST</span> <code class="text-white/90">/api/push/send</code></div>
-            <p class="text-white/55 text-[18px]">Send a push notification. Optional <code>address</code> filter.</p>
+            <p class="text-white/55 text-[18px]" data-i18n-html="doc.push.send">Send a push notification. Optional <code>address</code> filter.</p>
           </div>
         </section>
 
         <!-- Errors -->
         <section id="errors" class="mb-8">
-          <h2 class="text-[32px] mb-6 neon">Errors &amp; Auth</h2>
+          <h2 class="text-[32px] mb-6 neon" data-i18n="doc.errors.title">Errors &amp; Auth</h2>
           <div class="glass rounded-md p-6 text-[18px] text-white/55 space-y-4">
-            <p>Responses are JSON. Errors return <code>{ "error": "message" }</code> with an appropriate HTTP status (400, 401, 402, 404, 500).</p>
-            <p><strong class="text-white/80">Payment-required (402):</strong> skill/compute jobs without a valid signed <code>paymentTx</code> are rejected before execution.</p>
-            <p><strong class="text-white/80">Signing:</strong> register your ed25519 key via <code>/api/wallet/register-key</code>, then sign payment proofs binding <code>jobId + minerWallet + maxBudget + nonce</code>.</p>
-            <p><strong class="text-white/80">SDKs:</strong> use <code>runCompute()</code> / <code>submitJob()</code> in <a href="https://github.com/Proof-of-Human-Network/poh-miner" class="neon hover:underline">poh-miner SDK</a> to handle signing automatically.</p>
+            <p data-i18n-html="doc.errors.json">Responses are JSON. Errors return <code>{ "error": "message" }</code> with an appropriate HTTP status (400, 401, 402, 404, 500).</p>
+            <p data-i18n-html="doc.errors.payment"><strong class="text-white/80">Payment-required (402):</strong> skill/compute jobs without a valid signed <code>paymentTx</code> are rejected before execution.</p>
+            <p data-i18n-html="doc.errors.signing"><strong class="text-white/80">Signing:</strong> register your ed25519 key via <code>/api/wallet/register-key</code>, then sign payment proofs binding <code>jobId + minerWallet + maxBudget + nonce</code>.</p>
+            <p data-i18n-html="doc.errors.sdks"><strong class="text-white/80">SDKs:</strong> use <code>runCompute()</code> / <code>submitJob()</code> in <a href="https://github.com/Proof-of-Human-Network/poh-miner" class="neon hover:underline">poh-miner SDK</a> to handle signing automatically.</p>
           </div>
         </section>
 
@@ -711,10 +725,10 @@ run();</div>
 
   <footer class="border-t border-white/10 py-8 text-white/50" style="font-size: 1.25rem;">
     <div class="max-w-7xl mx-auto px-4 sm:px-8 flex flex-col sm:flex-row gap-2 sm:justify-between">
-      <div>PoH Miner Network API — port 3456 by default</div>
+      <div data-i18n="doc.foot.tag">PoH Miner Network API — port 3456 by default</div>
       <div class="flex gap-4">
-        <a href="../" class="hover:text-white">Landing</a>
-        <a href="https://proofofhuman.ge" class="hover:text-white">proofofhuman.ge</a>
+        <a href="../" class="hover:text-white" data-i18n="doc.foot.landing">Landing</a>
+        <a href="https://poh.ge" class="hover:text-white">poh.ge</a>
         <a href="https://github.com/Proof-of-Human-Network/poh-miner" target="_blank" class="hover:text-white">GitHub</a>
       </div>
     </div>
