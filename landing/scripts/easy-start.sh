@@ -3,12 +3,12 @@
 # Designed for normal people (Mac Mini users, Windows users with spare PCs, etc.)
 #
 # Usage:
-#   curl -fsSL https://miner.proofofhuman.ge/scripts/easy-start.sh | bash
+#   curl -fsSL https://miner.poh.ge/scripts/easy-start.sh | bash
 #   or run locally after cloning
 
 set -e
 
-BASE_URL="https://miner.proofofhuman.ge"
+BASE_URL="https://miner.poh.ge"
 
 echo "============================================"
 echo "  PoH Miner Network - Easy Start"
@@ -195,4 +195,4 @@ else
 fi
 
 echo ""
-echo "Dashboard & downloads: https://miner.proofofhuman.ge"
+echo "Dashboard & downloads: https://miner.poh.ge"

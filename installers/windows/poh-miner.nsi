@@ -16,7 +16,7 @@
 !define VERSIONPATCH 0
 !define HELPURL "https://github.com/poh/poh-miner-network"
 !define UPDATEURL "https://github.com/poh/poh-miner-network/releases"
-!define ABOUTURL "https://proofofhuman.ge"
+!define ABOUTURL "https://poh.ge"
 
 !define INSTALLSIZE 15000 ; approximate in KB
 

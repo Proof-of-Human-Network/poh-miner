@@ -180,7 +180,7 @@ The biggest optimization in this release: **inference now runs in-process via QV
 
 1. **Quit** PoH Miner completely (check system tray on Windows).
 2. **Back up** `.poh-miner` (see above).
-3. **Download and install** the latest build from [proofofhuman.ge](https://proofofhuman.ge).
+3. **Download and install** the latest build from [poh.ge](https://poh.ge).
 4. **Open** the app.
 
 **Existing wallet:** App should resume with the same address and chain. You will **not** see onboarding again if `onboarded` is already set in `config.json`.
@@ -378,4 +378,4 @@ A: No. The miner downloads and starts it on first run. Ensure port **7700** is f
 | Reconfigure MCP servers | **Optional** — paste standard `mcpServers` JSON if imports fail |
 | Free port 7700 for Meilisearch | **Yes** on first run (or keep existing instance on 7700) |
 
-[Get the latest PoH Miner →](https://proofofhuman.ge)
+[Get the latest PoH Miner →](https://poh.ge)

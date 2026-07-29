@@ -3,13 +3,14 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>POH • The Coin That Pays for AI Compute</title>
-  <meta name="description" content="POH is the native token of the Proof-of-Human decentralized AI compute network. Earn it by running a node, spend it on real AI compute.">
+  <title>POH • Private, Encrypted AI Compute for Business</title>
+  <meta name="description" content="POH gives teams building with AI private, end-to-end encrypted compute on a decentralized network. Your models, your data — never anyone else's cloud. Fixed quotes, paid in EUR, USD or USDT.">
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://fonts.googleapis.com/css2?family=Iceland&display=swap" rel="stylesheet">
   <link rel="icon" type="image/svg+xml" href="poh-miner.svg">
   <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
   <link rel="shortcut icon" href="favicon.ico">
+  <script src="i18n.js" defer></script>
   <style>
     :root { --bg: #000000; --accent: #22c55e; }
 
@@ -18,14 +19,9 @@
 
     .glass { background: rgba(10,10,10,0.85); border: 1px solid #1f1f1f; backdrop-filter: blur(20px); }
     .neon { color: #22c55e; }
-
-    #coin-mesh {
-      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-      opacity: 0.9; z-index: 1; pointer-events: none;
-    }
     .hero-bg { background: radial-gradient(circle at 50% 25%, rgba(34,197,94,0.10) 0%, transparent 65%); }
 
-    /* === GLOBAL +50% FONT SIZE SCALING === */
+    /* === GLOBAL +50% FONT SIZE SCALING (same as poh.html) === */
     html { font-size: 150%; }
     @media (max-width: 639px)  { html { font-size: 100%; } }
     @media (max-width: 767px)  { html { font-size: 110%; } }
@@ -52,21 +48,6 @@
     .mobile-drawer a:last-child { border-bottom: none; }
     @media (min-width: 1024px) { .mobile-drawer { display: none !important; } }
 
-    /* Spinning coin */
-    .coin {
-      width: 190px; height: 190px; border-radius: 9999px;
-      display: flex; align-items: center; justify-content: center;
-      background: radial-gradient(circle at 35% 28%, #1c5636, #041108 72%);
-      border: 2px solid rgba(34,197,94,0.55);
-      box-shadow: 0 0 80px rgba(34,197,94,0.30), inset 0 0 34px rgba(34,197,94,0.18);
-      color: #22c55e; animation: coin-float 4s ease-in-out infinite; position: relative;
-    }
-    .coin::after {
-      content: ''; position: absolute; inset: 14px; border-radius: 9999px;
-      border: 1px solid rgba(34,197,94,0.25);
-    }
-    @keyframes coin-float { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-16px); } }
-
     .chip { border: 1px solid #1f1f1f; background: rgba(10,10,10,0.6); border-radius: 999px; }
     .ico { width: 40px; height: 40px; stroke: #22c55e; stroke-width: 1.6; fill: none; }
     .card-hover { transition: transform .25s, border-color .25s; }
@@ -86,9 +67,11 @@
         <img src="poh-miner.svg" alt="PoH Logo" width="36" height="36" class="sm:w-[48px] sm:h-[48px]" style="vertical-align: middle;" />
       </a>
       <div class="nav-links items-center gap-x-6 xl:gap-x-9 text-[17px] xl:text-[20px]">
-        <a href="index.html" class="text-[#22c55e] transition whitespace-nowrap">POH</a>
-        <a href="wallet/" class="hover:text-[#22c55e] transition whitespace-nowrap">Wallet</a>
-        <a href="miner.html#start" class="px-3 lg:px-5 py-2 rounded-[4px] bg-[#22c55e] text-black hover:bg-white transition whitespace-nowrap">Run a miner</a>
+        <a href="poh.html" class="hover:text-[#22c55e] transition whitespace-nowrap" data-i18n="nav.poh">POH</a>
+        <a href="framework.html" class="hover:text-[#22c55e] transition whitespace-nowrap" data-i18n="nav.framework">Framework</a>
+        <a href="wallet/" class="hover:text-[#22c55e] transition whitespace-nowrap" data-i18n="nav.wallet">Wallet</a>
+        <a href="miner.html#start" class="px-3 lg:px-5 py-2 rounded-[4px] bg-[#22c55e] text-black hover:bg-white transition whitespace-nowrap" data-i18n="nav.runminer">Run a miner</a>
+        <div data-i18n-switch></div>
       </div>
       <button class="hamburger" id="hamburger" aria-label="Open menu">
         <span></span><span></span><span></span>
@@ -98,599 +81,169 @@
 
   <!-- Mobile nav drawer -->
   <div class="mobile-drawer" id="mobile-drawer">
-    <a href="index.html">POH</a>
-    <a href="wallet/">Wallet</a>
-    <a href="miner.html#start">Run a miner</a>
+    <a href="poh.html" data-i18n="nav.poh">POH</a>
+    <a href="framework.html" data-i18n="nav.framework">Framework</a>
+    <a href="wallet/" data-i18n="nav.wallet">Wallet</a>
+    <a href="miner.html#start" data-i18n="nav.runminer">Run a miner</a>
+    <div data-i18n-switch style="padding:14px 0"></div>
   </div>
 
   <!-- Hero -->
   <div class="relative min-h-[100dvh] flex items-center justify-center pt-16 sm:pt-20 hero-bg">
-    <canvas id="coin-mesh" class="absolute inset-0"></canvas>
-
     <div class="relative z-10 max-w-5xl px-6 text-center">
-      
-      <h1 class="font-display text-[52px] sm:text-[80px] md:text-[150px] leading-[0.9]">
-        <span class="neon">AI</span> Works <br>
-        You <span class="neon">Earn</span>
+      <div class="uppercase tracking-[3px] text-xs text-[#22c55e] mb-6" data-i18n="b2b.hero.eyebrow">PRIVATE AI COMPUTE</div>
+      <h1 class="font-display text-[48px] sm:text-[76px] md:text-[130px] leading-[0.9]" data-i18n-html="b2b.hero">
+        Build on <span class="neon">AI.</span><br>
+        Keep it <span class="neon">private.</span>
       </h1>
-
+      <p class="mt-8 max-w-3xl mx-auto text-[18px] sm:text-[22px] md:text-[26px] text-white/60" data-i18n="b2b.hero.sub">
+        Encrypted, sovereign compute for teams building with AI
+      </p>
       <div class="mt-10 flex flex-col sm:flex-row gap-4 justify-center">
-        <a href="miner.html#start"
-           class="inline-flex items-center justify-center px-8 py-3 bg-[#22c55e] text-black text-[18px] sm:text-[24px] md:text-[30px] rounded-[4px] hover:bg-white transition">
-          Start mining POH
+        <a target="_blank" href="https://calendly.com/poh_network"
+           class="inline-flex items-center justify-center px-8 py-3 bg-[#22c55e] text-black text-[18px] sm:text-[24px] md:text-[30px] rounded-[4px] hover:bg-white transition" data-i18n="b2b.hero.cta1">
+          Get a fixed quote →
         </a>
-        <a href="#earn-spend"
-           class="inline-flex items-center justify-center px-8 py-3 border border-white/30 hover:bg-white/5 text-[18px] sm:text-[24px] md:text-[30px] rounded-[4px] transition">
-          How it pays
+        <a href="#how"
+           class="inline-flex items-center justify-center px-8 py-3 border border-white/30 hover:bg-white/5 text-[18px] sm:text-[24px] md:text-[30px] rounded-[4px] transition" data-i18n="b2b.hero.cta2">
+          How it works
         </a>
       </div>
     </div>
   </div>
 
-  <!-- Value band -->
-  <div class="section-full border-y border-white/10 py-12 md:py-16 bg-[#050505]">
-    <div class="max-w-6xl mx-auto px-6">
-      <div class="uppercase tracking-[3px] text-xs text-[#22c55e] mb-10 text-center reveal">WHAT ONE POH IS WORTH</div>
-      <div class="grid md:grid-cols-2 gap-8 md:gap-10 items-stretch">
-        <!-- Left: what POH is worth -->
-        <div class="glass card-hover p-8 md:p-10 rounded-[6px] reveal flex flex-col justify-center text-center md:text-left">
-          <div class="font-display text-[44px] sm:text-[62px] md:text-[88px] leading-none">1 POH ≈ <span class="neon">&#?%</span></div>
-          <p class="mt-8 text-[16px] sm:text-[20px] md:text-[23px] text-white/60">POH is priced by the open market via P2P. Today, 1,000,000,000 AI compute tokens worth $200–500 at ChatGPT, Gemini or Grok.</p>
-        </div>
-        <!-- Right: enterprise -->
-        <div class="glass card-hover p-8 md:p-10 rounded-[6px] reveal flex flex-col justify-center text-center md:text-left">
-          <div class="uppercase tracking-[3px] text-xs text-[#22c55e] mb-5">ENTERPRISE</div>
-          <h3 class="font-display text-[34px] sm:text-[46px] md:text-[62px] leading-[0.95] mb-5">Need compute at scale?</h3>
-          <p class="text-[16px] sm:text-[20px] md:text-[23px] text-white/60 mb-9">Skip the volatility. Talk to us and lock a <span class="text-white/85">fixed quote</span> for enterprise AI compute.</p>
-          <a href="https://www.linkedin.com/in/bogdan-sizov-00b736386/" target="_blank" rel="noopener"
-             class="inline-flex items-center justify-center px-8 py-3 bg-[#22c55e] text-black text-[17px] sm:text-[21px] md:text-[25px] rounded-[4px] hover:bg-white transition self-center md:self-start">
-            Contact us — get a fixed quote →
-          </a>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Live Network Chart -->
-  <div class="border-t border-white/10 py-16 md:py-24">
-    <div class="max-w-5xl mx-auto px-4 sm:px-8">
-      <div class="flex items-end justify-between mb-6 gap-4 flex-wrap">
-        <div>
-          <div class="uppercase tracking-[3px] text-xs text-[#22c55e] mb-2">LIVE NETWORK</div>
-          <h2 class="font-display text-[32px] sm:text-[42px] leading-none">Compute &amp; nodes over time</h2>
-        </div>
-        <div class="flex items-center gap-6 text-sm">
-          <span class="flex items-center gap-2"><span class="inline-block w-3 h-3 rounded-full bg-[#22c55e]"></span><span class="text-white/60">TFLOPS</span></span>
-          <span class="flex items-center gap-2"><span class="inline-block w-3 h-3 rounded-full bg-[#f97316]"></span><span class="text-white/60">Nodes</span></span>
-          <span id="chart-last-updated" class="text-white/30 tabular-nums text-xs"></span>
-        </div>
-      </div>
-      <div id="net-chart-wrap" class="relative" style="height:450px">
-        <canvas id="net-chart" class="absolute inset-0 w-full h-full cursor-crosshair"></canvas>
-        <div id="chart-tooltip" class="pointer-events-none absolute z-20 hidden rounded-md border border-white/10 bg-[#141414]/95 px-3 py-2 text-xs shadow-lg backdrop-blur-sm tabular-nums"></div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Earn vs Spend -->
-  <div id="earn-spend" class="section-full max-w-6xl mx-auto px-4 sm:px-8 py-16 md:py-32">
-    <div class="text-center mb-16 md:mb-24 reveal">
-      <div class="uppercase tracking-[3px] text-xs text-[#22c55e] mb-6">TWO SIDES OF ONE ECONOMY</div>
-      <h2 class="font-display text-[40px] sm:text-[60px] md:text-[84px] leading-none">Earn it. Spend it.</h2>
-    </div>
-
-    <div class="grid md:grid-cols-2 gap-8 md:gap-10">
-      <div class="glass card-hover p-8 md:p-10 rounded-[6px] reveal">
-        <svg class="ico mb-5" viewBox="0 0 24 24"><path d="M12 2v20M2 12h20"/><circle cx="12" cy="12" r="9"/></svg>
-        <h3 class="text-[34px] md:text-[50px] tracking-tight mb-3">Run a node, earn POH</h3>
-        <p class="text-white/70 text-[17px] md:text-[20px]">Your machine solves incoming AI tasks. Every block you win mints fresh POH straight to your wallet — no cloud, no boss, no cap on how much you run.</p>
-        <a href="miner.html#start" class="inline-block mt-6 neon text-[18px] md:text-[22px] hover:underline">Download the miner →</a>
-      </div>
-      <div class="glass card-hover p-8 md:p-10 rounded-[6px] reveal">
-        <svg class="ico mb-5" viewBox="0 0 24 24"><path d="M3 10h18M7 15h4"/><rect x="2" y="5" width="20" height="14" rx="2"/></svg>
-        <h3 class="text-[34px] md:text-[50px] tracking-tight mb-3">Spend POH, get compute</h3>
-        <p class="text-white/70 text-[17px] md:text-[20px]">Post an AI job with a POH budget and the fastest node answers it. Deploy skills, stake to secure them, or settle peer-to-peer in seconds.</p>
-        <a href="wallet/" class="inline-block mt-6 neon text-[18px] md:text-[22px] hover:underline">Open your wallet →</a>
-      </div>
-    </div>
-  </div>
-
-  <!-- Why POH -->
+  <!-- Why private compute -->
   <div class="section-full border-t border-white/10 bg-[#050505]">
     <div class="w-full max-w-6xl mx-auto px-4 sm:px-8 py-16 md:py-32">
       <div class="text-center mb-16 md:mb-24 reveal">
-        <div class="uppercase tracking-[3px] text-xs text-[#22c55e] mb-6">WHY POH</div>
-        <h2 class="font-display text-[40px] sm:text-[60px] md:text-[80px] leading-none">Money that means work.</h2>
+        <div class="uppercase tracking-[3px] text-xs text-[#22c55e] mb-6" data-i18n="b2b.trust.eyebrow">YOUR DATA STAYS YOURS</div>
+        <h2 class="font-display text-[40px] sm:text-[60px] md:text-[80px] leading-none" data-i18n="b2b.trust.title">Compute without exposure.</h2>
       </div>
 
       <div class="grid grid-cols-2 lg:grid-cols-4 gap-8 md:gap-10">
         <div class="glass card-hover p-6 md:p-8 rounded-[6px] reveal">
-          <svg class="ico mb-4" viewBox="0 0 24 24"><path d="M20 7 9 18l-5-5"/></svg>
-          <h3 class="text-[26px] md:text-[34px] tracking-tight mb-2">Real backing</h3>
-          <p class="text-white/60 text-[15px] md:text-[17px]">Every coin is a receipt for a solved AI task.</p>
-        </div>
-        <div class="glass card-hover p-6 md:p-8 rounded-[6px] reveal">
-          <svg class="ico mb-4" viewBox="0 0 24 24"><path d="M12 2 4 6v6c0 5 3.5 8 8 10 4.5-2 8-5 8-10V6z"/></svg>
-          <h3 class="text-[26px] md:text-[34px] tracking-tight mb-2">Fair launch</h3>
-          <p class="text-white/60 text-[15px] md:text-[17px]">No pre-sale. Mine to earn.</p>
-        </div>
-        <div class="glass card-hover p-6 md:p-8 rounded-[6px] reveal">
-          <svg class="ico mb-4" viewBox="0 0 24 24"><path d="M13 2 3 14h7l-1 8 10-12h-7z"/></svg>
-          <h3 class="text-[26px] md:text-[34px] tracking-tight mb-2">Instant p2p</h3>
-          <p class="text-white/60 text-[15px] md:text-[17px]">Signed transfers settle in seconds.</p>
-        </div>
-        <div class="glass card-hover p-6 md:p-8 rounded-[6px] reveal">
           <svg class="ico mb-4" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
-          <h3 class="text-[26px] md:text-[34px] tracking-tight mb-2">Encrypted</h3>
-          <p class="text-white/60 text-[15px] md:text-[17px]">Chat messages are end-to-end encrypted.</p>
+          <h3 class="text-[26px] md:text-[34px] tracking-tight mb-2" data-i18n="b2b.trust.1t">End-to-end encrypted</h3>
+          <p class="text-white/60 text-[15px] md:text-[17px]" data-i18n="b2b.trust.1d">Jobs and messages are encrypted end to end. Only your nodes can read them.</p>
+        </div>
+        <div class="glass card-hover p-6 md:p-8 rounded-[6px] reveal">
+          <svg class="ico mb-4" viewBox="0 0 24 24"><path d="M12 2 4 6v6c0 5 3.5 8 8 10 4.5-2 8-5 8-10V6z"/><path d="M9 12l2 2 4-4"/></svg>
+          <h3 class="text-[26px] md:text-[34px] tracking-tight mb-2" data-i18n="b2b.trust.2t">Private by design</h3>
+          <p class="text-white/60 text-[15px] md:text-[17px]" data-i18n="b2b.trust.2d">Inference runs on local LLMs on dedicated nodes. No big-cloud AI ever touches your data.</p>
+        </div>
+        <div class="glass card-hover p-6 md:p-8 rounded-[6px] reveal">
+          <svg class="ico mb-4" viewBox="0 0 24 24"><circle cx="12" cy="12" r="2.4"/><circle cx="5" cy="6" r="2"/><circle cx="19" cy="6" r="2"/><circle cx="5" cy="18" r="2"/><circle cx="19" cy="18" r="2"/><path d="M6.6 7.2 10 10.4M17.4 7.2 14 10.4M6.6 16.8 10 13.6M17.4 16.8 14 13.6"/></svg>
+          <h3 class="text-[26px] md:text-[34px] tracking-tight mb-2" data-i18n="b2b.trust.3t">Sovereign &amp; unstoppable</h3>
+          <p class="text-white/60 text-[15px] md:text-[17px]" data-i18n="b2b.trust.3d">A decentralized mesh of independent nodes. No single provider, no lock-in, no cut-off.</p>
+        </div>
+        <div class="glass card-hover p-6 md:p-8 rounded-[6px] reveal">
+          <svg class="ico mb-4" viewBox="0 0 24 24"><path d="M3 10h18M7 15h4"/><rect x="2" y="5" width="20" height="14" rx="2"/></svg>
+          <h3 class="text-[26px] md:text-[34px] tracking-tight mb-2" data-i18n="b2b.trust.4t">Fixed, regulated pricing</h3>
+          <p class="text-white/60 text-[15px] md:text-[17px]" data-i18n="b2b.trust.4d">Lock a fixed quote and pay in EUR, USD or USDT — fully invoiced, fully official.</p>
         </div>
       </div>
     </div>
   </div>
 
-  <!-- Utility strip -->
+  <!-- What you can build -->
   <div class="section-full max-w-6xl mx-auto px-4 sm:px-8 py-16 md:py-32">
     <div class="text-center mb-16 md:mb-24 reveal">
-      <div class="uppercase tracking-[3px] text-xs text-[#22c55e] mb-6">UTILITY</div>
-      <h2 class="font-display text-[40px] sm:text-[56px] md:text-[76px] leading-none">One token, the whole network.</h2>
+      <div class="uppercase tracking-[3px] text-xs text-[#22c55e] mb-6" data-i18n="b2b.build.eyebrow">BUILT FOR BUILDERS</div>
+      <h2 class="font-display text-[40px] sm:text-[56px] md:text-[76px] leading-none" data-i18n="b2b.build.title">Run what your product needs.</h2>
     </div>
 
-    <div class="grid grid-cols-2 md:grid-cols-4 gap-8 md:gap-10 text-center">
-      <div class="glass card-hover p-6 rounded-[6px] reveal">
-        <div class="text-[30px] md:text-[45px] text-[#22c55e] mb-1">1 POH</div>
-        <div class="text-[15px] md:text-[18px] text-white/60">per block — split among AI workers</div>
+    <div class="grid md:grid-cols-2 gap-8 md:gap-10">
+      <div class="glass card-hover p-8 md:p-10 rounded-[6px] reveal">
+        <svg class="ico mb-5" viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="2"/><path d="M12 3v4M12 17v4M3 12h4M17 12h4"/></svg>
+        <h3 class="text-[34px] md:text-[50px] tracking-tight mb-3" data-i18n="b2b.build.1t">Your own models</h3>
+        <p class="text-white/70 text-[17px] md:text-[20px]" data-i18n="b2b.build.1d">Bring a custom LLM or pick per job. Mount private datasets or pull from Hugging Face — the network runs it where you say it runs.</p>
       </div>
-      <div class="glass card-hover p-6 rounded-[6px] reveal">
-        <div class="text-[30px] md:text-[45px] text-[#22c55e] mb-1">1 POH</div>
-        <div class="text-[15px] md:text-[18px] text-white/60">deploy a skill</div>
+      <div class="glass card-hover p-8 md:p-10 rounded-[6px] reveal">
+        <svg class="ico mb-5" viewBox="0 0 24 24"><path d="M13 2 3 14h7l-1 8 10-12h-7z"/></svg>
+        <h3 class="text-[34px] md:text-[50px] tracking-tight mb-3" data-i18n="b2b.build.2t">Agents &amp; skills</h3>
+        <p class="text-white/70 text-[17px] md:text-[20px]" data-i18n="b2b.build.2d">Deploy skills and agents on-chain, wire in your tools via MCP, and let the fastest node answer every call.</p>
       </div>
-      <div class="glass card-hover p-6 rounded-[6px] reveal">
-        <div class="text-[30px] md:text-[45px] text-[#22c55e] mb-1">10 POH</div>
-        <div class="text-[15px] md:text-[18px] text-white/60">stake to graduate a skill</div>
+      <div class="glass card-hover p-8 md:p-10 rounded-[6px] reveal">
+        <svg class="ico mb-5" viewBox="0 0 24 24"><path d="M4 17V7a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v10"/><path d="M2 17h20v2a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2z"/></svg>
+        <h3 class="text-[34px] md:text-[50px] tracking-tight mb-3" data-i18n="b2b.build.3t">One simple API</h3>
+        <p class="text-white/70 text-[17px] md:text-[20px]" data-i18n="b2b.build.3d">Everything is one HTTP API — jobs, chat, search, payments. Integrate in an afternoon.</p>
+        <a href="docs/" class="inline-block mt-6 neon text-[18px] md:text-[22px] hover:underline" data-i18n="b2b.build.3cta">Read the API docs →</a>
       </div>
-      <div class="glass card-hover p-6 rounded-[6px] reveal">
-        <div class="text-[24px] md:text-[38px] text-[#22c55e] mb-1">GEL₮</div>
-        <div class="text-[15px] md:text-[18px] text-white/60">priced in stablecoins</div>
+      <div class="glass card-hover p-8 md:p-10 rounded-[6px] reveal">
+        <svg class="ico mb-5" viewBox="0 0 24 24"><path d="M12 2v20M2 12h20"/><circle cx="12" cy="12" r="9"/></svg>
+        <h3 class="text-[34px] md:text-[50px] tracking-tight mb-3" data-i18n="b2b.build.4t">Pay per token</h3>
+        <p class="text-white/70 text-[17px] md:text-[20px]" data-i18n="b2b.build.4d">Metered per AI compute token with a hard budget per job. Unused budget is refunded — no idle GPUs on your bill.</p>
       </div>
     </div>
   </div>
 
-  <!-- How to get POH (3 steps) -->
-  <div class="section-full border-t border-white/10 bg-[#050505]">
+  <!-- How it works -->
+  <div id="how" class="section-full border-t border-white/10 bg-[#050505]">
     <div class="w-full max-w-5xl mx-auto px-4 sm:px-8 py-16 md:py-32">
       <div class="text-center mb-16 md:mb-24 reveal">
-        <div class="uppercase tracking-[3px] text-xs text-[#22c55e] mb-6">GET STARTED IN MINUTES</div>
-        <h2 class="font-display text-[40px] sm:text-[56px] md:text-[76px] leading-none">Three steps to your first POH.</h2>
+        <div class="uppercase tracking-[3px] text-xs text-[#22c55e] mb-6" data-i18n="b2b.how.eyebrow">HOW IT WORKS</div>
+        <h2 class="font-display text-[40px] sm:text-[56px] md:text-[76px] leading-none" data-i18n="b2b.how.title">From job to result, encrypted.</h2>
       </div>
 
-      <div class="grid md:grid-cols-3 gap-8 md:gap-10">
-        <div class="glass card-hover p-6 md:p-8 rounded-[6px] reveal">
+      <div class="grid md:grid-cols-3 gap-8 md:gap-10 text-center">
+        <div class="glass card-hover p-8 rounded-[6px] reveal">
           <div class="text-[#22c55e] text-[40px] md:text-[56px] font-display leading-none mb-3">01</div>
-          <h3 class="text-[26px] md:text-[36px] tracking-tight mb-2">Install</h3>
-          <p class="text-white/60 text-[16px] md:text-[19px]">Download the app. Double-click. No terminal.</p>
+          <h3 class="text-[28px] md:text-[38px] tracking-tight mb-2" data-i18n="b2b.how.1t">Post a job</h3>
+          <p class="text-white/60 text-[16px] md:text-[19px]" data-i18n="b2b.how.1d">Send an encrypted job with a budget through the wallet API.</p>
         </div>
-        <div class="glass card-hover p-6 md:p-8 rounded-[6px] reveal">
+        <div class="glass card-hover p-8 rounded-[6px] reveal">
           <div class="text-[#22c55e] text-[40px] md:text-[56px] font-display leading-none mb-3">02</div>
-          <h3 class="text-[26px] md:text-[36px] tracking-tight mb-2">Run</h3>
-          <p class="text-white/60 text-[16px] md:text-[19px]">Your node joins the mesh and starts solving tasks.</p>
+          <h3 class="text-[28px] md:text-[38px] tracking-tight mb-2" data-i18n="b2b.how.2t">The network computes</h3>
+          <p class="text-white/60 text-[16px] md:text-[19px]" data-i18n="b2b.how.2d">The fastest qualified node runs it — on your model, at your budget.</p>
         </div>
-        <div class="glass card-hover p-6 md:p-8 rounded-[6px] reveal">
+        <div class="glass card-hover p-8 rounded-[6px] reveal">
           <div class="text-[#22c55e] text-[40px] md:text-[56px] font-display leading-none mb-3">03</div>
-          <h3 class="text-[26px] md:text-[36px] tracking-tight mb-2">Earn</h3>
-          <p class="text-white/60 text-[16px] md:text-[19px]">POH lands in your wallet, block after block.</p>
+          <h3 class="text-[28px] md:text-[38px] tracking-tight mb-2" data-i18n="b2b.how.3t">Verified result</h3>
+          <p class="text-white/60 text-[16px] md:text-[19px]" data-i18n="b2b.how.3d">Work is verified on-chain and unused budget comes back to you.</p>
         </div>
       </div>
     </div>
   </div>
 
-  <!-- Final CTA -->
-  <div class="section-full max-w-5xl mx-auto px-4 sm:px-6 py-20 md:py-44 text-center hero-bg">
-    <h2 class="font-display text-[48px] sm:text-[72px] md:text-[110px] leading-[0.9] reveal">Put your machine<br><span class="neon">to work tonight.</span></h2>
-    <div class="mt-14 flex flex-col sm:flex-row gap-4 justify-center reveal">
-      <a href="miner.html#start"
-         class="inline-flex items-center justify-center px-10 py-4 bg-[#22c55e] text-black text-[20px] sm:text-[26px] md:text-[32px] rounded-[4px] hover:bg-white transition">
-        Download &amp; start mining
-      </a>
-      <a href="docs/"
-         class="inline-flex items-center justify-center px-10 py-4 border border-white/30 hover:bg-white/5 text-[20px] sm:text-[26px] md:text-[32px] rounded-[4px] transition">
-        Read the docs
-      </a>
+  <!-- Enterprise CTA -->
+  <div class="section-full max-w-5xl mx-auto px-4 sm:px-8 py-16 md:py-32 text-center">
+    <div class="reveal">
+      <div class="uppercase tracking-[3px] text-xs text-[#22c55e] mb-6" data-i18n="b2b.ent.eyebrow">ENTERPRISE</div>
+      <h2 class="font-display text-[44px] sm:text-[64px] md:text-[96px] leading-[0.95]" data-i18n-html="b2b.ent.title">Need scale<br><span class="neon">or an SLA?</span></h2>
+      <p class="mt-8 max-w-3xl mx-auto text-[17px] sm:text-[21px] md:text-[24px] text-white/60" data-i18n="b2b.ent.desc">
+        Dedicated capacity, private clusters and volume pricing for production workloads. You pay in EUR, USD or USDT — officially and fully invoiced — while the community powering the network is paid in local stablecoins.
+      </p>
+      <div class="mt-10 flex flex-col sm:flex-row gap-4 justify-center">
+        <a target="_blank" href="https://calendly.com/poh_network"
+           class="inline-flex items-center justify-center px-8 py-3 bg-[#22c55e] text-black text-[18px] sm:text-[24px] md:text-[28px] rounded-[4px] hover:bg-white transition" data-i18n="b2b.ent.cta">
+          Talk to us — get a fixed quote →
+        </a>
+        <a href="framework.html"
+           class="inline-flex items-center justify-center px-8 py-3 border border-white/30 hover:bg-white/5 text-[18px] sm:text-[24px] md:text-[28px] rounded-[4px] transition" data-i18n="b2b.ent.cta2">
+          Explore the network →
+        </a>
+      </div>
     </div>
   </div>
 
   <!-- Footer -->
-  <footer class="border-t border-white/10 py-8 footer-text text-white/50">
-    <div class="max-w-7xl mx-auto px-4 sm:px-8 flex flex-col sm:flex-row gap-2 sm:justify-between">
-      <div>POH — Decentralized AI compute, powered by local LLMs</div>
-      <div class="flex gap-x-4 gap-y-2 flex-wrap">
-        <a href="miner.html" class="hover:text-white">PoH Miner</a>
-        <a href="wallet/" class="hover:text-white">Wallet</a>
-        <a href="docs/" class="hover:text-white">Docs</a>
-        <a href="https://proofofhuman.ge" class="hover:text-white">Scanner</a>
+  <footer class="border-t border-white/10 py-10">
+    <div class="max-w-6xl mx-auto px-4 sm:px-8 flex flex-col md:flex-row items-center justify-between gap-4 text-white/40 footer-text">
+      <span data-i18n="idx.foot.tag">POH — Decentralized AI compute, powered by local LLMs</span>
+      <div class="flex items-center gap-6">
+        <a href="miner.html" class="hover:text-[#22c55e] transition" data-i18n="idx.foot.miner">PoH Miner</a>
+        <a href="wallet/" class="hover:text-[#22c55e] transition" data-i18n="nav.wallet">Wallet</a>
+        <a href="docs/" class="hover:text-[#22c55e] transition" data-i18n="idx.foot.docs">Docs</a>
       </div>
     </div>
   </footer>
 
   <script>
-    // Hero particle mesh
-    function initCoinMesh() {
-      const canvas = document.getElementById('coin-mesh');
-      if (!canvas) return;
-      const ctx = canvas.getContext('2d', { alpha: true });
-      let width, height, nodes = [];
-      function resize() { width = canvas.width = canvas.offsetWidth; height = canvas.height = canvas.offsetHeight; }
-      window.addEventListener('resize', resize); resize();
-      for (let i = 0; i < 55; i++) nodes.push({ x: Math.random()*width, y: Math.random()*height, vx:(Math.random()-0.5)*0.4, vy:(Math.random()-0.5)*0.4, r:1.5+Math.random()*1.5 });
-      function draw() {
-        ctx.clearRect(0,0,width,height);
-        nodes.forEach(n => { n.x+=n.vx; n.y+=n.vy; if(n.x<0||n.x>width)n.vx*=-1; if(n.y<0||n.y>height)n.vy*=-1; });
-        ctx.strokeStyle = 'rgba(34,197,94,0.12)'; ctx.lineWidth = 1;
-        for (let i=0;i<nodes.length;i++) for (let j=i+1;j<nodes.length;j++){
-          const dx=nodes[i].x-nodes[j].x, dy=nodes[i].y-nodes[j].y, d=Math.hypot(dx,dy);
-          if(d<140){ ctx.globalAlpha=1-d/140; ctx.beginPath(); ctx.moveTo(nodes[i].x,nodes[i].y); ctx.lineTo(nodes[j].x,nodes[j].y); ctx.stroke(); }
-        }
-        ctx.globalAlpha=1; ctx.fillStyle='rgba(34,197,94,0.55)';
-        nodes.forEach(n=>{ ctx.beginPath(); ctx.arc(n.x,n.y,n.r,0,Math.PI*2); ctx.fill(); });
-        requestAnimationFrame(draw);
-      }
-      draw();
-    }
-
     // Scroll reveal
-    function initReveal() {
-      const els = document.querySelectorAll('.reveal');
-      const io = new IntersectionObserver(entries => {
-        entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); } });
-      }, { threshold: 0.15 });
-      els.forEach(el => io.observe(el));
-    }
-
-    // ── Live network chart ────────────────────────────────────────────
-    function fmtNum(n) {
-      if (n >= 1_000_000_000) return (n / 1_000_000_000).toFixed(1).replace(/\.0$/, '') + 'M';
-      if (n >= 1_000)     return (n / 1_000).toFixed(1).replace(/\.0$/, '') + 'k';
-      return n.toLocaleString();
-    }
-
-    const MINER_API = 'https://miner.poh.ge';
-
-    async function fetchMinerApi(path) {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 6000);
-      try {
-        const res = await fetch(MINER_API + path, { cache: 'no-store', signal: controller.signal });
-        clearTimeout(timer);
-        if (!res.ok) return null;
-        return res;
-      } catch {
-        clearTimeout(timer);
-        return null;
-      }
-    }
-
-    const CHART_MAX_POINTS = 1440;
-    const chartData = { points: [] }; // { t, tflops, nodes }
-    let chartHoverIdx = null;
-    let chartLayout = null;
-
-    // Smooth Catmull-Rom spline through canvas points
-    function splinePath(ctx, pts, toX, toY) {
-      if (pts.length < 2) return;
-      ctx.moveTo(toX(0), toY(pts[0].v));
-      for (let i = 0; i < pts.length - 1; i++) {
-        const p0 = pts[Math.max(0, i - 1)];
-        const p1 = pts[i];
-        const p2 = pts[i + 1];
-        const p3 = pts[Math.min(pts.length - 1, i + 2)];
-        const cp1x = toX(i)     + (toX(i + 1) - toX(Math.max(0, i - 1))) / 6;
-        const cp1y = toY(p1.v)  + (toY(p2.v)  - toY(p0.v))  / 6;
-        const cp2x = toX(i + 1) - (toX(Math.min(pts.length - 1, i + 2)) - toX(i)) / 6;
-        const cp2y = toY(p2.v)  - (toY(p3.v)  - toY(p1.v))  / 6;
-        ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, toX(i + 1), toY(p2.v));
-      }
-    }
-
-    function fmtV(v) {
-      return v >= 1000 ? (v / 1000).toFixed(1) + 'k' : v % 1 === 0 ? String(v) : v.toFixed(1);
-    }
-
-    function fmtChartTime(t, spanMs) {
-      const d = new Date(t);
-      if (spanMs > 7 * 86_400_000) return (d.getMonth() + 1) + '/' + d.getDate() + '/' + String(d.getFullYear()).slice(2);
-      if (spanMs > 86_400_000) return (d.getMonth() + 1) + '/' + d.getDate() + ' ' + d.getHours().toString().padStart(2, '0') + ':00';
-      return d.getHours().toString().padStart(2, '0') + ':' + d.getMinutes().toString().padStart(2, '0');
-    }
-
-    function setChartPoints(rows) {
-      chartData.points = rows
-        .map(p => ({ t: p.t, tflops: p.tflops ?? 0, nodes: p.nodes ?? 0 }))
-        .sort((a, b) => a.t - b.t);
-    }
-
-    function appendLiveChartPoint(count, tflops) {
-      const t = Date.now();
-      const pts = chartData.points;
-      const nodes = count ?? 0;
-      const flops = tflops ?? 0;
-      if (pts.length && t - pts[pts.length - 1].t < 30_000) {
-        pts[pts.length - 1] = { t, nodes, tflops: flops };
-      } else {
-        pts.push({ t, nodes, tflops: flops });
-      }
-      if (pts.length > CHART_MAX_POINTS) pts.shift();
-    }
-
-    function nearestChartPoint(mouseX) {
-      if (!chartLayout?.points?.length) return null;
-      const { points, PAD, cW, tMin, tMax } = chartLayout;
-      const span = tMax - tMin || 1;
-      const clampedX = Math.max(PAD.left, Math.min(PAD.left + cW, mouseX));
-      const targetT = tMin + ((clampedX - PAD.left) / cW) * span;
-      let best = 0, bestDist = Infinity;
-      for (let i = 0; i < points.length; i++) {
-        const dist = Math.abs(points[i].t - targetT);
-        if (dist < bestDist) { bestDist = dist; best = i; }
-      }
-      return best;
-    }
-
-    function hideChartTooltip() {
-      const tip = document.getElementById('chart-tooltip');
-      if (tip) tip.classList.add('hidden');
-      chartHoverIdx = null;
-      drawNetChart();
-    }
-
-    function showChartTooltip(idx, clientX, clientY) {
-      const tip = document.getElementById('chart-tooltip');
-      const wrap = document.getElementById('net-chart-wrap');
-      const p = chartData.points[idx];
-      if (!tip || !wrap || !p || !chartLayout) return;
-
-      const spanMs = chartLayout.tMax - chartLayout.tMin;
-      tip.innerHTML =
-        '<div class="text-white/45 mb-1">' + fmtChartTime(p.t, spanMs) + '</div>' +
-        '<div class="text-[#f97316]">' + fmtV(p.nodes) + ' nodes</div>' +
-        '<div class="text-[#22c55e]">' + fmtV(p.tflops) + ' TFLOPS</div>';
-
-      const rect = wrap.getBoundingClientRect();
-      const tipW = 132, tipH = 68;
-      let left = clientX - rect.left + 14;
-      let top = clientY - rect.top - tipH - 10;
-      if (left + tipW > rect.width - 8) left = clientX - rect.left - tipW - 14;
-      if (top < 8) top = clientY - rect.top + 14;
-      tip.style.left = left + 'px';
-      tip.style.top = top + 'px';
-      tip.classList.remove('hidden');
-    }
-
-    function drawNetChart() {
-      const canvas = document.getElementById('net-chart');
-      if (!canvas) return;
-      const dpr = window.devicePixelRatio || 1;
-      const W = canvas.offsetWidth, H = canvas.offsetHeight;
-      if (!W || !H) return;
-      canvas.width = W * dpr; canvas.height = H * dpr;
-      const ctx = canvas.getContext('2d');
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-
-      ctx.fillStyle = '#0b0b0b';
-      ctx.fillRect(0, 0, W, H);
-
-      const PAD = { top: 18, right: 52, bottom: 30, left: 52 };
-      const cW = W - PAD.left - PAD.right;
-      const cH = H - PAD.top - PAD.bottom;
-      const points = chartData.points;
-
-      for (let i = 0; i <= 4; i++) {
-        const y = PAD.top + (cH / 4) * i;
-        ctx.strokeStyle = 'rgba(255,255,255,0.04)';
-        ctx.lineWidth = 1;
-        ctx.beginPath(); ctx.moveTo(PAD.left, y); ctx.lineTo(PAD.left + cW, y); ctx.stroke();
-      }
-
-      if (points.length < 2) {
-        chartLayout = null;
-        ctx.fillStyle = 'rgba(255,255,255,0.15)';
-        ctx.font = '13px system-ui,sans-serif';
-        ctx.textAlign = 'center';
-        ctx.fillText('Collecting data…', PAD.left + cW / 2, PAD.top + cH / 2 + 5);
-        return;
-      }
-
-      const tMin = points[0].t;
-      const tMax = points[points.length - 1].t;
-      const spanMs = tMax - tMin || 1;
-      const toX = i => PAD.left + ((points[i].t - tMin) / spanMs) * cW;
-      chartLayout = { points, PAD, cW, cH, W, H, tMin, tMax, toX };
-
-      ctx.fillStyle = 'rgba(255,255,255,0.2)';
-      ctx.font = '10px monospace';
-      ctx.textAlign = 'center';
-      const ticks = 6;
-      for (let k = 0; k < ticks; k++) {
-        const frac = ticks === 1 ? 0 : k / (ticks - 1);
-        const t = tMin + frac * spanMs;
-        const x = PAD.left + frac * cW;
-        ctx.fillText(fmtChartTime(t, spanMs), x, H - 8);
-      }
-
-      function drawSeries(key, color, side, unit, sharedMn, sharedMx) {
-        const series = points.map(p => ({ t: p.t, v: p[key] }));
-        if (series.length < 2) return;
-        const sn = series.length;
-        const mn = sharedMn, mx = sharedMx, range = mx - mn || 1;
-        const toY = v => PAD.top + cH - ((v - mn) / range) * cH;
-
-        ctx.fillStyle = color + 'cc';
-        ctx.font = '10px monospace';
-        ctx.textAlign = side === 'left' ? 'right' : 'left';
-        const xLbl = side === 'left' ? PAD.left - 6 : PAD.left + cW + 6;
-        const vals = series.map(p => p.v);
-        const sMin = Math.min(...vals), sMax = Math.max(...vals);
-        [sMin, (sMin + sMax) / 2, sMax].forEach(v => {
-          ctx.fillText(fmtV(v), xLbl, toY(v) + 3);
-        });
-        ctx.font = '9px monospace';
-        ctx.fillStyle = color + '88';
-        ctx.fillText(unit, xLbl, PAD.top - 5);
-
-        const rgb = color === '#22c55e' ? '34,197,94' : '249,115,22';
-        const grad = ctx.createLinearGradient(0, PAD.top, 0, PAD.top + cH);
-        grad.addColorStop(0, `rgba(${rgb},0.25)`);
-        grad.addColorStop(0.55, `rgba(${rgb},0.07)`);
-        grad.addColorStop(1, `rgba(${rgb},0.0)`);
-        ctx.beginPath();
-        splinePath(ctx, series, toX, toY);
-        ctx.lineTo(toX(sn - 1), PAD.top + cH);
-        ctx.lineTo(toX(0), PAD.top + cH);
-        ctx.closePath();
-        ctx.fillStyle = grad;
-        ctx.fill();
-
-        ctx.beginPath();
-        splinePath(ctx, series, toX, toY);
-        ctx.strokeStyle = color;
-        ctx.lineWidth = 2;
-        ctx.lineJoin = 'round';
-        ctx.shadowColor = color;
-        ctx.shadowBlur = 8;
-        ctx.stroke();
-        ctx.shadowBlur = 0;
-
-        const lx = toX(sn - 1), ly = toY(series[sn - 1].v);
-        ctx.shadowColor = color; ctx.shadowBlur = 14;
-        ctx.beginPath(); ctx.arc(lx, ly, 4, 0, Math.PI * 2);
-        ctx.fillStyle = color; ctx.fill();
-        ctx.shadowBlur = 0;
-      }
-
-      const _allVals = points.flatMap(p => [p.tflops, p.nodes]);
-      const _rawMin = Math.max(0, Math.min(..._allVals));
-      const _rawMax = Math.max(..._allVals);
-      const _pad = (_rawMax - _rawMin) * 0.12 || 1;
-      const _sharedMn = Math.max(0, _rawMin - _pad);
-      const _sharedMx = _rawMax + _pad;
-
-      drawSeries('tflops', '#22c55e', 'left', 'TFLOPS', _sharedMn, _sharedMx);
-      drawSeries('nodes', '#f97316', 'right', 'nodes', _sharedMn, _sharedMx);
-
-      if (chartHoverIdx != null && points[chartHoverIdx]) {
-        const hx = toX(chartHoverIdx);
-        const hp = points[chartHoverIdx];
-        ctx.strokeStyle = 'rgba(255,255,255,0.18)';
-        ctx.lineWidth = 1;
-        ctx.setLineDash([4, 4]);
-        ctx.beginPath();
-        ctx.moveTo(hx, PAD.top);
-        ctx.lineTo(hx, PAD.top + cH);
-        ctx.stroke();
-        ctx.setLineDash([]);
-
-        const toY = v => PAD.top + cH - ((v - _sharedMn) / (_sharedMx - _sharedMn || 1)) * cH;
-        ctx.beginPath();
-        ctx.arc(hx, toY(hp.tflops), 5, 0, Math.PI * 2);
-        ctx.fillStyle = '#22c55e';
-        ctx.fill();
-        ctx.beginPath();
-        ctx.arc(hx, toY(hp.nodes), 5, 0, Math.PI * 2);
-        ctx.fillStyle = '#f97316';
-        ctx.fill();
-      }
-    }
-
-    // Merge tiered history (daily → hourly → minutely) into one timeline,
-    // then auto-aggregate to at most ~300 points for chart rendering.
-    function mergeAndAggregate(daily, hourly, minutely) {
-      const map = new Map();
-      const add = pts => pts.forEach(p => map.set(Math.round(p.t / 60_000), p)); // key by minute
-      add(daily);
-      add(hourly);
-      add(minutely);
-      const sorted = [...map.values()].sort((a, b) => a.t - b.t);
-      if (!sorted.length) return [];
-
-      const TARGET = 300;
-      if (sorted.length <= TARGET) return sorted;
-
-      const span   = sorted[sorted.length - 1].t - sorted[0].t;
-      const bucket = Math.ceil(span / TARGET); // ms per bucket
-
-      const buckets = new Map();
-      for (const p of sorted) {
-        const k = Math.floor(p.t / bucket);
-        if (!buckets.has(k)) buckets.set(k, []);
-        buckets.get(k).push(p);
-      }
-      return [...buckets.values()].map(pts => ({
-        t:      pts[0].t,
-        nodes:  Math.round(pts.reduce((s, p) => s + p.nodes,  0) / pts.length),
-        tflops: Math.round(pts.reduce((s, p) => s + p.tflops, 0) / pts.length * 10) / 10,
-      })).sort((a, b) => a.t - b.t);
-    }
-
-    async function loadChartHistory() {
-      try {
-        const res = await fetchMinerApi('/network/history');
-        if (!res) return;
-        const data = await res.json();
-        const merged = (data.minutely || data.hourly || data.daily)
-          ? mergeAndAggregate(data.daily || [], data.hourly || [], data.minutely || [])
-          : (data.history || []);
-        if (!merged.length) return;
-        setChartPoints(merged);
-        drawNetChart();
-      } catch {}
-    }
-
-    async function tickChart() {
-      try {
-        const res = await fetchMinerApi('/peers');
-        if (res) {
-          const data = await res.json();
-          const count = data.count ?? (Array.isArray(data.peers) ? data.peers.length : null);
-          let tflops = data.totalTflops;
-          if (tflops == null && Array.isArray(data.peers))
-            tflops = Math.round(data.peers.reduce((s, p) => s + (p.tflops || 0), 0) * 10) / 10;
-
-          if (count != null || tflops != null)
-            appendLiveChartPoint(count ?? chartData.points.at(-1)?.nodes ?? 0, tflops ?? chartData.points.at(-1)?.tflops ?? 0);
-        }
-
-        drawNetChart();
-        const el = document.getElementById('chart-last-updated');
-        if (el) {
-          const d = new Date();
-          el.textContent = 'updated ' + d.getHours().toString().padStart(2,'0') + ':' + d.getMinutes().toString().padStart(2,'0') + ':' + d.getSeconds().toString().padStart(2,'0');
-        }
-      } catch {}
-    }
-
-    function initChartHover() {
-      const canvas = document.getElementById('net-chart');
-      if (!canvas) return;
-      canvas.addEventListener('mousemove', e => {
-        const rect = canvas.getBoundingClientRect();
-        const idx = nearestChartPoint(e.clientX - rect.left);
-        if (idx == null) return hideChartTooltip();
-        if (idx !== chartHoverIdx) {
-          chartHoverIdx = idx;
-          drawNetChart();
-        }
-        showChartTooltip(idx, e.clientX, e.clientY);
-      });
-      canvas.addEventListener('mouseleave', hideChartTooltip);
-    }
-
-    window.onload = () => {
-      initCoinMesh();
-      initReveal();
-      initChartHover();
-      loadChartHistory().then(() => tickChart());
-      setInterval(tickChart, 15000);
-      setInterval(loadChartHistory, 10 * 60 * 1000);
-      window.addEventListener('resize', () => { drawNetChart(); });
-    };
+    const obs = new IntersectionObserver(entries => {
+      entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('in'); obs.unobserve(e.target); } });
+    }, { threshold: 0.15 });
+    document.querySelectorAll('.reveal').forEach(el => obs.observe(el));
 
     // Mobile hamburger nav
     const hamburger = document.getElementById('hamburger');

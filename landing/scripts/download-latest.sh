@@ -9,7 +9,7 @@
 
 set -e
 
-BASE_URL="https://miner.proofofhuman.ge"
+BASE_URL="https://miner.poh.ge"
 
 detect_platform() {
   OS=$(uname -s | tr '[:upper:]' '[:lower:]')
@@ -58,7 +58,7 @@ echo "Detected platform: $PLATFORM"
 echo "Downloading: $DOWNLOAD_URL"
 
 if ! curl -fsSL -o "$FILENAME" "$DOWNLOAD_URL"; then
-  echo "❌ Download failed. Check https://miner.proofofhuman.ge for manual downloads."
+  echo "❌ Download failed. Check https://miner.poh.ge for manual downloads."
   exit 1
 fi
 

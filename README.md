@@ -1,6 +1,6 @@
 # PoH Miner Network
 
-Decentralized compute layer for the Proof of Human network. Miners race to evaluate wallet identity using the existing PoH checker + AI brain, earn POH token for valid work, and collectively maintain an immutable record of every verified identity on a shared blockchain.
+Decentralized compute layer for Artificial Intelligence, AI-agents, automations and robotics. Decentralized, encrypted, anonymous AI. 
 
 ---
 

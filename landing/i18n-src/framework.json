@@ -1,29 +1,65 @@
 {
   "en": {
-    "fw.hero.sub": "White-label, sovereign <span class=\"text-white/90\">AI compute</span> stablecoins"
+    "fw.hero.sub": "White-label, sovereign <span class=\"text-white/90\">AI compute</span> stablecoins",
+    "fw.fund.eyebrow": "RESERVE FUNDING",
+    "fw.fund.title": "Seeded by an <span class=\"neon\">offshore note.</span>",
+    "fw.fund.desc": "Each coin's reserve can be seeded with privately placed notes: an offshore SPV places them with qualified international investors, 100% of the proceeds sit in a ring-fenced custodial reserve backing the coin, and the notes are serviced by compute revenue plus yield on the reserve. Coin holders never carry investor risk.",
+    "fw.fund.notice": "A structure, not an offer — available to qualified institutional investors on request."
   },
   "ka": {
-    "fw.hero.sub": "White-label, სუვერენული სტეიბლქოინები <span class=\"text-white/90\">AI გამოთვლისთვის</span>"
+    "fw.hero.sub": "White-label, სუვერენული სტეიბლქოინები <span class=\"text-white/90\">AI გამოთვლისთვის</span>",
+    "fw.fund.eyebrow": "რეზერვის დაფინანსება",
+    "fw.fund.title": "საწყისი კაპიტალი — <span class=\"neon\">ოფშორული ნოტით.</span>",
+    "fw.fund.desc": "თითოეული მონეტის რეზერვი შეიძლება შეივსოს კერძოდ განთავსებული ნოტებით: ოფშორული SPV მათ კვალიფიციურ საერთაშორისო ინვესტორებთან ათავსებს, შემოსული თანხის 100% ინახება განცალკევებულ საკასტოდიო რეზერვში, რომელიც მონეტას უზრუნველყოფს, ნოტები კი გამოთვლის შემოსავლითა და რეზერვის სარგებლით ფინანსდება. მონეტის მფლობელები ინვესტორის რისკს არასდროს ატარებენ.",
+    "fw.fund.notice": "ეს სტრუქტურაა და არა შეთავაზება — ხელმისაწვდომია კვალიფიციური ინსტიტუციური ინვესტორებისთვის მოთხოვნით."
   },
   "hy": {
-    "fw.hero.sub": "White-label, ինքնիշխան սթեյբլքոիններ <span class=\"text-white/90\">AI հաշվարկի</span> համար"
+    "fw.hero.sub": "White-label, ինքնիշխան սթեյբլքոիններ <span class=\"text-white/90\">AI հաշվարկի</span> համար",
+    "fw.fund.eyebrow": "ՊԱՀՈՒՍՏԻ ՖԻՆԱՆՍԱՎՈՐՈՒՄ",
+    "fw.fund.title": "Սկիզբը՝ <span class=\"neon\">օֆշորային նոտայով.</span>",
+    "fw.fund.desc": "Յուրաքանչյուր մետաղադրամի պահուստը կարող է ձևավորվել մասնավոր տեղաբաշխված նոտաներով. օֆշորային SPV-ն դրանք տեղաբաշխում է որակավորված միջազգային ներդրողների շրջանում, միջոցների 100%-ը պահվում է առանձնացված կաստոդիալ պահուստում, որն ապահովում է մետաղադրամը, իսկ նոտաները սպասարկվում են հաշվարկի եկամտով և պահուստի եկամտաբերությամբ։ Մետաղադրամի սեփականատերերը երբեք չեն կրում ներդրողի ռիսկը։",
+    "fw.fund.notice": "Սա կառուցվածք է, ոչ թե առաջարկ — հասանելի է որակավորված ինստիտուցիոնալ ներդրողներին՝ հարցմամբ։"
   },
   "ky": {
-    "fw.hero.sub": "White-label, эгемен стейблкоиндер <span class=\"text-white/90\">AI эсептөө</span> үчүн"
+    "fw.hero.sub": "White-label, эгемен стейблкоиндер <span class=\"text-white/90\">AI эсептөө</span> үчүн",
+    "fw.fund.eyebrow": "РЕЗЕРВДИ КАРЖЫЛОО",
+    "fw.fund.title": "Башаты — <span class=\"neon\">офшордук нота.</span>",
+    "fw.fund.desc": "Ар бир монетанын резерви жеке жайгаштырылган ноталар менен түзүлүшү мүмкүн: офшордук SPV аларды квалификациялуу эл аралык инвесторлорго жайгаштырат, каражаттын 100% монетаны камсыздаган өзүнчө кастодиалдык резервде сакталат, ал эми ноталар эсептөө кирешеси жана резервдин кирешеси менен тейленет. Монета ээлери инвестордун тобокелин эч качан көтөрбөйт.",
+    "fw.fund.notice": "Бул сунуш эмес, структура — квалификациялуу институционалдык инвесторлорго суроо-талап боюнча жеткиликтүү."
   },
   "ru": {
-    "fw.hero.sub": "White-label суверенные стейблкоины для <span class=\"text-white/90\">ИИ-вычислений</span>"
+    "fw.hero.sub": "White-label суверенные стейблкоины для <span class=\"text-white/90\">ИИ-вычислений</span>",
+    "fw.fund.eyebrow": "ФИНАНСИРОВАНИЕ РЕЗЕРВА",
+    "fw.fund.title": "Старт — через <span class=\"neon\">офшорную ноту.</span>",
+    "fw.fund.desc": "Резерв каждой монеты может быть сформирован частно размещаемыми нотами: офшорная SPV размещает их среди квалифицированных международных инвесторов, 100% средств лежат в обособленном кастодиальном резерве, обеспечивающем монету, а ноты обслуживаются выручкой от вычислений и доходом на самом резерве. Держатели монеты никогда не несут риск инвестора.",
+    "fw.fund.notice": "Это структура, а не предложение — доступно квалифицированным институциональным инвесторам по запросу."
   },
   "de": {
-    "fw.hero.sub": "White-Label, souveräne Stablecoins für <span class=\"text-white/90\">KI-Rechenleistung</span>"
+    "fw.hero.sub": "White-Label, souveräne Stablecoins für <span class=\"text-white/90\">KI-Rechenleistung</span>",
+    "fw.fund.eyebrow": "RESERVE-FINANZIERUNG",
+    "fw.fund.title": "Angeschoben durch eine <span class=\"neon\">Offshore-Note.</span>",
+    "fw.fund.desc": "Die Reserve jeder Münze kann über privat platzierte Notes aufgebaut werden: Eine Offshore-SPV platziert sie bei qualifizierten internationalen Investoren, 100% der Erlöse liegen in einer abgeschotteten Verwahr-Reserve, die die Münze deckt, und die Notes werden aus Compute-Erlösen plus Zinsen auf die Reserve bedient. Münzinhaber tragen nie das Investorenrisiko.",
+    "fw.fund.notice": "Eine Struktur, kein Angebot — auf Anfrage für qualifizierte institutionelle Investoren."
   },
   "fr": {
-    "fw.hero.sub": "Des stablecoins white-label et souverains pour le <span class=\"text-white/90\">calcul IA</span>"
+    "fw.hero.sub": "Des stablecoins white-label et souverains pour le <span class=\"text-white/90\">calcul IA</span>",
+    "fw.fund.eyebrow": "FINANCEMENT DE LA RÉSERVE",
+    "fw.fund.title": "Amorcée par une <span class=\"neon\">note offshore.</span>",
+    "fw.fund.desc": "La réserve de chaque coin peut être amorcée par des notes placées en privé : une SPV offshore les place auprès d'investisseurs internationaux qualifiés, 100 % des fonds restent dans une réserve cantonnée chez un dépositaire qui adosse le coin, et les notes sont servies par les revenus du calcul plus le rendement de la réserve. Les détenteurs du coin ne portent jamais le risque investisseur.",
+    "fw.fund.notice": "Une structure, pas une offre — disponible sur demande pour les investisseurs institutionnels qualifiés."
   },
   "it": {
-    "fw.hero.sub": "Stablecoin white-label e sovrane per il <span class=\"text-white/90\">calcolo IA</span>"
+    "fw.hero.sub": "Stablecoin white-label e sovrane per il <span class=\"text-white/90\">calcolo IA</span>",
+    "fw.fund.eyebrow": "FINANZIAMENTO DELLA RISERVA",
+    "fw.fund.title": "Avviata da una <span class=\"neon\">note offshore.</span>",
+    "fw.fund.desc": "La riserva di ogni coin può essere costituita con note collocate privatamente: una SPV offshore le colloca presso investitori internazionali qualificati, il 100% dei proventi resta in una riserva segregata presso un depositario a copertura del coin, e le note sono servite dai ricavi del calcolo più il rendimento della riserva stessa. I detentori del coin non portano mai il rischio investitore.",
+    "fw.fund.notice": "Una struttura, non un'offerta — disponibile su richiesta per investitori istituzionali qualificati."
   },
   "es": {
-    "fw.hero.sub": "Stablecoins white-label y soberanas de <span class=\"text-white/90\">cómputo IA</span>"
+    "fw.hero.sub": "Stablecoins white-label y soberanas de <span class=\"text-white/90\">cómputo IA</span>",
+    "fw.fund.eyebrow": "FINANCIACIÓN DE LA RESERVA",
+    "fw.fund.title": "Sembrada con una <span class=\"neon\">nota offshore.</span>",
+    "fw.fund.desc": "La reserva de cada moneda puede sembrarse con notas colocadas de forma privada: una SPV offshore las coloca entre inversores internacionales cualificados, el 100% de lo recaudado permanece en una reserva segregada en custodia que respalda la moneda, y las notas se atienden con los ingresos de cómputo más el rendimiento de la propia reserva. Los tenedores de la moneda nunca cargan con el riesgo del inversor.",
+    "fw.fund.notice": "Una estructura, no una oferta — disponible bajo petición para inversores institucionales cualificados."
   }
 }

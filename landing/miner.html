@@ -10,13 +10,14 @@
   <link rel="icon" type="image/svg+xml" href="poh-miner.svg">
   <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
   <link rel="shortcut icon" href="favicon.ico">
+  <script src="i18n.js" defer></script>
   <style>
     :root {
       --bg: #000000;
       --accent: #22c55e;
     }
 
-    /* Match proofofhuman.ge exactly */
+    /* Match poh.ge exactly */
     body {
       font-family: 'Iceland', sans-serif;
       background: #000;
@@ -100,10 +101,11 @@
         </div>
       </div>
       <div class="nav-links items-center gap-x-6 xl:gap-x-9 text-[17px] xl:text-[20px]">
-        <a href="gelt/" class="hover:text-[#22c55e] transition whitespace-nowrap">GEL₮</a>
-        <a href="index.html" class="hover:text-[#22c55e] transition whitespace-nowrap">POH</a>
-        <a href="wallet/" class="hover:text-[#22c55e] transition whitespace-nowrap">Wallet</a>
-        <a href="index.html" class="px-3 lg:px-5 py-2 rounded-[4px] border border-[#22c55e]/60 text-[#22c55e] hover:bg-[#22c55e]/10 transition whitespace-nowrap">POH</a>
+        <a href="framework.html" class="hover:text-[#22c55e] transition whitespace-nowrap" data-i18n="nav.framework">Framework</a>
+        <a href="poh.html" data-i18n="nav.poh" class="hover:text-[#22c55e] transition whitespace-nowrap">POH</a>
+        <a href="wallet/" data-i18n="nav.wallet" class="hover:text-[#22c55e] transition whitespace-nowrap">Wallet</a>
+        <a href="poh.html" data-i18n="nav.poh" class="px-3 lg:px-5 py-2 rounded-[4px] border border-[#22c55e]/60 text-[#22c55e] hover:bg-[#22c55e]/10 transition whitespace-nowrap">POH</a>
+        <div data-i18n-switch></div>
       </div>
       <button class="hamburger" id="hamburger" aria-label="Open menu">
         <span></span><span></span><span></span>
@@ -113,10 +115,11 @@
 
   <!-- Mobile nav drawer -->
   <div class="mobile-drawer" id="mobile-drawer">
-    <a href="gelt/">GEL₮</a>
-    <a href="index.html">POH</a>
-    <a href="wallet/">Wallet</a>
-    <a href="index.html">POH coin</a>
+    <a href="framework.html" data-i18n="nav.framework">Framework</a>
+    <a href="poh.html" data-i18n="nav.poh">POH</a>
+    <a href="wallet/" data-i18n="nav.wallet">Wallet</a>
+    <a href="poh.html" data-i18n="mnr.nav.pohcoin">POH coin</a>
+    <div data-i18n-switch style="padding:14px 0"></div>
   </div>
 
   <!-- Hero -->
@@ -126,17 +129,17 @@
     
     <div class="relative z-10 max-w-5xl px-6 text-center">
 
-      <h1 class="font-display text-[44px] sm:text-[68px] md:text-[138px] leading-[0.92]">
+      <h1 data-i18n-html="mnr.hero.title" class="font-display text-[44px] sm:text-[68px] md:text-[138px] leading-[0.92]">
         Power the AI Brain.<br>
         <span class="neon">It earns when you are out.</span>
       </h1>
 
       <div class="mt-10 flex flex-col sm:flex-row gap-4 justify-center">
-        <a href="#start"
+        <a href="#start" data-i18n="mnr.hero.cta1"
            class="inline-flex items-center justify-center px-8 py-3 bg-white text-black text-[18px] sm:text-[24px] md:text-[30px] rounded-[4px] hover:bg-[#22c55e] transition">
           Start running a node
         </a>
-        <a href="#network"
+        <a href="#network" data-i18n="mnr.hero.cta2"
            class="inline-flex items-center justify-center px-8 py-3 border border-white/30 hover:bg-white/5 text-[18px] sm:text-[24px] md:text-[30px] rounded-[4px] transition">
           See the live mesh
         </a>
@@ -149,9 +152,9 @@
     
     <div class="flex flex-col md:flex-row gap-12 items-center">
       <div class="md:w-5/12 md:pb-40">
-        <div class="uppercase tracking-[3px] text-xs text-[#22c55e] mb-3">THE INFRASTRUCTURE</div>
-        <h2 class="font-display text-[52px] sm:text-[72px] md:text-[90px] leading-none">A living mesh of<br>compute providers.</h2>
-        <p class="mt-6 text-[18px] sm:text-[22px] md:text-[30px] text-white/70">Nodes running local LLMs form a decentralized AI compute network. When tasks arrive, your machine processes them and earns — no data center required.</p>
+        <div data-i18n="mnr.net.eyebrow" class="uppercase tracking-[3px] text-xs text-[#22c55e] mb-3">THE INFRASTRUCTURE</div>
+        <h2 data-i18n-html="mnr.net.title" class="font-display text-[52px] sm:text-[72px] md:text-[90px] leading-none">A living mesh of<br>compute providers.</h2>
+        <p data-i18n="mnr.net.desc" class="mt-6 text-[18px] sm:text-[22px] md:text-[30px] text-white/70">Nodes running local LLMs form a decentralized AI compute network. When tasks arrive, your machine processes them and earns — no data center required.</p>
       </div>
 
       <!-- Real Mesh Visualization -->
@@ -169,9 +172,9 @@
     <div class="max-w-7xl mx-auto px-4 sm:px-8 py-16 md:py-32">
 
       <div class="text-center mb-4">
-        <div class="uppercase tracking-[3px] text-xs text-[#22c55e] mb-4">THE DESKTOP APP</div>
+        <div data-i18n="mnr.app.eyebrow" class="uppercase tracking-[3px] text-xs text-[#22c55e] mb-4">THE DESKTOP APP</div>
         <h2 class="font-display text-[56px] sm:text-[80px] md:text-[130px] leading-[0.88]">PoH Miner.</h2>
-        <p class="mt-6 text-[16px] sm:text-[20px] md:text-[26px] text-white/55 max-w-2xl mx-auto">One native app. Your node joins the network, your local LLM solves incoming AI tasks, and you earn POH each time.</p>
+        <p data-i18n="mnr.app.desc" class="mt-6 text-[16px] sm:text-[20px] md:text-[26px] text-white/55 max-w-2xl mx-auto">One native app. Your node joins the network, your local LLM solves incoming AI tasks, and you earn POH each time.</p>
       </div>
 
       <!-- Mobile app summary card (hidden on sm+) -->
@@ -366,8 +369,8 @@
     <!-- CTA: Ready to contribute real compute? -->
   <div id="start" class="max-w-5xl mx-auto px-4 sm:px-6 py-14 md:py-40 border-t border-white/10">
     <div class="text-center mb-10">
-      <h2 class="font-display text-[44px] sm:text-[60px] md:text-[78px] leading-none">Ready to contribute real compute?</h2>
-      <p class="mt-4 text-[16px] sm:text-[22px] md:text-[30px] text-white/70 max-w-2xl mx-auto">Download the pre-built binary for your system. Double-click to install — no terminal, no coding required for non-technical users.</p>
+      <h2 data-i18n="mnr.dl.title" class="font-display text-[44px] sm:text-[60px] md:text-[78px] leading-none">Ready to contribute real compute?</h2>
+      <p data-i18n="mnr.dl.desc" class="mt-4 text-[16px] sm:text-[22px] md:text-[30px] text-white/70 max-w-2xl mx-auto">Download the pre-built binary for your system. Double-click to install — no terminal, no coding required for non-technical users.</p>
     </div>
 
     <div class="max-w-6xl mx-auto">
@@ -469,16 +472,16 @@
             </span>
             <div>
               <div class="font-semibold text-[30px]">Linux</div>
-              <div class="text-xs text-white/50">Ubuntu • Debian • Fedora • Any distro</div>
+              <div data-i18n="mnr.dl.linux.os" class="text-xs text-white/50">Ubuntu • Debian • Fedora • Any distro</div>
             </div>
           </div>
-          <div class="text-sm text-white/70 mb-4 flex-1">Portable AppImage — one file, runs on any distro. Download → chmod +x → double-click or run from anywhere. No root install.</div>
+          <div data-i18n="mnr.dl.linux.desc" class="text-sm text-white/70 mb-4 flex-1">Portable AppImage — one file, runs on any distro. Download → chmod +x → double-click or run from anywhere. No root install.</div>
           <div class="flex flex-col gap-2">
-            <a href="https://github.com/Proof-of-Human-Network/poh-miner/releases/latest/download/poh-miner-linux-x64.AppImage" download="poh-miner-linux-x64.AppImage"
+            <a href="https://github.com/Proof-of-Human-Network/poh-miner/releases/latest/download/poh-miner-linux-x64.AppImage" download="poh-miner-linux-x64.AppImage" data-i18n="mnr.dl.linux.btn1"
                class="block w-full text-center bg-[#22c55e] hover:bg-white hover:text-black transition text-black py-3 rounded-[4px] text-sm font-medium">
               Download AppImage (x64)
             </a>
-            <a href="https://github.com/Proof-of-Human-Network/poh-miner/releases/latest/download/poh-miner-linux-arm64.AppImage" download="poh-miner-linux-arm64.AppImage"
+            <a href="https://github.com/Proof-of-Human-Network/poh-miner/releases/latest/download/poh-miner-linux-arm64.AppImage" download="poh-miner-linux-arm64.AppImage" data-i18n="mnr.dl.linux.btn2"
                class="block w-full text-center border border-white/30 hover:bg-white/5 py-3 rounded-[4px] text-sm font-medium transition">
               Download AppImage (ARM64)
             </a>
@@ -493,13 +496,13 @@
               <div class="text-xs text-white/50">Mac Mini, MacBook, iMAC</div>
             </div>
           </div>
-          <div class="text-sm text-white/70 mb-3 flex-1">Open .dmg → drag to Applications • may need “Open Anyway” in Security &amp; Privacy</div>
+          <div data-i18n="mnr.dl.mac.desc" class="text-sm text-white/70 mb-3 flex-1">Open .dmg → drag to Applications • may need “Open Anyway” in Security &amp; Privacy</div>
           <div class="flex flex-col gap-2">
-            <a href="https://github.com/Proof-of-Human-Network/poh-miner/releases/latest/download/poh-miner-macos-amd.dmg" download="poh-miner-macos-amd.dmg"
+            <a href="https://github.com/Proof-of-Human-Network/poh-miner/releases/latest/download/poh-miner-macos-amd.dmg" download="poh-miner-macos-amd.dmg" data-i18n="mnr.dl.mac.btn1"
                class="block w-full text-center bg-[#22c55e] hover:bg-white hover:text-black transition text-black py-3 rounded-[4px] text-sm font-medium">
               Download Apple Silicon .dmg
             </a>
-            <a href="https://github.com/Proof-of-Human-Network/poh-miner/releases/latest/download/poh-miner-macos-intel.dmg" download="poh-miner-macos-intel.dmg"
+            <a href="https://github.com/Proof-of-Human-Network/poh-miner/releases/latest/download/poh-miner-macos-intel.dmg" download="poh-miner-macos-intel.dmg" data-i18n="mnr.dl.mac.btn2"
                class="block w-full text-center border border-white/30 hover:bg-white/5 py-3 rounded-[4px] text-sm font-medium transition">
               Download Intel .dmg installer
             </a>
@@ -514,8 +517,8 @@
               <div class="text-xs text-white/50">Windows 10 / 11 (x64)</div>
             </div>
           </div>
-          <div class="text-sm text-white/70 mb-4 flex-1">Standard .exe installer with shortcuts, Start Menu entry, and clean uninstaller. Built with NSIS.</div>
-          <a href="https://github.com/Proof-of-Human-Network/poh-miner/releases/latest/download/poh-miner-windows-x64.exe" download="poh-miner-windows-x64.exe"
+          <div data-i18n="mnr.dl.win.desc" class="text-sm text-white/70 mb-4 flex-1">Standard .exe installer with shortcuts, Start Menu entry, and clean uninstaller. Built with NSIS.</div>
+          <a href="https://github.com/Proof-of-Human-Network/poh-miner/releases/latest/download/poh-miner-windows-x64.exe" download="poh-miner-windows-x64.exe" data-i18n="mnr.dl.win.btn"
              class="block w-full text-center bg-[#22c55e] hover:bg-white hover:text-black transition text-black py-3 rounded-[4px] text-sm font-medium">
             Download Windows Installer
           </a>
@@ -524,16 +527,16 @@
 
       <!-- Terminal / power-user fallback (kept prominent but secondary) -->
       <div class="mt-8 text-center">
-        <div class="text-[18px] uppercase tracking-[1.5px] text-white/50 mb-2">Power users &amp; one-liner install</div>
+        <div data-i18n="mnr.dl.power.title" class="text-[18px] uppercase tracking-[1.5px] text-white/50 mb-2">Power users &amp; one-liner install</div>
         <div class="inline-flex flex-col sm:flex-row items-center gap-2 bg-black/60 border border-white/10 rounded-[4px] px-5 py-3 text-sm font-mono max-w-full overflow-x-auto">
           curl -fsSL https://miner.poh.ge/scripts/easy-start.sh | bash
         </div>
         <div class="mt-3 flex flex-wrap justify-center gap-x-4 text-xs">
-          <a href="scripts/easy-start.sh" download="easy-start.sh" class="text-[#22c55e] hover:underline">Download easy-start.sh</a>
+          <a href="scripts/easy-start.sh" download="easy-start.sh" data-i18n="mnr.dl.power.link1" class="text-[#22c55e] hover:underline">Download easy-start.sh</a>
           <span class="text-white/20">•</span>
-          <a href="scripts/download-latest.sh" download="download-latest.sh" class="text-[#22c55e] hover:underline">download-latest.sh (picks binary)</a>
+          <a href="scripts/download-latest.sh" download="download-latest.sh" data-i18n="mnr.dl.power.link2" class="text-[#22c55e] hover:underline">download-latest.sh (picks binary)</a>
           <span class="text-white/20">•</span>
-          <a href="https://github.com/Proof-of-Human-Network/poh-miner" target="_blank" class="text-white/60 hover:text-white">View build scripts + source</a>
+          <a href="https://github.com/Proof-of-Human-Network/poh-miner" target="_blank" data-i18n="mnr.dl.power.link3" class="text-white/60 hover:text-white">View build scripts + source</a>
         </div>
       </div>
 
@@ -543,9 +546,9 @@
   <!-- Prominent Wallet Section -->
   <div id="wallet" class="max-w-6xl mx-auto px-6 py-16 border-t border-white/10">
     <div class="text-center mb-10">
-      <div class="inline-block px-4 py-1 rounded-full border border-[#22c55e]/40 text-[#22c55e] text-sm tracking-[2px] mb-4">COMPANION APP</div>
-      <h2 class="font-display text-[40px] sm:text-[52px] md:text-[64px] leading-none tracking-[-2px]">POH Miner Wallet</h2>
-      <p class="mt-4 text-[16px] sm:text-[22px] md:text-[28px] text-white/70 max-w-2xl mx-auto">
+      <div data-i18n="mnr.wal.eyebrow" class="inline-block px-4 py-1 rounded-full border border-[#22c55e]/40 text-[#22c55e] text-sm tracking-[2px] mb-4">COMPANION APP</div>
+      <h2 data-i18n="mnr.wal.title" class="font-display text-[40px] sm:text-[52px] md:text-[64px] leading-none tracking-[-2px]">POH Miner Wallet</h2>
+      <p data-i18n="mnr.wal.sub" class="mt-4 text-[16px] sm:text-[22px] md:text-[28px] text-white/70 max-w-2xl mx-auto">
         Send, receive, and track your mining rewards in real time — directly from your phone.
       </p>
     </div>
@@ -574,8 +577,8 @@
             <circle cx="44" cy="12" r="2.5" fill="#22c55e"/>
           </svg>
         </div>
-        <div class="font-semibold text-[22px] mb-1">Live Balance</div>
-        <div class="text-[17px] text-white/60">Real-time balance pulled from your running node via the lightweight Wallet API.</div>
+        <div data-i18n="mnr.wal.f1t" class="font-semibold text-[22px] mb-1">Live Balance</div>
+        <div data-i18n="mnr.wal.f1d" class="text-[17px] text-white/60">Real-time balance pulled from your running node via the lightweight Wallet API.</div>
       </div>
 
       <!-- Send & Receive -->
@@ -593,8 +596,8 @@
             <rect x="26" y="25" width="4" height="6" rx="1" fill="#22c55e"/>
           </svg>
         </div>
-        <div class="font-semibold text-[22px] mb-1">Send &amp; Receive</div>
-        <div class="text-[17px] text-white/60">Full POH transfers between addresses. Works with any node that knows the wallet.</div>
+        <div data-i18n="mnr.wal.f2t" class="font-semibold text-[22px] mb-1">Send &amp; Receive</div>
+        <div data-i18n="mnr.wal.f2d" class="text-[17px] text-white/60">Full POH transfers between addresses. Works with any node that knows the wallet.</div>
       </div>
 
       <!-- Transaction History -->
@@ -617,8 +620,8 @@
             <rect x="38" y="11" width="6" height="34" rx="2" fill="#111827"/>
           </svg>
         </div>
-        <div class="font-semibold text-[22px] mb-1">Transaction History</div>
-        <div class="text-[17px] text-white/60">See all incoming rewards and outgoing sends with status and timestamps.</div>
+        <div data-i18n="mnr.wal.f3t" class="font-semibold text-[22px] mb-1">Transaction History</div>
+        <div data-i18n="mnr.wal.f3d" class="text-[17px] text-white/60">See all incoming rewards and outgoing sends with status and timestamps.</div>
       </div>
 
       <!-- Notifications -->
@@ -638,17 +641,17 @@
             <circle cx="28" cy="32" r="3.5" fill="#111827"/>
           </svg>
         </div>
-        <div class="font-semibold text-[22px] mb-1">Notifications</div>
-        <div class="text-[17px] text-white/60">Get alerted when rewards arrive or transactions are confirmed.</div>
+        <div data-i18n="mnr.wal.f4t" class="font-semibold text-[22px] mb-1">Notifications</div>
+        <div data-i18n="mnr.wal.f4d" class="text-[17px] text-white/60">Get alerted when rewards arrive or transactions are confirmed.</div>
       </div>
     </div>
 
     <div class="text-center flex flex-col sm:flex-row gap-4 justify-center">
-      <a href="wallet/"
+      <a href="wallet/" data-i18n="mnr.wal.cta1"
          class="inline-flex items-center justify-center px-10 py-4 bg-white hover:bg-[#22c55e] hover:text-black transition text-black text-[24px] font-medium rounded-[4px]">
         See Wallet →
       </a>
-      <a href="https://expo.dev/artifacts/eas/LM9zgBSEKFuUghANZVBOfUx6K9R0wagk68gELL3pTQ8.apk"
+      <a href="https://expo.dev/artifacts/eas/_o-28nuVQ6bqN0dPxH9zJdEr5CxT4M_nOWqmekOFntY.apk" data-i18n="mnr.wal.cta2"
          class="inline-flex items-center justify-center px-10 py-4 bg-[#22c55e] hover:bg-white hover:text-black transition text-black text-[24px] font-medium rounded-[4px]">
         Download Android (.apk)
       </a>
@@ -657,10 +660,10 @@
 
   <footer class="border-t border-white/10 py-8 footer-text text-white/50">
     <div class="max-w-7xl mx-auto px-4 sm:px-8 flex flex-col sm:flex-row gap-2 sm:justify-between">
-      <div>PoH Miner Network — Decentralized AI compute, powered by local LLMs</div>
+      <div data-i18n="mnr.foot.tag">PoH Miner Network — Decentralized AI compute, powered by local LLMs</div>
       <div class="flex gap-4">
-        <a href="docs/" class="hover:text-white">Docs</a>
-        <a href="https://proofofhuman.ge" class="hover:text-white">proofofhuman.ge</a>
+        <a href="docs/" data-i18n="mnr.foot.docs" class="hover:text-white">Docs</a>
+        <a href="https://poh.ge" class="hover:text-white">poh.ge</a>
         <a href="https://github.com/Proof-of-Human-Network" target="_blank" class="hover:text-white">GitHub</a>
       </div>
     </div>
@@ -764,7 +767,7 @@
       return n.toLocaleString();
     }
 
-    const MINER_API = 'https://miner.proofofhuman.ge';
+    const MINER_API = 'https://miner.poh.ge';
 
     async function fetchMinerApi(path) {
       const controller = new AbortController();

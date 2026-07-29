@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>What could your GPU earn? — POH</title>
+<style>
+  :root{
+    --bg:#0a0c11; --panel:#12151d; --panel2:#171b25; --line:#232838;
+    --ink:#eef1f7; --mut:#8a91a6; --faint:#5b6274;
+    --a:#4f9bff; --a2:#7db2f0; --good:#38d39f; --gold:#ffd24a; --warn:#f2b544; --bad:#f2665e;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:radial-gradient(1200px 700px at 50% -10%,#141a28 0%,var(--bg) 60%);
+    min-height:100%;color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    -webkit-font-smoothing:antialiased}
+  .wrap{width:100%;max-width:760px;margin:0 auto;padding:48px 24px;text-align:center;
+    min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center}
+  .eyebrow{font-size:13px;letter-spacing:3px;text-transform:uppercase;color:var(--a2);font-weight:700}
+  h1{font-size:38px;line-height:1.14;letter-spacing:-.6px;margin:16px 0 8px;font-weight:800;max-width:16ch}
+  .sub{color:var(--mut);font-size:17px;margin:0 auto 30px;max-width:46ch;line-height:1.5}
+
+  /* ---- fortune wheel ---- */
+  .stage{position:relative;width:min(440px,86vw);height:min(440px,86vw);margin:10px auto 12px;user-select:none}
+  .pointer{position:absolute;top:-6px;left:50%;transform:translateX(-50%);z-index:5;
+    width:0;height:0;border-left:16px solid transparent;border-right:16px solid transparent;
+    border-top:26px solid var(--gold);filter:drop-shadow(0 2px 4px rgba(0,0,0,.5))}
+  .wheel{position:absolute;inset:0;border-radius:50%;
+    box-shadow:0 0 0 6px #0e1119,0 0 0 8px #2a3040,0 22px 60px rgba(0,0,0,.55),inset 0 0 60px rgba(0,0,0,.4);
+    background:
+      conic-gradient(from 0deg,
+        #1c2333 0 30deg,#232c40 30deg 60deg,#1c2333 60deg 90deg,#232c40 90deg 120deg,
+        #1c2333 120deg 150deg,#232c40 150deg 180deg,#1c2333 180deg 210deg,#232c40 210deg 240deg,
+        #1c2333 240deg 270deg,#232c40 270deg 300deg,#1c2333 300deg 330deg,#232c40 330deg 360deg);
+    transition:transform 1.4s cubic-bezier(.16,.84,.3,1)}
+  .wheel::after{content:"";position:absolute;inset:14px;border-radius:50%;
+    border:2px dashed rgba(125,178,240,.22)}
+  .wheel.spinning{transition:none;animation:spin .5s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .ticks{position:absolute;inset:0;border-radius:50%;z-index:2;pointer-events:none}
+  .ticks i{position:absolute;top:50%;left:50%;width:6px;height:6px;margin:-3px;border-radius:50%;
+    background:rgba(125,178,240,.5)}
+  .hub{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:6;
+    width:63%;height:63%;border-radius:50%;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;text-align:center;cursor:pointer;
+    background:radial-gradient(60% 60% at 50% 35%,#1a2130,#0d1017);
+    border:1px solid #2c3548;box-shadow:0 10px 30px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.05);
+    transition:transform .15s}
+  .hub:active{transform:translate(-50%,-50%) scale(.98)}
+  .hub .cta{font-size:20px;font-weight:800;letter-spacing:.3px;color:var(--gold)}
+  .hub .cta small{display:block;font-size:12px;font-weight:600;color:var(--mut);letter-spacing:1.6px;
+    text-transform:uppercase;margin-top:9px}
+  .hub .amt{font-size:46px;font-weight:800;letter-spacing:-1.8px;line-height:1;
+    background:linear-gradient(180deg,#fff,#cfe0ff);-webkit-background-clip:text;background-clip:text;
+    -webkit-text-fill-color:transparent;font-variant-numeric:tabular-nums}
+  .hub .unit{font-size:14px;color:var(--mut);margin-top:8px;letter-spacing:.4px}
+  .hub .spin-msg{font-size:14px;color:var(--a2);font-weight:700;letter-spacing:1.4px;text-transform:uppercase}
+
+  .earned{min-height:24px;font-size:15px;color:var(--faint);margin-top:6px;font-variant-numeric:tabular-nums}
+  .earned b{color:var(--good);font-weight:700}
+
+  /* start earning button */
+  .start{display:none;align-items:center;justify-content:center;gap:12px;margin:26px auto 0;
+    padding:19px 46px;border-radius:16px;font-size:22px;font-weight:800;letter-spacing:.3px;color:#06120c;
+    background:linear-gradient(180deg,#63f0b4,#20c887);text-decoration:none;white-space:nowrap;
+    box-shadow:0 12px 38px rgba(40,220,150,.4);animation:pulse 2.2s ease-in-out infinite}
+  .start.show{display:inline-flex}
+  .start .arw{font-size:22px;transition:transform .2s}
+  .start:hover{filter:brightness(1.05)} .start:hover .arw{transform:translateX(4px)}
+  @keyframes pulse{0%,100%{transform:scale(1);box-shadow:0 12px 38px rgba(40,220,150,.4)}
+    50%{transform:scale(1.04);box-shadow:0 16px 50px rgba(40,220,150,.6)}}
+  @media(prefers-reduced-motion:reduce){.start{animation:none}}
+
+  /* language switcher */
+  .langbar{position:fixed;top:14px;right:14px;z-index:20}
+  .langbar select{appearance:none;-webkit-appearance:none;cursor:pointer;
+    background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:10px;
+    padding:9px 32px 9px 14px;font:inherit;font-size:13.5px;font-weight:600;outline:none;
+    background-image:linear-gradient(45deg,transparent 50%,var(--mut) 50%),linear-gradient(135deg,var(--mut) 50%,transparent 50%);
+    background-position:calc(100% - 16px) 55%,calc(100% - 11px) 55%;background-size:5px 5px,5px 5px;background-repeat:no-repeat}
+  .langbar select:hover{border-color:#33405a}
+
+  /* right-to-left languages */
+  html[dir=rtl] .langbar{right:auto;left:14px}
+  html[dir=rtl] .breakdown{text-align:right}
+  html[dir=rtl] .start:hover .arw{transform:translateX(-4px)}
+
+  /* ---- chips ---- */
+  .chips{display:flex;gap:12px;justify-content:center;flex-wrap:wrap;margin:26px auto 0;max-width:580px;width:100%}
+  .chip{display:inline-flex;align-items:center;gap:8px;background:var(--panel);border:1px solid var(--line);
+    border-radius:999px;padding:11px 17px;font-size:14.5px;color:var(--ink);max-width:100%}
+  .chip .lab{color:var(--faint);font-size:12px;letter-spacing:.3px}
+  .chip.hide{display:none}
+  .chip input{width:64px;background:transparent;border:0;border-bottom:1px dashed #3a445c;color:var(--gold);
+    font:inherit;font-weight:700;text-align:right;outline:none}
+  .chip .edit{color:var(--faint);font-size:11px}
+  .val{font-weight:700}
+  .val.tier-strong{color:var(--good)} .val.tier-mid{color:var(--a2)} .val.tier-low{color:var(--mut)}
+
+  .breakdown{margin:24px auto 0;max-width:580px;width:100%;text-align:left;background:var(--panel);
+    border:1px solid var(--line);border-radius:14px;overflow:hidden}
+  .breakdown summary{cursor:pointer;list-style:none;padding:16px 20px;font-size:14.5px;font-weight:600;
+    color:var(--mut);display:flex;justify-content:space-between;align-items:center}
+  .breakdown summary::-webkit-details-marker{display:none}
+  .breakdown[open] summary{border-bottom:1px solid var(--line)}
+  .breakdown .body{padding:18px 20px}
+  .kv{display:grid;grid-template-columns:1fr auto;gap:9px 16px;font-size:14.5px}
+  .kv .k{color:var(--faint)} .kv .v{color:var(--ink);font-variant-numeric:tabular-nums}
+  .foot{margin-top:16px;font-size:12.5px;color:var(--faint);line-height:1.6;max-width:580px;
+    margin-left:auto;margin-right:auto}
+  .hide{display:none}
+  @media(max-width:520px){
+    .wrap{padding:32px 16px}
+    h1{font-size:29px}
+    .sub{font-size:15px;margin-bottom:22px}
+    .hub .amt{font-size:38px}
+    .hub .cta{font-size:18px}
+  }
+</style>
+</head>
+<body>
+<div class="langbar"><select id="lang" aria-label="Language"></select></div>
+<div class="wrap">
+  <div class="eyebrow" data-i18n="eyebrow">POH · Compute</div>
+  <h1 data-i18n="title">While you sit here, your GPU could be earning.</h1>
+  <p class="sub" data-i18n="sub">Spin to measure this device and see what it would make on the network — right now, where you are.</p>
+
+  <div class="stage">
+    <div class="pointer"></div>
+    <div class="wheel" id="wheel"></div>
+    <div class="ticks" id="ticks"></div>
+    <div class="hub" id="hub">
+      <div class="cta" id="hubCta"><span data-i18n="cta">Click to see</span><small data-i18n="ctaSub">What could I earn</small></div>
+      <div class="spin-msg hide" id="hubSpin" data-i18n="measuring">Measuring…</div>
+      <div class="hide" id="hubResult">
+        <div class="amt" id="amt">$0.00</div>
+        <div class="unit" id="unit">per hour</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="earned" id="earned"></div>
+
+  <a class="start" id="startBtn" href="https://poh.ge" target="_blank" rel="noopener">
+    <span data-i18n="start">Start Earning</span><span class="arw" aria-hidden="true">→</span></a>
+
+  <div class="chips" id="chips">
+    <div class="chip hide" id="chipGpu"><span class="lab" data-i18n="lblGpu">GPU</span><span class="val" id="gpuVal">—</span></div>
+    <div class="chip hide" id="chipLoc"><span class="lab" data-i18n="lblLoc">Location</span><span class="val" id="locVal">—</span></div>
+    <div class="chip hide" id="chipElec"><span class="lab">⚡</span><span>$</span><input id="elecInput" type="number" step="0.01" min="0" value="0.12"><span class="lab" data-i18n="lblKwh">/kWh</span><span class="edit" data-i18n="lblEdit">edit</span></div>
+  </div>
+
+  <details class="breakdown hide" id="breakdown">
+    <summary><span data-i18n="how">How this is worked out</span><span>▾</span></summary>
+    <div class="body">
+      <div class="kv" id="bkKV"></div>
+      <p class="foot" id="foot" data-i18n="foot" style="margin-top:12px">Priced at $0.15 per million output tokens, the node keeping 85%, minus electricity. Throughput is estimated from an in-browser fp32 matrix-multiply — a conservative floor, not a spec sheet. Location and electricity are guessed from your IP; correct the price above and the numbers update live. Nothing is sent anywhere; this all runs in your browser.</p>
+    </div>
+  </details>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => (s==null?'':String(s)).replace(/[<>&]/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]));
+
+/* ===== localization ===== */
+const I18N = {
+  en:{ name:'English',
+    eyebrow:'POH · Compute', title:'While you sit here, your GPU could be earning.',
+    sub:'Spin to measure this device and see what it would make on the network — right now, where you are.',
+    cta:'Click to see', ctaSub:'What could I earn', measuring:'Measuring…', perHour:'per hour',
+    earnedLabel:'Earned while watching:', start:'Start Earning',
+    lblGpu:'GPU', lblLoc:'Location', lblKwh:'/kWh', lblEdit:'edit', hidden:'hidden by browser', unknown:'Unknown',
+    how:'How this is worked out', notSupported:'Not supported',
+    bkThroughput:'GPU throughput', bkInference:'Est. inference', bkGross:'Gross revenue',
+    bkNodeShare:'Node share (85%)', bkElectricity:'Electricity', bkNet:'Net', bkPerDay:'Per day', bkPerMonth:'Per month',
+    foot:'Priced at $0.15 per million output tokens, the node keeping 85%, minus electricity. Throughput is estimated from an in-browser fp32 matrix-multiply — a conservative floor, not a spec sheet. Location and electricity are guessed from your IP; correct the price above and the numbers update live. Nothing is sent anywhere; this all runs in your browser.' },
+  ru:{ name:'Русский',
+    eyebrow:'POH · Вычисления', title:'Пока вы здесь, ваш GPU мог бы зарабатывать.',
+    sub:'Крутите, чтобы измерить это устройство и увидеть, сколько оно заработало бы в сети — прямо сейчас, там, где вы есть.',
+    cta:'Нажмите, чтобы узнать', ctaSub:'Сколько я мог бы заработать', measuring:'Измеряем…', perHour:'в час',
+    earnedLabel:'Заработано за время просмотра:', start:'Начать зарабатывать',
+    lblGpu:'GPU', lblLoc:'Местоположение', lblKwh:'/кВт·ч', lblEdit:'изм.', hidden:'скрыто браузером', unknown:'Неизвестно',
+    how:'Как это рассчитано', notSupported:'Не поддерживается',
+    bkThroughput:'Пропускная способность GPU', bkInference:'Оценка инференса', bkGross:'Валовая выручка',
+    bkNodeShare:'Доля узла (85%)', bkElectricity:'Электроэнергия', bkNet:'Чистыми', bkPerDay:'В день', bkPerMonth:'В месяц',
+    foot:'Цена — $0,15 за миллион выходных токенов, узел получает 85%, минус электроэнергия. Пропускная способность оценивается по fp32-матричному умножению в браузере — консервативная оценка, а не паспортные данные. Местоположение и цена электроэнергии определяются по IP; исправьте цену выше — и цифры обновятся сразу. Ничего никуда не отправляется, всё выполняется в вашем браузере.' },
+  ka:{ name:'ქართული',
+    eyebrow:'POH · გამოთვლა', title:'სანამ აქ ხართ, თქვენს GPU-ს შეუძლია გამოიმუშაოს.',
+    sub:'დაატრიალეთ, რომ გაზომოთ ეს მოწყობილობა და ნახოთ, რამდენს გამოიმუშავებდა ქსელში — ახლავე, იქ, სადაც ხართ.',
+    cta:'დააჭირეთ სანახავად', ctaSub:'რამდენს გამოვიმუშავებდი', measuring:'იზომება…', perHour:'საათში',
+    earnedLabel:'გამომუშავებული ყურებისას:', start:'დაიწყე შემოსავალი',
+    lblGpu:'GPU', lblLoc:'მდებარეობა', lblKwh:'/კვტ·სთ', lblEdit:'შეცვლა', hidden:'ბრაუზერმა დამალა', unknown:'უცნობი',
+    how:'როგორ არის დათვლილი', notSupported:'არ არის მხარდაჭერილი',
+    bkThroughput:'GPU წარმადობა', bkInference:'სავარაუდო ინფერენსი', bkGross:'მთლიანი შემოსავალი',
+    bkNodeShare:'კვანძის წილი (85%)', bkElectricity:'ელექტროენერგია', bkNet:'წმინდა', bkPerDay:'დღეში', bkPerMonth:'თვეში',
+    foot:'ფასი — $0.15 მილიონ გამომავალ ტოკენზე, კვანძი იტოვებს 85%-ს, გამოკლებული ელექტროენერგია. წარმადობა შეფასებულია ბრაუზერში fp32 მატრიცის გამრავლებით — კონსერვატიული შეფასება, არა ტექნიკური მონაცემები. მდებარეობა და ელექტროენერგიის ფასი განისაზღვრება თქვენი IP-ით; შეასწორეთ ფასი ზემოთ და ციფრები მაშინვე განახლდება. არაფერი იგზავნება; ყველაფერი თქვენს ბრაუზერში სრულდება.' },
+  hy:{ name:'Հայերեն',
+    eyebrow:'POH · Հաշվարկ', title:'Քանի դեռ այստեղ եք, ձեր GPU-ն կարող է վաստակել։',
+    sub:'Պտտեք՝ չափելու այս սարքը և տեսնելու, թե որքան կվաստակեր ցանցում — հենց հիմա, այնտեղ, որտեղ դուք եք։',
+    cta:'Սեղմեք՝ տեսնելու', ctaSub:'Որքան կվաստակեի', measuring:'Չափվում է…', perHour:'ժամում',
+    earnedLabel:'Վաստակած՝ դիտելու ընթացքում՝', start:'Սկսել վաստակել',
+    lblGpu:'GPU', lblLoc:'Տեղադրություն', lblKwh:'/կՎտ·ժ', lblEdit:'խմբ.', hidden:'թաքցված է դիտարկիչի կողմից', unknown:'Անհայտ',
+    how:'Ինչպես է հաշվարկվում', notSupported:'Չի աջակցվում',
+    bkThroughput:'GPU թողունակություն', bkInference:'Գնահատված ինֆերենս', bkGross:'Համախառն եկամուտ',
+    bkNodeShare:'Հանգույցի բաժին (85%)', bkElectricity:'Էլեկտրաէներգիա', bkNet:'Զուտ', bkPerDay:'Օրական', bkPerMonth:'Ամսական',
+    foot:'Գինը՝ $0.15 մեկ միլիոն ելքային թոքենի համար, հանգույցը պահում է 85%-ը, հանած էլեկտրաէներգիան։ Թողունակությունը գնահատվում է դիտարկիչում fp32 մատրիցների բազմապատկումով՝ պահպանողական գնահատական, ոչ թե բնութագրեր։ Տեղադրությունն ու էլեկտրաէներգիայի գինը որոշվում են ձեր IP-ով. ուղղեք գինը վերևում, և թվերը կթարմացվեն անմիջապես։ Ոչինչ ոչ մի տեղ չի ուղարկվում. ամեն ինչ կատարվում է ձեր դիտարկիչում։' },
+  es:{ name:'Español',
+    eyebrow:'POH · Cómputo', title:'Mientras estás aquí, tu GPU podría estar ganando.',
+    sub:'Gira para medir este dispositivo y ver cuánto ganaría en la red — ahora mismo, donde estás.',
+    cta:'Haz clic para ver', ctaSub:'Cuánto podría ganar', measuring:'Midiendo…', perHour:'por hora',
+    earnedLabel:'Ganado mientras miras:', start:'Empezar a ganar',
+    lblGpu:'GPU', lblLoc:'Ubicación', lblKwh:'/kWh', lblEdit:'editar', hidden:'oculto por el navegador', unknown:'Desconocido',
+    how:'Cómo se calcula', notSupported:'No compatible',
+    bkThroughput:'Rendimiento de GPU', bkInference:'Inferencia est.', bkGross:'Ingreso bruto',
+    bkNodeShare:'Parte del nodo (85%)', bkElectricity:'Electricidad', bkNet:'Neto', bkPerDay:'Por día', bkPerMonth:'Por mes',
+    foot:'A $0,15 por millón de tokens de salida, el nodo se queda con el 85%, menos electricidad. El rendimiento se estima con una multiplicación de matrices fp32 en el navegador — un mínimo conservador, no una ficha técnica. La ubicación y la electricidad se deducen de tu IP; corrige el precio arriba y los números se actualizan al instante. Nada se envía a ningún sitio; todo se ejecuta en tu navegador.' },
+  de:{ name:'Deutsch',
+    eyebrow:'POH · Rechenleistung', title:'Während du hier sitzt, könnte deine GPU verdienen.',
+    sub:'Dreh, um dieses Gerät zu messen und zu sehen, was es im Netzwerk verdienen würde — jetzt gerade, wo du bist.',
+    cta:'Klick, um zu sehen', ctaSub:'Was könnte ich verdienen', measuring:'Wird gemessen…', perHour:'pro Stunde',
+    earnedLabel:'Verdient beim Zuschauen:', start:'Verdienen starten',
+    lblGpu:'GPU', lblLoc:'Standort', lblKwh:'/kWh', lblEdit:'ändern', hidden:'vom Browser verborgen', unknown:'Unbekannt',
+    how:'Wie das berechnet wird', notSupported:'Nicht unterstützt',
+    bkThroughput:'GPU-Durchsatz', bkInference:'Gesch. Inferenz', bkGross:'Bruttoertrag',
+    bkNodeShare:'Node-Anteil (85%)', bkElectricity:'Strom', bkNet:'Netto', bkPerDay:'Pro Tag', bkPerMonth:'Pro Monat',
+    foot:'Zu $0,15 pro Million Ausgabe-Token, wobei der Node 85% behält, abzüglich Strom. Der Durchsatz wird aus einer fp32-Matrixmultiplikation im Browser geschätzt — eine konservative Untergrenze, kein Datenblatt. Standort und Strompreis werden aus deiner IP geschätzt; korrigiere den Preis oben und die Zahlen aktualisieren sich sofort. Nichts wird irgendwohin gesendet; alles läuft in deinem Browser.' },
+  fr:{ name:'Français',
+    eyebrow:'POH · Calcul', title:'Pendant que vous êtes là, votre GPU pourrait gagner.',
+    sub:'Faites tourner pour mesurer cet appareil et voir ce qu\'il gagnerait sur le réseau — maintenant, là où vous êtes.',
+    cta:'Cliquez pour voir', ctaSub:'Combien je pourrais gagner', measuring:'Mesure en cours…', perHour:'par heure',
+    earnedLabel:'Gagné pendant que vous regardez :', start:'Commencer à gagner',
+    lblGpu:'GPU', lblLoc:'Emplacement', lblKwh:'/kWh', lblEdit:'modifier', hidden:'masqué par le navigateur', unknown:'Inconnu',
+    how:'Comment c\'est calculé', notSupported:'Non pris en charge',
+    bkThroughput:'Débit GPU', bkInference:'Inférence est.', bkGross:'Revenu brut',
+    bkNodeShare:'Part du nœud (85%)', bkElectricity:'Électricité', bkNet:'Net', bkPerDay:'Par jour', bkPerMonth:'Par mois',
+    foot:'Au prix de 0,15 $ par million de tokens de sortie, le nœud gardant 85%, moins l\'électricité. Le débit est estimé à partir d\'une multiplication de matrices fp32 dans le navigateur — un minimum prudent, pas une fiche technique. L\'emplacement et l\'électricité sont déduits de votre IP ; corrigez le prix ci-dessus et les chiffres se mettent à jour en direct. Rien n\'est envoyé nulle part ; tout s\'exécute dans votre navigateur.' },
+  it:{ name:'Italiano',
+    eyebrow:'POH · Calcolo', title:'Mentre sei qui, la tua GPU potrebbe guadagnare.',
+    sub:'Fai girare per misurare questo dispositivo e vedere quanto guadagnerebbe sulla rete — proprio ora, dove sei.',
+    cta:'Clicca per vedere', ctaSub:'Quanto potrei guadagnare', measuring:'Misurazione…', perHour:'all\'ora',
+    earnedLabel:'Guadagnato mentre guardi:', start:'Inizia a guadagnare',
+    lblGpu:'GPU', lblLoc:'Posizione', lblKwh:'/kWh', lblEdit:'modifica', hidden:'nascosto dal browser', unknown:'Sconosciuto',
+    how:'Come viene calcolato', notSupported:'Non supportato',
+    bkThroughput:'Throughput GPU', bkInference:'Inferenza stim.', bkGross:'Ricavo lordo',
+    bkNodeShare:'Quota del nodo (85%)', bkElectricity:'Elettricità', bkNet:'Netto', bkPerDay:'Al giorno', bkPerMonth:'Al mese',
+    foot:'A $0,15 per milione di token di output, con il nodo che trattiene l\'85%, meno l\'elettricità. Il throughput è stimato da una moltiplicazione di matrici fp32 nel browser — un minimo prudente, non una scheda tecnica. Posizione ed elettricità sono dedotte dal tuo IP; correggi il prezzo sopra e i numeri si aggiornano in tempo reale. Nulla viene inviato da nessuna parte; tutto gira nel tuo browser.' },
+  ar:{ name:'العربية', rtl:true,
+    eyebrow:'POH · حوسبة', title:'بينما تجلس هنا، يمكن لبطاقتك الرسومية أن تربح.',
+    sub:'أدِر العجلة لقياس هذا الجهاز ومعرفة ما يمكن أن يجنيه على الشبكة — الآن، حيث أنت.',
+    cta:'انقر لترى', ctaSub:'كم يمكن أن أربح', measuring:'جارٍ القياس…', perHour:'في الساعة',
+    earnedLabel:'المكتسب أثناء المشاهدة:', start:'ابدأ الربح',
+    lblGpu:'GPU', lblLoc:'الموقع', lblKwh:'/ك.و.س', lblEdit:'تعديل', hidden:'مخفي بواسطة المتصفح', unknown:'غير معروف',
+    how:'كيف يُحتسب هذا', notSupported:'غير مدعوم',
+    bkThroughput:'إنتاجية GPU', bkInference:'الاستدلال المقدَّر', bkGross:'الإيراد الإجمالي',
+    bkNodeShare:'حصة العقدة (85%)', bkElectricity:'الكهرباء', bkNet:'الصافي', bkPerDay:'يوميًا', bkPerMonth:'شهريًا',
+    foot:'بسعر $0.15 لكل مليون رمز مُخرَج، مع احتفاظ العقدة بنسبة 85%، ناقص الكهرباء. تُقدَّر الإنتاجية عبر ضرب مصفوفات fp32 داخل المتصفح — حد أدنى متحفظ وليس مواصفات رسمية. يُخمَّن الموقع وسعر الكهرباء من عنوان IP الخاص بك؛ صحِّح السعر أعلاه وتتحدث الأرقام فورًا. لا يُرسَل أي شيء إلى أي مكان؛ كل ذلك يعمل في متصفحك.' },
+  pt:{ name:'Português',
+    eyebrow:'POH · Computação', title:'Enquanto você está aqui, sua GPU poderia estar ganhando.',
+    sub:'Gire para medir este dispositivo e ver quanto ele ganharia na rede — agora mesmo, onde você está.',
+    cta:'Clique para ver', ctaSub:'Quanto eu poderia ganhar', measuring:'Medindo…', perHour:'por hora',
+    earnedLabel:'Ganho enquanto você assiste:', start:'Começar a ganhar',
+    lblGpu:'GPU', lblLoc:'Localização', lblKwh:'/kWh', lblEdit:'editar', hidden:'oculto pelo navegador', unknown:'Desconhecido',
+    how:'Como isto é calculado', notSupported:'Não suportado',
+    bkThroughput:'Desempenho da GPU', bkInference:'Inferência est.', bkGross:'Receita bruta',
+    bkNodeShare:'Parte do nó (85%)', bkElectricity:'Eletricidade', bkNet:'Líquido', bkPerDay:'Por dia', bkPerMonth:'Por mês',
+    foot:'A $0,15 por milhão de tokens de saída, com o nó ficando com 85%, menos eletricidade. O desempenho é estimado por uma multiplicação de matrizes fp32 no navegador — um piso conservador, não uma ficha técnica. Localização e eletricidade são deduzidas do seu IP; corrija o preço acima e os números se atualizam ao vivo. Nada é enviado a lugar nenhum; tudo roda no seu navegador.' },
+  nl:{ name:'Nederlands',
+    eyebrow:'POH · Rekenkracht', title:'Terwijl je hier zit, zou je GPU kunnen verdienen.',
+    sub:'Draai om dit apparaat te meten en te zien wat het op het netwerk zou opleveren — nu, waar je bent.',
+    cta:'Klik om te zien', ctaSub:'Hoeveel zou ik verdienen', measuring:'Meten…', perHour:'per uur',
+    earnedLabel:'Verdiend tijdens het kijken:', start:'Begin met verdienen',
+    lblGpu:'GPU', lblLoc:'Locatie', lblKwh:'/kWh', lblEdit:'bewerken', hidden:'verborgen door browser', unknown:'Onbekend',
+    how:'Hoe dit wordt berekend', notSupported:'Niet ondersteund',
+    bkThroughput:'GPU-doorvoer', bkInference:'Gesch. inferentie', bkGross:'Bruto-omzet',
+    bkNodeShare:'Node-aandeel (85%)', bkElectricity:'Elektriciteit', bkNet:'Netto', bkPerDay:'Per dag', bkPerMonth:'Per maand',
+    foot:'Geprijsd op $0,15 per miljoen output-tokens, waarbij de node 85% houdt, min elektriciteit. De doorvoer wordt geschat via een fp32-matrixvermenigvuldiging in de browser — een conservatieve ondergrens, geen specificatieblad. Locatie en elektriciteit worden geschat op basis van je IP; corrigeer de prijs hierboven en de cijfers werken live bij. Er wordt niets verzonden; dit draait allemaal in je browser.' },
+  az:{ name:'Azərbaycan',
+    eyebrow:'POH · Hesablama', title:'Siz burada olarkən GPU-nuz qazana bilər.',
+    sub:'Bu cihazı ölçmək və şəbəkədə nə qazana biləcəyini görmək üçün fırladın — indi, olduğunuz yerdə.',
+    cta:'Görmək üçün klikləyin', ctaSub:'Nə qədər qazana bilərəm', measuring:'Ölçülür…', perHour:'saatda',
+    earnedLabel:'Baxarkən qazanılan:', start:'Qazanmağa başla',
+    lblGpu:'GPU', lblLoc:'Məkan', lblKwh:'/kVt·s', lblEdit:'redaktə', hidden:'brauzer tərəfindən gizlədilib', unknown:'Naməlum',
+    how:'Bu necə hesablanır', notSupported:'Dəstəklənmir',
+    bkThroughput:'GPU məhsuldarlığı', bkInference:'Təxmini inferens', bkGross:'Ümumi gəlir',
+    bkNodeShare:'Node payı (85%)', bkElectricity:'Elektrik', bkNet:'Xalis', bkPerDay:'Gündə', bkPerMonth:'Ayda',
+    foot:'Milyon çıxış tokeni üçün $0.15 qiymətlə, node 85% saxlayır, elektrik çıxılmaqla. Məhsuldarlıq brauzerdə fp32 matris vurması ilə təxmin edilir — mühafizəkar aşağı hədd, texniki sənəd deyil. Məkan və elektrik qiyməti IP ünvanınızdan təxmin edilir; yuxarıdakı qiyməti düzəldin və rəqəmlər dərhal yenilənir. Heç nə heç yerə göndərilmir; hamısı brauzerinizdə işləyir.' },
+  ms:{ name:'Melayu',
+    eyebrow:'POH · Pengkomputeran', title:'Semasa anda di sini, GPU anda boleh menjana pendapatan.',
+    sub:'Putar untuk mengukur peranti ini dan lihat berapa yang boleh diperoleh di rangkaian — sekarang, di tempat anda berada.',
+    cta:'Klik untuk lihat', ctaSub:'Berapa saya boleh peroleh', measuring:'Mengukur…', perHour:'sejam',
+    earnedLabel:'Diperoleh sambil menonton:', start:'Mula memperoleh',
+    lblGpu:'GPU', lblLoc:'Lokasi', lblKwh:'/kWj', lblEdit:'edit', hidden:'disembunyikan oleh pelayar', unknown:'Tidak diketahui',
+    how:'Bagaimana ini dikira', notSupported:'Tidak disokong',
+    bkThroughput:'Truput GPU', bkInference:'Anggaran inferens', bkGross:'Hasil kasar',
+    bkNodeShare:'Bahagian nod (85%)', bkElectricity:'Elektrik', bkNet:'Bersih', bkPerDay:'Sehari', bkPerMonth:'Sebulan',
+    foot:'Pada harga $0.15 setiap juta token output, nod menyimpan 85%, tolak elektrik. Truput dianggarkan melalui pendaraban matriks fp32 dalam pelayar — asas konservatif, bukan helaian spesifikasi. Lokasi dan elektrik dianggarkan daripada IP anda; betulkan harga di atas dan nombor dikemas kini secara langsung. Tiada apa dihantar ke mana-mana; semuanya berjalan dalam pelayar anda.' },
+  uz:{ name:'Oʻzbek',
+    eyebrow:'POH · Hisoblash', title:'Siz shu yerda ekansiz, GPU’ngiz daromad keltirishi mumkin.',
+    sub:'Bu qurilmani oʻlchash va tarmoqda qancha ishlashini koʻrish uchun aylantiring — hozir, siz turgan joyda.',
+    cta:'Koʻrish uchun bosing', ctaSub:'Qancha ishlashim mumkin', measuring:'Oʻlchanmoqda…', perHour:'soatiga',
+    earnedLabel:'Tomosha davomida ishlangan:', start:'Ishlashni boshlang',
+    lblGpu:'GPU', lblLoc:'Joylashuv', lblKwh:'/kVt·s', lblEdit:'tahrir', hidden:'brauzer tomonidan yashirilgan', unknown:'Nomaʼlum',
+    how:'Bu qanday hisoblanadi', notSupported:'Qoʻllab-quvvatlanmaydi',
+    bkThroughput:'GPU unumdorligi', bkInference:'Taxminiy inferens', bkGross:'Yalpi daromad',
+    bkNodeShare:'Tugun ulushi (85%)', bkElectricity:'Elektr', bkNet:'Sof', bkPerDay:'Kuniga', bkPerMonth:'Oyiga',
+    foot:'Har million chiqish tokeni uchun $0.15 narxda, tugun 85% ni oladi, elektr chiqarib tashlanadi. Unumdorlik brauzerda fp32 matritsa koʻpaytirish orqali taxminlanadi — konservativ quyi chegara, texnik hujjat emas. Joylashuv va elektr narxi IP manzilingizdan taxmin qilinadi; yuqoridagi narxni toʻgʻrilang va raqamlar darhol yangilanadi. Hech narsa hech qayerga yuborilmaydi; hammasi brauzeringizda ishlaydi.' },
+  ky:{ name:'Кыргызча',
+    eyebrow:'POH · Эсептөө', title:'Сиз бул жерде отурганда, GPU’ңуз киреше таба алат.',
+    sub:'Бул түзмөктү өлчөө жана тармакта канча тапканын көрүү үчүн айлантыңыз — азыр, сиз турган жерде.',
+    cta:'Көрүү үчүн басыңыз', ctaSub:'Канча таба алмакмын', measuring:'Өлчөнүүдө…', perHour:'сааттык',
+    earnedLabel:'Көрүп жатканда табылганы:', start:'Киреше табууну баштаңыз',
+    lblGpu:'GPU', lblLoc:'Жайгашкан жери', lblKwh:'/кВт·с', lblEdit:'түзөтүү', hidden:'браузер жашырган', unknown:'Белгисиз',
+    how:'Бул кантип эсептелет', notSupported:'Колдоого алынбайт',
+    bkThroughput:'GPU өткөрүмдүүлүгү', bkInference:'Болжолдуу инференс', bkGross:'Дүң киреше',
+    bkNodeShare:'Түйүндүн үлүшү (85%)', bkElectricity:'Электр энергиясы', bkNet:'Таза', bkPerDay:'Күнүнө', bkPerMonth:'Айына',
+    foot:'Ар бир миллион чыгуу токени үчүн $0.15 баада, түйүн 85% алат, электр энергиясы алынып салынат. Өткөрүмдүүлүк браузерде fp32 матрица көбөйтүү аркылуу болжолдонот — консервативдик төмөнкү чек, техникалык документ эмес. Жайгашкан жериңиз жана электр баасы IP дарегиңизден болжолдонот; жогорудагы бааны оңдоңуз, сандар дароо жаңырат. Эч нерсе эч жакка жөнөтүлбөйт; баары браузериңизде иштейт.' },
+  ne:{ name:'नेपाली',
+    eyebrow:'POH · कम्प्युटिङ', title:'तपाईं यहाँ हुँदा, तपाईंको GPU ले कमाउन सक्छ।',
+    sub:'यो यन्त्र मापन गर्न र यसले सञ्जालमा कति कमाउँछ हेर्न घुमाउनुहोस् — अहिले, तपाईं जहाँ हुनुहुन्छ।',
+    cta:'हेर्न क्लिक गर्नुहोस्', ctaSub:'म कति कमाउन सक्छु', measuring:'मापन गर्दै…', perHour:'प्रति घण्टा',
+    earnedLabel:'हेर्दै गर्दा कमाइएको:', start:'कमाउन सुरु गर्नुहोस्',
+    lblGpu:'GPU', lblLoc:'स्थान', lblKwh:'/kWh', lblEdit:'सम्पादन', hidden:'ब्राउजरले लुकाएको', unknown:'अज्ञात',
+    how:'यो कसरी गणना गरिन्छ', notSupported:'समर्थित छैन',
+    bkThroughput:'GPU थ्रुपुट', bkInference:'अनुमानित इन्फरेन्स', bkGross:'कुल आम्दानी',
+    bkNodeShare:'नोड अंश (85%)', bkElectricity:'बिजुली', bkNet:'खुद', bkPerDay:'प्रति दिन', bkPerMonth:'प्रति महिना',
+    foot:'प्रति दस लाख आउटपुट टोकनमा $0.15 मूल्यमा, नोडले 85% राख्छ, बिजुली घटाएर। थ्रुपुट ब्राउजरभित्रको fp32 म्याट्रिक्स गुणनबाट अनुमान गरिन्छ — रूढिवादी न्यूनतम, स्पेसिफिकेसन होइन। स्थान र बिजुली तपाईंको IP बाट अनुमान गरिन्छ; माथिको मूल्य सच्याउनुहोस् र सङ्ख्याहरू तुरुन्तै अद्यावधिक हुन्छन्। केही पनि कतै पठाइँदैन; यो सबै तपाईंको ब्राउजरमा चल्छ।' },
+  fa:{ name:'دری', rtl:true,
+    eyebrow:'POH · محاسبه', title:'تا وقتی اینجا هستید، کارت گرافیک شما می‌تواند درآمد کسب کند.',
+    sub:'برای اندازه‌گیری این دستگاه و دیدن اینکه در شبکه چقدر درآمد دارد بچرخانید — همین حالا، همان‌جا که هستید.',
+    cta:'برای دیدن کلیک کنید', ctaSub:'چقدر می‌توانم درآمد داشته باشم', measuring:'در حال اندازه‌گیری…', perHour:'در ساعت',
+    earnedLabel:'کسب‌شده هنگام تماشا:', start:'شروع کسب درآمد',
+    lblGpu:'GPU', lblLoc:'موقعیت', lblKwh:'/کیلووات‌ساعت', lblEdit:'ویرایش', hidden:'توسط مرورگر پنهان شده', unknown:'نامعلوم',
+    how:'این چگونه محاسبه می‌شود', notSupported:'پشتیبانی نمی‌شود',
+    bkThroughput:'توان عملیاتی GPU', bkInference:'استنتاج تخمینی', bkGross:'درآمد ناخالص',
+    bkNodeShare:'سهم گره (85%)', bkElectricity:'برق', bkNet:'خالص', bkPerDay:'روزانه', bkPerMonth:'ماهانه',
+    foot:'با قیمت $0.15 به ازای هر میلیون توکن خروجی، گره 85% را نگه می‌دارد، منهای برق. توان عملیاتی از طریق ضرب ماتریسی fp32 در مرورگر تخمین زده می‌شود — یک کف محافظه‌کارانه، نه برگه مشخصات. موقعیت و قیمت برق از IP شما حدس زده می‌شود؛ قیمت بالا را اصلاح کنید و اعداد فوراً به‌روزرسانی می‌شوند. چیزی به جایی ارسال نمی‌شود؛ همه‌چیز در مرورگر شما اجرا می‌شود.' },
+  ps:{ name:'پښتو', rtl:true,
+    eyebrow:'POH · شمېرنه', title:'تر څو چې دلته یاست، ستاسو GPU کولی شي پیسې وګټي.',
+    sub:'د دې وسیلې د اندازه کولو او د دې لیدو لپاره چې په شبکه کې څومره ګټه کوي، وچرخوئ — همدا اوس، هلته چې تاسو یاست.',
+    cta:'د لیدو لپاره کلیک وکړئ', ctaSub:'زه څومره ګټلی شم', measuring:'اندازه کیږي…', perHour:'په ساعت کې',
+    earnedLabel:'د کتلو پرمهال ګټل شوي:', start:'ګټل پیل کړئ',
+    lblGpu:'GPU', lblLoc:'موقعیت', lblKwh:'/کیلووات·ساعت', lblEdit:'سمون', hidden:'د براوزر لخوا پټ شوی', unknown:'نامعلوم',
+    how:'دا څنګه محاسبه کیږي', notSupported:'ملاتړ نلري',
+    bkThroughput:'د GPU تولید', bkInference:'اټکل شوی استنتاج', bkGross:'ناخالص عاید',
+    bkNodeShare:'د نوډ برخه (85%)', bkElectricity:'بریښنا', bkNet:'خالص', bkPerDay:'په ورځ کې', bkPerMonth:'په میاشت کې',
+    foot:'د هر ملیون وتلي ټوکن لپاره د $0.15 په بیه، نوډ 85% ساتي، بریښنا منفي. تولید د براوزر دننه د fp32 ماتریکس ضرب له لارې اټکل کیږي — محافظه‌کاره ټیټه کچه، نه د مشخصاتو پاڼه. موقعیت او بریښنا ستاسو له IP څخه اټکل کیږي؛ پورتنۍ بیه سمه کړئ او شمیرې سمدلاسه تازه کیږي. هیڅ شی هیچیرې نه لیږل کیږي؛ ټول ستاسو په براوزر کې چلیږي.' },
+  my:{ name:'မြန်မာ',
+    eyebrow:'POH · တွက်ချက်မှု', title:'သင်ဒီမှာရှိနေစဉ်၊ သင့် GPU က ဝင်ငွေရှာနိုင်ပါတယ်။',
+    sub:'ဤစက်ကိုတိုင်းတာပြီး ကွန်ရက်ပေါ်တွင် မည်မျှရနိုင်သည်ကို ကြည့်ရန် လှည့်ပါ — အခုပဲ၊ သင်ရှိရာနေရာတွင်။',
+    cta:'ကြည့်ရန် နှိပ်ပါ', ctaSub:'ကျွန်ုပ် မည်မျှရနိုင်မလဲ', measuring:'တိုင်းတာနေသည်…', perHour:'တစ်နာရီလျှင်',
+    earnedLabel:'ကြည့်နေစဉ် ရရှိထားသည်:', start:'ဝင်ငွေရှာဖို့ စတင်ပါ',
+    lblGpu:'GPU', lblLoc:'တည်နေရာ', lblKwh:'/kWh', lblEdit:'တည်းဖြတ်', hidden:'ဘရောက်ဇာက ဖုံးကွယ်ထားသည်', unknown:'မသိ',
+    how:'ဒါကို ဘယ်လိုတွက်ချက်သလဲ', notSupported:'ပံ့ပိုးမထားပါ',
+    bkThroughput:'GPU စွမ်းဆောင်ရည်', bkInference:'ခန့်မှန်း inference', bkGross:'စုစုပေါင်း ဝင်ငွေ',
+    bkNodeShare:'Node ဝေစု (85%)', bkElectricity:'လျှပ်စစ်', bkNet:'အသားတင်', bkPerDay:'တစ်ရက်လျှင်', bkPerMonth:'တစ်လလျှင်',
+    foot:'ထုတ်ပေး token တစ်သန်းလျှင် $0.15 ဖြင့် တွက်ချက်ကာ node က 85% ယူပြီး လျှပ်စစ်ခ နုတ်သည်။ စွမ်းဆောင်ရည်ကို ဘရောက်ဇာအတွင်း fp32 matrix မြှောက်ခြင်းဖြင့် ခန့်မှန်းသည် — ကွန်ဆာဗေးတစ် အနိမ့်ဆုံးတန်ဖိုးဖြစ်ပြီး သတ်မှတ်ချက်စာရွက်မဟုတ်ပါ။ တည်နေရာနှင့် လျှပ်စစ်ခကို သင့် IP မှ ခန့်မှန်းသည်။ အပေါ်ကဈေးနှုန်းကို ပြင်ပါ၊ ဂဏန်းများ ချက်ချင်းအသစ်ဖြစ်သည်။ ဘာမှ ဘယ်နေရာသို့မှ မပို့ပါ၊ အားလုံး သင့်ဘရောက်ဇာတွင် အလုပ်လုပ်သည်။' },
+  lo:{ name:'ລາວ',
+    eyebrow:'POH · ການປະມວນຜົນ', title:'ໃນຂະນະທີ່ທ່ານຢູ່ນີ້, GPU ຂອງທ່ານສາມາດຫາເງິນໄດ້.',
+    sub:'ໝຸນເພື່ອວັດແທກອຸປະກອນນີ້ ແລະເບິ່ງວ່າມັນຈະຫາໄດ້ເທົ່າໃດໃນເຄືອຂ່າຍ — ດຽວນີ້, ຢູ່ບ່ອນທີ່ທ່ານຢູ່.',
+    cta:'ຄລິກເພື່ອເບິ່ງ', ctaSub:'ຂ້ອຍຈະຫາໄດ້ເທົ່າໃດ', measuring:'ກຳລັງວັດແທກ…', perHour:'ຕໍ່ຊົ່ວໂມງ',
+    earnedLabel:'ຫາໄດ້ໃນຂະນະທີ່ເບິ່ງ:', start:'ເລີ່ມຫາເງິນ',
+    lblGpu:'GPU', lblLoc:'ສະຖານທີ່', lblKwh:'/kWh', lblEdit:'ແກ້ໄຂ', hidden:'ຖືກເບຣົາເຊີເຊື່ອງໄວ້', unknown:'ບໍ່ຮູ້',
+    how:'ຄຳນວນແນວໃດ', notSupported:'ບໍ່ຮອງຮັບ',
+    bkThroughput:'ຄວາມສາມາດ GPU', bkInference:'ການປະເມີນ inference', bkGross:'ລາຍຮັບລວມ',
+    bkNodeShare:'ສ່ວນແບ່ງ node (85%)', bkElectricity:'ໄຟຟ້າ', bkNet:'ສຸດທິ', bkPerDay:'ຕໍ່ມື້', bkPerMonth:'ຕໍ່ເດືອນ',
+    foot:'ໃນລາຄາ $0.15 ຕໍ່ລ້ານ token ຜົນອອກ, node ເກັບໄວ້ 85%, ຫັກໄຟຟ້າ. ຄວາມສາມາດຖືກປະເມີນຜ່ານການຄູນ matrix fp32 ໃນເບຣົາເຊີ — ຂັ້ນຕ່ຳແບບລະມັດລະວັງ, ບໍ່ແມ່ນເອກະສານສະເປັກ. ສະຖານທີ່ ແລະໄຟຟ້າຖືກຄາດຄະເນຈາກ IP ຂອງທ່ານ; ແກ້ໄຂລາຄາຂ້າງເທິງ ແລ້ວຕົວເລກຈະອັບເດດທັນທີ. ບໍ່ມີຫຍັງຖືກສົ່ງໄປໃສ; ທັງໝົດເຮັດວຽກໃນເບຣົາເຊີຂອງທ່ານ.' },
+};
+let LANG = 'en';
+const t = k => (I18N[LANG] && I18N[LANG][k]) || I18N.en[k] || k;
+
+function pickLang(){
+  try { const s = localStorage.getItem('poh_lang'); if(s && I18N[s]) return s; } catch {}
+  const cands = navigator.languages || [navigator.language || 'en'];
+  for(const l of cands){ const p = (l||'').toLowerCase().split('-')[0]; if(I18N[p]) return p; }
+  return 'en';
+}
+function applyI18n(){
+  const rtl = !!(I18N[LANG] && I18N[LANG].rtl);
+  document.documentElement.lang = LANG;
+  document.documentElement.dir = rtl ? 'rtl' : 'ltr';
+  document.querySelectorAll('[data-i18n]').forEach(el => { el.textContent = t(el.getAttribute('data-i18n')); });
+  const arw = document.querySelector('.start .arw'); if(arw) arw.textContent = rtl ? '←' : '→';
+  if(state.ready){ renderNumbers(); renderChips(); }
+}
+function buildLangSwitcher(){
+  const sel = $('lang');
+  sel.innerHTML = Object.keys(I18N).map(k => `<option value="${k}">${I18N[k].name}</option>`).join('');
+  sel.value = LANG;
+  sel.addEventListener('change', () => {
+    LANG = sel.value;
+    try { localStorage.setItem('poh_lang', LANG); } catch {}
+    applyI18n();
+  });
+}
+
+/* ===== economics (mirrors src/data.mjs NODE) ===== */
+const PRICE_PER_MTOK = 0.15;   // USD per million output tokens
+const NODE_SHARE     = 0.85;
+const KW             = 0.55;   // draw while computing
+const REF_GFLOPS     = 900;    // in-browser bench that maps to ~1500 tok/s baseline
+const BASE_TOKS      = 1500;   // tokens/sec at the reference
+
+/* rough residential electricity, USD/kWh, by ISO country code */
+const ELEC = {
+  US:0.17,CA:0.13,MX:0.09,BR:0.13,AR:0.06,CL:0.17,CO:0.16,SR:0.050,
+  GB:0.30,IE:0.34,DE:0.38,FR:0.23,IT:0.36,ES:0.27,NL:0.35,BE:0.34,PT:0.25,
+  PL:0.20,RO:0.16,CZ:0.24,GR:0.23,SE:0.20,NO:0.14,FI:0.20,DK:0.36,CH:0.25,AT:0.28,
+  GE:0.07,AM:0.075,AZ:0.048,KG:0.015,KZ:0.04,UZ:0.039,TR:0.10,UA:0.05,RU:0.06,BY:0.05,
+  ET:0.02,EG:0.023,NG:0.036,ZA:0.10,KE:0.13,MA:0.13,GH:0.05,DZ:0.041,AO:0.016,SD:0.017,ZM:0.023,
+  IN:0.08,CN:0.08,JP:0.20,KR:0.11,TW:0.09,HK:0.16,SG:0.22,MY:0.050,TH:0.12,VN:0.08,ID:0.08,PH:0.16,MM:0.025,LA:0.034,
+  AE:0.08,SA:0.05,QA:0.032,IL:0.15,PK:0.06,BD:0.05,BT:0.03,NP:0.042,LK:0.08,IQ:0.015,OM:0.030,KW:0.040,BH:0.048,
+  AU:0.25,NZ:0.19
+};
+const DEFAULT_ELEC = 0.12;
+
+const state = { gflops:0, tokPerSec:0, elec:DEFAULT_ELEC, netHr:0, coarse:false, ready:false, revealAt:0,
+  gpuName:null, tierClass:'', locText:null };
+
+/* ===== device detection ===== */
+async function detectWebGPU(){
+  if(!navigator.gpu) return null;
+  let adapter;
+  try { adapter = await navigator.gpu.requestAdapter({ powerPreference:'high-performance' }); } catch { return null; }
+  if(!adapter) return null;
+  let info = {};
+  try { info = adapter.info || (adapter.requestAdapterInfo ? await adapter.requestAdapterInfo() : {}) || {}; } catch {}
+  return { adapter, info, fallback: !!adapter.isFallbackAdapter };
+}
+function detectWebGLName(){
+  try {
+    const gl = document.createElement('canvas').getContext('webgl');
+    if(!gl) return null;
+    const ext = gl.getExtension('WEBGL_debug_renderer_info');
+    return ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : null;
+  } catch { return null; }
+}
+function shortName(gpu, glName){
+  let n = null;
+  if(gpu && gpu.info){
+    const i = gpu.info;
+    n = i.device || i.description || (i.architecture ? (i.vendor?i.vendor+' ':'')+i.architecture : (i.vendor||null));
+  }
+  if(!n && glName) n = glName;
+  if(!n) return null;
+  // strip ANGLE wrapper: "ANGLE (NVIDIA, NVIDIA GeForce RTX 4090 Direct3D11...)" -> "NVIDIA GeForce RTX 4090"
+  const m = n.match(/ANGLE \([^,]+,\s*([^,]+?)(?:\s+Direct3D| \(0x| vs_| \d+\.\d| Vulkan|,|\))/i);
+  if(m) n = m[1];
+  return n.replace(/\s+/g,' ').trim().slice(0,42);
+}
+
+/* ===== WebGPU matmul benchmark ===== */
+const WGSL = `
+struct Dims { M:u32, N:u32, K:u32, pad:u32 };
+@group(0) @binding(0) var<storage, read> A : array<f32>;
+@group(0) @binding(1) var<storage, read> B : array<f32>;
+@group(0) @binding(2) var<storage, read_write> C : array<f32>;
+@group(0) @binding(3) var<uniform> d : Dims;
+var<workgroup> As : array<array<f32,16>,16>;
+var<workgroup> Bs : array<array<f32,16>,16>;
+@compute @workgroup_size(16,16)
+fn main(@builtin(local_invocation_id) lid: vec3<u32>, @builtin(workgroup_id) wid: vec3<u32>){
+  let row = wid.y*16u + lid.y; let col = wid.x*16u + lid.x;
+  var acc = 0.0; let tiles = (d.K + 15u) / 16u;
+  for(var t=0u; t<tiles; t=t+1u){
+    let aCol = t*16u + lid.x; let bRow = t*16u + lid.y;
+    As[lid.y][lid.x] = select(0.0, A[row*d.K + aCol], row < d.M && aCol < d.K);
+    Bs[lid.y][lid.x] = select(0.0, B[bRow*d.N + col], bRow < d.K && col < d.N);
+    workgroupBarrier();
+    for(var k=0u; k<16u; k=k+1u){ acc = acc + As[lid.y][k] * Bs[k][lid.x]; }
+    workgroupBarrier();
+  }
+  if(row < d.M && col < d.N){ C[row*d.N + col] = acc; }
+}`;
+async function benchWebGPU(adapter){
+  const device = await adapter.requestDevice();
+  let lost = false; device.lost.then(()=>{ lost = true; });
+  const M=1024,N=1024,K=1024, bytes=M*N*4, U=GPUBufferUsage;
+  const mk = u => device.createBuffer({ size:bytes, usage:u });
+  const A=mk(U.STORAGE|U.COPY_DST), B=mk(U.STORAGE|U.COPY_DST), C=mk(U.STORAGE);
+  const fa=new Float32Array(M*K), fb=new Float32Array(K*N);
+  for(let i=0;i<fa.length;i++) fa[i]=((i*2654435761)>>>0)/4294967296-0.5;
+  for(let i=0;i<fb.length;i++) fb[i]=(((i*40503)>>>0)%997)/997-0.5;
+  device.queue.writeBuffer(A,0,fa); device.queue.writeBuffer(B,0,fb);
+  const dims=device.createBuffer({ size:16, usage:U.UNIFORM|U.COPY_DST });
+  device.queue.writeBuffer(dims,0,new Uint32Array([M,N,K,0]));
+  const pipeline=device.createComputePipeline({ layout:'auto', compute:{ module:device.createShaderModule({code:WGSL}), entryPoint:'main' }});
+  const bind=device.createBindGroup({ layout:pipeline.getBindGroupLayout(0), entries:[
+    {binding:0,resource:{buffer:A}},{binding:1,resource:{buffer:B}},{binding:2,resource:{buffer:C}},{binding:3,resource:{buffer:dims}} ]});
+  const gx=Math.ceil(N/16), gy=Math.ceil(M/16);
+  const run = it => { const e=device.createCommandEncoder();
+    for(let i=0;i<it;i++){ const p=e.beginComputePass(); p.setPipeline(pipeline); p.setBindGroup(0,bind); p.dispatchWorkgroups(gx,gy); p.end(); }
+    device.queue.submit([e.finish()]); };
+  run(2); await device.queue.onSubmittedWorkDone(); if(lost) throw new Error('device lost');
+  let it=24, secs=0;
+  for(let a=0;a<4;a++){ const t0=performance.now(); run(it); await device.queue.onSubmittedWorkDone();
+    secs=(performance.now()-t0)/1000; if(lost) throw new Error('device lost'); if(secs>=0.25) break; it*=2; }
+  const gflops=(2*M*N*K*it)/secs/1e9; device.destroy&&device.destroy();
+  return { gflops, coarse:false };
+}
+function benchWebGL(){
+  const c=document.createElement('canvas'); c.width=c.height=1024; const gl=c.getContext('webgl'); if(!gl) return null;
+  const vs=`attribute vec2 p;void main(){gl_Position=vec4(p,0.0,1.0);}`;
+  const fs=`precision highp float;uniform float s;void main(){float a=0.0;vec2 q=gl_FragCoord.xy;
+    for(int i=0;i<200;i++){a+=sin(q.x*0.01+float(i)+s)*cos(q.y*0.013+float(i));}gl_FragColor=vec4(fract(a),0.0,0.0,1.0);}`;
+  const sh=(t,src)=>{const s=gl.createShader(t);gl.shaderSource(s,src);gl.compileShader(s);return s;};
+  const pr=gl.createProgram(); gl.attachShader(pr,sh(gl.VERTEX_SHADER,vs)); gl.attachShader(pr,sh(gl.FRAGMENT_SHADER,fs)); gl.linkProgram(pr); gl.useProgram(pr);
+  const b=gl.createBuffer(); gl.bindBuffer(gl.ARRAY_BUFFER,b); gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,3,-1,-1,3]),gl.STATIC_DRAW);
+  const loc=gl.getAttribLocation(pr,'p'); gl.enableVertexAttribArray(loc); gl.vertexAttribPointer(loc,2,gl.FLOAT,false,0,0);
+  const sL=gl.getUniformLocation(pr,'s');
+  for(let i=0;i<3;i++){gl.uniform1f(sL,i);gl.drawArrays(gl.TRIANGLES,0,3);} gl.finish();
+  const t0=performance.now(); let f=0; while(performance.now()-t0<700){ gl.uniform1f(sL,f); gl.drawArrays(gl.TRIANGLES,0,3); f++; } gl.finish();
+  const secs=(performance.now()-t0)/1000; const ops=f*1024*1024*200*4;
+  return { gflops:ops/secs/1e9, coarse:true };
+}
+
+/* ===== geo ===== */
+async function detectGeo(){
+  try {
+    const r = await fetch('https://ipapi.co/json/', { cache:'no-store' });
+    if(!r.ok) throw 0;
+    const j = await r.json();
+    return { cc:j.country_code, country:j.country_name, city:j.city };
+  } catch { return null; }
+}
+
+/* ===== earnings ===== */
+function computeEarnings(){
+  state.tokPerSec = Math.max(60, Math.min(30000, BASE_TOKS * state.gflops / REF_GFLOPS));
+  const tokensHr = state.tokPerSec * 3600;
+  const grossHr  = tokensHr/1e6 * PRICE_PER_MTOK;
+  const powerHr  = KW * state.elec;
+  state.netHr    = Math.max(0, grossHr*NODE_SHARE - powerHr);
+  return { tokensHr, grossHr, powerHr };
+}
+const fmt$ = (n,dp=2) => '$'+n.toLocaleString('en-US',{minimumFractionDigits:dp,maximumFractionDigits:dp});
+function fmtSmall(n){ if(n>=0.01) return fmt$(n); if(n>=0.0001) return '$'+n.toFixed(5); return '$'+n.toExponential(2); }
+
+function renderNumbers(){
+  const p = computeEarnings();
+  // headline: per hour (or per day if tiny)
+  const perHr = state.netHr;
+  $('amt').textContent = perHr>=0.005 ? fmt$(perHr) : (perHr>0 ? fmt$(perHr,4) : '$0.00');
+  $('unit').textContent = t('perHour');
+  // breakdown
+  const g = state.gflops;
+  const bk = [
+    [t('bkThroughput'), (g>=1000?(g/1000).toFixed(2)+' TFLOPS':Math.round(g)+' GFLOPS') + (state.coarse?' (approx)':'')],
+    [t('bkInference'), Math.round(state.tokPerSec).toLocaleString()+' tok/s'],
+    [t('bkGross'), fmtSmall(p.grossHr)+' /hr'],
+    [t('bkNodeShare'), fmtSmall(p.grossHr*NODE_SHARE)+' /hr'],
+    [t('bkElectricity'), '−'+fmtSmall(p.powerHr)+' /hr'],
+    [t('bkNet'), fmtSmall(perHr)+' /hr'],
+    [t('bkPerDay'), fmtSmall(perHr*24)],
+    [t('bkPerMonth'), fmtSmall(perHr*24*30)],
+  ];
+  $('bkKV').innerHTML = bk.map(([k,v])=>`<div class="k">${esc(k)}</div><div class="v">${v}</div>`).join('');
+}
+
+/* GPU / Location chips (localized labels come from data-i18n; values here) */
+function renderChips(){
+  $('gpuVal').textContent = state.gpuName || t('hidden');
+  $('gpuVal').className = 'val ' + state.tierClass;
+  $('locVal').textContent = state.locText || t('unknown');
+}
+
+/* live "earned since you opened this" ticker */
+function tick(){
+  if(!state.ready) return;
+  const secs = (performance.now()-state.revealAt)/1000;
+  const earned = state.netHr/3600 * secs;
+  $('earned').innerHTML = `${esc(t('earnedLabel'))} <b>${fmtSmall(earned)}</b>`;
+  requestAnimationFrame(tick);
+}
+
+/* ===== wheel dressing ===== */
+function drawTicks(){
+  const host=$('ticks'); const S=host.clientWidth||360; const c=S/2, R=c-12; let h='';
+  for(let k=0;k<12;k++){ const ang=(k/12)*2*Math.PI - Math.PI/2;
+    const x=c+Math.cos(ang)*R, y=c+Math.sin(ang)*R;
+    h+=`<i style="left:${x}px;top:${y}px"></i>`; }
+  host.innerHTML=h;
+}
+window.addEventListener('resize', drawTicks);
+
+/* ===== main flow ===== */
+let running=false;
+async function spin(){
+  if(running) return; running=true;
+  $('hubCta').classList.add('hide'); $('hubResult').classList.add('hide'); $('hubSpin').classList.remove('hide');
+  $('wheel').classList.add('spinning');
+
+  const [gpu, geo] = await Promise.all([detectWebGPU(), detectGeo()]);
+  const glName = detectWebGLName();
+
+  // electricity from geo
+  if(geo && geo.cc && ELEC[geo.cc] != null) state.elec = ELEC[geo.cc];
+  $('elecInput').value = state.elec;
+
+  // benchmark
+  let res=null;
+  try { res = gpu ? await benchWebGPU(gpu.adapter) : benchWebGL(); }
+  catch(e){ try { res = benchWebGL(); } catch {} }
+  if(!res){ $('hubSpin').textContent=t('notSupported'); running=false; return; }
+  state.gflops = res.gflops; state.coarse = res.coarse;
+
+  // stop wheel with a decelerating land
+  const wheel=$('wheel'); wheel.classList.remove('spinning');
+  const land = 360*6 + Math.floor(Math.random()*360);
+  wheel.style.transform = `rotate(${land}deg)`;
+
+  // fill chips
+  state.gpuName = shortName(gpu, glName);
+  state.tierClass = state.gflops>=1500?'tier-strong':state.gflops>=400?'tier-mid':'tier-low';
+  state.locText = (geo && (geo.city||geo.country)) ? [geo.city,geo.country].filter(Boolean).join(', ') : null;
+  renderChips();
+  $('chipGpu').classList.remove('hide');
+  $('chipLoc').classList.remove('hide');
+  $('chipElec').classList.remove('hide');
+  $('breakdown').classList.remove('hide');
+
+  // reveal after the wheel eases
+  setTimeout(()=>{
+    $('hubSpin').classList.add('hide'); $('hubResult').classList.remove('hide');
+    renderNumbers();
+    // count-up the headline
+    const target = state.netHr>=0.005 ? state.netHr : state.netHr;
+    const t0=performance.now(), dur=900;
+    (function up(now){ const p=Math.min(1,(now-t0)/dur), e=1-Math.pow(1-p,3);
+      const v=target*e; $('amt').textContent = target>=0.005?fmt$(v):fmt$(v,4);
+      if(p<1) requestAnimationFrame(up); })(t0);
+    $('startBtn').classList.add('show');
+    state.ready=true; state.revealAt=performance.now(); requestAnimationFrame(tick);
+    running=false;
+  }, 1500);
+}
+
+$('hub').addEventListener('click', spin);
+$('elecInput').addEventListener('input', e=>{
+  const v=parseFloat(e.target.value); if(!isNaN(v)&&v>=0){ state.elec=v; if(state.ready) renderNumbers(); }
+});
+
+LANG = pickLang();
+buildLangSwitcher();
+applyI18n();
+drawTicks();
+</script>
+</body>
+</html>

@@ -39,7 +39,7 @@ You can change this anytime in `config.json`. This gives you full control:
 - Very low power draw while idle.
 
 ### Windows
-- Download the PoH Miner `.exe` from [miner.proofofhuman.ge](https://miner.proofofhuman.ge) and run it.
+- Download the PoH Miner `.exe` from [miner.poh.ge](https://miner.poh.ge) and run it.
 - No engine to install — QVAC runs in-process; the model downloads on first launch.
 - Works great on gaming PCs (will detect NVIDIA GPU automatically).
 - For VPS or no-GPU machines, manually set `"inferenceMode": "cpu"` in config.
@@ -77,4 +77,4 @@ model picker in the desktop app (Settings and above the chat box).
 
 ## Need Help?
 
-Join the discussion on proofofhuman.ge or open an issue on GitHub.
+Join the discussion on poh.ge or open an issue on GitHub.

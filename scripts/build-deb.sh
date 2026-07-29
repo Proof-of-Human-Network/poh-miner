@@ -13,7 +13,7 @@ set -e
 VERSION=$(node -p "require('./package.json').version")
 ARCH="amd64"
 NAME="poh-miner"
-MAINTAINER="PoH Network <team@proofofhuman.ge>"
+MAINTAINER="PoH Network <team@poh.ge>"
 DESCRIPTION="PoH Miner Network - Earn POH by contributing compute to the decentralized AI identity brain"
 
 DIST_DIR="dist"

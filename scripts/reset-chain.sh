@@ -108,7 +108,7 @@ echo "🔧 Patching miner config (localhost bootnode, no stale snapshot)…"
 ssh "$HK" 'node -e "
   const fs=require(\"fs\"),p=\"/root/poh-miner/config.json\";
   const c=JSON.parse(fs.readFileSync(p,\"utf8\"));
-  c.bootnodes=[\"http://127.0.0.1:8080\"]; c.publicHost=\"miner.proofofhuman.ge\";
+  c.bootnodes=[\"http://127.0.0.1:8080\"]; c.publicHost=\"miner.poh.ge\";
   delete c.genesisSnapshot;
   fs.writeFileSync(p, JSON.stringify(c,null,2));
 "'

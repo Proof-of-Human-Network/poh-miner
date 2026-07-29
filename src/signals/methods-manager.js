@@ -7,7 +7,7 @@
  *
  * Sources (in priority order):
  * 1. Published signals transactions received via the PoH chain / gossip
- * 2. Direct fetch from https://poh.ge/methods/verifyer (and fallbacks)
+ * 2. Direct fetch from https://proofofhuman.ge/methods/verifyer (and fallbacks)
  * 3. Locally cached copy (~/.poh-miner/methods.json)
  *
  * All miners compute a deterministic `methodsHash` so the network can
@@ -25,13 +25,13 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const CONFIG_DIR = path.join(os.homedir(), '.poh-miner');
 const METHODS_FILE = path.join(CONFIG_DIR, 'methods.json');
 
-const PRIMARY_SOURCE = 'https://poh.ge/methods/verifyer';
+const PRIMARY_SOURCE = 'https://proofofhuman.ge/methods/verifyer';
 
-// Robust list of HTTP gateways (in priority order). poh.ge is primary (reliable
-// DNS); poh.ge kept as a fallback. Both proxy the same backend.
+// Robust list of HTTP gateways (in priority order). proofofhuman.ge is primary (reliable
+// DNS); proofofhuman.ge kept as a fallback. Both proxy the same backend.
 const GATEWAYS = [
-  'https://poh.ge/methods/verifyer',
-  'https://poh.ge/methods/verifyer',
+  'https://proofofhuman.ge/methods/verifyer',
+  'https://proofofhuman.ge/methods/verifyer',
 ];
 
 // Public IPFS gateways used when lastKnownCID is set
@@ -43,8 +43,8 @@ const IPFS_GATEWAYS = [
 
 // New: Sources for "signals that have live conviction curves" (the canonical set for miners)
 const LIVE_SIGNALS_SOURCES = [
-  'https://poh.ge/miner/signals/live',
-  'https://poh.ge/miner/signals/transactions',
+  'https://proofofhuman.ge/miner/signals/live',
+  'https://proofofhuman.ge/miner/signals/transactions',
 ];
 
 // Local supplemental signals (always merged into the active set when available)

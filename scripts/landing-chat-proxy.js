@@ -83,10 +83,10 @@ function releaseRateSlot(ip) {
 
 function corsHeaders(origin) {
   const allowed = [
-    'https://miner.proofofhuman.ge',
-    'http://miner.proofofhuman.ge',
-    'https://proofofhuman.ge',
-    'http://proofofhuman.ge',
+    'https://miner.poh.ge',
+    'http://miner.poh.ge',
+    'https://poh.ge',
+    'http://poh.ge',
     'http://localhost:4321',
     'http://127.0.0.1:4321',
     'http://localhost:5173',
@@ -100,7 +100,7 @@ function corsHeaders(origin) {
   if (origin && (allowed.includes(origin) || origin.includes('localhost'))) {
     h['Access-Control-Allow-Origin'] = origin;
   } else {
-    h['Access-Control-Allow-Origin'] = 'https://miner.proofofhuman.ge';
+    h['Access-Control-Allow-Origin'] = 'https://miner.poh.ge';
   }
   return h;
 }

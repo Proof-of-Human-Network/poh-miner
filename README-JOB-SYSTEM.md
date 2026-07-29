@@ -46,7 +46,7 @@ Where `geoMultiplier` can be as high as **2.2×** for same-region jobs.
 
 - Persistent job mempool (survives restarts)
 - Real gossip broadcasting of new jobs
-- Ability for the app layer (proofofhuman.ge) to tag jobs with origin region
+- Ability for the app layer (poh.ge) to tag jobs with origin region
 - Staking-weighted reputation affecting job eligibility
 
 This system is one of the key innovations that makes running a PoH miner economically rational and fair.
