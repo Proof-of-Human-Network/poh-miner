@@ -2,7 +2,7 @@
   "en": {
     "b2b.hero.eyebrow": "PRIVATE AI COMPUTE",
     "b2b.hero": "Build on <span class=\"neon\">AI.</span><br>Keep it <span class=\"neon\">private.</span>",
-    "b2b.hero.sub": "Encrypted, sovereign compute for teams building with AI — on a decentralized network that never sees your data.",
+    "b2b.hero.sub": "Encrypted, sovereign compute for teams building with AI",
     "b2b.hero.cta1": "Get a fixed quote →",
     "b2b.hero.cta2": "How it works",
     "b2b.trust.eyebrow": "YOUR DATA STAYS YOURS",
@@ -40,11 +40,10 @@
     "b2b.ent.cta": "Talk to us — get a fixed quote →",
     "b2b.ent.cta2": "Explore the network →"
   },
-
   "ka": {
     "b2b.hero.eyebrow": "პრივატული AI გამოთვლა",
     "b2b.hero": "ააშენე <span class=\"neon\">AI-ზე.</span><br>დარჩეს <span class=\"neon\">პრივატული.</span>",
-    "b2b.hero.sub": "დაშიფრული, სუვერენული გამოთვლა გუნდებისთვის, რომლებიც AI-ზე აშენებენ — დეცენტრალიზებულ ქსელზე, რომელიც შენს მონაცემებს ვერასდროს ხედავს.",
+    "b2b.hero.sub": "დაშიფრული, სუვერენული გამოთვლა გუნდებისთვის, რომლებიც AI-ზე აშენებენ",
     "b2b.hero.cta1": "მიიღე ფიქსირებული ფასი →",
     "b2b.hero.cta2": "როგორ მუშაობს",
     "b2b.trust.eyebrow": "შენი მონაცემები შენი რჩება",
@@ -82,11 +81,10 @@
     "b2b.ent.cta": "დაგვიკავშირდი — მიიღე ფიქსირებული ფასი →",
     "b2b.ent.cta2": "გაეცანი ქსელს →"
   },
-
   "hy": {
     "b2b.hero.eyebrow": "ՄԱՍՆԱՎՈՐ AI ՀԱՇՎԱՐԿ",
     "b2b.hero": "Կառուցիր <span class=\"neon\">AI-ով.</span><br>Պահիր <span class=\"neon\">մասնավոր.</span>",
-    "b2b.hero.sub": "Գաղտնագրված, ինքնիշխան հաշվարկ AI-ով կառուցող թիմերի համար — ապակենտրոնացված ցանցում, որը երբեք չի տեսնում քո տվյալները։",
+    "b2b.hero.sub": "Գաղտնագրված, ինքնիշխան հաշվարկ AI-ով կառուցող թիմերի համար",
     "b2b.hero.cta1": "Ստացիր ֆիքսված գին →",
     "b2b.hero.cta2": "Ինչպես է աշխատում",
     "b2b.trust.eyebrow": "ՔՈ ՏՎՅԱԼՆԵՐԸ ՄՆՈՒՄ ԵՆ ՔՈՆԸ",
@@ -124,11 +122,10 @@
     "b2b.ent.cta": "Կապվիր մեզ հետ — ստացիր ֆիքսված գին →",
     "b2b.ent.cta2": "Ուսումնասիրիր ցանցը →"
   },
-
   "ky": {
     "b2b.hero.eyebrow": "ЖЕКЕ AI ЭСЕПТӨӨ",
     "b2b.hero": "<span class=\"neon\">AI</span> менен кур.<br><span class=\"neon\">Жеке</span> бойдон калсын.",
-    "b2b.hero.sub": "AI менен кургандар үчүн шифрленген, эгемен эсептөө — сенин маалыматыңды эч качан көрбөгөн борборсуздандырылган тармакта.",
+    "b2b.hero.sub": "AI менен кургандар үчүн шифрленген, эгемен эсептөө",
     "b2b.hero.cta1": "Туруктуу баа ал →",
     "b2b.hero.cta2": "Кантип иштейт",
     "b2b.trust.eyebrow": "МААЛЫМАТЫҢ ӨЗҮҢДҮКҮ БОЙДОН КАЛАТ",
@@ -166,11 +163,10 @@
     "b2b.ent.cta": "Бизге кайрыл — туруктуу баа ал →",
     "b2b.ent.cta2": "Тармак менен таанышып чык →"
   },
-
   "ru": {
     "b2b.hero.eyebrow": "ПРИВАТНЫЕ ИИ-ВЫЧИСЛЕНИЯ",
     "b2b.hero": "Стройте на <span class=\"neon\">ИИ.</span><br>Оставьте это <span class=\"neon\">приватным.</span>",
-    "b2b.hero.sub": "Зашифрованные, суверенные вычисления для команд, строящих на ИИ, — в децентрализованной сети, которая никогда не видит ваши данные.",
+    "b2b.hero.sub": "Зашифрованные, суверенные вычисления для команд, строящих на ИИ",
     "b2b.hero.cta1": "Получить фиксированную цену →",
     "b2b.hero.cta2": "Как это работает",
     "b2b.trust.eyebrow": "ВАШИ ДАННЫЕ ОСТАЮТСЯ ВАШИМИ",
@@ -208,11 +204,10 @@
     "b2b.ent.cta": "Свяжитесь с нами — получите фиксированную цену →",
     "b2b.ent.cta2": "Изучить сеть →"
   },
-
   "de": {
     "b2b.hero.eyebrow": "PRIVATE KI-RECHENLEISTUNG",
     "b2b.hero": "Bau auf <span class=\"neon\">KI.</span><br>Halt es <span class=\"neon\">privat.</span>",
-    "b2b.hero.sub": "Verschlüsselte, souveräne Rechenleistung für Teams, die mit KI bauen — in einem dezentralen Netzwerk, das deine Daten nie sieht.",
+    "b2b.hero.sub": "Verschlüsselte, souveräne Rechenleistung für Teams, die mit KI bauen",
     "b2b.hero.cta1": "Festpreis erhalten →",
     "b2b.hero.cta2": "So funktioniert es",
     "b2b.trust.eyebrow": "DEINE DATEN BLEIBEN DEINE",
@@ -250,11 +245,10 @@
     "b2b.ent.cta": "Sprich mit uns — Festpreis erhalten →",
     "b2b.ent.cta2": "Das Netzwerk erkunden →"
   },
-
   "fr": {
     "b2b.hero.eyebrow": "CALCUL IA PRIVÉ",
     "b2b.hero": "Construisez sur l'<span class=\"neon\">IA.</span><br>Gardez-la <span class=\"neon\">privée.</span>",
-    "b2b.hero.sub": "Du calcul chiffré et souverain pour les équipes qui construisent avec l'IA — sur un réseau décentralisé qui ne voit jamais vos données.",
+    "b2b.hero.sub": "Du calcul chiffré et souverain pour les équipes qui construisent avec l'IA",
     "b2b.hero.cta1": "Obtenez un tarif fixe →",
     "b2b.hero.cta2": "Comment ça marche",
     "b2b.trust.eyebrow": "VOS DONNÉES RESTENT LES VÔTRES",
@@ -292,11 +286,10 @@
     "b2b.ent.cta": "Contactez-nous — obtenez un tarif fixe →",
     "b2b.ent.cta2": "Explorer le réseau →"
   },
-
   "it": {
     "b2b.hero.eyebrow": "CALCOLO IA PRIVATO",
     "b2b.hero": "Costruisci sull'<span class=\"neon\">IA.</span><br>Tienila <span class=\"neon\">privata.</span>",
-    "b2b.hero.sub": "Calcolo cifrato e sovrano per i team che costruiscono con l'IA — su una rete decentralizzata che non vede mai i tuoi dati.",
+    "b2b.hero.sub": "Calcolo cifrato e sovrano per i team che costruiscono con l'IA",
     "b2b.hero.cta1": "Ottieni un prezzo fisso →",
     "b2b.hero.cta2": "Come funziona",
     "b2b.trust.eyebrow": "I TUOI DATI RESTANO TUOI",
@@ -334,11 +327,10 @@
     "b2b.ent.cta": "Contattaci — ottieni un prezzo fisso →",
     "b2b.ent.cta2": "Esplora la rete →"
   },
-
   "es": {
     "b2b.hero.eyebrow": "CÓMPUTO IA PRIVADO",
     "b2b.hero": "Construye sobre <span class=\"neon\">IA.</span><br>Mantenla <span class=\"neon\">privada.</span>",
-    "b2b.hero.sub": "Cómputo cifrado y soberano para equipos que construyen con IA — en una red descentralizada que nunca ve tus datos.",
+    "b2b.hero.sub": "Cómputo cifrado y soberano para equipos que construyen con IA",
     "b2b.hero.cta1": "Obtén un precio fijo →",
     "b2b.hero.cta2": "Cómo funciona",
     "b2b.trust.eyebrow": "TUS DATOS SIGUEN SIENDO TUYOS",
