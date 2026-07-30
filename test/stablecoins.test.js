@@ -197,6 +197,23 @@ describe('genesis with assets', () => {
 });
 
 describe('per-currency gas', () => {
+  it('stablecoin rates anchor at $0.05 per 1M tokens via fx (fixed rate, not POH-derived)', () => {
+    // raw/token = 0.05 × fx × 100 ÷ 1e6 — verify against the registry fx rates
+    for (const t of STABLE_TICKERS) {
+      const expected = 0.05 * ASSETS[t].fxPerUSD * 100 / 1e6;
+      expect(GAS_PRICES[t]).toBeCloseTo(expected, 10);
+    }
+    // aiGEL: 1M tokens = 13.5 raw = ₾0.135 ≈ $0.05 (feeFor ceils to whole raw units)
+    expect(feeFor(1_000_000, 'aiGEL')).toBe(14);
+  });
+
+  it('$50 of aiGEL buys ~1B tokens (the $200-client / $0.05-miner scenario)', () => {
+    // $50 in GEL = 135 GEL = 13_500 raw units of aiGEL
+    const budgetRaw = 13_500;
+    const tokens = budgetRaw / GAS_PRICES.aiGEL;
+    expect(tokens).toBeCloseTo(1e9, -3);   // ≈ 1 billion AI tokens
+  });
+
   it('gasPriceFor honours config overrides; feeFor floors at 1 raw unit', () => {
     expect(gasPriceFor('POH')).toBe(1);
     expect(gasPriceFor('aiGEL')).toBe(GAS_PRICES.aiGEL);

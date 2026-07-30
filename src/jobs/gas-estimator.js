@@ -1,17 +1,24 @@
 // Per-currency price per AI token, in RAW units of that currency. POH: 1 μPOH
-// per token (unchanged, μPOH is the floor unit). Stablecoin defaults are derived
-// from their fx rate under a placeholder 1 POH ≈ $1 assumption — they come out
-// fractional, so fees floor at 1 raw unit (0.01) via feeFor(). Node operators
-// can override any entry with config.gasPrices = { aiGEL: <number>, ... }.
+// per token (unchanged, μPOH is the floor unit — a separate economy from the
+// stables). Stablecoin rates are FIXED per currency, never derived from POH.
+//
+// Anchor: USD_PER_1M_TOKENS ($0.05 per million AI tokens paid to miners),
+// converted at each currency's fx rate:
+//   raw/token = 0.05 × fxPerUSD × 100(raw per unit) ÷ 1e6
+// e.g. aiGEL (₾2.7/$): 1M tokens = 13.5 raw = ₾0.135 ≈ $0.05. For reference,
+// a 3090-class GPU's electricity in Georgia is ~₾0.02/1M tokens, so this rate
+// leaves miners a healthy margin. Node operators can override any entry with
+// config.gasPrices = { aiGEL: <number>, ... }.
 // NOT consensus: the accepting miner enforces its own floor; settlement pays
 // whatever was escrowed in exactly the currency paid.
+export const USD_PER_1M_TOKENS = 0.05;
 export const GAS_PRICES = {
   POH:   1,          // μPOH / token
-  aiGEL: 2.7e-7,     // raw (0.01 GEL) units / token
-  aiKGS: 8.7e-6,
-  aiAMD: 3.85e-5,
-  aiETB: 1.28e-5,
-  aiBTN: 8.4e-6,
+  aiGEL: 1.35e-5,    // ₾0.135 / 1M tokens (fx 2.7)
+  aiKGS: 4.35e-4,    // 4.35 som / 1M tokens (fx 87)
+  aiAMD: 1.925e-3,   // ֏19.25 / 1M tokens (fx 385)
+  aiETB: 6.4e-4,     // Br 6.40 / 1M tokens (fx 128)
+  aiBTN: 4.2e-4,     // Nu. 4.20 / 1M tokens (fx 84)
 };
 
 /** Effective per-token gas price for a currency, honouring config.gasPrices overrides. */
