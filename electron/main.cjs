@@ -904,9 +904,22 @@ async function warmUpQvacModel(model = 'qwen3-1.7b') {
     sendLog(`[Setup] ✓ QVAC model ${model} ready.`);
     return { ok: true };
   } catch (e) {
-    sendSetupProgress({ status: 'error', message: `Model warm-up failed: ${e.message} (retries on first job)`, model });
-    sendLog(`[Setup] ⚠️ QVAC warm-up failed: ${e.message}`);
-    return { ok: false, error: e.message };
+    // Attach an actionable hint for the known platform-specific failure modes so
+    // the renderer's alert tells the user what to actually do.
+    let hint = '';
+    const msg = String(e.message || e);
+    if (/ENOTDIR|ENOENT.*app\.asar/i.test(msg)) {
+      hint = ' [Packaging: native runtime stuck inside app.asar — update the app to v0.4.13+ which unpacks it.]';
+    } else if (process.platform === 'win32' && /vulkan|vk[A-Z]|no compatible device|gpu.*not.*found/i.test(msg)) {
+      hint = ' [Windows: the Vulkan runtime looks missing — update your GPU driver (Vulkan ships with NVIDIA/AMD/Intel drivers), then restart the app.]';
+    } else if (process.platform === 'win32' && /specified module could not be found|0xc0000135|dll/i.test(msg)) {
+      hint = ' [Windows: a required DLL is missing — install the Microsoft Visual C++ Redistributable from https://aka.ms/vs/17/release/vc_redist.x64.exe and restart.]';
+    } else if (/fetch failed|network|ETIMEDOUT|ECONNRESET/i.test(msg)) {
+      hint = ' [Network: the model registry/blob store was unreachable — check connectivity and retry.]';
+    }
+    sendSetupProgress({ status: 'error', message: `Model warm-up failed: ${msg}${hint} (retries on first job)`, model });
+    sendLog(`[Setup] ⚠️ QVAC warm-up failed: ${msg}${hint}\n${e.stack || ''}`);
+    return { ok: false, error: msg + hint };
   }
 }
 

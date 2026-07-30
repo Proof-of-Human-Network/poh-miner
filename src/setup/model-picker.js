@@ -17,10 +17,14 @@ import { execSync } from 'child_process';
 // headroom we want before offering a model as a comfortable pick. Extend this
 // array with bigger constants (e.g. 14B/32B) as they become available.
 export const MODEL_LADDER = [
-  { name: 'qwen3-0.6b', label: 'Qwen3 0.6B', constant: 'QWEN3_600M_INST_Q4',  approxDownloadGB: 0.4, minBudgetGB: 1,  blurb: 'Fastest, tiny footprint. Good on low-RAM / CPU-only hosts.' },
-  { name: 'qwen3-1.7b', label: 'Qwen3 1.7B', constant: 'QWEN3_1_7B_INST_Q4',  approxDownloadGB: 1.1, minBudgetGB: 3,  blurb: 'Balanced quality and speed. Solid all-round default.' },
-  { name: 'qwen3-4b',   label: 'Qwen3 4B',   constant: 'QWEN3_4B_INST_Q4_K_M', approxDownloadGB: 2.5, minBudgetGB: 7,  blurb: 'Noticeably stronger reasoning and structured output.' },
-  { name: 'qwen3-8b',   label: 'Qwen3 8B',   constant: 'QWEN3_8B_INST_Q4_K_M', approxDownloadGB: 5.0, minBudgetGB: 12, blurb: 'Best quality. Wants a capable GPU or lots of RAM.' },
+  { name: 'qwen3-0.6b',  label: 'Qwen3 0.6B',            constant: 'QWEN3_600M_INST_Q4',              approxDownloadGB: 0.4,  minBudgetGB: 1,  blurb: 'Fastest, tiny footprint. Good on low-RAM / CPU-only hosts.' },
+  { name: 'qwen3-1.7b',  label: 'Qwen3 1.7B',            constant: 'QWEN3_1_7B_INST_Q4',              approxDownloadGB: 1.1,  minBudgetGB: 3,  blurb: 'Balanced quality and speed. Solid all-round default.' },
+  { name: 'qwen3-4b',    label: 'Qwen3 4B',              constant: 'QWEN3_4B_INST_Q4_K_M',            approxDownloadGB: 2.5,  minBudgetGB: 7,  blurb: 'Noticeably stronger reasoning and structured output.' },
+  { name: 'qwen3-8b',    label: 'Qwen3 8B',              constant: 'QWEN3_8B_INST_Q4_K_M',            approxDownloadGB: 5.0,  minBudgetGB: 12, blurb: 'Great quality on a capable GPU or 16 GB+ RAM.' },
+  { name: 'gpt-oss-20b', label: 'GPT-OSS 20B',           constant: 'GPT_OSS_20B_INST_Q4_K_M',         approxDownloadGB: 11.6, minBudgetGB: 18, blurb: 'Frontier-lab open model. Wants 24 GB VRAM or 32 GB RAM.' },
+  { name: 'qwen3-27b',   label: 'Qwen3.6 27B',           constant: 'QWEN3_6_27B_MULTIMODAL_Q4_K_XL',  approxDownloadGB: 17.6, minBudgetGB: 26, blurb: 'Large dense model, strong reasoning. 32 GB+ machines.' },
+  { name: 'qwen3-35b',   label: 'Qwen3.6 35B-A3B (MoE)', constant: 'QWEN3_6_35B_A3B_MULTIMODAL_Q4_K_M', approxDownloadGB: 22.1, minBudgetGB: 34, blurb: 'Mixture-of-experts: 35B quality at ~3B active speed. 48 GB+ machines.' },
+  { name: 'gpt-oss-120b',label: 'GPT-OSS 120B',          constant: 'GPT_OSS_120B_INST_Q4_K_M_SHARD',  approxDownloadGB: 62.8, minBudgetGB: 80, blurb: 'Flagship-class. Workstations with 96 GB+ unified/VRAM only.' },
 ];
 
 /** Detect RAM, platform, and any GPU (Apple unified memory, or NVIDIA VRAM). */
@@ -44,13 +48,34 @@ export function detectHardware() {
         gpu = { type: 'nvidia', vramGB: Math.max(1, Math.round(parseInt(memMiB, 10) / 1024)), label: name.trim() };
       }
     } catch { /* no nvidia-smi / no NVIDIA GPU */ }
+
+    // Windows fallback: AMD/Intel discrete GPUs have no nvidia-smi — query WMI.
+    // (QVAC runs llama.cpp with Vulkan on Windows, so any Vulkan-capable GPU counts.)
+    if (gpu.type === 'none' && platform === 'win32') {
+      try {
+        const out = execSync(
+          'powershell -NoProfile -Command "Get-CimInstance Win32_VideoController | Select-Object -First 1 Name,AdapterRAM | ConvertTo-Json"',
+          { stdio: ['ignore', 'pipe', 'ignore'], timeout: 5000 }).toString().trim();
+        const info = JSON.parse(out);
+        const name = (info.Name || '').trim();
+        // AdapterRAM is uint32 — caps at 4 GB and lies for shared memory; treat it
+        // as a floor and only trust it for discrete AMD/NVIDIA names.
+        const vram = Math.max(0, Math.round((info.AdapterRAM || 0) / 1e9));
+        const discrete = /radeon rx|radeon pro|arc a|geforce|quadro/i.test(name);
+        if (name && discrete) {
+          gpu = { type: 'gpu', vramGB: Math.max(vram, 4), label: name };
+        } else if (name) {
+          gpu = { type: 'igpu', vramGB: 0, label: `${name} (integrated)` };
+        }
+      } catch { /* PowerShell/WMI unavailable — stay CPU-only */ }
+    }
   }
 
   // Usable memory budget for the model.
   let usableGB;
   if (gpu.type === 'apple')       usableGB = Math.round(totalRamGB * 0.6);   // unified memory, leave headroom
-  else if (gpu.type === 'nvidia') usableGB = Math.max(gpu.vramGB, Math.round(totalRamGB * 0.5));
-  else                            usableGB = Math.round(totalRamGB * 0.5);   // CPU only
+  else if (gpu.type === 'nvidia' || gpu.type === 'gpu') usableGB = Math.max(gpu.vramGB, Math.round(totalRamGB * 0.5));
+  else                            usableGB = Math.round(totalRamGB * 0.5);   // CPU only / iGPU
 
   return { totalRamGB, platform, arch, gpu, usableGB };
 }

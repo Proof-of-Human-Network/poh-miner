@@ -31,6 +31,10 @@ const ALIASES = {
   'qwen3':      'QWEN3_1_7B_INST_Q4',
   'qwen3-4b':   'QWEN3_4B_INST_Q4_K_M',
   'qwen3-8b':   'QWEN3_8B_INST_Q4_K_M',
+  'gpt-oss-20b':  'GPT_OSS_20B_INST_Q4_K_M',
+  'qwen3-27b':    'QWEN3_6_27B_MULTIMODAL_Q4_K_XL',
+  'qwen3-35b':    'QWEN3_6_35B_A3B_MULTIMODAL_Q4_K_M',
+  'gpt-oss-120b': 'GPT_OSS_120B_INST_Q4_K_M_SHARD',
   'llama3.2-1b':'LLAMA_3_2_1B_INST_Q4_0',
   // legacy Ollama names → default so old configs keep working
   'qwen2.5:1.5b': DEFAULT_MODEL,
@@ -44,6 +48,10 @@ const BUILTIN_MODELS = [
   { name: 'qwen3-1.7b', label: 'Qwen3 1.7B (default)', constant: 'QWEN3_1_7B_INST_Q4' },
   { name: 'qwen3-4b',   label: 'Qwen3 4B',           constant: 'QWEN3_4B_INST_Q4_K_M' },
   { name: 'qwen3-8b',   label: 'Qwen3 8B (best)',    constant: 'QWEN3_8B_INST_Q4_K_M' },
+  { name: 'gpt-oss-20b',  label: 'GPT-OSS 20B',            constant: 'GPT_OSS_20B_INST_Q4_K_M' },
+  { name: 'qwen3-27b',    label: 'Qwen3.6 27B',            constant: 'QWEN3_6_27B_MULTIMODAL_Q4_K_XL' },
+  { name: 'qwen3-35b',    label: 'Qwen3.6 35B-A3B (MoE)',  constant: 'QWEN3_6_35B_A3B_MULTIMODAL_Q4_K_M' },
+  { name: 'gpt-oss-120b', label: 'GPT-OSS 120B',           constant: 'GPT_OSS_120B_INST_Q4_K_M_SHARD' },
 ];
 
 // ── Singleton state ─────────────────────────────────────────────────────────
