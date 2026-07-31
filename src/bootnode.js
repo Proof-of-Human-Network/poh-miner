@@ -434,6 +434,7 @@ async function syncFromPeer(peerUrl) {
       if (!r.ok) throw new Error(`blocks fetch failed: ${r.status}`);
       const blocks = await r.json();
       if (!Array.isArray(blocks) || blocks.length === 0) break;
+      let rejected = false;
       for (const b of blocks) {
         const block = PohBlock.fromJSON ? PohBlock.fromJSON(b) : new PohBlock(b);
         const parent = chain[chain.length - 1];
@@ -441,12 +442,18 @@ async function syncFromPeer(peerUrl) {
           parent, chainPrefix: chain, ledger: txLedger, strictTx: false,
         });
         if (!check.valid) {
-          console.warn(`[Bootnode] Peer sync rejected block #${block.height} (${check.reason})`);
+          console.warn(`[Bootnode] Peer sync rejected block #${block.height} (${check.reason}) — aborting sync round`);
+          // A previousHash mismatch at the first fetched block means OUR tip is
+          // on a fork the peer doesn't have — appending can never succeed and
+          // the operator must rewind/wipe the local chain. Either way, skipping
+          // ahead would only produce a gapped chain, so stop the whole round.
+          rejected = true;
           break;
         }
         chain.push(block);
         txLedger.applyBlock(block, { strict: false });
       }
+      if (rejected) break;
       from = to + 1;
     }
     chainStore.saveChain(chain);
