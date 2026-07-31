@@ -26,7 +26,7 @@
     "outputPath": "dist/bin"
   },
   "scripts": {
-    "postinstall": "node scripts/verify-electron.cjs && node scripts/codesign-native-deps.cjs",
+    "postinstall": "node scripts/verify-electron.cjs && node scripts/codesign-native-deps.cjs && node scripts/patch-qvac-electron.cjs",
     "start": "electron --no-sandbox .",
     "start:headless": "node start.js",
     "dev": "node --watch start.js",
@@ -43,10 +43,10 @@
     "build:bin": "pkg . --compress GZip",
     "build:deb": "bash scripts/build-deb.sh",
     "build:electron": "electron-builder",
-    "build:electron:mac": "node scripts/fetch-bare-runtimes.cjs darwin-x64 darwin-arm64 && electron-builder --mac --publish never",
-    "build:electron:win": "node scripts/fetch-bare-runtimes.cjs win32-x64 && electron-builder --win --publish never",
-    "build:electron:linux": "node scripts/fetch-bare-runtimes.cjs linux-x64 linux-arm64 && electron-builder --linux --publish never",
-    "build:electron:all": "node scripts/fetch-bare-runtimes.cjs win32-x64 linux-x64 linux-arm64 darwin-x64 darwin-arm64 && electron-builder -mwl",
+    "build:electron:mac": "node scripts/fetch-bare-runtimes.cjs darwin-x64 darwin-arm64 && node scripts/patch-qvac-electron.cjs --strict && electron-builder --mac --publish never",
+    "build:electron:win": "node scripts/fetch-bare-runtimes.cjs win32-x64 && node scripts/patch-qvac-electron.cjs --strict && electron-builder --win --publish never",
+    "build:electron:linux": "node scripts/fetch-bare-runtimes.cjs linux-x64 linux-arm64 && node scripts/patch-qvac-electron.cjs --strict && electron-builder --linux --publish never",
+    "build:electron:all": "node scripts/fetch-bare-runtimes.cjs win32-x64 linux-x64 linux-arm64 darwin-x64 darwin-arm64 && node scripts/patch-qvac-electron.cjs --strict && electron-builder -mwl",
     "build:all": "npm run build:bin && npm run build:deb",
     "dist": "electron-builder",
     "test": "vitest run",
