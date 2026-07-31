@@ -49,6 +49,20 @@ function sendLog(message) {
   }
 }
 
+// Optional subsystems (QVAC worker spawn, search, networking) can surface
+// async errors with no owner — e.g. a ChildProcess "error" with no listener.
+// Without these handlers Electron shows the fatal "A JavaScript error occurred
+// in the main process" dialog and the whole miner dies. Log and keep running:
+// nothing the miner does (chain writes are atomic) needs a hard abort here.
+process.on('uncaughtException', (err) => {
+  console.error('[main] Uncaught exception:', err);
+  sendLog(`[Error] Uncaught exception: ${err && err.stack ? err.stack : err}`);
+});
+process.on('unhandledRejection', (reason) => {
+  console.error('[main] Unhandled rejection:', reason);
+  sendLog(`[Error] Unhandled rejection: ${reason && reason.stack ? reason.stack : reason}`);
+});
+
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1100,
@@ -890,6 +904,7 @@ function sendSetupProgress(msg) {
 async function warmUpQvacModel(model = 'qwen3-1.7b') {
   sendSetupProgress({ status: 'pulling', message: `Preparing model ${model}…`, model });
   sendLog(`[Setup] Preparing QVAC model (${model})...`);
+  let progressPoll = null;
   try {
     process.env.QVAC_DEFAULT_MODEL = model;
     const realPohUrl = pathToFileURL(path.join(__dirname, '../src/compute/adapters/real-poh.js')).href;
@@ -899,7 +914,18 @@ async function warmUpQvacModel(model = 'qwen3-1.7b') {
       sendSetupProgress({ status: 'ready', message: 'Inference ready (QVAC).', model });
       return { ok: true };
     }
-    await qvac.getModelId(model);
+    // Relay real download percentage to the renderer's progress bar.
+    if (typeof qvac.downloadStatus === 'function') {
+      progressPoll = setInterval(() => {
+        try {
+          const d = qvac.downloadStatus(model);
+          if (d && d.state === 'downloading' && d.pct != null) {
+            sendSetupProgress({ status: 'pulling', message: `Downloading ${model}… ${d.pct}%`, pct: d.pct, model });
+          }
+        } catch { /* tracker unavailable — bar just stays indeterminate */ }
+      }, 750);
+    }
+    await ((typeof qvac.downloadModel === 'function') ? qvac.downloadModel(model) : qvac.getModelId(model));
     sendSetupProgress({ status: 'ready', message: `${model} ready.`, model });
     sendLog(`[Setup] ✓ QVAC model ${model} ready.`);
     return { ok: true };
@@ -910,6 +936,8 @@ async function warmUpQvacModel(model = 'qwen3-1.7b') {
     const msg = String(e.message || e);
     if (/ENOTDIR|ENOENT.*app\.asar/i.test(msg)) {
       hint = ' [Packaging: native runtime stuck inside app.asar — update the app to v0.4.13+ which unpacks it.]';
+    } else if (/RPC initialization timed out|worker process/i.test(msg)) {
+      hint = ' [The inference worker did not start. Update the app to v0.4.17+ (fixes the packaged worker launch); if it persists, check that antivirus is not blocking bare.exe and that the Microsoft Visual C++ Redistributable is installed (https://aka.ms/vs/17/release/vc_redist.x64.exe).]';
     } else if (process.platform === 'win32' && /vulkan|vk[A-Z]|no compatible device|gpu.*not.*found/i.test(msg)) {
       hint = ' [Windows: the Vulkan runtime looks missing — update your GPU driver (Vulkan ships with NVIDIA/AMD/Intel drivers), then restart the app.]';
     } else if (process.platform === 'win32' && /specified module could not be found|0xc0000135|dll/i.test(msg)) {
@@ -917,9 +945,11 @@ async function warmUpQvacModel(model = 'qwen3-1.7b') {
     } else if (/fetch failed|network|ETIMEDOUT|ECONNRESET/i.test(msg)) {
       hint = ' [Network: the model registry/blob store was unreachable — check connectivity and retry.]';
     }
-    sendSetupProgress({ status: 'error', message: `Model warm-up failed: ${msg}${hint} (retries on first job)`, model });
+    sendSetupProgress({ status: 'error', message: `Model download failed: ${msg}${hint}`, model });
     sendLog(`[Setup] ⚠️ QVAC warm-up failed: ${msg}${hint}\n${e.stack || ''}`);
     return { ok: false, error: msg + hint };
+  } finally {
+    if (progressPoll) clearInterval(progressPoll);
   }
 }
 

@@ -2182,7 +2182,7 @@ export class PohMinerNode {
       // Ollama-compatible response shapes so existing clients keep working, but
       // inference runs in-process on QVAC. Restricted: localhost-only by default;
       // set config.llmApiKey to allow external access via "Authorization: Bearer".
-      const llmPaths = ['/api/chat', '/api/generate', '/api/embeddings', '/api/models'];
+      const llmPaths = ['/api/chat', '/api/generate', '/api/embeddings', '/api/models', '/api/models/download', '/api/models/status'];
       if (llmPaths.includes(url.pathname)) {
         const llmApiKey = this.config.llmApiKey;
         if (!isTrulyLocalRequest(req)) {
@@ -2216,6 +2216,24 @@ export class PohMinerNode {
           return;
         }
 
+        // GET /api/models/status — download/warm-up progress for one model or all.
+        // Lets headless operators and the UI watch (or discover a failed) model
+        // download without scraping logs.
+        if (req.method === 'GET' && url.pathname === '/api/models/status') {
+          (async () => {
+            try {
+              const qvac = await getQvacModels();
+              if (!qvac || typeof qvac.downloadStatus !== 'function') return sendJson(503, { error: 'QVAC unavailable' });
+              const model = url.searchParams.get('model');
+              const downloads = qvac.downloadStatus(model || undefined);
+              sendJson(200, { downloads: model ? (downloads ? [downloads] : []) : downloads });
+            } catch (e) {
+              sendJson(502, { error: 'QVAC unavailable: ' + e.message });
+            }
+          })();
+          return;
+        }
+
         // POST endpoints — buffer body then run through QVAC.
         let body = '';
         req.on('data', c => body += c);
@@ -2225,6 +2243,24 @@ export class PohMinerNode {
             const qvac = await getQvacModels();
             if (!qvac || !qvac.ENABLED) return sendJson(503, { error: 'Inference backend (QVAC) is unavailable on this device' });
             const model = payload.model || this.config.model || 'qwen3-1.7b';
+
+            // POST /api/models/download {model?} — manual model download/retry.
+            // This is the recovery path when the first-start download failed: no
+            // load timeout, and a success resets the inference circuit breaker.
+            if (url.pathname === '/api/models/download') {
+              if (req.method !== 'POST') return sendJson(405, { error: 'POST required' });
+              if (typeof qvac.downloadModel !== 'function') return sendJson(501, { error: 'Model download not supported by this build' });
+              const current = qvac.downloadStatus ? qvac.downloadStatus(model) : null;
+              if (current && current.state === 'downloading') {
+                return sendJson(200, { ok: true, model, started: false, status: current });
+              }
+              qvac.downloadModel(model).catch(e => console.warn(`[api] Model download failed (${model}): ${e.message}`));
+              return sendJson(202, {
+                ok: true, model, started: true,
+                status: qvac.downloadStatus ? qvac.downloadStatus(model) : null,
+                hint: `Poll GET /api/models/status?model=${encodeURIComponent(model)} for progress`,
+              });
+            }
 
             if (url.pathname === '/api/embeddings') {
               return sendJson(501, { error: 'Embeddings are not available in QVAC-only mode' });

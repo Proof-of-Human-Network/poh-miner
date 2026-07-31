@@ -65,6 +65,26 @@ function enqueue(fn) {
   return _queue;
 }
 
+// Download/warm-up tracker — canonicalName → { model, requested, state, pct,
+// error, startedAt, finishedAt }. state: 'downloading' | 'ready' | 'error'.
+// Queried by /api/models/status and the Electron setup screen so a failed
+// first-start download can be seen and retried manually from the UI.
+const _downloads = new Map();
+
+function _trackDownload(name, patch) {
+  const cur = _downloads.get(name) || { model: name, state: 'downloading', pct: null, error: null, startedAt: Date.now(), finishedAt: null };
+  _downloads.set(name, Object.assign(cur, patch));
+}
+
+// Status for one model (alias-resolved) or all tracked downloads.
+function downloadStatus(name) {
+  if (name) {
+    const canonical = ALIASES[(name || '').toLowerCase()] || name;
+    return _downloads.get(canonical) || _downloads.get(name) || null;
+  }
+  return [..._downloads.values()];
+}
+
 // Circuit breaker
 let _failures = 0;
 const CIRCUIT_OPEN_AFTER = 3;
@@ -235,7 +255,9 @@ async function getModelId(requested) {
       modelConfig: { ctx_size: CTX_SIZE, verbosity: 0 },
       onProgress: (pr) => {
         const pct = pr && pr.percentage;
-        if (pct != null && pct > 0 && Math.round(pct) % 25 === 0) {
+        if (pct == null) return;
+        _trackDownload(name, { state: 'downloading', pct: Math.min(100, Math.round(pct)), requested });
+        if (pct > 0 && Math.round(pct) % 25 === 0) {
           console.log(`[qvac] ${name} download: ${pct.toFixed(0)}%`);
         }
       },
@@ -243,6 +265,7 @@ async function getModelId(requested) {
   };
 
   const p = (async () => {
+    _trackDownload(name, { state: 'downloading', pct: null, error: null, startedAt: Date.now(), finishedAt: null, requested });
     await evictIfNeeded(name);
     let modelId;
     try {
@@ -255,6 +278,7 @@ async function getModelId(requested) {
     }
     _loaded.set(name, { modelId, lastUsed: Date.now() });
     _loadPromises.delete(name);
+    _trackDownload(name, { state: 'ready', pct: 100, error: null, finishedAt: Date.now() });
     console.log(`[qvac] Model ready: ${name} (id=${modelId})`);
     return modelId;
   })();
@@ -264,8 +288,21 @@ async function getModelId(requested) {
     return await p;
   } catch (err) {
     _loadPromises.delete(name);
+    _trackDownload(name, { state: 'error', error: err.message || String(err), finishedAt: Date.now() });
     throw err;
   }
+}
+
+// Explicit, manually-triggered download + load of a model (POST /api/models/download,
+// Electron "Download"/"Retry" buttons). Unlike a lazy first-job load there is no
+// race timeout here — a multi-GB fetch is allowed to take as long as it takes —
+// and a success clears the circuit breaker so chat recovers immediately.
+async function downloadModel(requested) {
+  if (!ENABLED) throw new Error('QVAC is disabled (QVAC_DISABLED=1)');
+  const modelId = await getModelId(requested);
+  _failures = 0;
+  _circuitOpenAt = 0;
+  return modelId;
 }
 
 // Rough prompt-token count for metering. QVAC's completion addon does not expose
@@ -449,6 +486,8 @@ module.exports = {
   listModels,
   isInstalled,
   getModelId,
+  downloadModel,
+  downloadStatus,
   status,
   estimatePromptTokens,
   estimateMessagesTokens,

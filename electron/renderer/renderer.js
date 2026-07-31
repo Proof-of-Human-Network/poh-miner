@@ -455,6 +455,8 @@ async function runAiSetupStep() {
   const progressPct  = document.getElementById('setup-progress-pct');
   const logEl        = document.getElementById('setup-log');
   const continueBtn  = document.getElementById('setup-continue-btn');
+  const retryBtn     = document.getElementById('setup-retry-btn');
+  let currentModel   = null; // set once the user picks; used by the retry button
 
   // Inference engine is QVAC, in-process — nothing to install.
   if (engineIcon) engineIcon.textContent = '✅';
@@ -476,13 +478,26 @@ async function runAiSetupStep() {
       if (modelStatus) modelStatus.textContent = 'Ready';
       if (progressWrap) progressWrap.classList.add('hidden');
       if (continueBtn) continueBtn.disabled = false;
+      if (retryBtn) retryBtn.classList.add('hidden');
     }
     if (msg.status === 'error') {
       if (modelIcon) modelIcon.textContent = '⚠️';
       if (modelStatus) modelStatus.textContent = msg.message;
-      if (continueBtn) continueBtn.disabled = false; // non-fatal — loads on first job
+      if (progressWrap) progressWrap.classList.add('hidden');
+      if (continueBtn) continueBtn.disabled = false; // non-fatal — can continue without the model
+      if (retryBtn) retryBtn.classList.remove('hidden');
     }
   });
+
+  // Manual retry after a failed download (network drop, registry outage, …).
+  if (retryBtn) retryBtn.onclick = async () => {
+    const model = currentModel || (await window.pohMinerAPI.setup.check().catch(() => null))?.model || 'qwen3-1.7b';
+    retryBtn.classList.add('hidden');
+    if (modelIcon) modelIcon.textContent = '⬇️';
+    if (modelStatus) modelStatus.textContent = `Retrying ${model}…`;
+    if (progressWrap) progressWrap.classList.remove('hidden');
+    await window.pohMinerAPI.setup.pullModel(model);
+  };
 
   // 1. Check current state (which QVAC model, and whether it's already loaded)
   const state = await window.pohMinerAPI.setup.check();
@@ -497,6 +512,7 @@ async function runAiSetupStep() {
 
   // 2. First-run picker: choose a model graded for this machine, then warm it up.
   const MODEL = await promptModelChoice(state.model || 'qwen3-1.7b');
+  currentModel = MODEL;
 
   const picker   = document.getElementById('model-picker');
   const progress = document.getElementById('model-progress');
@@ -1090,7 +1106,9 @@ async function loadSettingsPanel() {
     }
   } catch (e) {}
 
-  // Populate mining model dropdown
+  // Populate mining model dropdown. Uninstalled models stay selectable and are
+  // marked "(not installed)" — picking one reveals the Download button, which is
+  // the manual recovery path when the first-start download failed.
   const miningModelSel = document.getElementById('settings-mining-model');
   if (miningModelSel) {
     try {
@@ -1098,18 +1116,23 @@ async function loadSettingsPanel() {
       const res = await fetch(`http://localhost:${port}/api/models`);
       if (res.ok) {
         const data = await res.json();
-        const models = (data.models || []).map(m => m.name || m.model).filter(Boolean);
-        if (models.length) {
+        const entries = (data.models || [])
+          .map(m => ({ name: m.name || m.model, installed: !!m.installed }))
+          .filter(e => e.name);
+        if (entries.length) {
+          window._modelInstallState = Object.fromEntries(entries.map(e => [e.name, e.installed]));
           miningModelSel.innerHTML = '';
-          for (const m of models) {
+          for (const e of entries) {
             const opt = document.createElement('option');
-            opt.value = opt.textContent = m;
+            opt.value = e.name;
+            opt.textContent = e.installed ? e.name : `${e.name} (not installed)`;
             miningModelSel.appendChild(opt);
           }
-          if (status?.model && models.includes(status.model)) {
+          const names = entries.map(e => e.name);
+          if (status?.model && names.includes(status.model)) {
             miningModelSel.value = status.model;
           } else {
-            const qwen = models.find(m => m.includes('qwen'));
+            const qwen = names.find(m => m.includes('qwen'));
             if (qwen) miningModelSel.value = qwen;
           }
         } else {
@@ -1117,8 +1140,67 @@ async function loadSettingsPanel() {
         }
       }
     } catch { miningModelSel.innerHTML = '<option value="">No models available</option>'; }
+    miningModelSel.onchange = updateModelDownloadButton;
+    updateModelDownloadButton();
   }
 }
+
+// Show the Settings "Download" button only when the selected model's weights are
+// not on disk yet.
+function updateModelDownloadButton() {
+  const sel = document.getElementById('settings-mining-model');
+  const btn = document.getElementById('settings-model-download-btn');
+  if (!sel || !btn) return;
+  const name = sel.value;
+  const installed = window._modelInstallState?.[name];
+  btn.classList.toggle('hidden', !name || installed !== false);
+}
+
+// Manually download the selected model via the miner API, polling progress.
+// Works whether or not the first-start download succeeded.
+window.downloadSelectedModel = async function() {
+  const sel = document.getElementById('settings-mining-model');
+  const btn = document.getElementById('settings-model-download-btn');
+  const statusEl = document.getElementById('settings-model-dl-status');
+  const model = sel?.value;
+  if (!model) return;
+  const port = window._minerApiPort || 3456;
+  const setStatus = (t, ok) => { if (statusEl) { statusEl.textContent = t; statusEl.style.color = ok === false ? '#f87171' : ok ? '#22c55e' : '#9ca3af'; } };
+  if (btn) btn.disabled = true;
+  setStatus(`Starting download of ${model}…`);
+  try {
+    const res = await fetch(`http://localhost:${port}/api/models/download`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model }),
+    });
+    if (!res.ok && res.status !== 202) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || `HTTP ${res.status}`);
+    }
+    // Poll until the download settles.
+    while (true) {
+      await new Promise(r => setTimeout(r, 1500));
+      const st = await fetch(`http://localhost:${port}/api/models/status?model=${encodeURIComponent(model)}`).then(r => r.json()).catch(() => null);
+      const d = st?.downloads?.[0];
+      if (!d) { setStatus(`Downloading ${model}…`); continue; }
+      if (d.state === 'ready') {
+        setStatus(`${model} downloaded ✓`, true);
+        if (window._modelInstallState) window._modelInstallState[model] = true;
+        const opt = [...(sel.options || [])].find(o => o.value === model);
+        if (opt) opt.textContent = model;
+        updateModelDownloadButton();
+        break;
+      }
+      if (d.state === 'error') throw new Error(d.error || 'download failed');
+      setStatus(`Downloading ${model}… ${d.pct != null ? d.pct + '%' : ''}`);
+    }
+  } catch (e) {
+    setStatus(`Download failed: ${e.message}`, false);
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+};
 
 window.showSettings = function() {
   switchTab('settings');
@@ -2372,7 +2454,10 @@ window.installChatModel = async function(model = 'qwen3-1.7b') {
   try {
     if (window.pohMinerAPI.setup.onProgress) {
       window.pohMinerAPI.setup.onProgress((msg) => {
-        if (btn && msg) btn.textContent = `⬇ ${String(msg).slice(0, 24)}`;
+        if (!btn || !msg) return;
+        // msg is a progress object ({status, message, pct}), not a string.
+        if (msg.pct != null) btn.textContent = `⬇ Downloading… ${msg.pct}%`;
+        else if (msg.status === 'pulling') btn.textContent = '⬇ Downloading…';
       });
     }
     // warmUpQvacModel resolves { ok, error } rather than throwing, so inspect it.

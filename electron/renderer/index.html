@@ -953,6 +953,10 @@
           </div>
         </div>
         <div class="mt-6 text-center">
+          <button id="setup-retry-btn"
+                  class="hidden px-8 py-3 mr-2 bg-transparent border border-[#22c55e] text-[#22c55e] font-semibold rounded-2xl">
+            Retry download
+          </button>
           <button id="setup-continue-btn" onclick="goToStep('welcome')" disabled
                   class="px-8 py-3 bg-[#22c55e] text-black font-semibold rounded-2xl disabled:opacity-30 disabled:cursor-not-allowed">
             Continue
@@ -1889,10 +1893,17 @@
             <!-- Mining Model -->
             <div>
               <div style="font-size:10px;color:#666;letter-spacing:0.1em;margin-bottom:4px;text-transform:uppercase;" data-i18n="settings.model">Mining Model</div>
-              <select id="settings-mining-model" style="width:100%;background:#0a0a0a;border:1px solid #1a1a1a;border-radius:6px;padding:8px 10px;font-family:monospace;font-size:11px;color:#e5e7eb;box-sizing:border-box;">
-                <option value="">Loading models…</option>
-              </select>
+              <div style="display:flex;gap:6px;">
+                <select id="settings-mining-model" style="flex:1;background:#0a0a0a;border:1px solid #1a1a1a;border-radius:6px;padding:8px 10px;font-family:monospace;font-size:11px;color:#e5e7eb;box-sizing:border-box;">
+                  <option value="">Loading models…</option>
+                </select>
+                <button id="settings-model-download-btn" onclick="downloadSelectedModel()" class="hidden"
+                        style="background:#14532d;border:1px solid #22c55e;border-radius:6px;padding:8px 12px;font-size:11px;color:#22c55e;cursor:pointer;white-space:nowrap;">
+                  ⬇ Download
+                </button>
+              </div>
               <div style="font-size:10px;color:#444;margin-top:3px;" data-i18n="settings.model_hint">Select the QVAC model</div>
+              <div id="settings-model-dl-status" style="font-size:10px;color:#9ca3af;margin-top:3px;min-height:1.2em;"></div>
             </div>
 
             <!-- Language -->

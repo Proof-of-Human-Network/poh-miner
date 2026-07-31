@@ -33,7 +33,7 @@ async function ensureVulkanRuntime() {
   }
 }
 
-async function warmUpQvac(model) {
+async function warmUpQvac(model, apiPort = 3456) {
   console.log(`Preparing QVAC model (${model})...`);
   try {
     await ensureVulkanRuntime();
@@ -47,7 +47,14 @@ async function warmUpQvac(model) {
     await qvac.getModelId(model);
     console.log('   ✓ QVAC model ready.\n');
   } catch (e) {
-    console.warn(`   ⚠️  QVAC warm-up failed (will retry on first job): ${e.message}\n`);
+    // Non-fatal: the node keeps running without the model. Print the manual
+    // recovery path — the lazy first-job retry has a short timeout, so a big
+    // download realistically only succeeds via this endpoint or a restart.
+    console.warn(`   ⚠️  QVAC model download/warm-up failed: ${e.message}`);
+    console.warn('   The node keeps running. To download the model manually once connectivity is back:');
+    console.warn(`     curl -X POST http://localhost:${apiPort}/api/models/download -H "Content-Type: application/json" -d "{\\"model\\":\\"${model}\\"}"`);
+    console.warn(`     curl http://localhost:${apiPort}/api/models/status        # watch progress`);
+    console.warn('   (or use the desktop app: Settings → Mining AI model → Download)\n');
   }
 }
 
@@ -111,7 +118,7 @@ async function startProject() {
   console.log(`Using config: ${configPath}${locationNote}\n`);
 
   const chosenModel = await chooseModelFirstRun(config, configPath);
-  await warmUpQvac(chosenModel || config.model || 'qwen3-1.7b');
+  await warmUpQvac(chosenModel || config.model || 'qwen3-1.7b', config.walletApiPort || 3456);
 
   // Persist runtime-resolved fields (e.g. an auto-created wallet) back to the SAME
   // file we loaded — not a hardcoded ~/.poh-miner/config.json, which may be a
