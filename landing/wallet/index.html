@@ -29,6 +29,26 @@
     .phone-glow { filter: drop-shadow(0 0 60px rgba(34,197,94,0.15)); overflow: hidden; }
     .phone-glow svg { display: block; max-width: 100%; height: auto; }
     @media (max-width: 639px) { .phone-glow svg { width: min(260px, 72vw) !important; } }
+
+    /* ── Mobile nav ── */
+    .nav-links { display: none; }
+    @media (min-width: 1024px) { .nav-links { display: flex; } }
+    .hamburger { display: flex; flex-direction: column; gap: 5px; cursor: pointer; padding: 4px; }
+    .hamburger span { display: block; width: 22px; height: 2px; background: #fff; border-radius: 2px; transition: 0.25s; }
+    .hamburger.open span:nth-child(1) { transform: translateY(7px) rotate(45deg); }
+    .hamburger.open span:nth-child(2) { opacity: 0; }
+    .hamburger.open span:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
+    @media (min-width: 1024px) { .hamburger { display: none; } }
+    .mobile-drawer {
+      display: none; position: fixed; top: 64px; left: 0; right: 0; z-index: 49;
+      background: #0a0a0a; border-bottom: 1px solid #1f1f1f;
+      flex-direction: column; padding: 16px 24px 24px; gap: 0;
+    }
+    @media (min-width: 640px) { .mobile-drawer { top: 80px; } }
+    .mobile-drawer.open { display: flex; }
+    .mobile-drawer a { padding: 14px 0; font-size: 22px; color: #fff; border-bottom: 1px solid #1a1a1a; text-decoration: none; }
+    .mobile-drawer a:last-child { border-bottom: none; }
+    @media (min-width: 1024px) { .mobile-drawer { display: none !important; } }
   </style>
 </head>
 <body class="bg-black text-white overflow-x-hidden">
@@ -44,15 +64,27 @@
         <span class="text-white/20 text-lg sm:text-xl">/</span>
         <span class="font-display text-[24px] sm:text-[32px]">Wallet</span>
       </div>
-      <div class="flex items-center gap-x-4 sm:gap-x-5 text-[16px] sm:text-[18px]">
-        <a href="#balance" class="hover:text-[#22c55e] transition hidden md:block" data-i18n="wal.nav.balance">Balance</a>
-        <a href="#chat" class="hover:text-[#22c55e] transition hidden md:block" data-i18n="wal.nav.chat">Chat</a>
-        <a href="#send" class="hover:text-[#22c55e] transition hidden md:block" data-i18n="wal.nav.send">Send</a>
+      <div class="nav-links items-center gap-x-4 sm:gap-x-5 text-[16px] sm:text-[18px]">
+        <a href="#balance" class="hover:text-[#22c55e] transition whitespace-nowrap" data-i18n="wal.nav.balance">Balance</a>
+        <a href="#chat" class="hover:text-[#22c55e] transition whitespace-nowrap" data-i18n="wal.nav.chat">Chat</a>
+        <a href="#send" class="hover:text-[#22c55e] transition whitespace-nowrap" data-i18n="wal.nav.send">Send</a>
         <a href="#download" class="px-3 sm:px-4 py-2 rounded-[4px] bg-[#22c55e] text-black hover:bg-white transition whitespace-nowrap" data-i18n="wal.nav.download">Download</a>
         <div data-i18n-switch></div>
       </div>
+      <button class="hamburger" id="hamburger" aria-label="Open menu">
+        <span></span><span></span><span></span>
+      </button>
     </div>
   </nav>
+
+  <!-- Mobile nav drawer -->
+  <div class="mobile-drawer" id="mobile-drawer">
+    <a href="#balance" data-i18n="wal.nav.balance">Balance</a>
+    <a href="#chat" data-i18n="wal.nav.chat">Chat</a>
+    <a href="#send" data-i18n="wal.nav.send">Send</a>
+    <a href="#download" data-i18n="wal.nav.download">Download</a>
+    <div data-i18n-switch style="padding:14px 0"></div>
+  </div>
 
   <!-- ═══ HERO ═══ -->
   <div class="relative min-h-[100dvh] flex items-center pt-16 sm:pt-20 overflow-hidden">
@@ -570,6 +602,14 @@
       entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('visible'); });
     }, { threshold: 0.15 });
     document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+
+    // Mobile hamburger nav
+    const hamburger = document.getElementById('hamburger');
+    const drawer = document.getElementById('mobile-drawer');
+    if (hamburger && drawer) {
+      hamburger.addEventListener('click', () => { hamburger.classList.toggle('open'); drawer.classList.toggle('open'); });
+      drawer.querySelectorAll('a').forEach(a => a.addEventListener('click', () => { hamburger.classList.remove('open'); drawer.classList.remove('open'); }));
+    }
   </script>
 </body>
 </html>
