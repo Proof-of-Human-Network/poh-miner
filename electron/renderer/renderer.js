@@ -456,7 +456,25 @@ async function runAiSetupStep() {
   const logEl        = document.getElementById('setup-log');
   const continueBtn  = document.getElementById('setup-continue-btn');
   const retryBtn     = document.getElementById('setup-retry-btn');
+  const changeBtn    = document.getElementById('setup-change-model-btn');
+  const modelNameEl  = document.getElementById('setup-model-name');
   let currentModel   = null; // set once the user picks; used by the retry button
+
+  // Kick off (or re-kick) a download of `model`, resetting the progress UI.
+  const startPull = async (model) => {
+    currentModel = model;
+    const picker   = document.getElementById('model-picker');
+    const progress = document.getElementById('model-progress');
+    if (picker)   picker.classList.add('hidden');
+    if (progress) progress.classList.remove('hidden');
+    if (retryBtn)  retryBtn.classList.add('hidden');
+    if (changeBtn) changeBtn.classList.add('hidden');
+    if (modelNameEl) modelNameEl.textContent = `${model} model`;
+    if (modelIcon) modelIcon.textContent = '⬇️';
+    if (modelStatus) modelStatus.textContent = `Preparing ${model} (first run downloads it)…`;
+    if (progressWrap) progressWrap.classList.remove('hidden');
+    await window.pohMinerAPI.setup.pullModel(model);
+  };
 
   // Inference engine is QVAC, in-process — nothing to install.
   if (engineIcon) engineIcon.textContent = '✅';
@@ -486,17 +504,22 @@ async function runAiSetupStep() {
       if (progressWrap) progressWrap.classList.add('hidden');
       if (continueBtn) continueBtn.disabled = false; // non-fatal — can continue without the model
       if (retryBtn) retryBtn.classList.remove('hidden');
+      if (changeBtn) changeBtn.classList.remove('hidden');
     }
   });
 
   // Manual retry after a failed download (network drop, registry outage, …).
   if (retryBtn) retryBtn.onclick = async () => {
     const model = currentModel || (await window.pohMinerAPI.setup.check().catch(() => null))?.model || 'qwen3-1.7b';
-    retryBtn.classList.add('hidden');
-    if (modelIcon) modelIcon.textContent = '⬇️';
-    if (modelStatus) modelStatus.textContent = `Retrying ${model}…`;
-    if (progressWrap) progressWrap.classList.remove('hidden');
-    await window.pohMinerAPI.setup.pullModel(model);
+    await startPull(model);
+  };
+
+  // After a failure the user can go back and pick a different (e.g. smaller) model.
+  if (changeBtn) changeBtn.onclick = async () => {
+    changeBtn.classList.add('hidden');
+    if (retryBtn) retryBtn.classList.add('hidden');
+    const model = await promptModelChoice(currentModel || 'qwen3-1.7b');
+    await startPull(model);
   };
 
   // 1. Check current state (which QVAC model, and whether it's already loaded)
@@ -512,17 +535,7 @@ async function runAiSetupStep() {
 
   // 2. First-run picker: choose a model graded for this machine, then warm it up.
   const MODEL = await promptModelChoice(state.model || 'qwen3-1.7b');
-  currentModel = MODEL;
-
-  const picker   = document.getElementById('model-picker');
-  const progress = document.getElementById('model-progress');
-  if (picker)   picker.classList.add('hidden');
-  if (progress) progress.classList.remove('hidden');
-
-  if (modelStatus) modelStatus.textContent = `Preparing ${MODEL} (first run downloads it)…`;
-  if (modelIcon) modelIcon.textContent = '⬇️';
-  if (progressWrap) progressWrap.classList.remove('hidden');
-  await window.pohMinerAPI.setup.pullModel(MODEL);
+  await startPull(MODEL);
 }
 
 // Render three hardware-graded model options and resolve with the user's pick
@@ -2438,14 +2451,75 @@ window.toggleChatPrivacy = function() {
   if (typeof loadChatModels === 'function') loadChatModels(true);
 };
 
-// One-click download of a default on-device model when private mode has none
-// installed. Uses the same setup pull flow as onboarding, then refreshes the
-// picker so the freshly-downloaded model is selectable.
-window.installChatModel = async function(model = 'qwen3-1.7b') {
+// ── Download-model chooser (chat, private mode) ───────────────────────────────
+// Shows the hardware-graded QVAC options (same data as onboarding) and resolves
+// with the picked model name, or null if the user closes the dialog.
+
+window._mdlResolve = null;
+
+window.closeModelDownloadPicker = function() {
+  document.getElementById('model-dl-backdrop')?.classList.add('hidden');
+  const r = window._mdlResolve;
+  window._mdlResolve = null;
+  if (r) r(null);
+};
+
+window._pickDownloadModel = function(name) {
+  document.getElementById('model-dl-backdrop')?.classList.add('hidden');
+  const r = window._mdlResolve;
+  window._mdlResolve = null;
+  if (r) r(name);
+};
+
+async function promptModelDownloadChoice() {
+  const backdrop = document.getElementById('model-dl-backdrop');
+  const listEl   = document.getElementById('mdl-list');
+  const footEl   = document.getElementById('mdl-footer');
+  if (!backdrop || !listEl) return 'qwen3-1.7b';
+
+  backdrop.classList.remove('hidden');
+  listEl.innerHTML = '<div class="mp-empty">Detecting hardware…</div>';
+
+  let data = null;
+  try { data = await window.pohMinerAPI?.onboarding?.getModelOptions(); } catch { /* fall through */ }
+  // Fallback when hardware grading is unavailable: plain QVAC tier list.
+  const options = data?.options?.length ? data.options : [
+    { name: 'qwen3-0.6b' }, { name: 'qwen3-1.7b' }, { name: 'qwen3-4b' }, { name: 'qwen3-8b' },
+  ];
+  if (footEl && data?.hardwareSummary) footEl.textContent = data.hardwareSummary;
+
+  listEl.innerHTML = options.map(o => {
+    const safe = String(o.name).replace(/[^a-zA-Z0-9._:-]/g, '');
+    const rec  = o.name === data?.recommended ? ' <span class="mp-item-badge">RECOMMENDED</span>' : '';
+    const meta = [o.blurb, o.approxDownloadGB ? `~${o.approxDownloadGB} GB` : '']
+      .filter(Boolean).join(' · ');
+    return `<div class="mp-item" onclick="window._pickDownloadModel('${safe}')">
+      <div class="mp-item-icon">⬇️</div>
+      <div style="flex:1;min-width:0;">
+        <div class="mp-item-name">${safe}${rec}</div>
+        ${meta ? `<div style="font-size:10px;color:#6b7280;">${meta}</div>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+
+  return await new Promise(resolve => { window._mdlResolve = resolve; });
+}
+
+// Download an on-device model when private mode has none installed. With no
+// explicit model, opens the chooser so the user picks which one to download.
+// Uses the same setup pull flow as onboarding, then refreshes the picker so
+// the freshly-downloaded model is selectable.
+window.installChatModel = async function(model = null) {
   const btn = document.getElementById('chat-model-install-btn');
   if (!window.pohMinerAPI?.setup?.pullModel) {
     alert('Model download is only available in the desktop app.');
     return;
+  }
+  if (!model) {
+    model = await promptModelDownloadChoice();
+    if (!model) return; // user closed the chooser
+    // Persist as the default so scans/restarts use the same model (non-fatal).
+    try { await window.pohMinerAPI.onboarding?.setModel?.(model); } catch { /* ignore */ }
   }
   const orig = btn ? btn.textContent : '';
   if (btn) { btn.disabled = true; btn.textContent = '⬇ Downloading…'; }
@@ -2453,7 +2527,7 @@ window.installChatModel = async function(model = 'qwen3-1.7b') {
   let offProgress = null;
   try {
     if (window.pohMinerAPI.setup.onProgress) {
-      window.pohMinerAPI.setup.onProgress((msg) => {
+      offProgress = window.pohMinerAPI.setup.onProgress((msg) => {
         if (!btn || !msg) return;
         // msg is a progress object ({status, message, pct}), not a string.
         if (msg.pct != null) btn.textContent = `⬇ Downloading… ${msg.pct}%`;

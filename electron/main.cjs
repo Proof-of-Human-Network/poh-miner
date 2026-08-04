@@ -936,8 +936,16 @@ async function warmUpQvacModel(model = 'qwen3-1.7b') {
     const msg = String(e.message || e);
     if (/ENOTDIR|ENOENT.*app\.asar/i.test(msg)) {
       hint = ' [Packaging: native runtime stuck inside app.asar — update the app to v0.4.13+ which unpacks it.]';
+    } else if (/EACCES/i.test(msg) && /\bbare\b|bare-runtime/i.test(msg)) {
+      hint = ' [The bundled inference worker binary is not executable — a packaging defect in this build. Update the app to v0.4.18+.]';
     } else if (/RPC initialization timed out|worker process/i.test(msg)) {
-      hint = ' [The inference worker did not start. Update the app to v0.4.17+ (fixes the packaged worker launch); if it persists, check that antivirus is not blocking bare.exe and that the Microsoft Visual C++ Redistributable is installed (https://aka.ms/vs/17/release/vc_redist.x64.exe).]';
+      if (process.platform === 'win32') {
+        hint = ' [The inference worker did not start. Update the app to v0.4.17+ (fixes the packaged worker launch); if it persists, check that antivirus is not blocking bare.exe and that the Microsoft Visual C++ Redistributable is installed (https://aka.ms/vs/17/release/vc_redist.x64.exe).]';
+      } else if (process.platform === 'darwin') {
+        hint = ' [The inference worker did not start. Update the app to v0.4.18+ (fixes the packaged worker on macOS); if it persists, clear the quarantine flag with:  xattr -cr /Applications/PoH-Miner.app  and reopen the app.]';
+      } else {
+        hint = ' [The inference worker did not start. Update the app to v0.4.18+ (fixes the packaged worker on Linux).]';
+      }
     } else if (process.platform === 'win32' && /vulkan|vk[A-Z]|no compatible device|gpu.*not.*found/i.test(msg)) {
       hint = ' [Windows: the Vulkan runtime looks missing — update your GPU driver (Vulkan ships with NVIDIA/AMD/Intel drivers), then restart the app.]';
     } else if (process.platform === 'win32' && /specified module could not be found|0xc0000135|dll/i.test(msg)) {

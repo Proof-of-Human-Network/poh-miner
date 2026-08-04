@@ -862,13 +862,13 @@
     .send-summary-val { font-family: monospace; font-size: 11px; color: #e5e7eb; }
     .send-summary-val.dim { color: #374151; font-size: 10px; }
 
-    /* Model picker modal */
-    #model-picker-backdrop {
+    /* Model picker modal (also reused by the download-model chooser) */
+    #model-picker-backdrop, #model-dl-backdrop {
       position: fixed; inset: 0; background: rgba(0,0,0,.75); z-index: 300;
       display: flex; align-items: center; justify-content: center;
     }
-    #model-picker-backdrop.hidden { display: none; }
-    #model-picker-panel {
+    #model-picker-backdrop.hidden, #model-dl-backdrop.hidden { display: none; }
+    #model-picker-panel, #model-dl-panel {
       background: #111; border: 1px solid #222; border-radius: 20px;
       width: 380px; max-width: calc(100vw - 32px); max-height: 70vh;
       display: flex; flex-direction: column; overflow: hidden;
@@ -938,7 +938,7 @@
           <div class="flex items-center gap-3">
             <span id="setup-model-icon" class="text-xl">⏳</span>
             <div class="flex-1">
-              <div class="text-sm font-medium">qwen2.5:1.5b model</div>
+              <div id="setup-model-name" class="text-sm font-medium">AI model</div>
               <div id="setup-model-status" class="text-xs text-zinc-500">Waiting...</div>
             </div>
             <!-- Progress bar -->
@@ -956,6 +956,10 @@
           <button id="setup-retry-btn"
                   class="hidden px-8 py-3 mr-2 bg-transparent border border-[#22c55e] text-[#22c55e] font-semibold rounded-2xl">
             Retry download
+          </button>
+          <button id="setup-change-model-btn"
+                  class="hidden px-8 py-3 mr-2 bg-transparent border border-zinc-600 text-zinc-300 font-semibold rounded-2xl">
+            Choose another model
           </button>
           <button id="setup-continue-btn" onclick="goToStep('welcome')" disabled
                   class="px-8 py-3 bg-[#22c55e] text-black font-semibold rounded-2xl disabled:opacity-30 disabled:cursor-not-allowed">
@@ -2131,11 +2135,24 @@
       <div class="mp-footer">
         <div style="margin-bottom:6px;">QVAC models · used for scan, chat &amp; skills</div>
         <div style="color:#4b5563;line-height:1.6;">
-          To add a model, run in terminal:<br>
-          <code style="background:#1a1a1a;border:1px solid #252525;border-radius:4px;padding:2px 6px;font-size:10px;color:#9ca3af;user-select:all;">ollama pull &lt;model-name&gt;</code><br>
-          <span style="font-size:9px;color:#374151;">e.g. <code style="background:none;color:#4b5563;">ollama pull llama3.2:3b</code> · then reopen this picker</span>
+          To add a local model, use the <b>⬇ Download model</b> button in Chat<br>
+          <span style="font-size:9px;color:#374151;">models download in-app and run on-device (QVAC)</span>
         </div>
       </div>
+    </div>
+  </div>
+
+  <!-- Download-model chooser (chat "⬇ Download model" + Skip-then-download) -->
+  <div id="model-dl-backdrop" class="hidden" onclick="if(event.target.id==='model-dl-backdrop')closeModelDownloadPicker()">
+    <div id="model-dl-panel">
+      <div class="mp-header">
+        <span class="mp-title">Download a model</span>
+        <button class="mp-close" onclick="closeModelDownloadPicker()">×</button>
+      </div>
+      <div class="mp-list" id="mdl-list">
+        <div class="mp-empty">Detecting hardware…</div>
+      </div>
+      <div class="mp-footer" id="mdl-footer">Options are graded for this machine's RAM/GPU.</div>
     </div>
   </div>
 

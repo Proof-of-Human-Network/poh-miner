@@ -86,6 +86,10 @@ contextBridge.exposeInMainWorld('pohMinerAPI', {
     check: () => ipcRenderer.invoke('setup:check'),
     install: () => ipcRenderer.invoke('setup:install'),
     pullModel: (model) => ipcRenderer.invoke('setup:pull-model', model),
-    onProgress: (cb) => ipcRenderer.on('setup:progress', (_e, msg) => cb(msg)),
+    onProgress: (cb) => {
+      const handler = (_e, msg) => cb(msg);
+      ipcRenderer.on('setup:progress', handler);
+      return () => ipcRenderer.removeListener('setup:progress', handler);
+    },
   },
 });
