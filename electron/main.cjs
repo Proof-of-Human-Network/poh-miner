@@ -933,18 +933,24 @@ async function warmUpQvacModel(model = 'qwen3-1.7b') {
     // Attach an actionable hint for the known platform-specific failure modes so
     // the renderer's alert tells the user what to actually do.
     let hint = '';
-    const msg = String(e.message || e);
+    // The SDK nests the real failure (worker exit + stderr tail) in error.cause —
+    // without walking it the dialog shows only the generic 30s-timeout text.
+    const chain = [];
+    for (let err = e, depth = 0; err && depth < 4; err = err.cause, depth++) {
+      chain.push(String(err.message || err));
+    }
+    const msg = chain.join(' ← ');
     if (/ENOTDIR|ENOENT.*app\.asar/i.test(msg)) {
       hint = ' [Packaging: native runtime stuck inside app.asar — update the app to v0.4.13+ which unpacks it.]';
     } else if (/EACCES/i.test(msg) && /\bbare\b|bare-runtime/i.test(msg)) {
-      hint = ' [The bundled inference worker binary is not executable — a packaging defect in this build. Update the app to v0.4.18+.]';
+      hint = ' [The bundled inference worker binary is not executable — a packaging defect in this build. Update the app to v0.4.19+.]';
     } else if (/RPC initialization timed out|worker process/i.test(msg)) {
       if (process.platform === 'win32') {
         hint = ' [The inference worker did not start. Update the app to v0.4.17+ (fixes the packaged worker launch); if it persists, check that antivirus is not blocking bare.exe and that the Microsoft Visual C++ Redistributable is installed (https://aka.ms/vs/17/release/vc_redist.x64.exe).]';
       } else if (process.platform === 'darwin') {
-        hint = ' [The inference worker did not start. Update the app to v0.4.18+ (fixes the packaged worker on macOS); if it persists, clear the quarantine flag with:  xattr -cr /Applications/PoH-Miner.app  and reopen the app.]';
+        hint = ' [The inference worker did not start. Update the app to v0.4.19+ (fixes the packaged worker on macOS); if it persists, clear the quarantine flag with:  xattr -cr /Applications/PoH-Miner.app  and reopen the app.]';
       } else {
-        hint = ' [The inference worker did not start. Update the app to v0.4.18+ (fixes the packaged worker on Linux).]';
+        hint = ' [The inference worker did not start. Update the app to v0.4.19+ (fixes the packaged worker on Linux).]';
       }
     } else if (process.platform === 'win32' && /vulkan|vk[A-Z]|no compatible device|gpu.*not.*found/i.test(msg)) {
       hint = ' [Windows: the Vulkan runtime looks missing — update your GPU driver (Vulkan ships with NVIDIA/AMD/Intel drivers), then restart the app.]';

@@ -1,6 +1,6 @@
 {
   "name": "poh-miner",
-  "version": "0.4.18",
+  "version": "0.4.19",
   "description": "Run the PoH Miner Network. Earn POH by contributing compute (great on Mac Mini, PCs, servers).",
   "author": {
     "name": "Bogdan Sizov",
@@ -43,10 +43,11 @@
     "build:bin": "pkg . --compress GZip",
     "build:deb": "bash scripts/build-deb.sh",
     "build:electron": "electron-builder",
-    "build:electron:mac": "node scripts/fetch-bare-runtimes.cjs darwin-x64 darwin-arm64 && node scripts/patch-qvac-electron.cjs --strict && electron-builder --mac --publish never",
-    "build:electron:win": "node scripts/fetch-bare-runtimes.cjs win32-x64 && node scripts/patch-qvac-electron.cjs --strict && electron-builder --win --publish never",
-    "build:electron:linux": "node scripts/fetch-bare-runtimes.cjs linux-x64 linux-arm64 && node scripts/patch-qvac-electron.cjs --strict && electron-builder --linux --publish never",
-    "build:electron:all": "node scripts/fetch-bare-runtimes.cjs win32-x64 linux-x64 linux-arm64 darwin-x64 darwin-arm64 && node scripts/patch-qvac-electron.cjs --strict && electron-builder -mwl",
+    "bundle:qvac": "qvac bundle sdk",
+    "build:electron:mac": "node scripts/fetch-bare-runtimes.cjs darwin-x64 darwin-arm64 && node scripts/patch-qvac-electron.cjs --strict && npm run bundle:qvac && electron-builder --mac --publish never",
+    "build:electron:win": "node scripts/fetch-bare-runtimes.cjs win32-x64 && node scripts/patch-qvac-electron.cjs --strict && npm run bundle:qvac && electron-builder --win --publish never",
+    "build:electron:linux": "node scripts/fetch-bare-runtimes.cjs linux-x64 linux-arm64 && node scripts/patch-qvac-electron.cjs --strict && npm run bundle:qvac && electron-builder --linux --publish never",
+    "build:electron:all": "node scripts/fetch-bare-runtimes.cjs win32-x64 linux-x64 linux-arm64 darwin-x64 darwin-arm64 && node scripts/patch-qvac-electron.cjs --strict && npm run bundle:qvac && electron-builder -mwl",
     "build:all": "npm run build:bin && npm run build:deb",
     "dist": "electron-builder",
     "test": "vitest run",
@@ -64,6 +65,7 @@
   ],
   "license": "MIT",
   "devDependencies": {
+    "@qvac/cli": "^0.2.4",
     "@yao-pkg/pkg": "^5.8.1",
     "electron": "^31.4.0",
     "electron-builder": "^24.13.3",
@@ -98,6 +100,9 @@
       "landing/**/*",
       "package.json",
       "node_modules/**/*",
+      "qvac/worker.entry.mjs",
+      "qvac/addons.manifest.json",
+      "!qvac/worker.bundle.js",
       "!config.json",
       "!landing/binaries/**/*",
       "!.poh-miner/**/*",
@@ -118,8 +123,8 @@
     ],
     "afterPack": "scripts/afterPack.cjs",
     "asarUnpack": [
-      "node_modules/bare-runtime*/**",
-      "node_modules/@qvac/**"
+      "node_modules/**",
+      "qvac/**"
     ],
     "mac": {
       "category": "public.app-category.utilities",
