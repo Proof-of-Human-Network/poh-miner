@@ -1,6 +1,6 @@
 {
   "name": "poh-miner",
-  "version": "0.4.19",
+  "version": "0.4.20",
   "description": "Run the PoH Miner Network. Earn POH by contributing compute (great on Mac Mini, PCs, servers).",
   "author": {
     "name": "Bogdan Sizov",
@@ -43,7 +43,7 @@
     "build:bin": "pkg . --compress GZip",
     "build:deb": "bash scripts/build-deb.sh",
     "build:electron": "electron-builder",
-    "bundle:qvac": "qvac bundle sdk",
+    "bundle:qvac": "qvac bundle sdk && node -e \"fs.rmSync('qvac/worker.bundle.js',{force:true})\"",
     "build:electron:mac": "node scripts/fetch-bare-runtimes.cjs darwin-x64 darwin-arm64 && node scripts/patch-qvac-electron.cjs --strict && npm run bundle:qvac && electron-builder --mac --publish never",
     "build:electron:win": "node scripts/fetch-bare-runtimes.cjs win32-x64 && node scripts/patch-qvac-electron.cjs --strict && npm run bundle:qvac && electron-builder --win --publish never",
     "build:electron:linux": "node scripts/fetch-bare-runtimes.cjs linux-x64 linux-arm64 && node scripts/patch-qvac-electron.cjs --strict && npm run bundle:qvac && electron-builder --linux --publish never",
@@ -100,8 +100,7 @@
       "landing/**/*",
       "package.json",
       "node_modules/**/*",
-      "qvac/worker.entry.mjs",
-      "qvac/addons.manifest.json",
+      "qvac/**/*",
       "!qvac/worker.bundle.js",
       "!config.json",
       "!landing/binaries/**/*",
