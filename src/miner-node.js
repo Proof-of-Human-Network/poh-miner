@@ -73,6 +73,11 @@ import { EscrowManager, ESCROW_ADDRESS } from './p2p/escrow.js';
 import { ReferralStore } from './p2p/referral-store.js';
 import { tryExternalProviders } from './ai/external-providers.js';
 import { McpManager } from './ai/mcp-client.js';
+import { planTaskCascade, executeTaskCascade } from './ai/task-cascade.js';
+import {
+  materializeAttachments, applyAttachmentsToMessages, MAX_ATTACHMENT_BYTES,
+  DEFAULT_VISION_MODEL, isVisionModelName,
+} from './ai/chat-attachments.js';
 import { needsDatasetLookup, searchDatasets, disambiguateDataset } from './datasets/hf-dataset-search.js';
 import { needsHfModelLookup, searchModelsWithFallback, pickRelevantModels, formatModelSuggestions } from './datasets/hf-model-search.js';
 import * as hfDatasetManager from './datasets/hf-dataset-manager.js';
@@ -1028,128 +1033,138 @@ export class PohMinerNode {
 
   // ── Shared routing logic used by /chat/route and /chat/ask ───────────────
   //
-  // Segment-based routing: split message at conjunctions ("and", "also", etc.),
-  // match each segment to skills independently, cascade when multiple skills found.
-  // web_search is the catch-all for informational segments with no specific skill match.
-  // No LLM call needed — O(segments × skills) trigger matching scales to hundreds of skills.
+  // Task cascade: skills + datasets + MCP tools + HF media models, planned as
+  // ordered stages of parallel tasks (see src/ai/task-cascade.js). Preserves
+  // legacy single-skill / cascade / sequence / dataset / hf-model shapes for
+  // the Electron UI while exposing a unified `tasks` plan for execution.
   _routeMessage(message) {
     const allSkills = skillsManager.getAllSkills().filter(s => s.context && (s.status === 'active' || s.status === 'proposed'));
-    if (!allSkills.length) return Promise.resolve({ type: 'chat' });
 
-    // Extract global inputs (address / username present anywhere in the full message)
+    // Enrich skill inputs with global address/username when present
     const ADDR_RE   = /0x[0-9a-fA-F]{40}|[1-9A-HJ-NP-Za-km-z]{32,44}/;
     const ENS_RE    = /\b([\w-]+\.eth)\b/i;
     const HANDLE_RE = /@([\w.-]+)/;
-    const addrMatch   = message.match(ADDR_RE);
-    const ensMatch    = message.match(ENS_RE);
-    const handleMatch = message.match(HANDLE_RE);
+    const addrMatch   = (message || '').match(ADDR_RE);
+    const ensMatch    = (message || '').match(ENS_RE);
+    const handleMatch = (message || '').match(HANDLE_RE);
     const globalInput = { message };
     if (addrMatch)   globalInput.address  = addrMatch[0];
     if (ensMatch)    globalInput.username  = ensMatch[1].replace(/\.eth$/i, '');
     else if (handleMatch) globalInput.username = handleMatch[1].replace(/\.eth$/i, '');
 
-    // Split at conjunctions so each clause can be routed independently
-    const SPLIT_RE = /\s*\b(?:and also|as well as|as well|and|also|plus|additionally)\b\s*[,;]?\s*/i;
-    const segments = message.split(SPLIT_RE).map(s => s.trim()).filter(Boolean);
+    let mcpTools = [];
+    try { mcpTools = this.mcp?.listTools?.() || []; } catch { /* MCP not ready */ }
 
-    // Short conversational filler — don't web-search these
-    const CONVERSATIONAL_RE = /^(hi|hello|hey|thanks|thank you|ok|okay|yes|no|sure|great|cool|got it|makes sense|sounds good|nice|perfect|good|bye|see you|lol|haha|awesome|interesting|are you|what is your|what's your|how are you)\b/i;
+    const plan = planTaskCascade(message, {
+      skills: allSkills,
+      mcpTools,
+      brainDataDir: getBrainDataDir(),
+    });
 
-    // A segment like "create a standard ERC20 token contract" never matches any skill
-    // (no skill writes code from scratch) — it's a plain LLM generation request. When it's
-    // followed by a segment that DOES match a skill (e.g. "do a smart contract audit"),
-    // that's not two independent parallel tasks — it's "generate, then analyze what you
-    // just generated". Recorded here; resolved into a 'sequence' route after the loop.
-    const CREATION_RE = /\b(?:create|write|generate|build|implement|draft|code up|code me)\b/i;
-    let creationSegment = null;
-
-    const webSearchSkill = allSkills.find(s => s.id === 'web_search');
-    const usedSkillIds   = new Set();
-    const jobs           = [];
-
-    for (const segment of segments) {
-      const segLower = segment.toLowerCase();
-
-      // Score every skill against this segment.
-      // Multi-word triggers score proportional to their word count so
-      // "blog posts" (2) beats "posts" (1) when both appear in the segment.
-      const hits = allSkills
-        .map(s => {
-          let score = 0;
-          for (const t of (s.triggers || [])) {
-            if (segLower.includes(t.toLowerCase())) score += t.trim().split(/\s+/).length;
-          }
-          return { skill: s, score };
-        })
-        .filter(h => h.score > 0)
-        .sort((a, b) => b.score - a.score);
-
-      // Per-segment input — each segment gets its own query string
-      const segInput = { ...globalInput, query: segment, message: segment };
-
-      if (hits.length > 0) {
-        // Pick the highest-scoring skill not already in this cascade
-        const best = hits.find(h => !usedSkillIds.has(h.skill.id))?.skill;
-        if (best) {
-          usedSkillIds.add(best.id);
-          // For social skills (farcaster, paragraph, zora, poh_identity): if no username
-          // was extracted from the full message (no @handle), try the last bare word in
-          // this segment as a username — covers "blog posts assetux" → username: "assetux"
-          const SOCIAL_SKILLS = new Set(['read_farcaster','read_paragraph','read_zora','poh_identity']);
-          const segJob = { skillId: best.id, input: { ...segInput }, skillContext: best.context || null };
-          if (SOCIAL_SKILLS.has(best.id) && !segJob.input.username && !segJob.input.address) {
-            const triggerWords = new Set((best.triggers || []).map(t => t.toLowerCase().split(/\s+/)).flat());
-            const words = segment.split(/\s+/).filter(w => w.length >= 2 && !triggerWords.has(w.toLowerCase()));
-            const candidate = words[words.length - 1]?.replace(/[^a-zA-Z0-9_.-]/g, '');
-            if (candidate && candidate.length >= 2) {
-              segJob.input.username = candidate.replace(/^@/, '');
-              segJob.input.query    = candidate;
+    // Stamp global inputs onto skill tasks (address/username extraction)
+    if (plan.type === 'tasks') {
+      for (const stage of plan.stages || []) {
+        for (const t of stage) {
+          if (t.kind === 'skill') {
+            t.input = { ...globalInput, ...(t.input || {}) };
+            const SOCIAL_SKILLS = new Set(['read_farcaster','read_paragraph','read_zora','poh_identity']);
+            if (SOCIAL_SKILLS.has(t.skillId) && !t.input.username && !t.input.address) {
+              const skill = allSkills.find(s => s.id === t.skillId);
+              const triggerWords = new Set((skill?.triggers || []).map(x => x.toLowerCase().split(/\s+/)).flat());
+              const words = String(t.segment || message).split(/\s+/).filter(w => w.length >= 2 && !triggerWords.has(w.toLowerCase()));
+              const candidate = words[words.length - 1]?.replace(/[^a-zA-Z0-9_.-]/g, '');
+              if (candidate && candidate.length >= 2) {
+                t.input.username = candidate.replace(/^@/, '');
+                t.input.query = candidate;
+              }
             }
           }
-          jobs.push(segJob);
         }
-      } else if (webSearchSkill && !usedSkillIds.has('web_search')
-                 && !CONVERSATIONAL_RE.test(segment)
-                 && _segmentNeedsWebSearch(segment)) {
-        // Only web-search when the segment signals it needs live internet data
-        usedSkillIds.add('web_search');
-        jobs.push({ skillId: 'web_search', input: segInput, skillContext: webSearchSkill.context || null });
-      } else if (!creationSegment && CREATION_RE.test(segment)) {
-        creationSegment = segment;
       }
     }
 
-    // "create X and <skill action>" — generate first, then run the matched skill against
-    // what was generated. Only safe for knowledge-only skills (reference text fed to the
-    // LLM as context): sandboxed skills like web_search/read_zora have rigid input schemas
-    // (query/username/address) that generated code wouldn't fit, so those fall back to
-    // being treated as a normal single-skill match instead (creationSegment is just dropped).
-    if (jobs.length === 1 && creationSegment) {
-      const matchedSkill = allSkills.find(s => s.id === jobs[0].skillId);
-      if (matchedSkill && !matchedSkill.hasCode) {
+    // Legacy UI shapes
+    if (plan.type === 'chat') return Promise.resolve({ type: 'chat' });
+
+    const flat = (plan.stages || []).flat();
+    const onlySkills = flat.length > 0 && flat.every(t => t.kind === 'skill');
+
+    // create → knowledge-skill sequence
+    if (plan.reason?.startsWith('sequence:') && plan.stages?.length === 2) {
+      const gen = plan.stages[0][0];
+      const sk  = plan.stages[1][0];
+      if (gen?.kind === 'llm-generate' && sk?.kind === 'skill') {
         return Promise.resolve({
           type: 'sequence',
-          creationQuery: creationSegment,
-          skillId: jobs[0].skillId,
-          input: jobs[0].input,
-          skillContext: jobs[0].skillContext,
+          creationQuery: gen.query,
+          skillId: sk.skillId,
+          input: sk.input,
+          skillContext: sk.skillContext,
+          tasks: plan,
         });
       }
     }
 
-    if (jobs.length === 0) {
-      // Media-generation requests (video/image/audio) → search HF models and suggest.
-      if (needsHfModelLookup(message)) {
-        return Promise.resolve({ type: 'hf-model', query: message });
-      }
-      // Explicit dataset mentions → Hugging Face dataset pipeline.
-      if (needsDatasetLookup(message)) {
-        return Promise.resolve({ type: 'dataset', query: message });
-      }
-      return Promise.resolve({ type: 'chat' });
+    if (onlySkills && flat.length === 1) {
+      const t = flat[0];
+      return Promise.resolve({
+        type: 'skill', skillId: t.skillId, input: t.input, skillContext: t.skillContext,
+        reason: plan.reason, tasks: plan,
+      });
     }
-    if (jobs.length === 1)  return Promise.resolve({ type: 'skill', skillId: jobs[0].skillId, input: jobs[0].input, skillContext: jobs[0].skillContext, reason: 'segment match' });
-    return Promise.resolve({ type: 'cascade', jobs, reason: `segment cascade: ${jobs.map(j => j.skillId).join(', ')}` });
+    if (onlySkills && flat.length > 1) {
+      return Promise.resolve({
+        type: 'cascade',
+        jobs: flat.map(t => ({ skillId: t.skillId, input: t.input, skillContext: t.skillContext })),
+        reason: plan.reason, tasks: plan,
+      });
+    }
+    if (flat.length === 1 && flat[0].kind === 'hf-model') {
+      return Promise.resolve({ type: 'hf-model', query: flat[0].query || message, tasks: plan });
+    }
+    if (flat.length === 1 && flat[0].kind === 'dataset') {
+      return Promise.resolve({ type: 'dataset', query: flat[0].query || message, tasks: plan });
+    }
+
+    // Mixed cascade (skills + MCP + datasets + media) — new unified type
+    return Promise.resolve({
+      type: 'tasks',
+      tasks: plan,
+      reason: plan.reason,
+      // Also expose a jobs[] of skill tasks for older UI progress labels
+      jobs: flat.filter(t => t.kind === 'skill').map(t => ({ skillId: t.skillId, input: t.input, skillContext: t.skillContext })),
+    });
+  }
+
+  /** Run a task-cascade plan and return the aggregated reply. */
+  async _runTaskCascade(plan, { model, message } = {}) {
+    const runners = {
+      model: model || this.config.model,
+      getBrainDataDir,
+      runSkill: async (skillId, input) => {
+        const { output } = await skillsManager.runSkill(skillId, input, this.config);
+        return output;
+      },
+      callMcp: async (toolName, args) => {
+        if (!this.mcp?.callTool) throw new Error('MCP not initialized');
+        await this._initMcp();
+        return this.mcp.callTool(toolName, args || {});
+      },
+      llm: async (messages, opts = {}) => this._llmChat(messages, { model: opts.model || model, timeoutMs: opts.timeoutMs || 60_000 }),
+    };
+    return executeTaskCascade(plan, runners, message);
+  }
+
+  /** Sanitize model ids from clients (guards against UI bugs like model="model_used"). */
+  _resolveRequestModel(raw, { hasImages = false } = {}) {
+    const BAD = /^(model_used|modelused|undefined|null|model)$/i;
+    let m = (raw && typeof raw === 'string' && !BAD.test(raw.trim())) ? raw.trim() : null;
+    if (!m) m = this.config.model || 'qwen3-1.7b';
+    if (hasImages && !isVisionModelName(m)) {
+      // Prefer a vision model so image attachments actually work.
+      return DEFAULT_VISION_MODEL;
+    }
+    return m;
   }
 
   _openFirewallPort(port) {
@@ -2242,7 +2257,31 @@ export class PohMinerNode {
             const payload = body ? JSON.parse(body) : {};
             const qvac = await getQvacModels();
             if (!qvac || !qvac.ENABLED) return sendJson(503, { error: 'Inference backend (QVAC) is unavailable on this device' });
-            const model = payload.model || this.config.model || 'qwen3-1.7b';
+            // Materialize attachments first (images need a path; text is inlined).
+            // Accept payload.attachments or messages[].attachments (client-side).
+            let chatMessages = Array.isArray(payload.messages) ? payload.messages : [];
+            let hasImages = false;
+            const attachList = Array.isArray(payload.attachments) ? payload.attachments : [];
+            // Also pull attachments embedded on the last user message (base64 form)
+            const lastUser = [...chatMessages].reverse().find(m => m?.role === 'user');
+            if (lastUser && Array.isArray(lastUser.clientAttachments)) {
+              attachList.push(...lastUser.clientAttachments);
+            }
+            if (attachList.length) {
+              const { files, errors } = materializeAttachments(attachList, { maxBytes: MAX_ATTACHMENT_BYTES });
+              if (errors.length && !files.length) {
+                return sendJson(400, { error: errors.join('; '), code: 'ATTACHMENT_ERROR' });
+              }
+              if (errors.length) console.warn('[api/chat] attachment warnings:', errors.join('; '));
+              const applied = applyAttachmentsToMessages(chatMessages, files);
+              chatMessages = applied.messages;
+              hasImages = applied.hasImages;
+            } else {
+              // Already-materialized path attachments (from a prior hop)
+              hasImages = chatMessages.some(m => Array.isArray(m.attachments) && m.attachments.some(a => a?.path));
+            }
+
+            const model = this._resolveRequestModel(payload.model, { hasImages });
 
             // POST /api/models/download {model?} — manual model download/retry.
             // This is the recovery path when the first-start download failed: no
@@ -2273,7 +2312,7 @@ export class PohMinerNode {
             }
 
             if (url.pathname === '/api/chat') {
-              const messages = Array.isArray(payload.messages) ? payload.messages : [];
+              const messages = chatMessages;
               // Stream newline-delimited JSON when the client asks for it (Ollama shape +
               // what the Electron chat UI parses). Each token is one line; a final
               // {done:true} line closes it. Non-stream callers still get one JSON object.
@@ -2839,7 +2878,61 @@ export class PohMinerNode {
               }
             }
 
+            // ── Unified task cascade (skills + MCP + datasets + HF models) ─────
+            // Handles mixed multi-step requests like "weather yesterday and generate
+            // an image with the degree on it" or multi-shop MCP BI queries.
+            if (route.type === 'tasks' && route.tasks) {
+              try {
+                const selModel = reqModel || this.config.model;
+                const { reply, results } = await this._runTaskCascade(route.tasks, { model: selModel, message });
+                // Dataset download gate: if a dataset task needs install approval
+                const needDs = (results || []).find(r => r.kind === 'dataset' && r.ok && r.output && r.output.installed === false && r.output.datasetId);
+                if (needDs && !forcedDatasetId) {
+                  res.statusCode = 412;
+                  return res.end(JSON.stringify({
+                    error: `Answering this may require the "${needDs.output.datasetId}" dataset, which isn't installed locally.`,
+                    code: 'HF_DATASET_DOWNLOAD_REQUIRED',
+                    datasetId: needDs.output.datasetId,
+                    description: '',
+                    estimatedSizeBytes: null,
+                    installInstructions: [
+                      'Approve the download prompt in Chat, or',
+                      `POST /api/hf-dataset/${needDs.output.datasetId}/download on your miner API`,
+                      'Settings → Datasets lists installed copies',
+                    ].join(' '),
+                  }));
+                }
+                return res.end(JSON.stringify({
+                  type: 'chat',
+                  message: reply || 'Task cascade produced no output.',
+                  cascade: true,
+                  tasks: true,
+                  jobs: (results || []).map(r => ({
+                    id: r.id, kind: r.kind, skillId: r.skillId, server: r.server,
+                    ok: r.ok, error: r.error, ms: r.ms,
+                  })),
+                }));
+              } catch (e) {
+                console.warn('[chat/ask] task cascade error:', e.message);
+                // fall through
+              }
+            }
+
             if (route.type === 'cascade') {
+              // Prefer the full task plan when present (skills-only legacy path still works).
+              if (route.tasks) {
+                try {
+                  const selModel = reqModel || this.config.model;
+                  const { reply, results } = await this._runTaskCascade(route.tasks, { model: selModel, message });
+                  return res.end(JSON.stringify({
+                    type: 'chat', message: reply || 'Cascade produced no output.',
+                    cascade: true, tasks: true,
+                    jobs: (results || []).map(r => ({ id: r.id, kind: r.kind, skillId: r.skillId, ok: r.ok })),
+                  }));
+                } catch (e) {
+                  console.warn('[chat/ask] cascade-via-tasks error:', e.message);
+                }
+              }
               // Run all cascade skills in parallel, then synthesize with LLM.
               // Knowledge-only skills (no code) have nothing to "run" — feed their
               // reference text directly into the synthesis step instead.
@@ -6751,7 +6844,40 @@ export class PohMinerNode {
   async _routeComputePrompt(prompt, model) {
     let route;
     try { route = await this._routeMessage(prompt); } catch { return null; }
-    if (!route || route.type !== 'skill') return null;
+    if (!route) return null;
+
+    // Mixed task cascade (skills + MCP + datasets + media) — full executor
+    if (route.type === 'tasks' && route.tasks) {
+      try {
+        const { reply, results } = await this._runTaskCascade(route.tasks, { model, message: prompt });
+        if (reply) return { reply, skillId: 'task-cascade', results };
+      } catch (e) {
+        console.warn('[compute] task cascade failed:', e.message);
+      }
+      return null;
+    }
+    // Multi-skill cascade
+    if (route.type === 'cascade' && route.tasks) {
+      try {
+        const { reply } = await this._runTaskCascade(route.tasks, { model, message: prompt });
+        if (reply) return { reply, skillId: 'cascade' };
+      } catch { /* fall through */ }
+    }
+    if (route.type === 'cascade' && route.jobs?.length) {
+      try {
+        const plan = {
+          type: 'tasks',
+          stages: [route.jobs.map(j => ({
+            kind: 'skill', id: `skill:${j.skillId}`, skillId: j.skillId,
+            input: j.input, skillContext: j.skillContext, segment: prompt,
+          }))],
+          reason: route.reason,
+        };
+        const { reply } = await this._runTaskCascade(plan, { model, message: prompt });
+        if (reply) return { reply, skillId: 'cascade' };
+      } catch { /* fall through */ }
+    }
+    if (route.type !== 'skill') return null;
     const skillEntry = skillsManager.getSkill(route.skillId);
     if (!skillEntry) return null;
     try {
@@ -6802,14 +6928,25 @@ export class PohMinerNode {
       // .startsWith on the (absent) payload.address and crashed. Mirrors the token
       // metering + no-refund cap + public-job sealing used everywhere else.
       if (job.type === 'compute') {
-        const model   = job.model || this.config.model || 'qwen3-1.7b';
         const dataset = job.dataset || job.datasetId || null;
-        const prompt  = job.payload?.prompt || job.payload?.message || job.payload?.question;
-        if (!prompt) throw new Error('payload.prompt is required for compute jobs');
+        let prompt  = job.payload?.prompt || job.payload?.message || job.payload?.question;
+        if (!prompt && !job.payload?.attachments?.length) throw new Error('payload.prompt is required for compute jobs');
+        if (!prompt) prompt = 'Please analyze the attached file(s).';
 
-        // Auto-route through skill triggers (unless the caller pinned a dataset or opted out
-        // with route:false) — so "search the web: …" reaches web_search via the API too.
-        if (!dataset && job.route !== false) {
+        let boardMessages = null;
+        let hasImages = false;
+        if (Array.isArray(job.payload?.attachments) && job.payload.attachments.length) {
+          const { files, errors } = materializeAttachments(job.payload.attachments, { maxBytes: MAX_ATTACHMENT_BYTES });
+          if (errors.length && !files.length) throw new Error(errors.join('; '));
+          const applied = applyAttachmentsToMessages([{ role: 'user', content: prompt }], files);
+          boardMessages = applied.messages;
+          hasImages = applied.hasImages;
+          prompt = applied.messages.find(m => m.role === 'user')?.content || prompt;
+        }
+        const model = this._resolveRequestModel(job.model || this.config.model, { hasImages });
+
+        // Auto-route through task cascade / skills (unless dataset pinned, route:false, or image-only).
+        if (!dataset && job.route !== false && job.payload?.route !== false && !hasImages) {
           const routed = await this._routeComputePrompt(prompt, model);
           if (routed) {
             const { encrypt: encR, encPub: encPubR } = this._chatVisibility(job);
@@ -6821,7 +6958,7 @@ export class PohMinerNode {
               verdict: 'COMPUTE_RESULT',
               address: job.payload?.address || 'compute-job',
               confidence: 1,
-              reasoning: `Compute job routed to skill "${routed.skillId}"`,
+              reasoning: `Compute job routed to ${routed.skillId || 'cascade'}`,
               profile: profileR,
               modelUsed: model,
               skillId: routed.skillId,
@@ -6860,7 +6997,11 @@ export class PohMinerNode {
             messages.push({ role: turn.role, content: String(turn.content).slice(0, 8000) });
           }
         }
-        messages.push({ role: 'user', content: prompt });
+        if (boardMessages?.length) {
+          for (const m of boardMessages) messages.push(m);
+        } else {
+          messages.push({ role: 'user', content: prompt });
+        }
 
         const qvac = await getQvacModels();
         if (!qvac || !qvac.ENABLED) throw new Error('Inference backend (QVAC) is unavailable on this miner');
@@ -7047,20 +7188,35 @@ export class PohMinerNode {
       }
     }
 
-    // ── Compute job path (user-specified model + optional dataset) ─────────────
+    // ── Compute job path (user-specified model + optional dataset + attachments) ─
     if (job.type === 'compute') {
       try {
-        const model   = job.model || this.config.model || 'qwen3-1.7b';
         const dataset = job.dataset || job.datasetId || null;
-        const prompt  = job.payload?.prompt || job.payload?.message || job.payload?.question;
-        if (!prompt) throw new Error('payload.prompt is required for compute jobs');
+        let prompt  = job.payload?.prompt || job.payload?.message || job.payload?.question;
+        if (!prompt && !job.payload?.attachments?.length) throw new Error('payload.prompt is required for compute jobs');
+        if (!prompt) prompt = 'Please analyze the attached file(s).';
+
+        // Materialize attachments (same 1 MB limit as chat)
+        let jobMessages = null;
+        let hasImages = false;
+        if (Array.isArray(job.payload?.attachments) && job.payload.attachments.length) {
+          const { files, errors } = materializeAttachments(job.payload.attachments, { maxBytes: MAX_ATTACHMENT_BYTES });
+          if (errors.length && !files.length) throw new Error(errors.join('; '));
+          const applied = applyAttachmentsToMessages([{ role: 'user', content: prompt }], files);
+          jobMessages = applied.messages;
+          hasImages = applied.hasImages;
+          // Keep a text-only prompt for routing (skills don't need image bytes)
+          prompt = applied.messages.find(m => m.role === 'user')?.content || prompt;
+        }
+
+        const model = this._resolveRequestModel(job.model || this.config.model, { hasImages });
 
         const gasPrice = this.config.gasPrice || GAS.DEFAULT_GAS_PRICE;
         let reply = null, tokensUsed = null, routedSkillId = null, datasetUsed = null;
 
-        // Auto-route through skill triggers (unless a dataset is pinned or route:false),
-        // so "search the web: …" reaches web_search via the API just like /chat/ask.
-        if (!dataset && job.route !== false) {
+        // Auto-route through task cascade / skills (unless a dataset is pinned or route:false),
+        // so "search the web: …" and multi-step cascades work via the jobs API too.
+        if (!dataset && job.route !== false && job.payload?.route !== false && !hasImages) {
           const routed = await this._routeComputePrompt(prompt, model);
           if (routed) { reply = routed.reply; tokensUsed = routed.tokensUsed; routedSkillId = routed.skillId; }
         }
@@ -7093,7 +7249,12 @@ export class PohMinerNode {
             }
           }
 
-          messages.push({ role: 'user', content: prompt });
+          // Current turn: either attachment-aware messages or plain prompt.
+          if (jobMessages?.length) {
+            for (const m of jobMessages) messages.push(m);
+          } else {
+            messages.push({ role: 'user', content: prompt });
+          }
 
           // Run the job on QVAC (in-process). datasetUsed already prepended its own
           // system message; otherwise give the model a light assistant persona.

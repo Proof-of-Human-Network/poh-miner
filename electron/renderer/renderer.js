@@ -2018,7 +2018,10 @@ window._activeModel  = 'qwen3-1.7b';
 window._cachedModels = [];
 
 function getActiveModel() {
-  return window._activeModel || 'qwen3-1.7b';
+  const m = window._activeModel || 'qwen3-1.7b';
+  // Guard against UI bugs that once set the model id to a field name
+  if (!m || /^(model_used|modelUsed|undefined|null|model)$/i.test(m)) return 'qwen3-1.7b';
+  return m;
 }
 
 function setActiveModel(name) {
@@ -2551,31 +2554,73 @@ window.installChatModel = async function(model = null) {
   }
 };
 
-// ── File upload ────────────────────────────────────────────────────────────────
+// ── File upload (text + images, 1 MB) ──────────────────────────────────────────
 
 window._chatAttachedFile = null;
-const MAX_CHAT_FILE_BYTES = 100 * 1024;
+const MAX_CHAT_FILE_BYTES = 1 * 1024 * 1024; // 1 MB — matches server MAX_ATTACHMENT_BYTES
+const IMAGE_EXT_RE = /\.(png|jpe?g|webp|gif|bmp)$/i;
+const TEXT_EXT_RE = /\.(txt|md|markdown|json|csv|log|js|jsx|ts|tsx|py|html?|css|ya?ml|xml|sh|bash|sql|rs|go|java|c|cpp|h|rb|php|swift|kt|toml|ini|conf)$/i;
+
+function _isImageFile(file) {
+  if (file.type && file.type.startsWith('image/')) return true;
+  return IMAGE_EXT_RE.test(file.name || '');
+}
+function _isTextFile(file) {
+  if (file.type && (file.type.startsWith('text/') || /json|xml|javascript|yaml/.test(file.type))) return true;
+  return TEXT_EXT_RE.test(file.name || '');
+}
 
 window.handleChatFileUpload = function(event) {
   const file = event.target.files?.[0];
   event.target.value = ''; // allow re-selecting the same file later
   if (!file) return;
   if (file.size > MAX_CHAT_FILE_BYTES) {
-    alert(`File too large (max 100KB). "${file.name}" is ${(file.size / 1024).toFixed(0)}KB.`);
+    alert(`File too large (max 1 MB). "${file.name}" is ${(file.size / 1024).toFixed(0)} KB.`);
     return;
   }
+  if (!_isImageFile(file) && !_isTextFile(file)) {
+    alert(`Unsupported file type for "${file.name}".\nAttach text (txt/md/json/csv/code) or images (png/jpg/webp/gif).`);
+    return;
+  }
+
   const reader = new FileReader();
-  reader.onload = () => {
-    window._chatAttachedFile = { name: file.name, content: String(reader.result).slice(0, 100_000) };
+  reader.onerror = () => alert(`Could not read file "${file.name}".`);
+
+  const showChip = (label) => {
     const chip = document.getElementById('chat-file-chip');
     const chipName = document.getElementById('chat-file-chip-name');
     if (chip && chipName) {
-      chipName.textContent = `📎 ${file.name}`;
+      chipName.textContent = label;
       chip.style.display = 'flex';
     }
   };
-  reader.onerror = () => alert(`Could not read file "${file.name}".`);
-  reader.readAsText(file);
+
+  if (_isImageFile(file)) {
+    reader.onload = () => {
+      // data URL → server materializes to a real path for QVAC multimodal
+      window._chatAttachedFile = {
+        name: file.name,
+        mime: file.type || 'image/png',
+        kind: 'image',
+        dataUrl: String(reader.result),
+        size: file.size,
+      };
+      showChip(`🖼️ ${file.name} (${(file.size / 1024).toFixed(0)} KB)`);
+    };
+    reader.readAsDataURL(file);
+  } else {
+    reader.onload = () => {
+      window._chatAttachedFile = {
+        name: file.name,
+        mime: file.type || 'text/plain',
+        kind: 'text',
+        content: String(reader.result).slice(0, 200_000),
+        size: file.size,
+      };
+      showChip(`📎 ${file.name} (${(file.size / 1024).toFixed(0)} KB)`);
+    };
+    reader.readAsText(file);
+  }
 };
 
 window.removeChatFile = function() {
@@ -2647,7 +2692,7 @@ async function submitComputeJob(promptText, jobCtx = {}) {
   const budget = getChatBudget();
   const input = document.getElementById('chat-input');
   const isPrivate = window._chatPrivate !== false;
-  const { bubble: jobBubble, history: historyForJob, dataset } = jobCtx;
+  const { bubble: jobBubble, history: historyForJob, dataset, attachments } = jobCtx;
   const hist = historyForJob || chatHistory.slice(0, -1);
   const append = (t) => appendToBubble(jobBubble, t);
   const finalize = () => finalizeBubble(jobBubble);
@@ -2683,6 +2728,12 @@ async function submitComputeJob(promptText, jobCtx = {}) {
       paymentTx: { txHash, signature },
     };
     if (dataset) jobBody.dataset = dataset;
+    // File attachments (text + images, ≤1 MB) — same shape as /api/chat
+    const atts = attachments || window._pendingChatAttachments;
+    if (atts?.length) {
+      jobBody.payload.attachments = atts;
+      window._pendingChatAttachments = null;
+    }
 
     const jobRes = await fetch(`http://localhost:${port}/job`, {
       method: 'POST',
@@ -2787,18 +2838,43 @@ async function sendChatMessage() {
     return jobBubble;
   };
 
+  // Build user-visible text + API attachment payload.
+  // Text files are inlined for history; images are sent as dataUrl attachments
+  // so the miner can materialize a path for QVAC multimodal.
   let llmText = text;
+  let apiAttachments = null;
   if (attachedFile) {
-    llmText = `${text}\n\n[Attached file: ${attachedFile.name}]\n\`\`\`\n${attachedFile.content}\n\`\`\``;
+    if (attachedFile.kind === 'image' || attachedFile.dataUrl) {
+      apiAttachments = [{
+        name: attachedFile.name,
+        mime: attachedFile.mime,
+        dataUrl: attachedFile.dataUrl,
+      }];
+      llmText = text || 'Please describe and analyze the attached image.';
+    } else {
+      const body = attachedFile.content || '';
+      llmText = `${text}\n\n[Attached file: ${attachedFile.name}]\n\`\`\`\n${body}\n\`\`\``;
+      // Also send structured attachment so jobs API can re-materialize if needed
+      apiAttachments = [{
+        name: attachedFile.name,
+        mime: attachedFile.mime || 'text/plain',
+        content: body,
+      }];
+    }
   }
 
   chatHistory.push({ role: 'user', content: llmText });
-  renderMessage('user', attachedFile ? `${text}\n\n📎 ${attachedFile.name}` : text);
+  const userLabel = attachedFile
+    ? `${text || ''}${text ? '\n\n' : ''}${attachedFile.kind === 'image' ? '🖼️' : '📎'} ${attachedFile.name}`
+    : text;
+  renderMessage('user', userLabel);
   if (attachedFile) window.removeChatFile();
 
   const model = getActiveModel();
   const port  = window._minerApiPort || 3456;
   const historySnapshot = chatHistory.slice();
+  // Stash attachments for the private /api/chat path below
+  window._pendingChatAttachments = apiAttachments;
 
   function _endChatJob() {
     chatJobAbortControllers.delete(jobId);
@@ -2966,7 +3042,75 @@ async function sendChatMessage() {
     });
     if (routeRes.ok) {
       const route = await routeRes.json();
-      if (route.type === 'cascade' && route.jobs?.length) {
+      // Unified task cascade (skills + MCP + datasets + media models)
+      if (!_skillDone && route.type === 'tasks') {
+        const label = route.reason || 'task cascade';
+        jobShowAssistant(`Running task cascade… (${label})`, true);
+        _bubbleShown = true;
+        chatAbortController = jobAbort;
+        try {
+          const cascadeRes = await fetch(`http://localhost:${port}/chat/ask`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(_chatAskPayload(text, historySnapshot, isPrivate, { model })),
+            signal: AbortSignal.timeout(120000),
+          });
+          jobFinalize();
+          if (cascadeRes.status === 412) {
+            const info = await cascadeRes.json();
+            const approved = await showHfDatasetDownloadModal(info);
+            if (approved) {
+              renderMessage('assistant', `Downloading dataset \`${info.datasetId}\`…`, true);
+              const dlRes = await fetch(`http://localhost:${port}/api/hf-dataset/${encodeURIComponent(info.datasetId)}/download`, { method: 'POST' });
+              finalizeLastBubble();
+              if (dlRes.ok) {
+                const retryRes = await fetch(`http://localhost:${port}/chat/ask`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify(_chatAskPayload(text, historySnapshot, isPrivate, { model, datasetId: info.datasetId })),
+                  signal: AbortSignal.timeout(120000),
+                });
+                const retryData = await retryRes.json();
+                const reply = retryData.message || 'Could not answer using the downloaded dataset.';
+                jobShowAssistant(reply);
+                pushAssistantReply(reply);
+                refreshHfDatasetsSettings();
+              } else {
+                const errData = await dlRes.json().catch(() => ({}));
+                const msg = `Failed to download dataset: ${errData.error || dlRes.statusText}`;
+                renderMessage('assistant', msg);
+                chatHistory.push({ role: 'assistant', content: msg });
+              }
+            } else {
+              const msg = `Download declined.\n\n${HF_DATASET_INSTALL_HINT}`;
+              jobShowAssistant(msg);
+              pushAssistantReply(msg);
+            }
+            _skillDone = true;
+          } else if (cascadeRes.ok) {
+            const cascadeData = await cascadeRes.json();
+            const reply = cascadeData.message || 'Task cascade returned no data.';
+            jobShowAssistant(reply);
+            pushAssistantReply(reply, cascadeData.skillMemory ? { _skillMemory: cascadeData.skillMemory } : {});
+            _skillDone = true;
+          } else {
+            const errData = await cascadeRes.json().catch(() => ({}));
+            const msg = errData.error || `Task cascade failed (HTTP ${cascadeRes.status}).`;
+            renderMessage('assistant', msg);
+            chatHistory.push({ role: 'assistant', content: msg });
+            _skillDone = true;
+          }
+        } catch (e) {
+          finalizeLastBubble();
+          console.warn('[tasks] /chat/ask failed:', e.message);
+          const msg = `Task cascade failed: ${e.message}`;
+          renderMessage('assistant', msg);
+          chatHistory.push({ role: 'assistant', content: msg });
+          _skillDone = true;
+        }
+      }
+
+      if (!_skillDone && route.type === 'cascade' && route.jobs?.length) {
         // Multi-skill cascade: delegate entirely to /chat/ask which runs all skills
         // inline and synthesizes the results with LLM — no paid job queue needed.
         const skillNames = route.jobs.map(j => j.skillId).join(' + ');
@@ -3279,10 +3423,15 @@ async function sendChatMessage() {
   // ── End skill routing ─────────────────────────────────────────────────────
 
   // Public mode with no skill match: paid network compute job (async queue)
+  // Task cascade still runs on the receiving miner via _routeComputePrompt.
   if (!isPrivate) {
     jobShowAssistant('Submitting paid compute job…', true);
     try {
-      await submitComputeJob(llmText, { bubble: jobBubble, history: historySnapshot });
+      await submitComputeJob(llmText, {
+        bubble: jobBubble,
+        history: historySnapshot,
+        attachments: window._pendingChatAttachments,
+      });
     } finally {
       _endChatJob();
     }
@@ -3301,16 +3450,22 @@ async function sendChatMessage() {
       ? [{ role: 'system', content: systemParts.join('\n\n') }, ...chatHistory]
       : chatHistory;
 
+    const chatBody = {
+      model,
+      messages: messagesWithContext,
+      stream: true,
+      options: { temperature: 0.7 },
+    };
+    // Image (and structured text) attachments — miner materializes paths / inlines text
+    if (window._pendingChatAttachments?.length) {
+      chatBody.attachments = window._pendingChatAttachments;
+      window._pendingChatAttachments = null;
+    }
     const res = await fetch(`http://localhost:${port}/api/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       signal: chatAbortController.signal,
-      body: JSON.stringify({
-        model,
-        messages: messagesWithContext,
-        stream: true,
-        options: { temperature: 0.7 },
-      }),
+      body: JSON.stringify(chatBody),
     });
 
     if (!res.ok) {

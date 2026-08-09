@@ -13,18 +13,27 @@
 import os from 'os';
 import { execSync } from 'child_process';
 
-// Text LLM ladder, smallest → largest. `minBudgetGB` is the usable-memory
-// headroom we want before offering a model as a comfortable pick. Extend this
-// array with bigger constants (e.g. 14B/32B) as they become available.
+// Text + vision LLM ladder, smallest → largest. `minBudgetGB` is the usable-
+// memory headroom we want before offering a model as a comfortable pick.
+// Vision models (VL / multimodal) can read chat image attachments via QVAC.
+// Keep minBudgetGB and approxDownloadGB strictly monotonic (tests + grading).
 export const MODEL_LADDER = [
-  { name: 'qwen3-0.6b',  label: 'Qwen3 0.6B',            constant: 'QWEN3_600M_INST_Q4',              approxDownloadGB: 0.4,  minBudgetGB: 1,  blurb: 'Fastest, tiny footprint. Good on low-RAM / CPU-only hosts.' },
-  { name: 'qwen3-1.7b',  label: 'Qwen3 1.7B',            constant: 'QWEN3_1_7B_INST_Q4',              approxDownloadGB: 1.1,  minBudgetGB: 3,  blurb: 'Balanced quality and speed. Solid all-round default.' },
-  { name: 'qwen3-4b',    label: 'Qwen3 4B',              constant: 'QWEN3_4B_INST_Q4_K_M',            approxDownloadGB: 2.5,  minBudgetGB: 7,  blurb: 'Noticeably stronger reasoning and structured output.' },
-  { name: 'qwen3-8b',    label: 'Qwen3 8B',              constant: 'QWEN3_8B_INST_Q4_K_M',            approxDownloadGB: 5.0,  minBudgetGB: 12, blurb: 'Great quality on a capable GPU or 16 GB+ RAM.' },
-  { name: 'gpt-oss-20b', label: 'GPT-OSS 20B',           constant: 'GPT_OSS_20B_INST_Q4_K_M',         approxDownloadGB: 11.6, minBudgetGB: 18, blurb: 'Frontier-lab open model. Wants 24 GB VRAM or 32 GB RAM.' },
-  { name: 'qwen3-27b',   label: 'Qwen3.6 27B',           constant: 'QWEN3_6_27B_MULTIMODAL_Q4_K_XL',  approxDownloadGB: 17.6, minBudgetGB: 26, blurb: 'Large dense model, strong reasoning. 32 GB+ machines.' },
-  { name: 'qwen3-35b',   label: 'Qwen3.6 35B-A3B (MoE)', constant: 'QWEN3_6_35B_A3B_MULTIMODAL_Q4_K_M', approxDownloadGB: 22.1, minBudgetGB: 34, blurb: 'Mixture-of-experts: 35B quality at ~3B active speed. 48 GB+ machines.' },
-  { name: 'gpt-oss-120b',label: 'GPT-OSS 120B',          constant: 'GPT_OSS_120B_INST_Q4_K_M_SHARD',  approxDownloadGB: 62.8, minBudgetGB: 80, blurb: 'Flagship-class. Workstations with 96 GB+ unified/VRAM only.' },
+  { name: 'smollm2-360m',  label: 'SmolLM2 360M',           constant: 'SMOLLM2_360M_INST_Q8',              approxDownloadGB: 0.35, minBudgetGB: 1,  blurb: 'Ultra-tiny text model. Emergency mode on very low-RAM hosts.' },
+  { name: 'qwen3-0.6b',    label: 'Qwen3 0.6B',             constant: 'QWEN3_600M_INST_Q4',                approxDownloadGB: 0.45, minBudgetGB: 1.5, blurb: 'Fastest Qwen, tiny footprint. Good on low-RAM / CPU-only hosts.' },
+  { name: 'llama3.2-1b',   label: 'Llama 3.2 1B',           constant: 'LLAMA_3_2_1B_INST_Q4_0',            approxDownloadGB: 0.8,  minBudgetGB: 2,  blurb: 'Meta small instruct model. Snappy chat on modest machines.' },
+  { name: 'llama-tool-1b', label: 'Llama Tool-Calling 1B',  constant: 'LLAMA_TOOL_CALLING_1B_INST_Q4_K',   approxDownloadGB: 0.95, minBudgetGB: 2.5, blurb: 'Tuned for tool/MCP calling. Good with skills and MCP servers.' },
+  { name: 'smolvlm2-500m', label: 'SmolVLM2 500M (vision)', constant: 'SMOLVLM2_500M_MULTIMODAL_Q8_0',     approxDownloadGB: 1.05, minBudgetGB: 3,  blurb: 'Tiny vision-language model — reads images in chat.' },
+  { name: 'qwen3-1.7b',    label: 'Qwen3 1.7B',             constant: 'QWEN3_1_7B_INST_Q4',                approxDownloadGB: 1.2,  minBudgetGB: 3.5, blurb: 'Balanced quality and speed. Solid all-round default.' },
+  { name: 'qwen3vl-2b',    label: 'Qwen3-VL 2B (vision)',   constant: 'QWEN3VL_2B_MULTIMODAL_Q4_K',        approxDownloadGB: 1.6,  minBudgetGB: 4.5, blurb: 'Vision + text. Best pick when you attach screenshots or photos.' },
+  { name: 'qwen3.5-2b-mm', label: 'Qwen3.5 2B Multimodal',  constant: 'QWEN3_5_2B_MULTIMODAL_Q4_K_M',      approxDownloadGB: 1.9,  minBudgetGB: 5.5, blurb: 'Newer Qwen multimodal — image understanding + chat.' },
+  { name: 'gemma4-2b-mm',  label: 'Gemma4 2B Multimodal',   constant: 'GEMMA4_2B_MULTIMODAL_Q4_K_M',       approxDownloadGB: 2.1,  minBudgetGB: 6.5, blurb: 'Google Gemma4 vision-language model.' },
+  { name: 'qwen3-4b',      label: 'Qwen3 4B',               constant: 'QWEN3_4B_INST_Q4_K_M',              approxDownloadGB: 2.5,  minBudgetGB: 7.5, blurb: 'Noticeably stronger reasoning and structured output.' },
+  { name: 'qwen3.5-4b-mm', label: 'Qwen3.5 4B Multimodal',  constant: 'QWEN3_5_4B_MULTIMODAL_Q4_K_M',      approxDownloadGB: 3.2,  minBudgetGB: 9,  blurb: 'Strong multimodal reasoning for docs and screenshots.' },
+  { name: 'qwen3-8b',      label: 'Qwen3 8B',               constant: 'QWEN3_8B_INST_Q4_K_M',              approxDownloadGB: 5.0,  minBudgetGB: 12, blurb: 'Great quality on a capable GPU or 16 GB+ RAM.' },
+  { name: 'gpt-oss-20b',   label: 'GPT-OSS 20B',            constant: 'GPT_OSS_20B_INST_Q4_K_M',           approxDownloadGB: 11.6, minBudgetGB: 18, blurb: 'Frontier-lab open model. Wants 24 GB VRAM or 32 GB RAM.' },
+  { name: 'qwen3-27b',     label: 'Qwen3.6 27B',            constant: 'QWEN3_6_27B_MULTIMODAL_Q4_K_XL',    approxDownloadGB: 17.6, minBudgetGB: 26, blurb: 'Large dense model, strong reasoning. 32 GB+ machines.' },
+  { name: 'qwen3-35b',     label: 'Qwen3.6 35B-A3B (MoE)',  constant: 'QWEN3_6_35B_A3B_MULTIMODAL_Q4_K_M', approxDownloadGB: 22.1, minBudgetGB: 34, blurb: 'Mixture-of-experts: 35B quality at ~3B active speed. 48 GB+ machines.' },
+  { name: 'gpt-oss-120b',  label: 'GPT-OSS 120B',           constant: 'GPT_OSS_120B_INST_Q4_K_M_SHARD',    approxDownloadGB: 62.8, minBudgetGB: 80, blurb: 'Flagship-class. Workstations with 96 GB+ unified/VRAM only.' },
 ];
 
 /** Detect RAM, platform, and any GPU (Apple unified memory, or NVIDIA VRAM). */

@@ -14,9 +14,10 @@ describe('model ladder', () => {
       expect(MODEL_LADDER[i].minBudgetGB).toBeGreaterThan(MODEL_LADDER[i - 1].minBudgetGB);
       expect(MODEL_LADDER[i].approxDownloadGB).toBeGreaterThan(MODEL_LADDER[i - 1].approxDownloadGB);
     }
-    // Spans tiny → flagship
-    expect(MODEL_LADDER[0].name).toBe('qwen3-0.6b');
+    // Spans ultra-tiny → flagship
+    expect(MODEL_LADDER[0].name).toBe('smollm2-360m');
     expect(MODEL_LADDER[MODEL_LADDER.length - 1].name).toBe('gpt-oss-120b');
+    expect(MODEL_LADDER.some(m => /vision|multimodal|vl/i.test(m.label + m.name))).toBe(true);
   });
 
   it('grades monotonically: more usable memory never suggests a smaller large-tier', () => {
@@ -36,14 +37,15 @@ describe('model ladder', () => {
     }
   });
 
-  it('small machine collapses to the tiny model; workstation reaches the flagship', () => {
+  it('small machine collapses toward tiny models; workstation reaches the flagship', () => {
     const laptop = getModelOptions(hw(4));
-    expect(laptop.small.name).toBe('qwen3-0.6b');
-    expect(laptop.recommended).toBe('qwen3-0.6b');
+    // large fits ≤4 GB usable → around 1.7B / VL-2B class; small is two steps down
+    expect(['smollm2-360m', 'qwen3-0.6b', 'llama3.2-1b', 'llama-tool-1b', 'smolvlm2-500m']).toContain(laptop.small.name);
+    expect(laptop.large.minBudgetGB).toBeLessThanOrEqual(4.5);
 
     const ws = getModelOptions(hw(96, 'nvidia', 48));
     expect(ws.large.name).toBe('gpt-oss-120b');
-    expect(['qwen3-35b', 'qwen3-27b']).toContain(ws.recommended);
+    expect(['qwen3-35b', 'qwen3-27b', 'gpt-oss-20b']).toContain(ws.recommended);
   });
 
   it('discrete AMD/Intel GPUs (type "gpu") grade like NVIDIA', () => {

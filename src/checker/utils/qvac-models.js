@@ -31,27 +31,46 @@ const ALIASES = {
   'qwen3':      'QWEN3_1_7B_INST_Q4',
   'qwen3-4b':   'QWEN3_4B_INST_Q4_K_M',
   'qwen3-8b':   'QWEN3_8B_INST_Q4_K_M',
+  'smollm2-360m': 'SMOLLM2_360M_INST_Q8',
+  'llama3.2-1b':  'LLAMA_3_2_1B_INST_Q4_0',
+  'llama-tool-1b': 'LLAMA_TOOL_CALLING_1B_INST_Q4_K',
   'gpt-oss-20b':  'GPT_OSS_20B_INST_Q4_K_M',
   'qwen3-27b':    'QWEN3_6_27B_MULTIMODAL_Q4_K_XL',
   'qwen3-35b':    'QWEN3_6_35B_A3B_MULTIMODAL_Q4_K_M',
   'gpt-oss-120b': 'GPT_OSS_120B_INST_Q4_K_M_SHARD',
-  'llama3.2-1b':'LLAMA_3_2_1B_INST_Q4_0',
+  // Vision / multimodal (image attachments)
+  'smolvlm2-500m': 'SMOLVLM2_500M_MULTIMODAL_Q8_0',
+  'qwen3vl-2b':    'QWEN3VL_2B_MULTIMODAL_Q4_K',
+  'qwen3.5-2b-mm': 'QWEN3_5_2B_MULTIMODAL_Q4_K_M',
+  'qwen3.5-4b-mm': 'QWEN3_5_4B_MULTIMODAL_Q4_K_M',
+  'gemma4-2b-mm':  'GEMMA4_2B_MULTIMODAL_Q4_K_M',
   // legacy Ollama names → default so old configs keep working
   'qwen2.5:1.5b': DEFAULT_MODEL,
   'qwen2.5':      DEFAULT_MODEL,
   'phi3:mini':    DEFAULT_MODEL,
+  // Guard against UI bugs that send field names as the model id
+  'model_used':   DEFAULT_MODEL,
+  'modelused':    DEFAULT_MODEL,
 };
 
 // Curated list surfaced to the model picker (in addition to loaded + registry).
 const BUILTIN_MODELS = [
-  { name: 'qwen3-0.6b', label: 'Qwen3 0.6B (tiny)',  constant: 'QWEN3_600M_INST_Q4' },
-  { name: 'qwen3-1.7b', label: 'Qwen3 1.7B (default)', constant: 'QWEN3_1_7B_INST_Q4' },
-  { name: 'qwen3-4b',   label: 'Qwen3 4B',           constant: 'QWEN3_4B_INST_Q4_K_M' },
-  { name: 'qwen3-8b',   label: 'Qwen3 8B (best)',    constant: 'QWEN3_8B_INST_Q4_K_M' },
-  { name: 'gpt-oss-20b',  label: 'GPT-OSS 20B',            constant: 'GPT_OSS_20B_INST_Q4_K_M' },
-  { name: 'qwen3-27b',    label: 'Qwen3.6 27B',            constant: 'QWEN3_6_27B_MULTIMODAL_Q4_K_XL' },
-  { name: 'qwen3-35b',    label: 'Qwen3.6 35B-A3B (MoE)',  constant: 'QWEN3_6_35B_A3B_MULTIMODAL_Q4_K_M' },
-  { name: 'gpt-oss-120b', label: 'GPT-OSS 120B',           constant: 'GPT_OSS_120B_INST_Q4_K_M_SHARD' },
+  { name: 'smollm2-360m',  label: 'SmolLM2 360M (ultra-tiny)', constant: 'SMOLLM2_360M_INST_Q8' },
+  { name: 'qwen3-0.6b',    label: 'Qwen3 0.6B (tiny)',         constant: 'QWEN3_600M_INST_Q4' },
+  { name: 'llama3.2-1b',   label: 'Llama 3.2 1B',              constant: 'LLAMA_3_2_1B_INST_Q4_0' },
+  { name: 'llama-tool-1b', label: 'Llama Tool-Calling 1B',     constant: 'LLAMA_TOOL_CALLING_1B_INST_Q4_K' },
+  { name: 'qwen3-1.7b',    label: 'Qwen3 1.7B (default)',      constant: 'QWEN3_1_7B_INST_Q4' },
+  { name: 'qwen3-4b',      label: 'Qwen3 4B',                  constant: 'QWEN3_4B_INST_Q4_K_M' },
+  { name: 'qwen3-8b',      label: 'Qwen3 8B',                  constant: 'QWEN3_8B_INST_Q4_K_M' },
+  { name: 'smolvlm2-500m', label: 'SmolVLM2 500M (vision)',    constant: 'SMOLVLM2_500M_MULTIMODAL_Q8_0' },
+  { name: 'qwen3vl-2b',    label: 'Qwen3-VL 2B (vision)',      constant: 'QWEN3VL_2B_MULTIMODAL_Q4_K' },
+  { name: 'qwen3.5-2b-mm', label: 'Qwen3.5 2B Multimodal',     constant: 'QWEN3_5_2B_MULTIMODAL_Q4_K_M' },
+  { name: 'qwen3.5-4b-mm', label: 'Qwen3.5 4B Multimodal',     constant: 'QWEN3_5_4B_MULTIMODAL_Q4_K_M' },
+  { name: 'gemma4-2b-mm',  label: 'Gemma4 2B Multimodal',      constant: 'GEMMA4_2B_MULTIMODAL_Q4_K_M' },
+  { name: 'gpt-oss-20b',   label: 'GPT-OSS 20B',               constant: 'GPT_OSS_20B_INST_Q4_K_M' },
+  { name: 'qwen3-27b',     label: 'Qwen3.6 27B',               constant: 'QWEN3_6_27B_MULTIMODAL_Q4_K_XL' },
+  { name: 'qwen3-35b',     label: 'Qwen3.6 35B-A3B (MoE)',     constant: 'QWEN3_6_35B_A3B_MULTIMODAL_Q4_K_M' },
+  { name: 'gpt-oss-120b',  label: 'GPT-OSS 120B',              constant: 'GPT_OSS_120B_INST_Q4_K_M_SHARD' },
 ];
 
 // ── Singleton state ─────────────────────────────────────────────────────────
@@ -362,7 +381,16 @@ async function chat(messages, opts = {}) {
 
       for (const m of (messages || [])) {
         if (m && m.role && m.content != null && ['system', 'user', 'assistant'].includes(m.role)) {
-          history.push({ role: m.role, content: String(m.content) });
+          const entry = { role: m.role, content: String(m.content) };
+          // Multimodal: QVAC expects attachments: [{ path }] with a real filesystem path
+          // (see @qvac/sdk completion-stream transformMessage → type:'media').
+          if (Array.isArray(m.attachments) && m.attachments.length) {
+            entry.attachments = m.attachments
+              .filter(a => a && typeof a.path === 'string' && a.path.length)
+              .map(a => ({ path: a.path }));
+            if (!entry.attachments.length) delete entry.attachments;
+          }
+          history.push(entry);
         }
       }
       // Append /no_think to the last user turn for Qwen3 fast responses.
