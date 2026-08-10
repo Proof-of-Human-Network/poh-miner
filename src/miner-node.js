@@ -2649,8 +2649,35 @@ export class PohMinerNode {
         req.on('data', c => body += c);
         req.on('end', async () => {
           try {
-            const { message, history = [], model: reqModel, private: isPrivate = false, datasetId: forcedDatasetId, skillMemory = null, requesterAddress: reqRequester = null, skipHistoryMatch = false } = JSON.parse(body);
-            if (!message) { res.statusCode = 400; return res.end(JSON.stringify({ error: 'message required' })); }
+            const {
+              message: rawMessage, history = [], model: reqModel, private: isPrivate = false,
+              datasetId: forcedDatasetId, skillMemory = null, requesterAddress: reqRequester = null,
+              skipHistoryMatch = false, attachments: rawAttachments = null,
+            } = JSON.parse(body);
+            // Materialize chat attachments early (text inline + image paths for vision models).
+            let message = (rawMessage || '').trim();
+            let askAttachments = null;
+            let askHasImages = false;
+            if (Array.isArray(rawAttachments) && rawAttachments.length) {
+              const { files, errors } = materializeAttachments(rawAttachments, { maxBytes: MAX_ATTACHMENT_BYTES });
+              if (errors.length && !files.length) {
+                res.statusCode = 400;
+                return res.end(JSON.stringify({ error: errors.join('; '), code: 'ATTACHMENT_ERROR' }));
+              }
+              if (errors.length) console.warn('[chat/ask] attachment warnings:', errors.join('; '));
+              const applied = applyAttachmentsToMessages(
+                [{ role: 'user', content: message || 'Please analyze the attached file(s).' }],
+                files,
+              );
+              askAttachments = applied.messages;
+              askHasImages = applied.hasImages;
+              message = applied.messages.find(m => m.role === 'user')?.content || message;
+            }
+            if (!message && !askAttachments) {
+              res.statusCode = 400;
+              return res.end(JSON.stringify({ error: 'message required' }));
+            }
+            if (!message) message = 'Please analyze the attached file(s).';
 
             const requesterAddress = reqRequester || (!isPrivate ? (this.config.pohWallet || this.config.wallet) : null);
 
@@ -2986,8 +3013,11 @@ export class PohMinerNode {
             // Free LLM answer (non-streaming so any client can use it).
             // Routes through the MCP tool loop when MCP servers are connected;
             // otherwise _mcpChat falls straight through to a plain completion.
-            const selModel   = reqModel || this.config.model;
-            const messages   = [...history, { role: 'user', content: message }];
+            // Image attachments force a vision-capable model when needed.
+            const selModel = this._resolveRequestModel(reqModel || this.config.model, { hasImages: askHasImages });
+            const messages = askAttachments
+              ? [...history, ...askAttachments]
+              : [...history, { role: 'user', content: message }];
             const reply = await this._mcpChat(messages, { model: selModel, timeoutMs: 40_000 });
 
             // 2nd-pass web search: if LLM says it can't access internet, run web_search and retry
