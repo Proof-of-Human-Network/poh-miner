@@ -1,6 +1,6 @@
 {
   "name": "poh-miner",
-  "version": "0.4.20",
+  "version": "0.4.21",
   "description": "Run the PoH Miner Network. Earn POH by contributing compute (great on Mac Mini, PCs, servers).",
   "author": {
     "name": "Bogdan Sizov",
@@ -100,8 +100,7 @@
       "landing/**/*",
       "package.json",
       "node_modules/**/*",
-      "qvac/**/*",
-      "!qvac/worker.bundle.js",
+      "!qvac/**/*",
       "!config.json",
       "!landing/binaries/**/*",
       "!.poh-miner/**/*",
@@ -122,8 +121,7 @@
     ],
     "afterPack": "scripts/afterPack.cjs",
     "asarUnpack": [
-      "node_modules/**",
-      "qvac/**"
+      "node_modules/**"
     ],
     "mac": {
       "category": "public.app-category.utilities",

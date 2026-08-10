@@ -2,21 +2,16 @@
 'use strict';
 
 /**
- * electron-builder afterPack hook — recursively ad-hoc signs every Mach-O
- * binary inside the packaged .app bundle.
+ * electron-builder afterPack hook.
  *
- * Why this is needed:
- * electron-builder 24.x + @electron/osx-sign 1.0.x does NOT support
- * `mac.identity: "-"` for ad-hoc signing (it interprets "-" as a keychain
- * cert name filter, finds nothing, and skips signing). On macOS ARM64, an
- * unsigned .app with embedded native binaries is rejected by Gatekeeper with
- * the hard "malware" dialog (non-bypassable).
+ * 1) Copy qvac worker entry into app.asar.unpacked/qvac/ on every platform.
+ *    We intentionally do NOT put `qvac/**` in package.json `files` + `asarUnpack`
+ *    together — that double-hardlinks the same files and fails CI on Linux/mac
+ *    with EEXIST (Windows happens to succeed). Bare needs the worker on a real
+ *    filesystem path next to unpacked node_modules so deps resolve.
  *
- * This hook signs inside-out: all nested Mach-O binaries first, then the .app
- * wrapper. This gives the app a valid ad-hoc signature that satisfies the ARM64
- * kernel requirement. Users still see the "unidentified developer" dialog
- * (bypassable with right-click → Open or `xattr -cr`), but NOT the
- * non-bypassable "malware" block.
+ * 2) On macOS: ad-hoc codesign the .app (--deep) so arm64 Gatekeeper does not
+ *    hard-block with the non-bypassable "malware" dialog.
  *
  * Configured in package.json: build.afterPack = "scripts/afterPack.cjs"
  */
@@ -25,12 +20,38 @@ const { execFileSync } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 
-module.exports = async function afterPack(context) {
-  // Only sign when the TARGET platform is macOS (regardless of build machine)
-  if (context.electronPlatformName !== 'darwin') {
-    return;
+const ROOT = path.join(__dirname, '..');
+
+function copyFile(src, dest) {
+  fs.mkdirSync(path.dirname(dest), { recursive: true });
+  fs.copyFileSync(src, dest);
+}
+
+function copyQvacWorker(context) {
+  const resourcesDir =
+    context.electronPlatformName === 'darwin'
+      ? path.join(context.appOutDir, `${context.packager.appInfo.productFilename}.app`, 'Contents', 'Resources')
+      : path.join(context.appOutDir, 'resources');
+
+  const destDir = path.join(resourcesDir, 'app.asar.unpacked', 'qvac');
+  const files = ['worker.entry.mjs', 'addons.manifest.json'];
+  for (const name of files) {
+    const src = path.join(ROOT, 'qvac', name);
+    if (!fs.existsSync(src)) {
+      console.warn(`[afterPack] skip missing ${name}`);
+      continue;
+    }
+    const dest = path.join(destDir, name);
+    copyFile(src, dest);
+    console.log(`[afterPack] qvac → ${path.relative(context.appOutDir, dest)}`);
   }
-  // codesign is only available on macOS build machines
+  // Ensure mobile-only bundle never ships
+  const junk = path.join(destDir, 'worker.bundle.js');
+  try { fs.rmSync(junk, { force: true }); } catch { /* */ }
+}
+
+function adHocSignMac(context) {
+  if (context.electronPlatformName !== 'darwin') return;
   if (process.platform !== 'darwin') {
     console.warn('[afterPack] Cannot ad-hoc sign: codesign unavailable (not on macOS). The resulting .app will be unsigned.');
     return;
@@ -43,20 +64,6 @@ module.exports = async function afterPack(context) {
   }
 
   console.log('[afterPack] Ad-hoc signing .app bundle (--deep):', appPath);
-
-  // Ad-hoc sign the WHOLE bundle with --deep. codesign then signs every piece
-  // of nested code — frameworks (and their internal dylibs), helper .apps, loose
-  // Mach-O libraries, and the main executable — in the correct inside-out order.
-  //
-  // The previous approach signed each Mach-O individually. That corrupts a
-  // framework's seal: signing "Electron Framework.framework/…/Electron Framework"
-  // as a bare file (rather than the framework bundle) leaves the bundle invalid,
-  // so the final whole-app sign aborted with "code object is not signed at all".
-  //
-  // --deep has entitlement/identifier caveats that make Apple discourage it for
-  // cert-based *distribution* signing, but none of those apply to an ad-hoc
-  // signature with no entitlements. We only need a valid ad-hoc signature to
-  // satisfy the arm64 code-execution requirement (avoid the "malware" block).
   try {
     execFileSync('codesign', ['--force', '--deep', '--sign', '-', '--timestamp=none', appPath], {
       stdio: ['ignore', 'ignore', 'pipe'],
@@ -68,7 +75,6 @@ module.exports = async function afterPack(context) {
     throw new Error(`Ad-hoc signing failed: ${stderr}`);
   }
 
-  // Verify the final result (deep + strict so an unsigned nested binary fails).
   try {
     execFileSync('codesign', ['--verify', '--deep', '--strict', '--verbose=2', appPath], {
       stdio: ['ignore', 'ignore', 'pipe'],
@@ -78,4 +84,9 @@ module.exports = async function afterPack(context) {
     const stderr = e.stderr ? e.stderr.toString().trim() : '';
     console.warn(`[afterPack] Verification warning: ${stderr}`);
   }
+}
+
+module.exports = async function afterPack(context) {
+  copyQvacWorker(context);
+  adHocSignMac(context);
 };
