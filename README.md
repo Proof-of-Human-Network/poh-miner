@@ -226,11 +226,14 @@ The mobile **PoH Wallet** app uses the same APIs on any connected miner (`Ask AI
 
 ### Stablecoins (multi-currency)
 
-The chain carries five regional stablecoins alongside POH — `aiGEL`, `aiKGS`,
-`aiAMD`, `aiETB`, `aiBTN` (displayed as αιGEL, αιKGS, …). They use **2
-decimals** (1 aiGEL = 100 raw units); POH keeps 9 (1 POH = 1e9 μPOH). Supply is
-minted once in the genesis allocation to the treasury address — there is no
-runtime mint; future supply changes are network upgrades.
+The chain carries four regional stablecoins alongside POH — `aiGEL`, `KGST`,
+`aiETB`, `aiBTN`. They use **2 decimals** (1 aiGEL = 100 raw units); POH keeps 9
+(1 POH = 1e9 μPOH). Supply is minted once in the genesis allocation to the
+treasury address — there is no runtime mint; future supply changes are network
+upgrades.
+
+On-chain currencies: **POH**, **aiGEL**, **KGST**, **aiETB**, **aiBTN**.
+P2P market also supports: **USDT**, **USDC**, **GELT** (off-chain).
 
 - **Transfers**: `POST /api/wallet/send` and `/api/tx/submit` accept a
   `currency` field (omit for POH). A transaction's hash includes `currency`
@@ -239,11 +242,11 @@ runtime mint; future supply changes are network upgrades.
   per currency (`config.gasPrices` overridable) and **the miner receives
   exactly the currency paid** (no conversion). The signed payment proof binds
   the currency (6th key of the payment hash when non-POH).
-- **P2P**: stablecoins are tradable base assets. When both legs are on-chain
-  (e.g. aiKGS/aiGEL) the trade settles **atomically** in one `p2p-swap-filled`
-  transition — no payment-sent step, proceeds go directly to the taker's own
-  poh address (no receival-wallet input). Off-chain legs (bank transfer, USDT…)
-  keep the manual escrow/release flow.
+- **P2P**: on-chain stablecoins are tradable base assets. When both legs are
+  on-chain (e.g. KGST/aiGEL) the trade settles **atomically** in one
+  `p2p-swap-filled` transition — no payment-sent step, proceeds go directly to
+  the taker's own poh address (no receival-wallet input). Off-chain legs (bank
+  transfer, USDT…) keep the manual escrow/release flow.
 
 ### Jobs (scan requests, skills, compute)
 

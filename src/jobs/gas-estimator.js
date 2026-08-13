@@ -15,8 +15,7 @@ export const USD_PER_1M_TOKENS = 0.05;
 export const GAS_PRICES = {
   POH:   1,          // μPOH / token
   aiGEL: 1.35e-5,    // ₾0.135 / 1M tokens (fx 2.7)
-  aiKGS: 4.35e-4,    // 4.35 som / 1M tokens (fx 87)
-  aiAMD: 1.925e-3,   // ֏19.25 / 1M tokens (fx 385)
+  KGST:  4.35e-4,    // 4.35 som / 1M tokens (fx 87)
   aiETB: 6.4e-4,     // Br 6.40 / 1M tokens (fx 128)
   aiBTN: 4.2e-4,     // Nu. 4.20 / 1M tokens (fx 84)
 };

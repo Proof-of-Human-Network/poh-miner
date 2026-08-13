@@ -32,7 +32,7 @@ describe('assets registry', () => {
     expect(normalizeCurrency(undefined)).toBe('POH');
     expect(normalizeCurrency('POH')).toBe('POH');
     expect(normalizeCurrency('aiGEL')).toBe('aiGEL');
-    expect(isKnownAsset('aiKGS')).toBe(true);
+    expect(isKnownAsset('KGST')).toBe(true);
     expect(isKnownAsset('DOGE')).toBe(false);
     expect(toRaw('aiGEL', 12.5)).toBe(1250);
     expect(fromRaw('aiGEL', 1250)).toBe(12.5);
@@ -70,7 +70,7 @@ describe('multi-asset ledger', () => {
   function seeded() {
     const l = new TxLedgerState();
     l.applyGenesisAllocations({ genesisAllocations: [
-      { address: A, balance: 5_000_000_000, nonce: 0, assets: { aiGEL: 10_000, aiKGS: 500 } },
+      { address: A, balance: 5_000_000_000, nonce: 0, assets: { aiGEL: 10_000, KGST: 500 } },
       { address: T, balance: 0, nonce: 0, assets: Object.fromEntries(STABLE_TICKERS.map(t => [t, 100_000])) },
     ] });
     return l;
@@ -101,8 +101,8 @@ describe('multi-asset ledger', () => {
     const l = seeded();
     const bad = new PoHTransaction({ from: A, to: B, amount: 1, fee: 0, nonce: 1, timestamp: 1, currency: 'DOGE' });
     expect(l.validateAndApplyTransaction(bad.toJSON()).reason).toMatch(/unknown currency/);
-    // A has 5 POH but only 500 aiKGS — an aiKGS overdraft must fail despite POH funds
-    const over = new PoHTransaction({ from: A, to: B, amount: 501, fee: 0, nonce: 1, timestamp: 1, currency: 'aiKGS' });
+    // A has 5 POH but only 500 KGST — an KGST overdraft must fail despite POH funds
+    const over = new PoHTransaction({ from: A, to: B, amount: 501, fee: 0, nonce: 1, timestamp: 1, currency: 'KGST' });
     const r = l._applyTransactionTrusted(over.toJSON());
     expect(r.valid).toBe(false);
     expect(r.reason).toMatch(/insufficient/);
@@ -121,11 +121,11 @@ describe('atomic p2p-swap-filled', () => {
   function swapLedger() {
     const l = new TxLedgerState();
     l.applyGenesisAllocations({ genesisAllocations: [
-      { address: A, balance: 0, nonce: 0, assets: { aiKGS: 10_000 } },   // maker sells aiKGS
+      { address: A, balance: 0, nonce: 0, assets: { KGST: 10_000 } },   // maker sells KGST
       { address: B, balance: 0, nonce: 0, assets: { aiGEL: 2_000 } },    // taker pays aiGEL
     ] });
     // Maker's sell order escrowed the base
-    l.applyP2PEscrowTransition({ type: 'p2p-order-created', side: 'sell', escrowLocked: true, maker: A, pohAmount: 8_700, baseAsset: 'aiKGS' });
+    l.applyP2PEscrowTransition({ type: 'p2p-order-created', side: 'sell', escrowLocked: true, maker: A, pohAmount: 8_700, baseAsset: 'KGST' });
     return l;
   }
 
@@ -133,14 +133,14 @@ describe('atomic p2p-swap-filled', () => {
     const l = swapLedger();
     const ok = l.applyP2PEscrowTransition({
       type: 'p2p-swap-filled', tradeId: 't1', orderId: 'o1', maker: A, taker: B,
-      baseAsset: 'aiKGS', baseAmount: 8_700, quoteAsset: 'aiGEL', quoteAmount: 270,
+      baseAsset: 'KGST', baseAmount: 8_700, quoteAsset: 'aiGEL', quoteAmount: 270,
       baseRecipient: B, quoteRecipient: A, referrer: null, referralFee: 0, updatedAt: 1,
     });
     expect(ok).toBe(true);
-    expect(l.getBalance(B, 'aiKGS')).toBe(8_700);
+    expect(l.getBalance(B, 'KGST')).toBe(8_700);
     expect(l.getBalance(A, 'aiGEL')).toBe(270);
     expect(l.getBalance(B, 'aiGEL')).toBe(2_000 - 270);
-    expect(l.getBalance(ESCROW_ADDRESS, 'aiKGS')).toBe(0);
+    expect(l.getBalance(ESCROW_ADDRESS, 'KGST')).toBe(0);
     expect(l.checkSupplyInvariant().ok).toBe(true);
   });
 
@@ -148,11 +148,11 @@ describe('atomic p2p-swap-filled', () => {
     const l = swapLedger();
     const ok = l.applyP2PEscrowTransition({
       type: 'p2p-swap-filled', tradeId: 't1', orderId: 'o1', maker: A, taker: B,
-      baseAsset: 'aiKGS', baseAmount: 8_700, quoteAsset: 'aiGEL', quoteAmount: 99_999, // > taker balance
+      baseAsset: 'KGST', baseAmount: 8_700, quoteAsset: 'aiGEL', quoteAmount: 99_999, // > taker balance
       baseRecipient: B, quoteRecipient: A, referralFee: 0, updatedAt: 1,
     });
     expect(ok).toBe(false);
-    expect(l.getBalance(ESCROW_ADDRESS, 'aiKGS')).toBe(8_700); // untouched
+    expect(l.getBalance(ESCROW_ADDRESS, 'KGST')).toBe(8_700); // untouched
     expect(l.getBalance(B, 'aiGEL')).toBe(2_000);
     expect(l.getBalance(A, 'aiGEL')).toBe(0);
   });
@@ -162,11 +162,11 @@ describe('atomic p2p-swap-filled', () => {
     const R = 'poh' + 'd'.repeat(40);
     l.applyP2PEscrowTransition({
       type: 'p2p-swap-filled', tradeId: 't1', orderId: 'o1', maker: A, taker: B,
-      baseAsset: 'aiKGS', baseAmount: 8_700, quoteAsset: 'aiGEL', quoteAmount: 270,
+      baseAsset: 'KGST', baseAmount: 8_700, quoteAsset: 'aiGEL', quoteAmount: 270,
       baseRecipient: B, quoteRecipient: A, referrer: R, referralFee: 26, updatedAt: 1,
     });
-    expect(l.getBalance(B, 'aiKGS')).toBe(8_700 - 26);
-    expect(l.getBalance(R, 'aiKGS')).toBe(26);
+    expect(l.getBalance(B, 'KGST')).toBe(8_700 - 26);
+    expect(l.getBalance(R, 'KGST')).toBe(26);
     expect(l.checkSupplyInvariant().ok).toBe(true);
   });
 });
@@ -175,12 +175,12 @@ describe('genesis with assets', () => {
   it('allocations carry assets deterministically; POH-only rows keep legacy shape', () => {
     const allocs = buildAllocations({
       [A]: { balance: 100, nonce: 2 },
-      [T]: { balance: 0, nonce: 0, assets: { aiKGS: 5, aiGEL: 7 } },
+      [T]: { balance: 0, nonce: 0, assets: { KGST: 5, aiGEL: 7 } },
     });
     const plain = allocs.find(a => a.address === A);
     expect('assets' in plain).toBe(false);
     const treas = allocs.find(a => a.address === T);
-    expect(Object.keys(treas.assets)).toEqual(['aiGEL', 'aiKGS']); // sorted
+    expect(Object.keys(treas.assets)).toEqual(['aiGEL', 'KGST']); // sorted
   });
 
   it('two genesis builds from the same snapshot hash identically; assets change the hash', () => {

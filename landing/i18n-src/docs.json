@@ -128,11 +128,11 @@
     "doc.foot.tag": "PoH Miner Network API — port 3456 by default",
     "doc.foot.landing": "Landing",
     "doc.assets.title": "Stablecoins & multi-currency",
-    "doc.assets.p1": "Five regional stablecoins ride on the chain alongside POH: αιGEL, αιKGS, αιAMD, αιETB, αιBTN (wire tickers aiGEL, aiKGS, aiAMD, aiETB, aiBTN). Stablecoins use 2 decimals (1 unit = 100 raw); POH keeps 9 (1 POH = 1e9 μPOH).",
-    "doc.assets.p2": "GET /api/assets lists every asset with decimals, display names and per-currency gas prices. GET /api/wallet/balance returns an additional assets map with each stablecoin's raw and display balance.",
+    "doc.assets.p1": "Four regional stablecoins ride on the chain alongside POH: aiGEL, KGST, aiETB, aiBTN (2 decimals, 1 unit = 100 raw). POH keeps 9 decimals (1 POH = 1e9 μPOH). On-chain currencies: <strong>POH, aiGEL, KGST, aiETB, aiBTN</strong>. P2P market also supports off-chain currencies: <strong>USDT, USDC, GELT</strong>.",
+    "doc.assets.p2": "GET /api/assets lists every on-chain asset with decimals, display names and per-currency gas prices. GET /api/wallet/balance returns an additional assets map with each stablecoin's raw and display balance.",
     "doc.assets.p3": "Transfers: POST /api/wallet/send (and /api/tx/submit) accept a currency field — omit it for POH. A transaction's signed hash includes currency ONLY when non-POH, so existing POH transactions and signatures remain valid unchanged.",
-    "doc.jobs.pricing.currency": "Job fees can be paid in POH or any stablecoin: set currency on the job payload. The fee floor is priced per currency, and the miner receives exactly the currency paid — no conversion.",
-    "doc.p2p.swap": "Stablecoins trade as base assets. When both legs are on-chain (e.g. aiKGS/aiGEL, or POH for aiGEL) the trade settles atomically in one step — no payment-sent/confirm phase, and proceeds go directly to the taker's own poh wallet address (no receival-wallet input). Off-chain legs (bank transfer, USDT…) keep the manual escrow flow."
+    "doc.jobs.pricing.currency": "Job fees can be paid in POH or any on-chain stablecoin: set currency on the job payload. The fee floor is priced per currency, and the miner receives exactly the currency paid — no conversion.",
+    "doc.p2p.swap": "On-chain stablecoins trade as base assets. When both legs are on-chain (e.g. KGST/aiGEL, or POH for aiGEL) the trade settles atomically in one step — no payment-sent/confirm phase, and proceeds go directly to the taker's own poh wallet address (no receival-wallet input). Off-chain legs (USDT, USDC, GELT, bank transfer) keep the manual escrow flow."
   },
   "ka": {
     "doc.nav.upgrade": "განახლების გზამკვლევი",

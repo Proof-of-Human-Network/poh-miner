@@ -1,7 +1,7 @@
 /**
  * assets.js — single source of truth for every on-chain asset.
  *
- * POH is the native asset (9 decimals, mined). The five regional stablecoins
+ * POH is the native asset (9 decimals, mined). The four regional stablecoins
  * (2 decimals, fiat-style) are minted once at genesis to the treasury address;
  * future supply changes happen via coordinated network upgrades — there is NO
  * runtime mint transition.
@@ -16,13 +16,12 @@
 export const ASSETS = {
   POH:   { ticker: 'POH',   decimals: 9, display: 'POH',   sign: '',    native: true },
   aiGEL: { ticker: 'aiGEL', decimals: 2, display: 'αιGEL', sign: '₾',   iso: 'GEL', country: 'Georgia',    fxPerUSD: 2.7 },
-  aiKGS: { ticker: 'aiKGS', decimals: 2, display: 'αιKGS', sign: 'som', iso: 'KGS', country: 'Kyrgyzstan', fxPerUSD: 87 },
-  aiAMD: { ticker: 'aiAMD', decimals: 2, display: 'αιAMD', sign: '֏',   iso: 'AMD', country: 'Armenia',    fxPerUSD: 385 },
+  KGST:  { ticker: 'KGST',  decimals: 2, display: 'KGST',  sign: 'som', iso: 'KGS', country: 'Kyrgyzstan', fxPerUSD: 87 },
   aiETB: { ticker: 'aiETB', decimals: 2, display: 'αιETB', sign: 'Br',  iso: 'ETB', country: 'Ethiopia',   fxPerUSD: 128 },
   aiBTN: { ticker: 'aiBTN', decimals: 2, display: 'αιBTN', sign: 'Nu.', iso: 'BTN', country: 'Bhutan',     fxPerUSD: 84 },
 };
 
-export const STABLE_TICKERS = ['aiGEL', 'aiKGS', 'aiAMD', 'aiETB', 'aiBTN'];
+export const STABLE_TICKERS = ['aiGEL', 'KGST', 'aiETB', 'aiBTN'];
 
 // ── Genesis supply (owner fills in before executing the reset) ───────────────
 // The treasury receives the entire initial stablecoin supply in the migration
