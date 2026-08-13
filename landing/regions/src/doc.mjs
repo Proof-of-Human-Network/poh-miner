@@ -15,7 +15,7 @@ export function buildDoc(c, L) {
   const page = inner => `<section class="page">${rh}${inner}${foot()}</section>`;
 
   // §4 and §6 each run to two pages, so the page-map is not simply i+3.
-  const tocPages = [3, 4, 5, 6, 8, 9, 11, 12, 13];
+  const tocPages = [3, 4, 5, 6, 9, 10, 12, 13, 14];
   const toc = L.toc.map((tt, i) =>
     `<div><span class="num">${i + 1}.</span><span class="t">${tt}</span><span class="d"></span><span class="p">${tocPages[i]}</span></div>`).join('');
 
@@ -153,7 +153,7 @@ ${page(`
   <div class="figure">
     <div class="cap">${L.s6scenCap}</div>
     <div class="cs">${L.s6scenCs}</div>
-    ${scenarioChart(scenarioRows(L.s6scenLabels), { a: '#000', a2: '#7a7a7a', payLabel: L.lang === 'ru' ? 'платим' : 'we pay', sellLabel: L.lang === 'ru' ? 'продаём' : 'we sell', recLabel: L.lang === 'ru' ? 'возврат' : 'recovery' })}
+    ${scenarioChart(scenarioRows(L.s6scenLabels, c), { a: '#000', a2: '#7a7a7a', payLabel: L.lang === 'ru' ? 'платим' : 'we pay', sellLabel: L.lang === 'ru' ? 'продаём' : 'we sell', recLabel: L.lang === 'ru' ? 'возврат' : 'recovery' })}
   </div>
   <div class="note">${L.s6scenNote}</div>
   <p class="tiny">${L.assumptions}</p>

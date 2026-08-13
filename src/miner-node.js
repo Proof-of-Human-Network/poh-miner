@@ -68,9 +68,10 @@ import { resolveRpcConfig } from './rpc/resolver.js';
 import crypto from 'crypto';
 import os from 'os';
 import { buildManifest, serveDataset, pullDataset } from './storage/dataset-sync.js';
-import { OrderStore, QUOTE_CURRENCIES, ONCHAIN_ASSETS, isOnChainAsset } from './p2p/order-store.js';
+import { OrderStore, QUOTE_CURRENCIES, ONCHAIN_ASSETS, isOnChainAsset, parsePair } from './p2p/order-store.js';
 import { EscrowManager, ESCROW_ADDRESS } from './p2p/escrow.js';
 import { ReferralStore } from './p2p/referral-store.js';
+import { PriceHistory } from './p2p/price-history.js';
 import { tryExternalProviders } from './ai/external-providers.js';
 import { McpManager } from './ai/mcp-client.js';
 import { planTaskCascade, executeTaskCascade } from './ai/task-cascade.js';
@@ -423,6 +424,8 @@ export class PohMinerNode {
     this.p2pOrderStore = new OrderStore();
     this.p2pEscrow = new EscrowManager();
     this.p2pReferral = new ReferralStore();
+    this.p2pPriceHistory = new PriceHistory();
+    this._p2pSampleTimer = null;
     // push token registry: address → { token, platform, registeredAt }
     this.pushTokens = new Map();
     this.rewardClaimStore = new RewardClaimStore();
@@ -1022,6 +1025,19 @@ export class PohMinerNode {
 
     // Periodic reputation recovery for good behavior (software protection)
     setInterval(() => this.decayReputation(), 10 * 60 * 1000); // every 10 minutes
+    this._startP2PPriceSampler();
+  }
+
+  _startP2PPriceSampler() {
+    if (this._p2pSampleTimer || !this.p2pPriceHistory) return;
+    const ms = Number(process.env.POH_P2P_SAMPLE_MS || 60_000);
+    const tick = () => {
+      try { this.p2pPriceHistory.sample(this.p2pOrderStore); }
+      catch (e) { console.warn('[P2P] price sample failed:', e.message); }
+    };
+    tick();
+    this._p2pSampleTimer = setInterval(tick, Number.isFinite(ms) && ms >= 250 ? ms : 60_000);
+    if (this._p2pSampleTimer.unref) this._p2pSampleTimer.unref();
   }
 
   /**
@@ -3568,6 +3584,53 @@ export class PohMinerNode {
         }));
       }
 
+      // GET /api/p2p/markets — pair list + last (book mid) + 24h change (null until history).
+      // Optional ?pair=BASE-QUOTE (e.g. KGST-USDT-TRC20). GELt is not listed.
+      if (req.method === 'GET' && url.pathname === '/api/p2p/markets') {
+        const pair = url.searchParams.get('pair') || undefined;
+        const result = this.p2pOrderStore.listMarkets({ pair });
+        if (result.error) { res.statusCode = 400; return res.end(JSON.stringify(result)); }
+        if (this.p2pPriceHistory && result.markets) {
+          for (const m of result.markets) {
+            m.change24h = this.p2pPriceHistory.change24h(m.pair, m.last);
+          }
+        }
+        return res.end(JSON.stringify(result));
+      }
+
+      // GET /api/p2p/candles — mid-price snapshot OHLC. ?pair=BASE-QUOTE or
+      // ?quoteCurrency= (+ optional ?baseAsset=POH). interval=1m|1h|1d, limit<=1000.
+      if (req.method === 'GET' && url.pathname === '/api/p2p/candles') {
+        let baseAsset = url.searchParams.get('baseAsset') || 'POH';
+        let quoteCurrency = url.searchParams.get('quoteCurrency');
+        const pairParam = url.searchParams.get('pair');
+        if (pairParam) {
+          const parsed = parsePair(pairParam);
+          if (!parsed) { res.statusCode = 400; return res.end(JSON.stringify({ error: `unknown pair: ${pairParam}` })); }
+          baseAsset = parsed.baseAsset;
+          quoteCurrency = parsed.quoteCurrency;
+        }
+        if (!quoteCurrency) { res.statusCode = 400; return res.end(JSON.stringify({ error: 'quoteCurrency or pair is required' })); }
+        const interval = url.searchParams.get('interval') || '1h';
+        if (!['1m', '1h', '1d'].includes(interval)) {
+          res.statusCode = 400;
+          return res.end(JSON.stringify({ error: 'interval must be 1m, 1h, or 1d' }));
+        }
+        let limit = Number(url.searchParams.get('limit') || 200);
+        if (!Number.isFinite(limit)) limit = 200;
+        limit = Math.min(Math.max(1, Math.floor(limit)), 1000);
+        const pair = `${baseAsset}-${quoteCurrency}`;
+        const candles = this.p2pPriceHistory
+          ? this.p2pPriceHistory.candles(pair, interval, limit)
+          : [];
+        return res.end(JSON.stringify({
+          pair,
+          interval,
+          source: 'mid-price-snapshots',
+          candles,
+        }));
+      }
+
       // GET /api/p2p/price — reference price for a (baseAsset, quoteCurrency) pair,
       // derived ONLY from the best open P2P order(s). ?quoteCurrency= for a single
       // quote, ?baseAsset= to price a stablecoin (default POH), omit for a map.
@@ -3580,12 +3643,19 @@ export class PohMinerNode {
         }));
       }
 
-      // GET /api/p2p/orders — list open orders (filters: side, quoteCurrency, baseAsset)
+      // GET /api/p2p/orders — list open orders (filters: side, quoteCurrency, baseAsset, pair)
       if (req.method === 'GET' && url.pathname === '/api/p2p/orders') {
-        const side         = url.searchParams.get('side') || undefined;
-        const quoteCurrency= url.searchParams.get('quoteCurrency') || undefined;
-        const baseAsset    = url.searchParams.get('baseAsset') || undefined;
-        const status       = url.searchParams.get('status') || 'open';
+        const side          = url.searchParams.get('side') || undefined;
+        let quoteCurrency   = url.searchParams.get('quoteCurrency') || undefined;
+        let baseAsset       = url.searchParams.get('baseAsset') || undefined;
+        const status        = url.searchParams.get('status') || 'open';
+        const pair          = url.searchParams.get('pair');
+        if (pair) {
+          const parsed = parsePair(pair);
+          if (!parsed) { res.statusCode = 400; return res.end(JSON.stringify({ error: `unknown pair: ${pair}` })); }
+          baseAsset = parsed.baseAsset;
+          quoteCurrency = parsed.quoteCurrency;
+        }
         const orders = this.p2pOrderStore.listOrders({ side, quoteCurrency, baseAsset, status });
         return res.end(JSON.stringify({ orders }));
       }
@@ -3687,7 +3757,7 @@ export class PohMinerNode {
         // POST /api/p2p/orders/:id/select — taker selects order
         if (action === 'select') {
           readBody().then(body => {
-            const { address, signingPublicKey, signature, timestamp, pohAmount, quoteAmount } = body;
+            const { address, signingPublicKey, signature, timestamp, pohAmount, quoteAmount, takerPayoutAddress } = body;
             const auth = verifyP2PAuth(address, signingPublicKey, signature,
               { address, timestamp, action: 'select-order', orderId, pohAmount, quoteAmount });
             if (auth.error) { res.statusCode = 401; return res.end(JSON.stringify(auth)); }
@@ -3698,11 +3768,11 @@ export class PohMinerNode {
             const baseAsset = order.baseAsset || 'POH';
 
             // ── Atomic on-chain swap ────────────────────────────────────────────
-            // Sell order whose quote is another on-chain asset (e.g. aiKGS/aiGEL):
+            // Sell order whose quote is another on-chain asset (e.g. KGST/aiGEL):
             // maker's base already sits in escrow; the taker's quote debits here.
             // Both legs settle in ONE p2p-swap-filled transition — no payment-sent
-            // step, no receival wallet: the taker's own poh address receives the
-            // base, the maker's address receives the quote.
+            // step: the taker's own poh address receives the base, the maker's
+            // address receives the quote.
             if (order.side === 'sell' && isOnChainAsset(order.quoteCurrency)) {
               const quoteAsset = order.quoteCurrency;
               const takerQuoteBal = this._confirmedBalance(ownerAddress, quoteAsset);
@@ -3711,7 +3781,7 @@ export class PohMinerNode {
                 return res.end(JSON.stringify({ error: `insufficient ${quoteAsset} balance: have ${takerQuoteBal}, need ${quoteAmount}`, currency: quoteAsset }));
               }
 
-              const result = this.p2pOrderStore.selectOrder(orderId, { taker: ownerAddress, pohAmount, quoteAmount });
+              const result = this.p2pOrderStore.selectOrder(orderId, { taker: ownerAddress, pohAmount, quoteAmount, takerPayoutAddress });
               if (result.error) { res.statusCode = 400; return res.end(JSON.stringify(result)); }
               const tradeId = result.trade.id;
 
@@ -3750,7 +3820,7 @@ export class PohMinerNode {
               if (lockResult !== true) { res.statusCode = 400; return res.end(JSON.stringify(lockResult)); }
             }
 
-            const result = this.p2pOrderStore.selectOrder(orderId, { taker: ownerAddress, pohAmount, quoteAmount });
+            const result = this.p2pOrderStore.selectOrder(orderId, { taker: ownerAddress, pohAmount, quoteAmount, takerPayoutAddress });
             if (result.error) {
               if (order.side === 'buy') this.p2pEscrow.release(this.walletManager, ownerAddress, pohAmount, baseAsset);
               res.statusCode = 400; return res.end(JSON.stringify(result));
@@ -3972,6 +4042,7 @@ export class PohMinerNode {
     const bindHost = localOnly ? '127.0.0.1' : (this.config.bindHost || '0.0.0.0');
     server.listen(port, bindHost, () => {
       if (!localOnly) this._openFirewallPort(port);
+      this._startP2PPriceSampler();
       console.log(`[PoH-Miner] Wallet API listening on http://${bindHost}:${port}${localOnly ? ' (localOnly)' : ''}`);
       console.log(`   Wallet: curl "http://localhost:${port}/api/wallet/balance?address=${this.config.wallet}"`);
       console.log(`   Submit job: curl -X POST http://localhost:${port}/job -d '{"payload":{"address":"bc1q..."}}'`);

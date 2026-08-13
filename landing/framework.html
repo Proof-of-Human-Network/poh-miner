@@ -172,7 +172,7 @@
         <div class="uppercase tracking-[3px] text-xs text-[#22c55e] mb-6">THE PERP MARKET</div>
         <h2 class="font-display text-[40px] sm:text-[56px] md:text-[80px] leading-none">Compute pairs,<br>quoted like Forex.</h2>
         <p class="mt-8 max-w-3xl mx-auto text-[17px] sm:text-[20px] md:text-[23px] text-white/60">
-          αιAMD/αιGEL, αιBTN/αιETB, αιKGS/αιAMD — every pair, no expiry.
+          αιGEL/KGST, αιBTN/αιETB, KGST/αιGEL — every pair, no expiry.
           Buying compute in any currency is an FX trade.
         </p>
       </div>
@@ -198,11 +198,10 @@
       <table class="offers min-w-[720px]">
         <thead>
           <tr>
-            <th>Geography</th>
+            <th>Geo</th>
             <th>Coin</th>
-            <th>Offer · per M AI tokens</th>
-            <th>≈ USD</th>
-            <th>Node throughput</th>
+            <th>kW/h</th>
+            <th>Rate</th>
             <th></th>
           </tr>
         </thead>
@@ -259,24 +258,29 @@
   <!-- Live geographies -->
   <div class="section-full max-w-6xl mx-auto px-4 sm:px-8 py-16 md:py-32">
     <div class="text-center mb-16 md:mb-24 reveal">
-      <div class="uppercase tracking-[3px] text-xs text-[#22c55e] mb-6">LIVE GEOGRAPHIES</div>
-      <h2 class="font-display text-[40px] sm:text-[56px] md:text-[80px] leading-none">Five coins. One chain.</h2>
+      <div class="uppercase tracking-[3px] text-xs text-[#22c55e] mb-6">THE MARKETS BOARD</div>
+      <h2 class="font-display text-[40px] sm:text-[56px] md:text-[80px] leading-none">Compute coins.<br>One chain.</h2>
+      <div class="mt-10 space-y-2 text-[15px] sm:text-[17px] md:text-[19px] tracking-[0.08em] text-white/50 font-display">
+        <div>USDT / KGST / aiETB · aiGEL · aiBTN</div>
+        <div>GELt / aiGEL / aiETB · aiBTN · KGST</div>
+      </div>
+      <p class="mt-6 max-w-3xl mx-auto text-[16px] sm:text-[18px] text-white/55">Tether and the Government of Georgia are already building GELt. aiGEL is the compute coin on that rail.</p>
     </div>
-    <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-6 md:gap-8">
-      <a href="gelt/" class="glass card-hover p-6 rounded-[6px] reveal text-center block">
+    <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-6 md:gap-8">
+      <div class="glass p-6 rounded-[6px] reveal text-center">
+        <div class="flag mb-2">🇬🇪</div>
+        <div class="text-[30px] md:text-[38px] text-[#22c55e] leading-none">GELt</div>
+        <div class="text-[15px] text-white/60 mt-2">External. Tether + GoG.</div>
+      </div>
+      <a href="gel/" class="glass card-hover p-6 rounded-[6px] reveal text-center block">
         <div class="flag mb-2">🇬🇪</div>
         <div class="text-[30px] md:text-[38px] text-[#22c55e] leading-none">αιGEL</div>
-        <div class="text-[15px] text-white/60 mt-2">Georgia — capital &amp; liquidity hub</div>
-      </a>
-      <a href="amd/" class="glass card-hover p-6 rounded-[6px] reveal text-center block">
-        <div class="flag mb-2">🇦🇲</div>
-        <div class="text-[30px] md:text-[38px] text-[#22c55e] leading-none">αιAMD</div>
-        <div class="text-[15px] text-white/60 mt-2">Armenia — engineering bench</div>
+        <div class="text-[15px] text-white/60 mt-2">Compute coin</div>
       </a>
       <a href="kgs/" class="glass card-hover p-6 rounded-[6px] reveal text-center block">
         <div class="flag mb-2">🇰🇬</div>
-        <div class="text-[30px] md:text-[38px] text-[#22c55e] leading-none">αιKGS</div>
-        <div class="text-[15px] text-white/60 mt-2">Kyrgyzstan — $0.03 hydro power</div>
+        <div class="text-[30px] md:text-[38px] text-[#22c55e] leading-none">KGST</div>
+        <div class="text-[15px] text-white/60 mt-2">Rail. $0.03 hydro.</div>
       </a>
       <a href="etb/" class="glass card-hover p-6 rounded-[6px] reveal text-center block">
         <div class="flag mb-2">🇪🇹</div>
@@ -288,6 +292,10 @@
         <div class="text-[30px] md:text-[38px] text-[#22c55e] leading-none">αιBTN</div>
         <div class="text-[15px] text-white/60 mt-2">Bhutan — carbon-free hydro</div>
       </a>
+      <div class="glass p-6 rounded-[6px] reveal text-center">
+        <div class="text-[30px] md:text-[38px] text-[#22c55e] leading-none mt-8">USDT</div>
+        <div class="text-[15px] text-white/60 mt-2">On-ramp</div>
+      </div>
     </div>
     <p class="mt-10 text-center text-white/40 text-[16px] reveal">Your currency next? The framework is white-label.</p>
   </div>
@@ -338,11 +346,10 @@
     // Figures mirror regions/src/data.mjs (electricity + hardware amortisation,
     // 24-month payback margin). Indicative, not audited.
     const COINS = [
-      { code: 'αιGEL', slug: 'gelt', flag: '🇬🇪', country: 'Georgia',    fx: 2.7, power: 0.07  },
-      { code: 'αιAMD',  slug: 'amd',  flag: '🇦🇲', country: 'Armenia',    fx: 385, power: 0.075 },
-      { code: 'αιKGS',  slug: 'kgs',  flag: '🇰🇬', country: 'Kyrgyzstan', fx: 87,  power: 0.035 },
-      { code: 'αιETB',  slug: 'etb',  flag: '🇪🇹', country: 'Ethiopia',   fx: 128, power: 0.02  },
-      { code: 'αιBTN',  slug: 'btn',  flag: '🇧🇹', country: 'Bhutan',     fx: 84,  power: 0.03  },
+      { code: 'αιGEL', slug: 'gel', flag: '🇬🇪', country: 'Georgia',    fx: 2.7, power: 0.07  },
+      { code: 'KGST',  slug: 'kgs', flag: '🇰🇬', country: 'Kyrgyzstan', fx: 87,  power: 0.035 },
+      { code: 'αιETB', slug: 'etb', flag: '🇪🇹', country: 'Ethiopia',   fx: 128, power: 0.02  },
+      { code: 'αιBTN', slug: 'btn', flag: '🇧🇹', country: 'Bhutan',     fx: 84,  power: 0.03  },
     ];
 
     // Provider pay price per M AI tokens, USD (same model as regions/src/data.mjs)
@@ -413,17 +420,14 @@
     }
     function renderOffers() {
       const rows = COINS.map(c => {
-        const usd = payPerM(c);
-        const local = usd * c.fx;
-        return { c, usd, local };
-      }).sort((a, b) => a.usd - b.usd);
+        return { c };
+      }).sort((a, b) => a.c.power - b.c.power);
       document.getElementById('offers-body').innerHTML = rows.map(r => `
         <tr class="row-hover">
           <td><span class="flag">${r.c.flag}</span> &nbsp;${r.c.country}</td>
           <td class="text-[#22c55e]">${r.c.code}</td>
-          <td class="mono">${fmtLocal(r.local)} ${r.c.code}</td>
-          <td class="mono text-white/60">$${r.usd.toFixed(3)}</td>
-          <td class="text-white/60">5.4M tok / node-hour</td>
+          <td class="mono text-white/60">$${r.c.power.toFixed(3)}</td>
+          <td class="mono">${fmtLocal(r.c.fx)} ${r.c.code}/USD</td>
           <td><a href="${r.c.slug}/" class="neon hover:underline whitespace-nowrap">View offer →</a></td>
         </tr>`).join('');
     }

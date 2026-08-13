@@ -328,7 +328,7 @@ run();</div>
 
           <div class="glass rounded-[4px] p-5 mb-6 text-[17px] text-white/70">
             <div class="neon mb-2 text-[20px]" data-i18n="doc.assets.title">Stablecoins &amp; multi-currency</div>
-            <p class="mb-2" data-i18n-html="doc.assets.p1">Five regional stablecoins ride on the chain alongside POH: <strong>αιGEL, αιKGS, αιAMD, αιETB, αιBTN</strong> (wire tickers <code>aiGEL</code>, <code>aiKGS</code>, <code>aiAMD</code>, <code>aiETB</code>, <code>aiBTN</code>). Stablecoins use <strong>2 decimals</strong> (1 unit = 100 raw); POH keeps 9 (1&nbsp;POH&nbsp;=&nbsp;1e9&nbsp;μPOH).</p>
+            <p class="mb-2" data-i18n-html="doc.assets.p1">Four compute coins ride on the chain alongside POH: <strong>αιGEL, KGST, αιETB, αιBTN</strong> (wire tickers <code>aiGEL</code>, <code>KGST</code>, <code>aiETB</code>, <code>aiBTN</code>). They use <strong>2 decimals</strong> (1 unit = 100 raw); POH keeps 9 (1&nbsp;POH&nbsp;=&nbsp;1e9&nbsp;μPOH). Dollar on-ramp is off-chain <strong>USDT</strong> (<code>USDT-ERC20</code>, <code>USDT-TRC20</code>, <code>USDT-TON</code>, <code>USDT-SOL</code>, <code>USDT-BEP20</code>). Two forex meshes: <code>USDT / KGST / aiETB · aiGEL · aiBTN</code> and <code>GELt / aiGEL / aiETB · aiBTN · KGST</code>. <strong>GELt</strong> is external (Tether + Government of Georgia) — not an on-chain asset. Armenia is not listed.</p>
             <p class="mb-2" data-i18n-html="doc.assets.p2"><code>GET /api/assets</code> lists every asset with decimals, display names and per-currency gas prices. <code>GET /api/wallet/balance</code> returns an additional <code>assets</code> map with each stablecoin's raw and display balance.</p>
             <p data-i18n-html="doc.assets.p3">Transfers: <code>POST /api/wallet/send</code> (and <code>/api/tx/submit</code>) accept a <code>currency</code> field — omit it for POH. A transaction's signed hash includes <code>currency</code> ONLY when non-POH, so existing POH transactions and signatures remain valid unchanged.</p>
           </div>
@@ -695,13 +695,18 @@ run();</div>
           <h2 class="text-[32px] mb-6 neon" data-i18n="doc.p2p.title">P2P Exchange</h2>
 
           <div class="glass rounded-[4px] p-5 mb-6 text-[17px] text-white/70">
-            <p data-i18n-html="doc.p2p.swap">Stablecoins trade as base assets. When both legs are on-chain (e.g. <code>aiKGS/aiGEL</code>, or POH for aiGEL) the trade settles <strong>atomically</strong> in one step — no payment-sent/confirm phase, and proceeds go directly to the taker's own poh wallet address (no receival-wallet input). Off-chain legs (bank transfer, USDT…) keep the manual escrow flow.</p>
+            <p data-i18n-html="doc.p2p.swap">On-chain assets (<code>POH</code>, <code>KGST</code>, <code>aiGEL</code>, <code>aiETB</code>, <code>aiBTN</code>) trade as base. When both legs are on-chain (e.g. <code>KGST/aiGEL</code>, or POH for aiGEL) the trade settles <strong>atomically</strong> in one step — no payment-sent/confirm phase; the taker's own poh address receives the base. Off-chain legs (USDT, USDC, bank transfer) keep the manual escrow flow. Maker pay-to for off-chain quotes is <code>order.paymentMethods[].address</code>. Meshes: <code>USDT / KGST / aiETB · aiGEL · aiBTN</code> and <code>GELt / aiGEL / aiETB · aiBTN · KGST</code> (GELt external, not listed).</p>
           </div>
           <p class="text-white/55 text-[18px] mb-6" data-i18n="doc.p2p.intro">Peer-to-peer POH trading with on-chain escrow.</p>
 
           <div class="endpoint-card">
             <div class="mb-2"><span class="method method-get">GET</span> <code class="text-white/90">/api/p2p/currencies</code></div>
-            <p class="text-white/55 text-[18px]" data-i18n="doc.p2p.currencies">Supported quote currencies.</p>
+            <p class="text-white/55 text-[18px]" data-i18n="doc.p2p.currencies">Supported quotes and on-chain bases. Includes KGST and USDT wires. GELt is not listed.</p>
+          </div>
+
+          <div class="endpoint-card">
+            <div class="mb-2"><span class="method method-get">GET</span> <code class="text-white/90">/api/p2p/markets</code></div>
+            <p class="text-white/55 text-[18px]" data-i18n-html="doc.p2p.markets">Pair list with last price (mid from the open book) and 24h change. <code>change24h</code> is <code>null</code> until history exists. Optional <code>?pair=BASE-QUOTE</code> (e.g. <code>KGST-USDT-TRC20</code>).</p>
           </div>
 
           <div class="endpoint-card">
@@ -711,7 +716,7 @@ run();</div>
 
           <div class="endpoint-card">
             <div class="mb-2"><span class="method method-get">GET</span> <code class="text-white/90">/api/p2p/orders</code></div>
-            <p class="text-white/55 text-[18px]" data-i18n-html="doc.p2p.orders">Open order book. Filters: <code>side</code>, <code>quoteCurrency</code>.</p>
+            <p class="text-white/55 text-[18px]" data-i18n-html="doc.p2p.orders">Open order book. Filters: <code>side</code>, <code>quoteCurrency</code>, <code>baseAsset</code>, <code>pair</code>.</p>
           </div>
 
           <div class="endpoint-card">
@@ -731,7 +736,7 @@ run();</div>
 
           <div class="endpoint-card">
             <div class="mb-2"><span class="method method-post">POST</span> <code class="text-white/90">/api/p2p/orders/:id/select</code></div>
-            <p class="text-white/55 text-[18px]" data-i18n="doc.p2p.select">Taker selects an order to begin a trade.</p>
+            <p class="text-white/55 text-[18px]" data-i18n="doc.p2p.select">Taker selects an order to begin a trade. Optional takerPayoutAddress is the taker's off-chain receive address when taking a buy.</p>
           </div>
 
           <div class="endpoint-card">

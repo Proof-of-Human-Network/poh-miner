@@ -125,7 +125,7 @@ export function deckStablecoin(c, L) {
       <p class="small" style="margin-top:3mm;max-width:205mm">${d.dCostNote}</p></div>`, { foot, track }),
 
     S(`<div class="body">${eyebrow(d.dScenK)}<h2>${d.dScenH}</h2>
-      <div style="margin-top:1mm">${scenarioChart(scenarioRows(d.dScenLabels), { a, a2, payLabel: L.lang === 'ru' ? 'платим' : 'we pay', sellLabel: L.lang === 'ru' ? 'продаём' : 'we sell', recLabel: L.lang === 'ru' ? 'возврат' : 'recovery' })}</div>
+      <div style="margin-top:1mm">${scenarioChart(scenarioRows(d.dScenLabels, c), { a, a2, payLabel: L.lang === 'ru' ? 'платим' : 'we pay', sellLabel: L.lang === 'ru' ? 'продаём' : 'we sell', recLabel: L.lang === 'ru' ? 'возврат' : 'recovery' })}</div>
       <p class="small" style="margin-top:2mm;max-width:205mm">${d.dScenNote}</p></div>`, { cls: 'tint', foot, track }),
 
     S(`<div class="body">${eyebrow(d.s7k)}<h2>${d.s7h}</h2>${strip(d.s7strip)}</div>`, { cls: 'tint', foot, track }),

@@ -77,8 +77,8 @@ export const COUNTRIES = [
     currency: 'Som',
     iso: 'KGS',
     sign: 'som',
-    stable: 'αιKGS',
-    stableName: 'αιKGS',
+    stable: 'KGST',
+    stableName: 'KGST',
     fx: 87,
     power: 0.035,
     population: '7.1M',
@@ -91,7 +91,7 @@ export const COUNTRIES = [
     westHour: 45,
     avgWage: 340,
     whyHere: [
-      ['Among the cheapest power in the region', 'Hydroelectric generation at roughly USD 0.03–0.04 per kWh makes every node profitable.'],
+      ['Among the cheapest power in the region', 'Hydroelectric generation at roughly USD 0.03–0.04 per kWh keeps host net high. Sold hours and card class still set the yield.'],
       ['A young, fast-growing workforce', 'Median age under 27, with a state-backed digital-skills push.'],
       ['A crypto-permissive legal regime', 'Licensed virtual-asset service providers and an explicit mining framework.'],
     ],
@@ -122,11 +122,11 @@ export const COUNTRIES = [
     westHour: 45,
     avgWage: 190,
     whyHere: [
-      ['The lowest power cost in the programme', 'Grand-scale hydroelectric supply at roughly USD 0.02 per kWh.'],
+      ['The lowest power cost in the programme', 'Grand-scale hydroelectric supply at roughly USD 0.02 per kWh — it keeps host net high. Sold hours and card class still set the yield.'],
       ['The largest campus base in the corridor', 'Over a million tertiary students across an English-medium university system — laboratories that can host compute at scale.'],
       ['A hard-currency-scarce economy', 'A stable digital unit of account is worth more here than anywhere else on this list.'],
     ],
-    sectorNote: 'Ethiopia offers compute scale where it counts: the cheapest kilowatt-hour in the programme and the largest installed base of machines to host it.',
+    sectorNote: 'Ethiopia offers compute scale where it counts: cheap power, a large installed base of machines, and a host yield that is set by sold hours and card class.',
   },
   {
     cc: 'bt',
@@ -182,10 +182,17 @@ export const HW = { price: 1600, lifeHours: 20000 };   // ≈ $0.08/compute-hour
 // The band spans both. $0.15 is the reference sell price; the model now carries
 // the full range rather than a single point.
 export const PRICE = {
-  lo: 0.01,            // $/M — floor of the published band
+  lo: 0.08,            // $/M — floor of the published band; at or above host pay in every programme country
   hi: 0.20,            // $/M — ceiling of the published band
   sellBase: 0.15,      // $/M — reference sell price to the client
-  payMargin: 0.106,    // $/M — what we add over raw compute cost to pay providers
+  payMargin: 0.106,    // leftover; payTok() is payback-anchored, not cost-plus
+};
+
+// Nameplate card the headline yields assume. Older cafe GPUs are the downside case.
+export const CARD = {
+  name: 'RTX 4070-class',
+  downsideName: 'GTX 1650–3060-class',
+  downsideTokPerSec: 300,
 };
 
 // Raw cost to produce 1M output tokens in a country: electricity + hardware wear.
@@ -216,10 +223,10 @@ export function payTok(c) {
   return (netPerHour + powerPerHour) / tokM;
 }
 
-export function nodeHour(c) {
-  const tokens = NODE.tokPerSec * 3600;                // 5.4M
+export function nodeHour(c, tokPerSec = NODE.tokPerSec) {
+  const tokens = tokPerSec * 3600;                     // 5.4M at nameplate
   const pay = payTok(c);
-  const gross = (tokens / 1e6) * pay;                  // what the provider is paid
+  const gross = (tokens / 1e6) * pay;                  // paid per metered token, not per nameplate hour
   const power = NODE.kW * c.power;                     // the provider's own electricity
   return { tokens, gross, power, pay, net: gross - power, nodeNet: gross - power };
 }
@@ -252,13 +259,17 @@ export function batchRecovery(payPerM, sellPerM, issuerShare = 0.80, markup = BA
   return (issuerShare * fiatPerUnit) / need;           // ≥1 ⇒ batch fully repaid in one pass
 }
 
-// Three go-to-market scenarios: the lever is how cheaply we buy compute and how
-// dearly we sell it. Wider spread ⇒ faster fiat back to the issuer.
-export const SCENARIOS = [
-  { key: 'tight', pay: 0.12, sell: 0.15 },   // rich-market pay, modest sell
-  { key: 'base',  pay: 0.10, sell: 0.17 },   // balanced
-  { key: 'wide',  pay: 0.06, sell: 0.20 },   // cheap power + lean hardware, premium sell
-];
+// Three go-to-market scenarios for a given country: host pay is that country's
+// actual payTok(); sell moves inside the published band. Recovery is always
+// computed at the first-batch 80% issuer share.
+export function scenariosFor(c) {
+  const pay = +payTok(c).toFixed(3);
+  return [
+    { key: 'modest',    pay, sell: PRICE.lo },
+    { key: 'reference', pay, sell: PRICE.sellBase },
+    { key: 'premium',   pay, sell: PRICE.hi },
+  ];
+}
 
 export function nodeYear(c, util = NODE.utilisation) {
   const h = nodeHour(c);
@@ -272,8 +283,8 @@ export function nodeYear(c, util = NODE.utilisation) {
 export const SOLD_UTIL = 0.35;
 
 // A gaming club: PCs earning only outside peak play.
-export function clubMonth(c, pcs = c.pcsPerClub, hoursPerDay = 14, util = SOLD_UTIL) {
-  const h = nodeHour(c);
+export function clubMonth(c, pcs = c.pcsPerClub, hoursPerDay = 14, util = SOLD_UTIL, tokPerSec = NODE.tokPerSec) {
+  const h = nodeHour(c, tokPerSec);
   const perPc = h.nodeNet * hoursPerDay * util * 30;
   return { perPc, total: perPc * pcs, pcs, hoursPerDay, util };
 }

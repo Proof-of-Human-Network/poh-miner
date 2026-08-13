@@ -3,7 +3,7 @@
 // buying local AI compute and paying for it in the local fiat-pegged stablecoin.
 
 import { nodeHour, nodeYear, clubMonth, payback, computeCost, payTok, fmtUSD, fmtLocal, SOLD_UTIL,
-         PRICE, BATCH, batchRecovery, SCENARIOS, COUNTRIES } from './data.mjs';
+         PRICE, BATCH, batchRecovery, scenariosFor, COUNTRIES, CARD } from './data.mjs';
 
 const money = n => '$' + Math.round(n).toLocaleString('en-US');
 const money2 = n => '$' + n.toFixed(2);
@@ -22,7 +22,7 @@ export function L(lang, c) {
   const utilPct = Math.round(SOLD_UTIL * 100);
 
   // pricing
-  const priceRange = `${money2(PRICE.lo)}–${money2(PRICE.hi)}`;   // "$0.01–$0.20"
+  const priceRange = `${money2(PRICE.lo)}–${money2(PRICE.hi)}`;   // "$0.08–$0.20"
   const sellBase = money2(PRICE.sellBase);                        // "$0.15"
   const pay = payTok(c);                                          // what we pay this country's hosts
   const cost = computeCost(c).perM;                               // raw floor
@@ -31,11 +31,26 @@ export function L(lang, c) {
   const firstBatchLocalNum = c.stableLive ? BATCH.firstGEL : Math.round(firstBatchUSD * c.fx / 10000) * 10000;
   const firstBatchLocal = firstBatchLocalNum.toLocaleString('en-US');
 
+  const slow = nodeHour(c, CARD.downsideTokPerSec);
+  const slowClub = clubMonth(c, c.pcsPerClub, 14, SOLD_UTIL, CARD.downsideTokPerSec);
+  const recBySplit = BATCH.splits.map(([iss]) => batchRecovery(pay, PRICE.sellBase, iss));
+  const fmtSplits = pairs => {
+    const s = pairs.map(([iss]) => Math.round(iss * 100) + '/' + Math.round((1 - iss) * 100));
+    if (s.length === 0) return '';
+    if (s.length === 1) return s[0];
+    return s.slice(0, -1).join(', ') + ' and ' + s[s.length - 1];
+  };
+  const onePassShares = fmtSplits(BATCH.splits.filter((_, i) => recBySplit[i] >= 1));
+  const multiPassShares = fmtSplits(BATCH.splits.filter((_, i) => recBySplit[i] < 1));
+  const pilotHostMo = 20 * clubTotal + 3 * labTotal;
+  const batchMonths = Math.max(1, Math.round(firstBatchUSD / pilotHostMo));
+
   const V = { S, C: c.country, Cn: c.countryOf, adj: c.adjective, cur: c.currency, iso: c.iso,
               cap: c.capital };
 
   const M = { nh, ny, club, clubTotal, clubYear, labTotal, gpuPrice, gpuPayback, utilPct,
-              priceRange, sellBase, pay, cost, firstBatchLocal, firstBatchUSD };
+              priceRange, sellBase, pay, cost, firstBatchLocal, firstBatchUSD,
+              slow, slowClub, recBySplit, onePassShares, multiPassShares, batchMonths };
   return lang === 'ru' ? RU(c, V, M) : EN(c, V, M);
 }
 
@@ -51,12 +66,13 @@ export function priceStackRows() {
   });
 }
 
-// Three scenarios with first-batch recovery.
-export function scenarioRows(labels) {
-  return SCENARIOS.map((s, i) => {
+// Three scenarios with first-batch recovery, calibrated to this country's pay.
+export function scenarioRows(labels, c) {
+  return scenariosFor(c).map((s, i) => {
     const rec = batchRecovery(s.pay, s.sell);
     return { pay: s.pay, sell: s.sell, rec,
-             label: labels.names[i], sub: labels.subs[i],
+             label: labels.names[i],
+             sub: `$${s.pay.toFixed(3)} → $${s.sell.toFixed(2)}`,
              speed: rec >= 2 ? labels.fast : rec >= 1 ? labels.ok : labels.slow };
   });
 }
@@ -75,7 +91,8 @@ export function batchRows(sizeLabels) {
 
 function EN(c, V, m) {
   const { nh, club, clubTotal, clubYear, labTotal, gpuPrice, gpuPayback, utilPct,
-          priceRange, sellBase, pay, cost, firstBatchLocal, firstBatchUSD } = m;
+          priceRange, sellBase, pay, cost, firstBatchLocal, firstBatchUSD,
+          slow, slowClub, onePassShares, multiPassShares, batchMonths } = m;
   const machines = (Number(c.clubs.replace(/\D/g, '')) * c.pcsPerClub).toLocaleString('en-US');
 
   return {
@@ -113,9 +130,9 @@ function EN(c, V, m) {
     s1h: 'Executive Summary',
     s1lead: `The Programme purchases one thing inside ${V.Cn}: <strong>machine compute</strong> — GPU hours drawn from gaming clubs, university laboratories, offices and homes. It pays for every hour, without exception, in <strong>${V.S}</strong>, a stablecoin redeemable one-for-one for the ${c.adjective} ${c.currency}.`,
     s1p1: `The proposition to ${V.Cn} is not aid and not an export scheme. It is a demand line. AI inference that today is bought from data centres in Frankfurt, Virginia or Singapore is bought here instead — from hardware that already exists in the country — at a price competitive internationally, and the money lands in a wallet the same hour it is earned rather than in a correspondent bank three days later.`,
-    s1p2: `The reason this is possible now, and was not possible three years ago, is the arrival of fiat-pegged stablecoins in local currencies. Client capital arrives in ${V.Cn} directly, in dollars or euros, is converted once into ${V.S}, and is paid out to the community — the people and institutions whose machines did the work. There is no intermediary jurisdiction and no intermediary token anywhere in the chain.`,
+    s1p2: `The reason this is possible now, and was not possible three years ago, is the arrival of fiat-pegged stablecoins in local currencies. Client capital arrives in ${V.Cn} directly, in dollars or euros, is converted once into ${V.S}, and is paid out to the community — the people and institutions whose machines did the work. The payment corridor has one conversion and no intermediary token. Any reserve financing (§4.3) sits outside that corridor.`,
     s1k: [
-      [money2(c.power), `Per kilowatt-hour, blended — the input that decides whether a compute hour is profitable.`],
+      [money2(c.power), `Per kilowatt-hour, blended — cheap power keeps host net high; sold hours and card class set the yield.`],
       [money2(nh.nodeNet), `Net to the host per GPU-hour sold, after electricity, at the compute price the Programme pays (${money3(pay)}/M tokens).`],
       [`${machines}+`, `Consumer GPUs already installed in ${c.adjective} gaming clubs alone — before laboratories, offices and homes.`],
       ['100%', `Share of local payouts settled in ${V.S}. There is no second payment method.`],
@@ -125,7 +142,7 @@ function EN(c, V, m) {
     s2h: 'What the Programme Buys: Compute',
     s2lead: `One supply line, aggregated from four sources. Each draws on hardware that is already bought, powered and online somewhere in the ${c.adjective} economy — it simply has no second shift.`,
     s2computeH: 'The unit — one GPU-hour',
-    s2compute: `AI inference served from consumer graphics hardware. A single current-generation card serves a small model at roughly ${nh.tokens / 1e6}M output tokens per hour under batched load. The Programme pays the host a compute price of about ${money3(pay)} per million tokens — ${money2(nh.gross)} per hour, against ${money2(nh.power)} of electricity at ${money2(c.power)} per kWh, leaving ${money2(nh.nodeNet)} net. That same compute is resold to end clients within a band of ${priceRange} per million tokens; the spread between the two is what funds the programme and repays the stablecoin issuer.`,
+    s2compute: `AI inference served from consumer graphics hardware. A single ${CARD.name} card (about ${money(gpuPrice)}) serves a small model at roughly ${nh.tokens / 1e6}M output tokens per hour under batched load — 1,500 tok/s. The Programme pays the host a compute price of about ${money3(pay)} per million tokens — ${money2(nh.gross)} per hour, against ${money2(nh.power)} of electricity at ${money2(c.power)} per kWh, leaving ${money2(nh.nodeNet)} net. Hosts are paid on metered tokens, not a nameplate hour. That same compute is resold to end clients within a band of ${priceRange} per million tokens — never below the host pay price; the spread funds the programme and is the issuer's operating return.`,
     s2sourcesH: 'Where the capacity comes from',
     s2sources: `Four channels aggregate it: gaming clubs idle outside peak play; university laboratories idle at night, on weekends and through vacations; hardware sponsors seeding prize GPUs into the community through tournaments and hackathons; and offices and homes with a spare GPU. No capacity is built for the Programme — it is drawn from what the country already owns.`,
     s2why: `The sources reinforce one another. A gaming club proves the install in a commercial room; a university turns the same install into a teaching asset; a sponsor's prize card ends up running in a club, a laboratory or a winner's home. One agent, one metering-and-payout rail, four ways to fill it.`,
@@ -134,7 +151,7 @@ function EN(c, V, m) {
       ['Gaming clubs', `≈ ${c.pcsPerClub} machines each, idle outside evening play`, `${money(clubTotal)}/club·mo`, 'Metered, verified'],
       ['University laboratories', 'Idle nights, weekends and vacations', `${money(labTotal)}/lab·mo`, 'Metered, verified'],
       ['Hardware sponsors', 'Prize GPUs awarded at community events', `${money(club.perPc)}/prize GPU·mo`, 'Sponsored, enrolled'],
-      ['Homes & offices', 'Spare consumer GPUs, opt-in', `${money2(nh.nodeNet)}/GPU·hr net`, 'Metered, verified'],
+      ['Homes & offices', 'Spare consumer GPUs, opt-in', `${money(club.perPc)}/GPU·mo`, 'Metered, verified'],
     ],
     s2tblHead: ['Source', 'What is idle', 'Indicative yield', 'Basis'],
 
@@ -142,9 +159,9 @@ function EN(c, V, m) {
     s3lead: `One rule governs every payment the Programme makes inside ${V.Cn}: <strong>it is denominated and settled in ${V.S}</strong>. Not in dollars with a local conversion. Not in a platform balance that later becomes money. In ${V.S}, at the moment the work is accepted.`,
     s3why: [
       ['The contributor keeps the spread', `A cross-border payout typically loses three to seven per cent to intermediary fees and the retail conversion spread. Settling natively in ${V.S} removes that leg entirely; the contributor receives what the Programme paid.`],
-      ['Settlement is immediate', `Work accepted at noon is spendable at 12.01. There is no cut-off, no value date, no correspondent bank, and no weekend.`],
+      ['Settlement is same-day', `Work accepted is paid the same day, typically within minutes once the contributor has a live wallet. First redemption into ${c.currency} follows the licensed off-ramp's hours.`],
       ['The unit of account is the one they live in', `A contributor prices their rent, their tuition and their groceries in ${c.currency}. Paying in ${c.currency} removes the currency risk from the person least able to hedge it.`],
-      ['It works without a bank account', `Access requires a phone, not a branch, a credit history or a corporate account. This matters most for smaller operators and for hosts outside ${V.cap}.`],
+      ['A bank account is not required', `A phone is enough where a licensed wallet or mobile-money off-ramp is available. This matters most for smaller operators and for hosts outside ${V.cap}.`],
       ['It is auditable end to end', `Every payout is an on-chain record against a screened identity — cleaner evidence for tax and for the regulator than a cash or card-transfer economy produces.`],
       ['It keeps value in the country', `The ${c.currency} is not converted out. It circulates: clubs pay rent, students pay tuition, and the float stays domestic.`],
     ],
@@ -159,33 +176,33 @@ function EN(c, V, m) {
       [`4. The float stays domestic`, `${V.S} circulates inside the ${c.adjective} economy: clubs pay rent, students pay tuition, and redemption to ${c.currency} runs through licensed local off-ramps.`],
     ],
     s4back: `The return leg is symmetric. ${c.adjective} earnings that a contributor wishes to hold in hard currency move ${V.S} → USD or EUR at the same licensed wholesale venue, so the corridor is two-way rather than a one-way drain.`,
-    s4whyGeo: `<strong>Why direct, and not via a hub.</strong> Three reasons: every extra hop in a payment adds a counterparty, a spread and a regulatory perimeter; the buyer's hard currency lands in the economy that did the work rather than in a transit jurisdiction; and the ${V.S} float is domestic from the first payment onward. One conversion, one jurisdiction, no intermediary token.`,
+    s4whyGeo: `<strong>Why direct, and not via a hub.</strong> Three reasons: every extra hop in a payment adds a counterparty, a spread and a regulatory perimeter; the buyer's hard currency lands in the economy that did the work rather than in a transit jurisdiction; and the ${V.S} float is domestic from the first payment onward. On the payout rail: one conversion, one jurisdiction, no intermediary token.`,
 
     s4mintH: 'Minting in batches — a pilot first',
     s4mint: c.stableLive
       ? `The programme does not ask an issuer to mint an open-ended supply. It asks for a stablecoin to be minted in <strong>discrete batches</strong>, the first one small and treated as a pilot. In ${V.C}, ${V.S} already exists, so the first batch is a <em>proposal to the issuer</em> rather than a new instrument: mint a defined tranche against collateral, let the programme spend it into the compute economy, and review before any second tranche.`
       : `The programme does not ask an issuer to mint an open-ended supply. It asks for ${V.S} to be minted in <strong>discrete batches</strong>, the first one small and treated as a pilot. A partner issuer deposits collateral, mints one defined tranche, and the programme spends it into the ${c.adjective} compute economy — then everyone reviews the results before a second tranche is minted.`,
     s4mintSteps: [
-      ['1. First batch — a pilot', `${c.stableLive ? `A minimum first batch of ${firstBatchLocal} ${c.iso} (${money(firstBatchUSD)})` : `A first batch of about ${firstBatchLocal} ${c.iso} (≈ ${money(firstBatchUSD)})`} is minted against the issuer's collateral. Small on purpose: enough to prove the loop, not enough to put the issuer at risk.`],
+      ['1. First batch — a pilot', `${c.stableLive ? `A minimum first batch of ${firstBatchLocal} ${c.iso} (${money(firstBatchUSD)})` : `A first batch of about ${firstBatchLocal} ${c.iso} (≈ ${money(firstBatchUSD)})`} is minted against the issuer's reserve. Small on purpose: at the pilot of twenty clubs and three laboratories that is about ${batchMonths} months of host payout — longer than the twelve-week pilot, so the batch is not spent in the pilot window.`],
       ['2. Spent on compute', `The minted ${V.S} is used to pay ${c.adjective} compute providers — clubs, laboratories, hosts — for the AI compute they deliver. This is the only thing the batch is spent on.`],
-      ['3. Sold to clients for fiat', `That compute is resold to end clients, who pay in EUR, USD or GBP. This incoming hard currency is what repays the issuer.`],
+      ['3. Sold to clients for fiat', `That compute is resold to end clients, who pay in EUR, USD or GBP. This incoming hard currency is the issuer's operating return — it does not release the reserve that backs circulating coins.`],
       ['4. Review, then scale', `After the first batch the results are measured — utilisation, resale price, repayment speed — and the next, larger batch is planned on the evidence.`],
     ],
-    s4splitH: 'How the issuer is repaid',
-    s4split: `Incoming client fiat is split between the issuer and the programme. On the <strong>first batch the split is 80 / 20</strong>: 80% flows straight back to the issuer to return their collateral and all documented costs, plus a ${Math.round(BATCH.issuerMarkup * 100)}% markup as their return; 20% funds programme operations and ecosystem development. Both sides see the same cost ledger — there are no hidden margins inside the repayment. As each batch retires the issuer's risk, their share of subsequent batches falls — 60/40, then 40/60, then 20/80 — while the batches themselves grow. The ${Math.round(BATCH.issuerMarkup * 100)}% markup is not a one-off on the pilot: it is applied to every batch, so whatever the split, the issuer's portion always returns their collateral and costs plus ${Math.round(BATCH.issuerMarkup * 100)}%. The issuer earns most, earliest, when the risk is highest; the programme keeps more, later, once the model is proven.`,
+    s4splitH: 'How the issuer is paid',
+    s4split: `Incoming client fiat is split between the issuer and the programme. On the <strong>first batch the split is 80 / 20</strong>: 80% is the issuer's share of operating revenue — toward documented costs plus a ${Math.round(BATCH.issuerMarkup * 100)}% target markup — and 20% funds programme operations. The reserve that backs circulating coins stays in place; this split is a coupon on that reserve, not a release of it. Collateral is released only as coins are redeemed and the batch retires. Both sides see the same cost ledger. As each batch retires, the issuer's share of later batches falls — 60/40, then 40/60, then 20/80 — while the batches themselves grow. At this country's host pay and the ${sellBase} reference sell, the ${onePassShares || 'listed'} splits recover the ${Math.round(BATCH.issuerMarkup * 100)}% target in one pass of the minted float; ${multiPassShares || 'later splits'} need more than one pass. The ${Math.round(BATCH.issuerMarkup * 100)}% is the target return on what is repaid, not a guarantee that any given split finishes in a single pass. The issuer earns most, earliest, when the risk is highest.`,
     s4splitCap: 'Figure 4.2 — Issuer vs ecosystem share of client fiat, by batch',
-    s4splitCs: 'Bars widen as successive batches grow; the issuer share falls as their collateral risk is retired',
+    s4splitCs: 'Bars widen as successive batches grow; the issuer share of operating revenue falls as their risk is retired',
     s4splitSizes: ['pilot', 'larger', 'larger still', 'at scale'],
-    s4splitLabels: { issuer: 'to issuer (collateral + costs + markup)', eco: 'to programme / ecosystem' },
-    s4splitNote: `<strong>Why it is safe for the issuer.</strong> The first batch is small, the collateral is theirs and remains 1:1-backed, the repayment is front-loaded and marked up, and no second tranche is minted until the first has performed. The programme carries the execution risk; the issuer carries a short, over-collateralised, marked-up receivable.`,
+    s4splitLabels: { issuer: 'to issuer (share of client fiat)', eco: 'to programme / ecosystem' },
+    s4splitNote: `<strong>Why it is safe for the issuer.</strong> The first batch is small, the reserve stays 1:1-backed for as long as coins circulate, the issuer's share of operating revenue is front-loaded, and no second tranche is minted until the first has performed. The programme carries the execution risk; the issuer carries a short, fully reserved, marked-up claim on operating revenue.`,
 
-    s4fundH: 'Where the collateral can come from — an offshore note',
-    s4fund: `The issuer's collateral does not have to come from its own balance sheet. The programme supports seeding it with a privately placed note: a special-purpose vehicle in an international financial centre (for example the AIFC in Astana) places notes with qualified international investors, and 100% of the proceeds are held as the batch's reserve at a custodian bank. ${V.S} is minted only against that reserve, so every coin in circulation remains fully redeemable at all times.`,
+    s4fundH: 'Where the reserve can come from — a privately placed note',
+    s4fund: `The issuer's reserve does not have to come from its own balance sheet. It can be seeded by a privately placed note: a special-purpose vehicle in an international financial centre places notes with qualified international investors, and 100% of the proceeds are held as the batch's reserve at a custodian bank. This is reserve financing, not a hop in the payment corridor — buyers still pay the licensed entity in ${V.Cn}, and hosts are still paid in ${V.S}. ${V.S} is minted only against that reserve, so every coin in circulation remains fully redeemable at all times.`,
     s4fundSteps: [
       ['1. Notes placed privately', `A dedicated SPV issues the notes to qualified international investors by private placement only — never a public offer, in ${V.C} or anywhere else.`],
-      ['2. Proceeds become the reserve', `100% of proceeds sit at a custodian bank as collateral for the batch. They are never spent; ${V.S} is minted against them and stays 1:1 redeemable.`],
-      ['3. Serviced by compute revenue', `The client fiat from resold compute — the same flow that repays the issuer in 4.2 — services the note coupon and principal, supplemented by yield earned on the reserve itself.`],
-      ['4. Risks never mix', `If compute sales disappoint, the reserve is intact and coin holders are unaffected; only noteholders carry the business risk. Coin risk and investor risk are structurally separated.`],
+      ['2. Proceeds become the reserve', `100% of proceeds sit at a custodian bank as the batch's reserve. They are never spent on operations; ${V.S} is minted against them and stays 1:1 redeemable.`],
+      ['3. Serviced by compute revenue', `The client-fiat split in 4.2 services the note coupon. Principal is repaid as coins are redeemed and reserve is released. Yield earned on the reserve can supplement the coupon.`],
+      ['4. Risks never mix', `If compute sales disappoint, the reserve is intact and coin holders are unaffected; only noteholders miss the coupon. Coin risk and investor risk are structurally separated.`],
     ],
     s4fundNotice: `This section describes a financing structure, not an offer of securities. Any placement would be made only to qualified institutional investors, under the securities laws applicable to them, on the basis of full offering documentation.`,
 
@@ -196,7 +213,7 @@ function EN(c, V, m) {
       ['Population', c.population, 'Depth of the host base'],
       ['Gaming clubs (est.)', c.clubs, `≈ ${machines} consumer GPUs already installed`],
       ['Universities', c.universities, `${c.students} students — laboratories as the schools channel`],
-      ['Electricity, blended', `${money2(c.power)}/kWh`, 'Decides compute profitability'],
+      ['Electricity, blended', `${money2(c.power)}/kWh`, 'Keeps host net high; does not by itself set the yield'],
       ['Net per GPU-hour', money2(nh.nodeNet), 'Host share after electricity, at wholesale token price'],
       ['Utilisation (early net)', `${utilPct}%`, 'Share of offered idle hours actually sold'],
     ],
@@ -212,21 +229,21 @@ function EN(c, V, m) {
       ['Host net per hour', '', money2(nh.nodeNet)],
     ],
     s6t1head: ['Line', 'Basis', 'USD'],
-    s6note: `<strong>Two prices, one spread.</strong> The host is paid a compute price of ${money3(pay)} per million tokens — driven by that country's electricity and hardware cost. The same tokens are sold to end clients within a band of ${priceRange} per million (reference ${sellBase}). The gap between what we pay and what we sell is the programme's margin, and it is the fund from which the stablecoin issuer is repaid — the subject of §4.`,
+    s6note: `<strong>Two prices, one spread.</strong> The host is paid ${money3(pay)} per million tokens. The same tokens are sold to end clients within ${priceRange} per million (reference ${sellBase}) — the programme does not sell below the host pay price. The gap is the programme's margin and the issuer's operating return (§4). Figures assume an ${CARD.name} card at 1,500 tok/s. An older cafe GPU (${CARD.downsideName}, ~${CARD.downsideTokPerSec} tok/s) delivers about one-fifth the tokens; that hour nets ${money2(slow.nodeNet)} after electricity, and an ${club.pcs}-machine club about ${money(slowClub.total)}/month. Sold hours and card class set the yield; electricity is a thin slice of cost.`,
     s6chartH: 'Where each cent of the token price goes',
     s6chartCap: `Figure 6.1 — Cost, provider margin and our margin, per million tokens, by country`,
-    s6chartCs: `United States dollars per million output tokens; reference sell price ${sellBase}; cost tracks local electricity`,
+    s6chartCs: `United States dollars per million output tokens; reference sell price ${sellBase}; the black slice is mostly hardware wear — electricity is the thin slice that varies by country`,
     s6chartLabels: { cost: 'Compute cost (power + hardware)', prov: 'Provider margin', ours: 'Our margin' },
     s6scenH: 'Three go-to-market scenarios',
-    s6scenLead: `The two prices move independently. The cheaper we procure compute — cheap power, bulk hardware — and the dearer we sell it, the wider the spread and the faster client fiat returns to the issuer. The three columns below show what a first batch recovers in a single pass.`,
-    s6scenCap: 'Figure 6.2 — Pay price, sell price and first-batch recovery, by scenario',
-    s6scenCs: 'United States dollars per million tokens; recovery = share of a first batch repaid to the issuer in one pass of the minted float',
+    s6scenLead: `Host pay is this country's actual price. Sell moves inside the published band. The three columns show how much of a first batch the issuer's 80% share recovers in a single pass of the minted float.`,
+    s6scenCap: 'Figure 6.2 — This country’s pay, three sell prices, first-batch recovery',
+    s6scenCs: 'United States dollars per million tokens; recovery = 80% issuer share of (sell ÷ pay) ÷ 1.10',
     s6scenLabels: {
-      names: ['Tight', 'Balanced', 'Wide'],
-      subs: ['rich market, modest sell', 'balanced', 'cheap power, premium sell'],
+      names: ['Modest', 'Reference', 'Premium'],
+      subs: ['floor sell', 'reference sell', 'ceiling sell'],
       slow: 'PARTIAL — NEEDS VOLUME', ok: 'REPAYS IN ONE PASS', fast: 'REPAYS FAST, ROOM TO GROW',
     },
-    s6scenNote: `Recovery above 100% means one pass of the minted stablecoin, once resold, returns more than the issuer's collateral plus markup — so the next batch can be larger. Below 100%, the batch is retired over additional volume rather than in a single pass.`,
+    s6scenNote: `Recovery above 100% means one pass of the minted stablecoin, once resold, covers the issuer's 10% target on that pass — so the next batch can be larger. Below 100%, the target is reached over additional volume. Later batches at a 40% or 20% issuer share need more than one pass at these prices.`,
 
     s7h: 'Supply Channels',
     s7lead: 'Capacity is not bought one machine at a time. Four channels aggregate it, and each has a dedicated proposal deck accompanying this document.',
@@ -292,7 +309,7 @@ function EN(c, V, m) {
       s2fig: [
         ['100%', `of local payouts settled in ${V.S}`],
         ['0', 'correspondent banks in the chain'],
-        ['&lt;60s', 'from work accepted to money spendable'],
+        ['Same day', 'from work accepted to wallet credit'],
       ],
       s3k: 'What it replaces',
       s3h: 'The cost of getting paid across a border.',
@@ -308,13 +325,13 @@ function EN(c, V, m) {
       s5h: 'The money lands where the work is done.',
       s5cards: [
         ['One conversion', `USD/EUR converts to ${V.S} once, at wholesale, through a licensed local venue — the contributor never touches FX.`],
-        ['No intermediary', `No transit jurisdiction, no intermediary token. Fewer counterparties, thinner spreads, one regulatory perimeter.`],
+        ['No intermediary on the rail', `On the payout rail: no transit jurisdiction, no intermediary token. Reserve financing, if used, sits outside that rail.`],
         ['Float stays home', `Payouts are denominated in ${c.currency}; the float circulates in ${V.Cn} instead of draining out.`],
       ],
       s6k: `What ${V.S} buys`,
       s6h: `One thing, priced by the hour.`,
       s6a: ['We pay the host', `${money3(pay)}<span style="font-size:14pt">/M tok</span>`, `The compute price paid to ${c.adjective} hosts — driven by local electricity and hardware.`],
-      s6b: ['We sell to clients', `${priceRange}<span style="font-size:14pt">/M tok</span>`, `The band we resell that compute for. The spread funds the programme and repays the issuer.`],
+      s6b: ['We sell to clients', `${priceRange}<span style="font-size:14pt">/M tok</span>`, `The band we resell that compute for — never below host pay. The spread funds the programme and is the issuer's operating return.`],
       // batch minting
       dMintK: 'The mechanism',
       dMintH: 'Mint in batches. Start with a pilot.',
@@ -328,42 +345,42 @@ function EN(c, V, m) {
         ? `${V.S} already exists — so for ${V.C} this is a proposal to the issuer, not a new coin.`
         : `A partner issuer mints ${V.S} in tranches; no open-ended supply.`,
       // split ladder
-      dSplitK: 'Repayment',
-      dSplitH: 'Client fiat repays the issuer first.',
+      dSplitK: 'Operating return',
+      dSplitH: 'Client fiat is the issuer’s coupon — the reserve stays put.',
       dSplitSizes: ['pilot', 'larger', 'larger still', 'at scale'],
-      dSplitLabels: { issuer: 'to issuer (+' + Math.round(BATCH.issuerMarkup * 100) + '% markup)', eco: 'to ecosystem' },
-      dSplitNote: `First batch splits 80/20 to the issuer; every batch returns their collateral, costs and a ${Math.round(BATCH.issuerMarkup * 100)}% markup. Their share falls as risk retires; batches grow.`,
+      dSplitLabels: { issuer: 'to issuer (share of client fiat)', eco: 'to ecosystem' },
+      dSplitNote: `First batch splits 80/20. The 80% is operating revenue toward costs plus a ${Math.round(BATCH.issuerMarkup * 100)}% target — not a release of the 1:1 reserve. The ${onePassShares} splits recover that target in one pass at the reference sell; ${multiPassShares} need more volume. Share falls as risk retires; batches grow.`,
       // offshore note funding
       dFundK: 'Reserve funding',
-      dFundH: 'An offshore note can seed the collateral.',
+      dFundH: 'A privately placed note can seed the reserve.',
       dFundCards: [
         ['Placed privately', `An SPV in an international financial centre places notes with qualified international investors — never a public offer.`],
-        ['100% into reserve', `Proceeds sit at a custodian bank as the batch's collateral; ${V.S} is minted against them and stays 1:1 redeemable.`],
-        ['Serviced by compute', `Client EUR / USD revenue services the notes, plus yield earned on the reserve itself.`],
-        ['Risks never mix', `Coin holders are backed by the intact reserve; only noteholders carry the business risk.`],
+        ['100% into reserve', `Proceeds sit at a custodian bank as the batch's reserve; ${V.S} is minted against them and stays 1:1 redeemable.`],
+        ['Serviced by compute', `The 4.2 client-fiat split services the coupon. Principal returns as coins are redeemed and reserve is released.`],
+        ['Risks never mix', `Coin holders are backed by the intact reserve; only noteholders miss the coupon if sales disappoint.`],
       ],
-      dFundNote: `A structure, not an offer — private placement to qualified institutional investors only, under applicable securities law.`,
+      dFundNote: `A structure, not an offer — private placement to qualified institutional investors only. This finances the reserve; it is not a hop in the payment corridor.`,
       // cost vs sell chart
       dCostK: 'The two prices',
       dCostH: 'Cheap to produce. Sold for more.',
       dCostLabels: { cost: 'Compute cost (power + hardware)', prov: 'Provider margin', ours: 'Our margin' },
-      dCostNote: `Cost tracks each country's electricity; the sell price is set by the client market. The gap repays the issuer and funds the programme.`,
+      dCostNote: `The black slice is mostly hardware wear; electricity is the thin country-varying slice. Sell is set by the client market and is never below host pay. The gap is the issuer's operating return.`,
       // scenarios
       dScenK: 'Three scenarios',
-      dScenH: 'Buy cheaper, sell dearer, get fiat faster.',
+      dScenH: 'This country’s pay. Three sell prices.',
       dScenLabels: {
-        names: ['Tight', 'Balanced', 'Wide'],
-        subs: ['modest spread', 'balanced', 'cheap power, premium sell'],
+        names: ['Modest', 'Reference', 'Premium'],
+        subs: ['floor sell', 'reference sell', 'ceiling sell'],
         slow: 'PARTIAL', ok: 'ONE PASS', fast: 'FAST + HEADROOM',
       },
-      dScenNote: `Recovery = share of the first batch repaid in a single pass of the minted float. Above 100%, the next batch can be bigger.`,
+      dScenNote: `Recovery = 80% issuer share of (sell ÷ pay) ÷ 1.10, using this country's host pay. Above 100%, the next batch can be bigger.`,
       s7k: `Value to ${V.C}`,
       s7h: 'The money is earned abroad and spent at home.',
       s7strip: [
         [money(clubTotal), `per club each month, from idle machines`],
         [`${machines}`, `consumer GPUs already installed in ${V.Cn}`],
         ['100%', `of earnings denominated in ${c.currency} — the float stays domestic`],
-        [money2(c.power), `per kWh — the input that makes local compute competitive`],
+        [money2(c.power), `per kWh — cheap power; sold hours and card class set the yield`],
       ],
       s8k: 'Compliance',
       s8h: 'Narrow by design.',
@@ -536,7 +553,7 @@ function EN(c, V, m) {
     },
 
     /* ---------- generic deck strings ---------- */
-    assumptions: `Figures are internal modelling estimates on stated assumptions — electricity at ${money2(c.power)}/kWh, batched inference at 1,500 output tokens per second, a compute price paid to hosts of ${money3(pay)} and a client sell price within ${priceRange} per million output tokens (reference ${sellBase}), and ${utilPct}% of offered hours actually sold. They are not audited statistics and are not a forecast.`,
+    assumptions: `Figures are internal modelling estimates on stated assumptions — an ${CARD.name} card at 1,500 output tokens per second (older cafe cards at ~${CARD.downsideTokPerSec} tok/s scale tokens and client revenue by about one-fifth), electricity at ${money2(c.power)}/kWh, a compute price paid to hosts of ${money3(pay)}, a client sell price within ${priceRange} per million output tokens (reference ${sellBase}; never below host pay), and ${utilPct}% of offered hours actually sold. They are not audited statistics and are not a forecast.`,
   };
 }
 
@@ -546,7 +563,8 @@ function EN(c, V, m) {
 
 function RU(c, V, m) {
   const { nh, club, clubTotal, clubYear, labTotal, gpuPrice, gpuPayback, utilPct,
-          priceRange, sellBase, pay, cost, firstBatchLocal, firstBatchUSD } = m;
+          priceRange, sellBase, pay, cost, firstBatchLocal, firstBatchUSD,
+          slow, slowClub, onePassShares, multiPassShares, batchMonths } = m;
   const machines = (Number(c.clubs.replace(/\D/g, '')) * c.pcsPerClub).toLocaleString('ru-RU');
   const cName = c.cc === 'am' ? 'Армении' : 'Кыргызстане';
   const cNom  = c.cc === 'am' ? 'Армения' : 'Кыргызстан';
@@ -593,9 +611,9 @@ function RU(c, V, m) {
     s1h: 'Резюме',
     s1lead: `Программа закупает в ${cName} одну вещь: <strong>машинные вычисления</strong> — GPU-часы из компьютерных клубов, университетских лабораторий, офисов и домов. Каждый час оплачивается без исключений в <strong>${V.S}</strong> — стейблкоине, погашаемом один к одному в ${curRu}.`,
     s1p1: `Для ${cGen} это не помощь и не экспортная схема, а линия спроса. ИИ-инференс, который сегодня покупают у дата-центров во Франкфурте, Вирджинии или Сингапуре, покупается здесь — на оборудовании, которое уже есть в стране, — по цене, конкурентной на международном рынке, и деньги приходят в кошелёк в тот же час, а не в банк через три дня.`,
-    s1p2: `Это стало возможно только сейчас — благодаря появлению стейблкоинов с привязкой к местной валюте. Капитал клиента приходит в ${cName} напрямую, в долларах или евро, один раз конвертируется в ${V.S} и выплачивается сообществу — людям и учреждениям, чьи машины выполнили работу. В цепочке нет ни промежуточной юрисдикции, ни промежуточного токена.`,
+    s1p2: `Это стало возможно только сейчас — благодаря появлению стейблкоинов с привязкой к местной валюте. Капитал клиента приходит в ${cName} напрямую, в долларах или евро, один раз конвертируется в ${V.S} и выплачивается сообществу — людям и учреждениям, чьи машины выполнили работу. В платёжном коридоре одна конвертация и нет промежуточного токена. Любое финансирование резерва (§4.3) стоит вне этого коридора.`,
     s1k: [
-      [money2(c.power), `За киловатт-час — параметр, определяющий рентабельность часа вычислений.`],
+      [money2(c.power), `За киловатт-час — дешёвая энергия держит чистыми хоста высокими; доход задают проданные часы и класс карты.`],
       [money2(nh.nodeNet), `Чистыми хосту за проданный GPU-час, после электроэнергии, при цене компенсации ${money3(pay)} за миллион токенов.`],
       [`${machines}+`, `Потребительских GPU уже установлено только в ${adjRuPl} компьютерных клубах — до лабораторий, офисов и домов.`],
       ['100%', `Доля местных выплат в ${V.S}. Второго способа оплаты нет.`],
@@ -605,7 +623,7 @@ function RU(c, V, m) {
     s2h: 'Что закупает программа: вычисления',
     s2lead: `Одна линия предложения, агрегируемая из четырёх источников. Каждый опирается на оборудование, которое уже куплено, запитано и в сети где-то в экономике ${cGen}, — у него просто нет второй смены.`,
     s2computeH: 'Единица — один GPU-час',
-    s2compute: `ИИ-инференс на потребительских видеокартах. Одна карта текущего поколения выдаёт около ${nh.tokens / 1e6} млн выходных токенов в час при пакетной нагрузке. Программа платит хосту цену компенсации около ${money3(pay)} за миллион токенов — ${money2(nh.gross)} в час против ${money2(nh.power)} на электроэнергию по ${money2(c.power)} за кВт·ч, оставляя ${money2(nh.nodeNet)} чистыми. Те же вычисления перепродаются конечным клиентам в диапазоне ${priceRange} за миллион токенов; спред между этими двумя ценами финансирует программу и погашает эмитента стейблкоина.`,
+    s2compute: `ИИ-инференс на потребительских видеокартах. Одна карта класса ${CARD.name} (около ${money(gpuPrice)}) выдаёт около ${nh.tokens / 1e6} млн выходных токенов в час при пакетной нагрузке — 1 500 ток/с. Программа платит хосту около ${money3(pay)} за миллион токенов — ${money2(nh.gross)} в час против ${money2(nh.power)} на электроэнергию по ${money2(c.power)} за кВт·ч, оставляя ${money2(nh.nodeNet)} чистыми. Хосту платят по учтённым токенам, а не за номинальный час. Те же вычисления перепродаются в диапазоне ${priceRange} за миллион — никогда ниже цены хоста; спред финансирует программу и составляет операционный доход эмитента.`,
     s2sourcesH: 'Откуда берётся мощность',
     s2sources: `Её агрегируют четыре канала: компьютерные клубы, простаивающие вне пика игры; университетские лаборатории, пустующие ночами, по выходным и в каникулы; спонсоры оборудования, передающие призовые GPU сообществу через турниры и хакатоны; офисы и дома со свободной GPU. Ни одна мощность не строится под программу — она берётся из того, чем страна уже владеет.`,
     s2why: `Источники усиливают друг друга. Клуб доказывает установку в коммерческом зале; университет превращает ту же установку в учебный актив; призовая карта спонсора оказывается в клубе, лаборатории или дома у победителя. Один агент, одни рельсы учёта и выплат, четыре способа их наполнить.`,
@@ -614,7 +632,7 @@ function RU(c, V, m) {
       ['Компьютерные клубы', `≈ ${c.pcsPerClub} машин, простой вне вечерней игры`, `${money(clubTotal)}/клуб·мес`, 'По счётчику, с верификацией'],
       ['Университетские лаборатории', 'Простой ночами, по выходным и в каникулы', `${money(labTotal)}/лаб·мес`, 'По счётчику, с верификацией'],
       ['Спонсоры оборудования', 'Призовые GPU вручаются на событиях сообщества', `${money(club.perPc)}/приз·мес`, 'Спонсорство, подключено'],
-      ['Дома и офисы', 'Свободные потребительские GPU, добровольно', `${money2(nh.nodeNet)}/GPU·час чистыми`, 'По счётчику, с верификацией'],
+      ['Дома и офисы', 'Свободные потребительские GPU, добровольно', `${money(club.perPc)}/GPU·мес`, 'По счётчику, с верификацией'],
     ],
     s2tblHead: ['Источник', 'Что простаивает', 'Ориентировочный доход', 'Основание'],
 
@@ -622,9 +640,9 @@ function RU(c, V, m) {
     s3lead: `Каждый платёж программы внутри ${cGen} подчиняется одному правилу: <strong>он номинирован и исполняется в ${V.S}</strong>. Не в долларах с местной конвертацией. Не балансом платформы, который когда-нибудь станет деньгами. В ${V.S}, в момент приёмки работы.`,
     s3why: [
       ['Спред остаётся у исполнителя', `Трансграничная выплата обычно теряет от трёх до семи процентов на комиссиях посредников и розничном курсе. Расчёт напрямую в ${V.S} убирает это звено целиком.`],
-      ['Расчёт мгновенный', `Работа принята в полдень — деньги доступны в 12:01. Нет операционного дня, нет банка-корреспондента, нет выходных.`],
+      ['Расчёт в тот же день', `Принятая работа оплачивается в тот же день, обычно за минуты после того, как у исполнителя есть живой кошелёк. Первое погашение в ${curRu} идёт по часам лицензированного офф-рампа.`],
       ['Единица счёта — та, в которой человек живёт', `Исполнитель считает аренду, учёбу и продукты в ${curRu}. Оплата в ${curRu} снимает валютный риск с того, кто хуже всех может его захеджировать.`],
-      ['Работает без банковского счёта', `Нужен телефон, а не отделение, кредитная история или расчётный счёт. Особенно важно для небольших операторов и для тех, кто живёт не в ${capRu}.`],
+      ['Банковский счёт не обязателен', `Достаточно телефона, если есть лицензированный кошелёк или мобильный офф-рамп. Особенно важно для небольших операторов и для тех, кто живёт не в ${capRu}.`],
       ['Полная прослеживаемость', `Каждая выплата — запись в реестре против проверенной личности. Для налоговой и регулятора это чище, чем наличная экономика.`],
       ['Стоимость остаётся в стране', `${curRuNom.charAt(0).toUpperCase() + curRuNom.slice(1)} не выводится. Он обращается: клубы платят аренду, студенты — за учёбу, а объём остаётся внутри страны.`],
     ],
@@ -639,31 +657,31 @@ function RU(c, V, m) {
       ['4. Объём остаётся в стране', `${V.S} обращается внутри экономики ${cGen}: клубы платят аренду, студенты — за учёбу, а погашение в местную валюту идёт через лицензированные офф-рампы.`],
     ],
     s4back: `Обратное плечо симметрично. Заработок, который исполнитель хочет держать в твёрдой валюте, идёт ${V.S} → USD или EUR на той же лицензированной оптовой площадке, поэтому коридор двусторонний, а не односторонний отток.`,
-    s4whyGeo: `<strong>Почему напрямую, а не через хаб.</strong> Три причины: каждое лишнее звено платежа добавляет контрагента, спред и регуляторный периметр; твёрдая валюта покупателя оседает в экономике, которая выполнила работу, а не в транзитной юрисдикции; и объём ${V.S} остаётся внутри страны с первого платежа. Одна конвертация, одна юрисдикция, никакого промежуточного токена.`,
+    s4whyGeo: `<strong>Почему напрямую, а не через хаб.</strong> Три причины: каждое лишнее звено платежа добавляет контрагента, спред и регуляторный периметр; твёрдая валюта покупателя оседает в экономике, которая выполнила работу, а не в транзитной юрисдикции; и объём ${V.S} остаётся внутри страны с первого платежа. На рельсах выплат: одна конвертация, одна юрисдикция, никакого промежуточного токена.`,
 
     s4mintH: 'Выпуск партиями — сначала пилот',
     s4mint: `Программа не просит эмитента выпускать неограниченный объём. Она просит выпускать ${V.S} <strong>дискретными партиями</strong>, первая из которых мала и считается пилотом. Партнёр-эмитент вносит залог, выпускает одну определённую партию, и программа тратит её в вычислительную экономику ${cGen} — после чего все стороны оценивают результат до выпуска следующей партии.`,
     s4mintSteps: [
-      ['1. Первая партия — пилот', `Первая партия — около ${firstBatchLocal} ${c.iso} (≈ ${money(firstBatchUSD)}) — выпускается под залог эмитента. Намеренно мало: достаточно, чтобы доказать контур, но не рисковать эмитентом.`],
+      ['1. Первая партия — пилот', `Первая партия — около ${firstBatchLocal} ${c.iso} (≈ ${money(firstBatchUSD)}) — выпускается под резерв эмитента. Намеренно мало: на пилоте из двадцати клубов и трёх лабораторий это около ${batchMonths} месяцев выплат хостам — дольше двенадцатинедельного пилота, так что партия не тратится в окне пилота.`],
       ['2. Тратится на вычисления', `Выпущенный ${V.S} идёт на оплату ${adjRuPl} провайдеров вычислений — клубов, лабораторий, хостов — за поставленный ИИ-компьют. Больше партия ни на что не тратится.`],
-      ['3. Продаётся клиентам за фиат', `Эти вычисления перепродаются конечным клиентам, которые платят в EUR, USD или GBP. Именно эта входящая твёрдая валюта погашает эмитента.`],
+      ['3. Продаётся клиентам за фиат', `Эти вычисления перепродаются конечным клиентам, которые платят в EUR, USD или GBP. Эта входящая твёрдая валюта — операционный доход эмитента; она не высвобождает резерв, который обеспечивает монеты в обращении.`],
       ['4. Оценка, затем масштаб', `После первой партии измеряются результаты — загрузка, цена перепродажи, скорость возврата — и следующая, большая партия планируется по фактам.`],
     ],
-    s4splitH: 'Как погашается эмитент',
-    s4split: `Входящий клиентский фиат делится между эмитентом и программой. На <strong>первой партии сплит 80 / 20</strong>: 80% сразу возвращаются эмитенту, чтобы вернуть залог и все задокументированные издержки плюс наценку ${Math.round(BATCH.issuerMarkup * 100)}% как его доход; 20% финансируют операции программы и развитие экосистемы. Обе стороны видят один и тот же реестр издержек — скрытых маржей внутри погашения нет. По мере того как каждая партия снимает риск эмитента, его доля в следующих партиях падает — 60/40, затем 40/60, затем 20/80 — а сами партии растут. Наценка ${Math.round(BATCH.issuerMarkup * 100)}% — не разовая на пилоте: она применяется к каждой партии, так что при любом сплите доля эмитента всегда возвращает залог и издержки плюс ${Math.round(BATCH.issuerMarkup * 100)}%. Эмитент зарабатывает больше и раньше, когда риск выше; программа оставляет себе больше и позже, когда модель доказана.`,
+    s4splitH: 'Как платят эмитенту',
+    s4split: `Входящий клиентский фиат делится между эмитентом и программой. На <strong>первой партии сплит 80 / 20</strong>: 80% — доля эмитента в операционной выручке (к задокументированным издержкам плюс целевая наценка ${Math.round(BATCH.issuerMarkup * 100)}%), 20% финансируют операции программы. Резерв, обеспечивающий монеты в обращении, остаётся на месте: это купон на резерв, а не его высвобождение. Залог высвобождается только по мере погашения монет и закрытия партии. Обе стороны видят один реестр издержек. По мере закрытия партий доля эмитента в следующих падает — 60/40, затем 40/60, затем 20/80 — а сами партии растут. При цене хоста этой страны и ориентире продажи ${sellBase} сплиты ${onePassShares || '—'} закрывают цель ${Math.round(BATCH.issuerMarkup * 100)}% за один проход выпущенного объёма; ${multiPassShares || '—'} требуют больше одного прохода. ${Math.round(BATCH.issuerMarkup * 100)}% — целевая доходность на погашаемое, а не гарантия, что любой сплит закроется за один проход. Эмитент зарабатывает больше и раньше, когда риск выше.`,
     s4splitCap: 'Схема 4.2 — Доля эмитента и экосистемы в клиентском фиате, по партиям',
-    s4splitCs: 'Столбцы шире с ростом партий; доля эмитента падает по мере снятия залогового риска',
+    s4splitCs: 'Столбцы шире с ростом партий; доля эмитента в операционной выручке падает по мере снятия риска',
     s4splitSizes: ['пилот', 'больше', 'ещё больше', 'в масштабе'],
-    s4splitLabels: { issuer: 'эмитенту (залог + издержки + наценка)', eco: 'программе / экосистеме' },
-    s4splitNote: `<strong>Почему это безопасно для эмитента.</strong> Первая партия мала, залог принадлежит ему и остаётся обеспеченным 1:1, погашение идёт с опережением и с наценкой, а следующая партия не выпускается, пока не отработает первая. Риск исполнения несёт программа; у эмитента — короткая, переобеспеченная дебиторка с наценкой.`,
+    s4splitLabels: { issuer: 'эмитенту (доля клиентского фиата)', eco: 'программе / экосистеме' },
+    s4splitNote: `<strong>Почему это безопасно для эмитента.</strong> Первая партия мала, резерв остаётся обеспеченным 1:1, пока монеты в обращении, доля эмитента в операционной выручке идёт с опережением, и следующая партия не выпускается, пока не отработает первая. Риск исполнения несёт программа; у эмитента — короткое, полностью резервированное требование на операционную выручку с наценкой.`,
 
-    s4fundH: 'Откуда может взяться залог — офшорная нота',
-    s4fund: `Залог эмитента не обязан браться с его собственного баланса. Программа поддерживает его формирование через частно размещаемую ноту: специальная компания (SPV) в международном финансовом центре (например, МФЦА в Астане) размещает ноты среди квалифицированных международных инвесторов, и 100% привлечённых средств хранятся как резерв партии в банке-кастодиане. ${V.S} выпускается только против этого резерва, поэтому каждая монета в обращении всегда полностью погашаема.`,
+    s4fundH: 'Откуда может взяться резерв — частно размещаемая нота',
+    s4fund: `Резерв эмитента не обязан браться с его собственного баланса. Его можно сформировать через частно размещаемую ноту: специальная компания (SPV) в международном финансовом центре размещает ноты среди квалифицированных международных инвесторов, и 100% привлечённых средств хранятся как резерв партии в банке-кастодиане. Это финансирование резерва, а не звено платёжного коридора — покупатели по-прежнему платят лицензированному юрлицу в ${cName}, хосты по-прежнему получают ${V.S}. ${V.S} выпускается только против этого резерва, поэтому каждая монета в обращении всегда полностью погашаема.`,
     s4fundSteps: [
       ['1. Частное размещение нот', `Выделенная SPV выпускает ноты только среди квалифицированных международных инвесторов по частному размещению — без публичного предложения, ни локально, ни где-либо ещё.`],
-      ['2. Средства становятся резервом', `100% привлечённых средств лежат в банке-кастодиане как залог партии. Они никогда не тратятся; ${V.S} выпускается против них и остаётся погашаемым 1:1.`],
-      ['3. Обслуживание за счёт выручки', `Клиентский фиат от перепродажи вычислений — тот же поток, что гасит эмитента в 4.2, — обслуживает купон и тело нот; его дополняет доход на самом резерве.`],
-      ['4. Риски не смешиваются', `Если продажи вычислений разочаруют, резерв цел и держатели монет не затронуты; бизнес-риск несут только держатели нот. Риск монеты и риск инвестора структурно разделены.`],
+      ['2. Средства становятся резервом', `100% привлечённых средств лежат в банке-кастодиане как резерв партии. На операции они не тратятся; ${V.S} выпускается против них и остаётся погашаемым 1:1.`],
+      ['3. Обслуживание за счёт выручки', `Сплит клиентского фиата из 4.2 обслуживает купон ноты. Тело гасится по мере погашения монет и высвобождения резерва. Доход на самом резерве может дополнять купон.`],
+      ['4. Риски не смешиваются', `Если продажи вычислений разочаруют, резерв цел и держатели монет не затронуты; купон не получают только держатели нот. Риск монеты и риск инвестора структурно разделены.`],
     ],
     s4fundNotice: `Этот раздел описывает структуру финансирования, а не предложение ценных бумаг. Любое размещение проводилось бы только среди квалифицированных институциональных инвесторов, по применимому к ним законодательству о ценных бумагах и на основании полной документации выпуска.`,
 
@@ -676,7 +694,7 @@ function RU(c, V, m) {
       ['Население', c.population, 'Глубина базы хостов'],
       ['Компьютерные клубы (оценка)', c.clubs, `≈ ${machines} потребительских GPU уже установлено`],
       ['Университеты', c.universities, `${c.students} студентов — лаборатории как школьный канал`],
-      ['Электроэнергия', `${money2(c.power)}/кВт·ч`, 'Определяет рентабельность вычислений'],
+      ['Электроэнергия', `${money2(c.power)}/кВт·ч`, 'Держит чистыми хоста высокими; сама по себе доход не задаёт'],
       ['Чистыми за GPU-час', money2(nh.nodeNet), 'Доля хоста после электроэнергии, по оптовой цене токена'],
       ['Загрузка (ранняя сеть)', `${utilPct}%`, 'Доля предлагаемых часов простоя, которые продаются'],
     ],
@@ -692,21 +710,21 @@ function RU(c, V, m) {
       ['Чистыми хосту в час', '', money2(nh.nodeNet)],
     ],
     s6t1head: ['Статья', 'Основание', 'USD'],
-    s6note: `<strong>Две цены, один спред.</strong> Хосту платят цену компенсации ${money3(pay)} за миллион токенов — она задаётся электроэнергией и стоимостью железа в стране. Те же токены продаются конечным клиентам в диапазоне ${priceRange} за миллион (ориентир ${sellBase}). Разница между тем, что мы платим, и тем, за сколько продаём, — это маржа программы и фонд, из которого погашается эмитент стейблкоина (см. §4).`,
+    s6note: `<strong>Две цены, один спред.</strong> Хосту платят ${money3(pay)} за миллион токенов. Те же токены продаются в диапазоне ${priceRange} за миллион (ориентир ${sellBase}) — программа не продаёт ниже цены хоста. Разница — маржа программы и операционный доход эмитента (§4). Цифры предполагают карту ${CARD.name} на 1 500 ток/с. Более старая клубная GPU (${CARD.downsideName}, ~${CARD.downsideTokPerSec} ток/с) даёт примерно пятую часть токенов; такой час оставляет ${money2(slow.nodeNet)} после электроэнергии, а клуб из ${club.pcs} машин — около ${money(slowClub.total)}/мес. Доход задают проданные часы и класс карты; электроэнергия — тонкий слой себестоимости.`,
     s6chartH: 'Куда идёт каждый цент цены токена',
     s6chartCap: `Схема 6.1 — Себестоимость, маржа провайдера и наша маржа, за миллион токенов, по странам`,
-    s6chartCs: `Доллары США за миллион выходных токенов; ориентир цены продажи ${sellBase}; себестоимость следует за местной электроэнергией`,
+    s6chartCs: `Доллары США за миллион выходных токенов; ориентир продажи ${sellBase}; чёрный слой — в основном износ железа, электроэнергия — тонкий слой, который меняется по странам`,
     s6chartLabels: { cost: 'Себестоимость (энергия + железо)', prov: 'Маржа провайдера', ours: 'Наша маржа' },
     s6scenH: 'Три сценария вывода на рынок',
-    s6scenLead: `Две цены двигаются независимо. Чем дешевле мы закупаем вычисления — дешёвая энергия, опт по железу — и чем дороже продаём, тем шире спред и тем быстрее клиентский фиат возвращается эмитенту. Три столбца ниже показывают, какую долю первой партии возвращает один проход.`,
-    s6scenCap: 'Схема 6.2 — Цена закупки, цена продажи и возврат первой партии, по сценариям',
-    s6scenCs: 'Доллары США за миллион токенов; возврат = доля первой партии, погашаемая эмитенту за один проход выпущенного объёма',
+    s6scenLead: `Цена хоста — фактическая цена этой страны. Цена продажи двигается внутри опубликованного диапазона. Три столбца показывают, какую долю первой партии возвращает 80% эмитента за один проход выпущенного объёма.`,
+    s6scenCap: 'Схема 6.2 — Цена этой страны, три цены продажи, возврат первой партии',
+    s6scenCs: 'Доллары США за миллион токенов; возврат = 80% доли эмитента × (продажа ÷ закупка) ÷ 1,10',
     s6scenLabels: {
-      names: ['Узкий', 'Сбалансированный', 'Широкий'],
-      subs: ['богатый рынок, скромная продажа', 'баланс', 'дешёвая энергия, премиальная продажа'],
+      names: ['Скромный', 'Ориентир', 'Премиум'],
+      subs: ['пол продажи', 'ориентир', 'потолок продажи'],
       slow: 'ЧАСТИЧНО — НУЖЕН ОБЪЁМ', ok: 'ВОЗВРАТ ЗА ОДИН ПРОХОД', fast: 'БЫСТРО, ЕСТЬ ЗАПАС',
     },
-    s6scenNote: `Возврат выше 100% означает, что один проход выпущенного стейблкоина после перепродажи возвращает больше, чем залог эмитента плюс наценка, — значит следующая партия может быть больше. Ниже 100% — партия гасится дополнительным объёмом, а не за один проход.`,
+    s6scenNote: `Возврат выше 100% означает, что один проход выпущенного стейблкоина покрывает целевые 10% эмитента на этом проходе — следующая партия может быть больше. Ниже 100% цель достигается дополнительным объёмом. Поздние партии при доле эмитента 40% или 20% при этих ценах требуют больше одного прохода.`,
 
     s7h: 'Каналы предложения',
     s7lead: 'Мощности не набираются по одной машине. Их агрегируют четыре канала, и к каждому прилагается отдельная презентация.',
@@ -770,7 +788,7 @@ function RU(c, V, m) {
       s2fig: [
         ['100%', `местных выплат в ${V.S}`],
         ['0', 'банков-корреспондентов в цепочке'],
-        ['&lt;60 с', 'от приёмки работы до доступных денег'],
+        ['В тот же день', 'от приёмки работы до зачисления на кошелёк'],
       ],
       s3k: 'Что это заменяет',
       s3h: 'Цену трансграничного получения денег.',
@@ -786,13 +804,13 @@ function RU(c, V, m) {
       s5h: 'Деньги приходят туда, где сделана работа.',
       s5cards: [
         ['Одна конвертация', `USD/EUR один раз, оптом, конвертируются в ${V.S} через лицензированную местную площадку — исполнитель не касается FX.`],
-        ['Без посредников', 'Нет транзитной юрисдикции и промежуточного токена. Меньше контрагентов, уже спреды, один регуляторный периметр.'],
+        ['Без посредников на рельсах', 'На рельсах выплат нет транзитной юрисдикции и промежуточного токена. Финансирование резерва, если есть, стоит вне этих рельс.'],
         ['Объём остаётся дома', `Выплаты номинированы в ${curRu}; объём обращается внутри страны, а не утекает наружу.`],
       ],
       s6k: `Две цены`,
       s6h: 'Платим хосту одно, продаём клиенту другое.',
       s6a: ['Платим хосту', `${money3(pay)}<span style="font-size:14pt">/млн ток</span>`, `Цена компенсации местным хостам — её задают местная электроэнергия и железо.`],
-      s6b: ['Продаём клиентам', `${priceRange}<span style="font-size:14pt">/млн ток</span>`, `Диапазон, в котором мы перепродаём вычисления. Спред финансирует программу и погашает эмитента.`],
+      s6b: ['Продаём клиентам', `${priceRange}<span style="font-size:14pt">/млн ток</span>`, `Диапазон перепродажи — никогда не ниже цены хоста. Спред финансирует программу и составляет операционный доход эмитента.`],
       dMintK: 'Механизм',
       dMintH: 'Выпуск партиями. Сначала пилот.',
       dMintSteps: [
@@ -802,40 +820,40 @@ function RU(c, V, m) {
         ['Оценка', `Измеряем, затем планируем большую следующую партию.`],
       ],
       dMintNote: `Партнёр-эмитент выпускает ${V.S} траншами; неограниченного объёма нет.`,
-      dSplitK: 'Погашение',
-      dSplitH: 'Клиентский фиат сначала гасит эмитента.',
+      dSplitK: 'Операционный доход',
+      dSplitH: 'Клиентский фиат — купон эмитента; резерв остаётся на месте.',
       dSplitSizes: ['пилот', 'больше', 'ещё больше', 'в масштабе'],
-      dSplitLabels: { issuer: 'эмитенту (+' + Math.round(BATCH.issuerMarkup * 100) + '% наценка)', eco: 'экосистеме' },
-      dSplitNote: `Первая партия делится 80/20 в пользу эмитента; каждая партия возвращает залог, издержки и наценку ${Math.round(BATCH.issuerMarkup * 100)}%. Его доля падает по мере снятия риска; партии растут.`,
+      dSplitLabels: { issuer: 'эмитенту (доля клиентского фиата)', eco: 'экосистеме' },
+      dSplitNote: `Первая партия делится 80/20. 80% — операционная выручка к издержкам плюс цель ${Math.round(BATCH.issuerMarkup * 100)}%, а не высвобождение резерва 1:1. ${onePassShares} закрывают цель за один проход при ориентирной продаже; ${multiPassShares} требуют большего объёма. Доля падает по мере снятия риска; партии растут.`,
       // офшорная нота
       dFundK: 'Финансирование резерва',
-      dFundH: 'Залог может дать офшорная нота.',
+      dFundH: 'Резерв может дать частно размещаемая нота.',
       dFundCards: [
         ['Частное размещение', `SPV в международном финансовом центре размещает ноты среди квалифицированных международных инвесторов — без публичного предложения.`],
-        ['100% в резерв', `Средства лежат в банке-кастодиане как залог партии; ${V.S} выпускается против них и погашаем 1:1.`],
-        ['Обслуживание выручкой', `Клиентские EUR / USD за вычисления обслуживают ноты; плюс доход на самом резерве.`],
-        ['Риски не смешиваются', `Держатели монеты защищены целым резервом; бизнес-риск несут только держатели нот.`],
+        ['100% в резерв', `Средства лежат в банке-кастодиане как резерв партии; ${V.S} выпускается против них и погашаем 1:1.`],
+        ['Обслуживание выручкой', `Сплит клиентского фиата из 4.2 обслуживает купон. Тело возвращается по мере погашения монет и высвобождения резерва.`],
+        ['Риски не смешиваются', `Держатели монеты защищены целым резервом; купон не получают только держатели нот, если продажи разочаруют.`],
       ],
-      dFundNote: `Структура, а не предложение — только частное размещение среди квалифицированных институциональных инвесторов по применимому праву.`,
+      dFundNote: `Структура, а не предложение — только частное размещение среди квалифицированных институциональных инвесторов. Это финансирует резерв, а не является звеном платёжного коридора.`,
       dCostK: 'Две цены',
       dCostH: 'Дёшево произвести. Дороже продать.',
       dCostLabels: { cost: 'Себестоимость (энергия + железо)', prov: 'Маржа провайдера', ours: 'Наша маржа' },
-      dCostNote: `Себестоимость следует за электроэнергией страны; цену продажи задаёт рынок клиентов. Разрыв гасит эмитента и финансирует программу.`,
+      dCostNote: `Чёрный слой — в основном износ железа; электроэнергия — тонкий слой, который меняется по странам. Продажа никогда не ниже цены хоста. Разрыв — операционный доход эмитента.`,
       dScenK: 'Три сценария',
-      dScenH: 'Дешевле купить, дороже продать — быстрее фиат.',
+      dScenH: 'Цена этой страны. Три цены продажи.',
       dScenLabels: {
-        names: ['Узкий', 'Сбаланс.', 'Широкий'],
-        subs: ['скромный спред', 'баланс', 'дешёвая энергия, премиум'],
+        names: ['Скромный', 'Ориентир', 'Премиум'],
+        subs: ['пол продажи', 'ориентир', 'потолок'],
         slow: 'ЧАСТИЧНО', ok: 'ОДИН ПРОХОД', fast: 'БЫСТРО + ЗАПАС',
       },
-      dScenNote: `Возврат = доля первой партии, погашенная за один проход выпущенного объёма. Выше 100% — следующая партия может быть больше.`,
+      dScenNote: `Возврат = 80% доли эмитента × (продажа ÷ закупка) ÷ 1,10 при цене хоста этой страны. Выше 100% — следующая партия может быть больше.`,
       s7k: `Ценность для ${cGen}`,
       s7h: 'Деньги зарабатываются вовне и тратятся дома.',
       s7strip: [
         [money(clubTotal), 'на клуб в месяц, с простаивающих машин'],
         [`${machines}`, `потребительских GPU уже установлено в ${cName}`],
         ['100%', `заработка номинировано в ${curRu} — объём остаётся внутри страны`],
-        [money2(c.power), 'за кВт·ч — вход, делающий местные вычисления конкурентными'],
+        [money2(c.power), 'за кВт·ч — дешёвая энергия; доход задают часы и класс карты'],
       ],
       s8k: 'Комплаенс',
       s8h: 'Узко по замыслу.',
@@ -1004,6 +1022,6 @@ function RU(c, V, m) {
       s8sub: 'Без капитальных затрат, без эксклюзивности, и учреждение может прекратить участие за неделю в любой момент.',
     },
 
-    assumptions: `Цифры — внутренние модельные оценки при указанных допущениях: электроэнергия ${money2(c.power)}/кВт·ч, пакетный инференс 1 500 выходных токенов в секунду, цена компенсации хосту ${money3(pay)} и цена продажи клиенту в диапазоне ${priceRange} за миллион выходных токенов (ориентир ${sellBase}), продаётся ${utilPct}% предлагаемых часов. Это не аудированная статистика и не прогноз.`,
+    assumptions: `Цифры — внутренние модельные оценки при указанных допущениях: карта ${CARD.name} на 1 500 выходных токенов в секунду (более старые клубные карты ~${CARD.downsideTokPerSec} ток/с масштабируют токены и клиентскую выручку примерно в пять раз вниз), электроэнергия ${money2(c.power)}/кВт·ч, цена компенсации хосту ${money3(pay)}, цена продажи клиенту в диапазоне ${priceRange} за миллион (ориентир ${sellBase}; никогда не ниже цены хоста), продаётся ${utilPct}% предлагаемых часов. Это не аудированная статистика и не прогноз.`,
   };
 }

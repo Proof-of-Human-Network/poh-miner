@@ -20,6 +20,25 @@ export const ONCHAIN_ASSETS = ['POH', ...STABLE_TICKERS];
 export function isOnChainAsset(c) { return ONCHAIN_ASSETS.includes(c); }
 export function isValidQuote(c)   { return QUOTE_CURRENCIES.includes(c) || ONCHAIN_ASSETS.includes(c); }
 
+// Wire pair id is BASE-QUOTE (WP5 `?pair=`). Quotes like USDT-TRC20 contain
+// hyphens — always parse with parsePair(), never split on the first '-'.
+export function pairId(baseAsset, quoteCurrency) {
+  return `${baseAsset}-${quoteCurrency}`;
+}
+
+export function parsePair(pair) {
+  if (!pair || typeof pair !== 'string') return null;
+  const bases = [...ONCHAIN_ASSETS].sort((a, b) => b.length - a.length);
+  const quotes = new Set([...QUOTE_CURRENCIES, ...ONCHAIN_ASSETS]);
+  for (const base of bases) {
+    const prefix = `${base}-`;
+    if (!pair.startsWith(prefix)) continue;
+    const quote = pair.slice(prefix.length);
+    if (quotes.has(quote) && quote !== base) return { baseAsset: base, quoteCurrency: quote };
+  }
+  return null;
+}
+
 const ORDER_EXPIRY_MS    = 24 * 60 * 60 * 1000;  // 24 h
 const PAYMENT_TIMEOUT_MS = 15 * 60 * 1000;        // 15 min
 
@@ -154,6 +173,41 @@ export class OrderStore {
     return out;
   }
 
+  // Every listed BASE-QUOTE pair plus last (book mid). change24h is filled in
+  // by PriceHistory when the HTTP handler has a sampler. GELt is not listed.
+  listMarkets({ pair } = {}) {
+    let pairs;
+    if (pair) {
+      const parsed = parsePair(pair);
+      if (!parsed) return { error: `unknown pair: ${pair}` };
+      pairs = [parsed];
+    } else {
+      pairs = [];
+      for (const baseAsset of ONCHAIN_ASSETS) {
+        for (const quoteCurrency of [...QUOTE_CURRENCIES, ...ONCHAIN_ASSETS]) {
+          if (quoteCurrency === baseAsset) continue;
+          pairs.push({ baseAsset, quoteCurrency });
+        }
+      }
+    }
+    return {
+      markets: pairs.map(({ baseAsset, quoteCurrency }) => {
+        const ref = this._priceFor(quoteCurrency, baseAsset);
+        return {
+          pair: pairId(baseAsset, quoteCurrency),
+          base: baseAsset,
+          quote: quoteCurrency,
+          last: ref.price,
+          change24h: null,
+          bestBid: ref.bestBid ? ref.bestBid.price : null,
+          bestAsk: ref.bestAsk ? ref.bestAsk.price : null,
+          source: ref.source,
+          onchainQuote: isOnChainAsset(quoteCurrency),
+        };
+      }),
+    };
+  }
+
   _patchOrder(id, patch) {
     if (!this.orders[id]) return null;
     Object.assign(this.orders[id], patch, { updatedAt: Date.now() });
@@ -170,7 +224,7 @@ export class OrderStore {
 
   // ─── Trades ──────────────────────────────────────────────────────────────
 
-  selectOrder(orderId, { taker, pohAmount, quoteAmount }) {
+  selectOrder(orderId, { taker, pohAmount, quoteAmount, takerPayoutAddress }) {
     const order = this.orders[orderId];
     if (!order)                       return { error: 'order not found' };
     if (order.status !== 'open')      return { error: `order is ${order.status}` };
@@ -180,6 +234,7 @@ export class OrderStore {
     if (pohAmount > order.pohAmount)  return { error: 'pohAmount exceeds order size' };
 
     const now = Date.now();
+    const payout = typeof takerPayoutAddress === 'string' ? takerPayoutAddress.trim() : '';
     const trade = {
       id: crypto.randomUUID(),
       orderId,
@@ -187,6 +242,9 @@ export class OrderStore {
       pohAmount,
       quoteAmount,
       status: 'selected',
+      // Off-chain quote receive address when the taker is selling the base
+      // (taking a buy). Atomic / sell-takes receive on-chain at `taker`.
+      ...(payout ? { takerPayoutAddress: payout } : {}),
       // Atomic on-chain swap: both legs settle in one chain transition — no
       // payment-sent/confirm phase, no payment deadline.
       ...(isOnChainAsset(order.quoteCurrency) ? { atomic: true } : {}),
