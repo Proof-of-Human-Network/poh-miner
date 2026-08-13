@@ -16,7 +16,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const srcDir = join(here, '..', 'i18n-src');
 const target = join(here, '..', 'i18n.js');
 
-const LANGS = ['en', 'ka', 'hy', 'ky', 'ru', 'de', 'fr', 'it', 'es'];
+const LANGS = ["en", "ru", "ky", "ka", "cn", "hk", "es", "de", "arab", "farsi", "it", "fr"];
 
 // Deep-merge every source table into { lang: { key: value } }.
 const merged = {};
