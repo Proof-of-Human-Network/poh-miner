@@ -471,13 +471,17 @@ run();</div>
 
           <div class="endpoint-card">
             <div class="mb-2"><span class="method method-post">POST</span> <code class="text-white/90">/chat/ask</code></div>
-            <p class="text-white/55 text-[18px]" data-i18n-html="doc.chat.ask">Full AI reply — routes to a skill or free chat. May return <code>{ fromChainHistory: true }</code> for cached on-chain replies.</p>
+            <p class="text-white/55 text-[18px]" data-i18n-html="doc.chat.ask">Full AI reply — routes to a skill or free chat. Accepts optional <code>attachments</code> (text files or images, ≤1&nbsp;MB total). Images force a vision-capable model. May return <code>{ fromChainHistory: true }</code> for cached on-chain replies.</p>
             <div class="code-block mt-3">{
   "message": "What is my on-chain reputation?",
   "wallet": "poh...",
   "requesterAddress": "poh...",
-  "history": []
+  "history": [],
+  "attachments": [
+    { "type": "image", "data": "&lt;base64-image&gt;", "filename": "screenshot.png" }
+  ]
 }</div>
+            <p class="text-white/40 text-[15px] mt-3" data-i18n-html="doc.chat.attachments">Attachments are an optional array of <code>{ type: 'text'|'image', data: '&lt;base64&gt;', filename?: '...' }</code>. Text is inlined into the prompt; images select a vision model automatically. Max 1&nbsp;MB per request.</p>
           </div>
 
           <div class="glass rounded-md p-5 mt-4 text-[17px] text-white/50" data-i18n-html="doc.chat.context">
