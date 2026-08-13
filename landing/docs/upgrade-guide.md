@@ -1,5 +1,13 @@
 # PoH Miner Upgrade Guide (macOS, Windows, Linux)
 
+**⚠️ This guide is outdated (v0.4.3/v0.4.4 era).** For current v0.4.21:
+- Check the [main README](../README.md) for latest build links
+- v0.4.21 includes chat attachments, task cascade, expanded model ladder
+- There have been multiple genesis resets and reward model v2; see git history for details
+- MCP integration is live — configure in Settings or config.json
+
+---
+
 This guide covers upgrading an **existing** PoH Miner install after the security release **and** the v0.4.3 / v0.4.4 updates (chat, explorer, wallet fixes, signed job payments, and sync improvements).
 
 **Short answer:** you do **not** need to wipe your blockchain for a normal upgrade. Keep your data folder, install the new version, and restart.

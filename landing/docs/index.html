@@ -98,6 +98,7 @@
         <a href="#chain-wallet" data-i18n-html="doc.toc.chain">Chain &amp; Wallet</a>
         <a href="#jobs" data-i18n="doc.toc.jobs">Jobs</a>
         <a href="#chat" data-i18n-html="doc.toc.chat">Chat &amp; Routing</a>
+        <a href="#mcp" data-i18n="doc.toc.mcp">MCP Servers</a>
         <a href="#search" data-i18n="doc.toc.search">History Search</a>
         <a href="#explorer" data-i18n="doc.toc.explorer">Explorer</a>
         <a href="#skills" data-i18n="doc.toc.skills">Skills</a>
@@ -488,6 +489,47 @@ run();</div>
             <strong class="text-white/70">Private vs public context</strong><br>
             Private chat uses in-memory session history. Public (paid) jobs also pull on-chain history via
             <code>/api/wallet/jobs</code> so follow-ups work across devices.
+          </div>
+        </section>
+
+        <!-- MCP -->
+        <section id="mcp" class="mb-16">
+          <h2 class="text-[32px] mb-6 neon" data-i18n="doc.mcp.title">Model Context Protocol (MCP)</h2>
+
+          <p class="text-white/55 text-[18px] mb-6" data-i18n="doc.mcp.intro">
+            Connect external MCP servers to add tools to chat and compute jobs. Configure servers via Electron Settings or <code>config.json</code>.
+          </p>
+
+          <div class="endpoint-card">
+            <div class="mb-2"><span class="method method-get">GET</span> <code class="text-white/90">/api/mcp/status</code></div>
+            <p class="text-white/55 text-[18px]" data-i18n-html="doc.mcp.status">List connected MCP servers and their available tools. Returns <code>{ servers: [{ name, status, toolCount, tools: [{ name, description }] }] }</code>.</p>
+            <div class="code-block mt-3">{ "servers": [
+  { "name": "web_search", "status": "connected", "tools": [
+      { "name": "search", "description": "Web search query" }
+    ]
+  }
+] }</div>
+          </div>
+
+          <div class="glass rounded-md p-5 mt-4 text-[17px] text-white/50" data-i18n-html="doc.mcp.chat">
+            <strong class="text-white/70">MCP in chat</strong><br>
+            When you ask a question in <code>/chat/ask</code> or <code>/chat/route</code>, the miner can invoke MCP tools (up to 3 rounds). Tool results are fed back into the LLM for a final reply. Tool names are namespaced: <code>&lt;server&gt;__&lt;tool&gt;</code>.
+          </div>
+
+          <div class="mb-6 mt-8">
+            <h3 class="text-[20px] mb-4 text-white/80">Configuration</h3>
+            <p class="text-white/55 text-[18px] mb-4" data-i18n="doc.mcp.config">Add servers to <code>config.json</code> under <code>mcpServers</code> (standard Claude Desktop / Cursor format):</p>
+            <div class="code-block">
+{
+  "mcpServers": {
+    "web_search": {
+      "command": "node",
+      "args": ["web-search-mcp/index.js"],
+      "env": { "API_KEY": "..." }
+    }
+  }
+}</div>
+            <p class="text-white/40 text-[15px] mt-3" data-i18n-html="doc.mcp.electron"><strong>Electron users:</strong> paste server config into <strong>Settings → MCP Servers</strong> instead of editing config.json manually.</p>
           </div>
         </section>
 
