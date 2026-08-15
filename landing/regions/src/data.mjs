@@ -282,6 +282,13 @@ export function nodeYear(c, util = NODE.utilisation) {
 // discounted by this — an idle hour is capacity, not revenue.
 export const SOLD_UTIL = 0.35;
 
+// Opening pilot: prove one loop before anything is scaled.
+export const PILOT = {
+  universities: 1,
+  clubs: 1,
+  hardware: 1,
+};
+
 // A gaming club: PCs earning only outside peak play.
 export function clubMonth(c, pcs = c.pcsPerClub, hoursPerDay = 14, util = SOLD_UTIL, tokPerSec = NODE.tokPerSec) {
   const h = nodeHour(c, tokPerSec);

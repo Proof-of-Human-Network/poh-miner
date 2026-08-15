@@ -3,7 +3,7 @@
 // buying local AI compute and paying for it in the local fiat-pegged stablecoin.
 
 import { nodeHour, nodeYear, clubMonth, payback, computeCost, payTok, fmtUSD, fmtLocal, SOLD_UTIL,
-         PRICE, BATCH, batchRecovery, scenariosFor, COUNTRIES, CARD } from './data.mjs';
+         PRICE, BATCH, batchRecovery, scenariosFor, COUNTRIES, CARD, PILOT } from './data.mjs';
 
 const money = n => '$' + Math.round(n).toLocaleString('en-US');
 const money2 = n => '$' + n.toFixed(2);
@@ -42,7 +42,7 @@ export function L(lang, c) {
   };
   const onePassShares = fmtSplits(BATCH.splits.filter((_, i) => recBySplit[i] >= 1));
   const multiPassShares = fmtSplits(BATCH.splits.filter((_, i) => recBySplit[i] < 1));
-  const pilotHostMo = 20 * clubTotal + 3 * labTotal;
+  const pilotHostMo = PILOT.clubs * clubTotal + PILOT.universities * labTotal;
   const batchMonths = Math.max(1, Math.round(firstBatchUSD / pilotHostMo));
 
   const V = { S, C: c.country, Cn: c.countryOf, adj: c.adjective, cur: c.currency, iso: c.iso,
@@ -137,7 +137,7 @@ function EN(c, V, m) {
       [`${machines}+`, `Consumer GPUs already installed in ${c.adjective} gaming clubs alone — before laboratories, offices and homes.`],
       ['100%', `Share of local payouts settled in ${V.S}. There is no second payment method.`],
     ],
-    s1note: `<strong>The ask.</strong> A pilot: three universities, twenty gaming clubs and one hardware sponsor in ${V.Cn}, with ${V.S} payout live from week one. Everything in this document follows from that one loop working.`,
+    s1note: `<strong>The ask.</strong> A pilot: one university, one gaming club and one hardware company in ${V.Cn}, with ${V.S} payout live from week one. Everything in this document follows from that one loop working.`,
 
     s2h: 'What the Programme Buys: Compute',
     s2lead: `One supply line, aggregated from four sources. Each draws on hardware that is already bought, powered and online somewhere in the ${c.adjective} economy — it simply has no second shift.`,
@@ -183,7 +183,7 @@ function EN(c, V, m) {
       ? `The programme does not ask an issuer to mint an open-ended supply. It asks for a stablecoin to be minted in <strong>discrete batches</strong>, the first one small and treated as a pilot. In ${V.C}, ${V.S} already exists, so the first batch is a <em>proposal to the issuer</em> rather than a new instrument: mint a defined tranche against collateral, let the programme spend it into the compute economy, and review before any second tranche.`
       : `The programme does not ask an issuer to mint an open-ended supply. It asks for ${V.S} to be minted in <strong>discrete batches</strong>, the first one small and treated as a pilot. A partner issuer deposits collateral, mints one defined tranche, and the programme spends it into the ${c.adjective} compute economy — then everyone reviews the results before a second tranche is minted.`,
     s4mintSteps: [
-      ['1. First batch — a pilot', `${c.stableLive ? `A minimum first batch of ${firstBatchLocal} ${c.iso} (${money(firstBatchUSD)})` : `A first batch of about ${firstBatchLocal} ${c.iso} (≈ ${money(firstBatchUSD)})`} is minted against the issuer's reserve. Small on purpose: at the pilot of twenty clubs and three laboratories that is about ${batchMonths} months of host payout — longer than the twelve-week pilot, so the batch is not spent in the pilot window.`],
+      ['1. First batch — a pilot', `${c.stableLive ? `A minimum first batch of ${firstBatchLocal} ${c.iso} (${money(firstBatchUSD)})` : `A first batch of about ${firstBatchLocal} ${c.iso} (≈ ${money(firstBatchUSD)})`} is minted against the issuer's reserve. Small on purpose: at the pilot of one club and one laboratory that is about ${batchMonths} months of host payout — longer than the twelve-week pilot, so the batch is not spent in the pilot window.`],
       ['2. Spent on compute', `The minted ${V.S} is used to pay ${c.adjective} compute providers — clubs, laboratories, hosts — for the AI compute they deliver. This is the only thing the batch is spent on.`],
       ['3. Sold to clients for fiat', `That compute is resold to end clients, who pay in EUR, USD or GBP. This incoming hard currency is the issuer's operating return — it does not release the reserve that backs circulating coins.`],
       ['4. Review, then scale', `After the first batch the results are measured — utilisation, resale price, repayment speed — and the next, larger batch is planned on the evidence.`],
@@ -270,14 +270,14 @@ function EN(c, V, m) {
     s9tblHead: ['Phase', 'Weeks', 'Milestone'],
     s9tbl: [
       ['Preparation', '0–4', `Local counsel engaged; ${V.S} on- and off-ramp partner appointed; USD/EUR → ${V.S} conversion tested at wholesale`],
-      ['Pilot', '4–12', `Three universities, twenty gaming clubs, one hardware sponsor; first ${V.S} payouts in week five`],
+      ['Pilot', '4–12', `One university, one gaming club, one hardware company; first ${V.S} payouts in week five`],
       ['Measurement', '12–16', 'Contributor retention, payout latency, dispute rate and capacity delivered, all published'],
       ['Scale', '16+', 'Channel-by-channel expansion on the evidence from the pilot'],
     ],
     s9ask: [
       ['From government', `A statement of no objection for ${V.S} payouts to residents, and a named point of contact.`],
-      ['From institutions', `Three universities and twenty clubs willing to run a twelve-week pilot at no cost to them.`],
-      ['From partners', `One hardware sponsor and one licensed on/off-ramp.`],
+      ['From institutions', `One university and one club willing to run a twelve-week pilot at no cost to them.`],
+      ['From partners', `One hardware company and one licensed on/off-ramp.`],
     ],
     s9notice: 'This document is furnished for the purpose of discussion only. It does not constitute an offer to sell, or the solicitation of an offer to buy, any security or financial instrument. All figures are illustrative outputs of an internal model based upon the stated assumptions; they are estimates rather than audited statistics and actual results will differ. Nothing herein constitutes legal, tax, financial or investment advice. The regulatory treatment of stablecoins is evolving, and operation is contingent upon obtaining and maintaining applicable licences and upon the identity, anti-money-laundering and sanctions obligations described above.',
 
@@ -389,7 +389,7 @@ function EN(c, V, m) {
       s9h: 'Twelve weeks. No public money.',
       s9steps: [
         { k: 'W0', t: 'Counsel + ramp partner', s: 'Licensing confirmed' },
-        { k: 'W4', t: 'Pilot opens', s: '3 universities · 20 clubs' },
+        { k: 'W4', t: 'Pilot opens', s: '1 university · 1 club · 1 hardware' },
         { k: 'W5', t: `First ${V.S} payouts`, s: 'The loop proven', hi: true },
         { k: 'W12', t: 'Results published', s: 'Retention · latency · capacity' },
       ],
@@ -618,7 +618,7 @@ function RU(c, V, m) {
       [`${machines}+`, `Потребительских GPU уже установлено только в ${adjRuPl} компьютерных клубах — до лабораторий, офисов и домов.`],
       ['100%', `Доля местных выплат в ${V.S}. Второго способа оплаты нет.`],
     ],
-    s1note: `<strong>Запрос.</strong> Пилот: три университета, двадцать компьютерных клубов и один спонсор по оборудованию в ${cName}, с выплатами в ${V.S} с первой недели. Всё остальное в этом документе следует из того, что этот контур работает.`,
+    s1note: `<strong>Запрос.</strong> Пилот: один университет, один компьютерный клуб и одна компания по оборудованию в ${cName}, с выплатами в ${V.S} с первой недели. Всё остальное в этом документе следует из того, что этот контур работает.`,
 
     s2h: 'Что закупает программа: вычисления',
     s2lead: `Одна линия предложения, агрегируемая из четырёх источников. Каждый опирается на оборудование, которое уже куплено, запитано и в сети где-то в экономике ${cGen}, — у него просто нет второй смены.`,
@@ -662,7 +662,7 @@ function RU(c, V, m) {
     s4mintH: 'Выпуск партиями — сначала пилот',
     s4mint: `Программа не просит эмитента выпускать неограниченный объём. Она просит выпускать ${V.S} <strong>дискретными партиями</strong>, первая из которых мала и считается пилотом. Партнёр-эмитент вносит залог, выпускает одну определённую партию, и программа тратит её в вычислительную экономику ${cGen} — после чего все стороны оценивают результат до выпуска следующей партии.`,
     s4mintSteps: [
-      ['1. Первая партия — пилот', `Первая партия — около ${firstBatchLocal} ${c.iso} (≈ ${money(firstBatchUSD)}) — выпускается под резерв эмитента. Намеренно мало: на пилоте из двадцати клубов и трёх лабораторий это около ${batchMonths} месяцев выплат хостам — дольше двенадцатинедельного пилота, так что партия не тратится в окне пилота.`],
+      ['1. Первая партия — пилот', `Первая партия — около ${firstBatchLocal} ${c.iso} (≈ ${money(firstBatchUSD)}) — выпускается под резерв эмитента. Намеренно мало: на пилоте из одного клуба и одной лаборатории это около ${batchMonths} месяцев выплат хостам — дольше двенадцатинедельного пилота, так что партия не тратится в окне пилота.`],
       ['2. Тратится на вычисления', `Выпущенный ${V.S} идёт на оплату ${adjRuPl} провайдеров вычислений — клубов, лабораторий, хостов — за поставленный ИИ-компьют. Больше партия ни на что не тратится.`],
       ['3. Продаётся клиентам за фиат', `Эти вычисления перепродаются конечным клиентам, которые платят в EUR, USD или GBP. Эта входящая твёрдая валюта — операционный доход эмитента; она не высвобождает резерв, который обеспечивает монеты в обращении.`],
       ['4. Оценка, затем масштаб', `После первой партии измеряются результаты — загрузка, цена перепродажи, скорость возврата — и следующая, большая партия планируется по фактам.`],
@@ -751,14 +751,14 @@ function RU(c, V, m) {
     s9tblHead: ['Этап', 'Недели', 'Результат'],
     s9tbl: [
       ['Подготовка', '0–4', `Привлечены юристы; назначен партнёр по он-/офф-рампу ${V.S}; оптовая конвертация USD/EUR → ${V.S} протестирована`],
-      ['Пилот', '4–12', `Три университета, двадцать клубов, один спонсор по оборудованию; первые выплаты в ${V.S} на пятой неделе`],
+      ['Пилот', '4–12', `Один университет, один клуб, одна компания по оборудованию; первые выплаты в ${V.S} на пятой неделе`],
       ['Измерение', '12–16', 'Удержание исполнителей, задержка выплат, доля споров и поставленные мощности — публикуются'],
       ['Масштабирование', '16+', 'Расширение по каналам на основании данных пилота'],
     ],
     s9ask: [
       ['От государства', `Заявление об отсутствии возражений против выплат в ${V.S} резидентам и назначенное контактное лицо.`],
-      ['От учреждений', 'Три университета и двадцать клубов, готовых провести двенадцатинедельный пилот бесплатно для себя.'],
-      ['От партнёров', 'Один спонсор по оборудованию и один лицензированный он-/офф-рамп.'],
+      ['От учреждений', 'Один университет и один клуб, готовые провести двенадцатинедельный пилот бесплатно для себя.'],
+      ['От партнёров', 'Одна компания по оборудованию и один лицензированный он-/офф-рамп.'],
     ],
     s9notice: 'Документ предоставляется исключительно для целей обсуждения. Он не является предложением о продаже или приглашением к покупке каких-либо ценных бумаг или финансовых инструментов. Все цифры — иллюстративный вывод внутренней модели при указанных допущениях; это оценки, а не аудированная статистика, и фактические результаты будут отличаться. Ничто здесь не является юридической, налоговой, финансовой или инвестиционной консультацией. Регулирование стейблкоинов развивается, и деятельность обусловлена получением и поддержанием применимых лицензий и обязательствами по идентификации, ПОД/ФТ и санкционному контролю, описанными выше.',
 
@@ -862,7 +862,7 @@ function RU(c, V, m) {
       s9h: 'Двенадцать недель. Без бюджетных денег.',
       s9steps: [
         { k: 'Н0', t: 'Юристы + рамп-партнёр', s: 'Лицензии подтверждены' },
-        { k: 'Н4', t: 'Старт пилота', s: '3 вуза · 20 клубов' },
+        { k: 'Н4', t: 'Старт пилота', s: '1 вуз · 1 клуб · 1 компания' },
         { k: 'Н5', t: `Первые выплаты в ${V.S}`, s: 'Контур доказан', hi: true },
         { k: 'Н12', t: 'Публикация результатов', s: 'Удержание · задержки · мощности' },
       ],
