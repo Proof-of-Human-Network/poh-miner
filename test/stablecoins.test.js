@@ -180,7 +180,7 @@ describe('genesis with assets', () => {
     const plain = allocs.find(a => a.address === A);
     expect('assets' in plain).toBe(false);
     const treas = allocs.find(a => a.address === T);
-    expect(Object.keys(treas.assets)).toEqual(['aiGEL', 'KGST']); // sorted
+    expect(Object.keys(treas.assets)).toEqual(['KGST', 'aiGEL']); // default JS sort (K < a)
   });
 
   it('two genesis builds from the same snapshot hash identically; assets change the hash', () => {
