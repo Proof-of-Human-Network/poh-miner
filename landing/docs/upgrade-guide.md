@@ -1,8 +1,8 @@
 # PoH Miner Upgrade Guide (macOS, Windows, Linux)
 
-**⚠️ This guide is outdated (v0.4.3/v0.4.4 era).** For current v0.4.21:
+**⚠️ This guide is outdated (v0.4.3/v0.4.4 era).** For current v0.4.22:
 - Check the [main README](../README.md) for latest build links
-- v0.4.21 includes chat attachments, task cascade, expanded model ladder
+- v0.4.22 includes stablecoins on main (KGST, P2P 24h markets, i18n) plus chat attachments and task cascade
 - There have been multiple genesis resets and reward model v2; see git history for details
 - MCP integration is live — configure in Settings or config.json
 
