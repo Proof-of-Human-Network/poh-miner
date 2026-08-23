@@ -84,6 +84,11 @@ jobs:
                 esac
               done ;;
           esac
+          # Keep poh-miner-* aliases so older landing URLs still resolve.
+          for f in out/dai-miner-*; do
+            [ -f "$f" ] || continue
+            cp "$f" "out/poh-miner-${f#out/dai-miner-}"
+          done
           ls -lh out/
 
       - name: Upload artifacts

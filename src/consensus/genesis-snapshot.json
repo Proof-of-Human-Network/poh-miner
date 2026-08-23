@@ -1,7 +1,123 @@
 {
-  "balances": {},
-  "genesisTimestamp": 1784592000000,
-  "snapshotHash": null,
-  "note": "Fresh chain 2026-07-21 — new genesis, all balances 0, DAI earned by mining from block 1.",
-  "generatedAt": "2026-07-21T00:00:00.000Z"
+  "version": 1,
+  "sourceHeight": 17347,
+  "tipHeight": 17347,
+  "finalizedHeight": 17247,
+  "snapshotHash": "322d07a5702e2cf4ff4338e908f8844e3effdad331e874dceb935d4b09a2cf64",
+  "totalMinted": 869250000000,
+  "coinbaseDust": 0,
+  "excludedBalance": 0,
+  "excluded": [
+    "daiaudit000000000000000000000000000000000001"
+  ],
+  "sumBalances": 869250000000,
+  "addressCount": 24,
+  "genesisTimestamp": 1787461800000,
+  "generatedAt": "2026-08-23T05:08:13.363664Z",
+  "note": "Hard fork 2026-08-23: PoH\u2192DAI, 1 POH = 1 DAI. Chain resets to height 0. Addresses remapped poh{hex}\u2192dai{hex}. Keys unchanged.",
+  "migration": {
+    "fromPrefix": "poh",
+    "toPrefix": "dai",
+    "rate": "1 POH = 1 DAI",
+    "sourceChainHeight": 17347,
+    "sourceSnapshotHash": "4710f263cd8ddc435b9c5ecb981a3804028ba61a96ca8ee1b1f57aab46398f86"
+  },
+  "balances": {
+    "dai11eedf721d3068feabafddfacb734a7cf0469ea0": {
+      "balance": 10445000000,
+      "nonce": 0
+    },
+    "dai392533e5ff9742e2eeefd4d660fde054564c88db": {
+      "balance": 180000000,
+      "nonce": 0
+    },
+    "dai3b851b3119b8f512781c8eb918b36b5361ccb682": {
+      "balance": 13770000000,
+      "nonce": 0
+    },
+    "dai3d459b3bc9c48a6695cae6b2ea4bc8f454bf00da": {
+      "balance": 45000000,
+      "nonce": 0
+    },
+    "dai40436108338303d415d89277bfa1768db88a8ebb": {
+      "balance": 543185000000,
+      "nonce": 3
+    },
+    "dai47d4fdb0fdc110d3d037cfcae8832cf2bde1e8f1": {
+      "balance": 5760000000,
+      "nonce": 0
+    },
+    "dai4adb21192a5346a113e340b0dd41a7cdc6e0edeb": {
+      "balance": 87202500000,
+      "nonce": 0
+    },
+    "dai4b34f3e262dc3c881155a24a0170f093f154194d": {
+      "balance": 120000000,
+      "nonce": 0
+    },
+    "dai541f40a648d989f229318247a586673bc9994866": {
+      "balance": 3300000000,
+      "nonce": 0
+    },
+    "dai57e7d3560c95eff5954252228eaba17cb5700f34": {
+      "balance": 2695000000,
+      "nonce": 0
+    },
+    "dai59212ce512fbf507484f66e416a26869a4d42a8b": {
+      "balance": 86427500000,
+      "nonce": 0
+    },
+    "dai5d96888dbe12c44fde4f8722e1ab5c0cba8d830a": {
+      "balance": 10037500000,
+      "nonce": 0
+    },
+    "dai64df6cc6c98657b18210aa55db2db04d0d6f2ea4": {
+      "balance": 85000000,
+      "nonce": 0
+    },
+    "dai6ad942ace8c2b1477f9416f493b4709717c11221": {
+      "balance": 1000000000,
+      "nonce": 0
+    },
+    "dai7d78aab26065c7363fa7248d95e2998536f58ad8": {
+      "balance": 860000000,
+      "nonce": 0
+    },
+    "dai9160d844dd2bcf3999c8276ec8b8e744d4d11b4a": {
+      "balance": 210000000,
+      "nonce": 0
+    },
+    "dai9280460d83065062aaf52b32753b5c3272c828b2": {
+      "balance": 15165000000,
+      "nonce": 0
+    },
+    "dai974a078a352ae493198264effb024f2f7589f2b8": {
+      "balance": 300000000,
+      "nonce": 0
+    },
+    "dai9f43f4afe00630f5196409c73927ba6f88d4da8b": {
+      "balance": 120000000,
+      "nonce": 0
+    },
+    "daiaf54d5c1737ff0ae52c0d3b1e509f3395b546d49": {
+      "balance": 2080000000,
+      "nonce": 0
+    },
+    "daib3d535340d6b64fb3704b8b764b9eb8f41dedf09": {
+      "balance": 180000000,
+      "nonce": 0
+    },
+    "daic9416d1d04bfb2a500337b6bca6e88e6004979bc": {
+      "balance": 27682500000,
+      "nonce": 0
+    },
+    "daidba45cab8f4cda3eafbd47eca8f89e15d3be0098": {
+      "balance": 56400000000,
+      "nonce": 0
+    },
+    "daiec17befd1d9780c52daac57426e033ca5bdb1437": {
+      "balance": 2000000000,
+      "nonce": 0
+    }
+  }
 }
