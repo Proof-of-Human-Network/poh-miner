@@ -1,6 +1,6 @@
 # Icons
 
-This folder contains icons generated from the AIHub logo (`dai-miner-source.png`).
+This folder contains icons generated from the DAI wordmark (`dai-miner-source.png`) — Iceland-font "DAI", same style as the original POH mark.
 
 ## Files
 

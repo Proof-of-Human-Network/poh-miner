@@ -7,7 +7,6 @@
  */
 
 import sharp from 'sharp';
-import pngToIco from 'png-to-ico';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -49,18 +48,33 @@ async function generateIcons() {
     console.log(`   ✓ ${size}x${size}`);
   }
 
-  // Generate Windows .ico (needs multiple sizes, best with 16,32,48,256)
+  // Generate Windows .ico as PNG-in-ICO (electron-builder requires a ≥256px frame).
   console.log('\n→ Generating Windows .ico...');
   try {
-    const icoBuffer = await pngToIco([
-      path.join(ICONS_DIR, 'dai-miner-16.png'),
-      path.join(ICONS_DIR, 'dai-miner-32.png'),
-      path.join(ICONS_DIR, 'dai-miner-48.png'),
-      path.join(ICONS_DIR, 'dai-miner-256.png'),
-    ]);
-
-    fs.writeFileSync(path.join(ICONS_DIR, 'dai-miner.ico'), icoBuffer);
-    console.log('   ✓ dai-miner.ico created');
+    const icoSizes = [16, 32, 48, 256];
+    const blobs = icoSizes.map(s => fs.readFileSync(path.join(ICONS_DIR, `dai-miner-${s}.png`)));
+    const count = icoSizes.length;
+    const header = Buffer.alloc(6 + 16 * count);
+    header.writeUInt16LE(0, 0);
+    header.writeUInt16LE(1, 2);
+    header.writeUInt16LE(count, 4);
+    let offset = 6 + 16 * count;
+    const chunks = [header];
+    icoSizes.forEach((s, i) => {
+      const entry = 6 + 16 * i;
+      header.writeUInt8(s >= 256 ? 0 : s, entry);
+      header.writeUInt8(s >= 256 ? 0 : s, entry + 1);
+      header.writeUInt8(0, entry + 2);
+      header.writeUInt8(0, entry + 3);
+      header.writeUInt16LE(1, entry + 4);
+      header.writeUInt16LE(32, entry + 6);
+      header.writeUInt32LE(blobs[i].length, entry + 8);
+      header.writeUInt32LE(offset, entry + 12);
+      offset += blobs[i].length;
+      chunks.push(blobs[i]);
+    });
+    fs.writeFileSync(path.join(ICONS_DIR, 'dai-miner.ico'), Buffer.concat(chunks));
+    console.log('   ✓ dai-miner.ico created (16/32/48/256)');
   } catch (err) {
     console.error('   ✗ Failed to create .ico:', err.message);
   }
@@ -114,7 +128,7 @@ async function generateIcons() {
   // Create a simple README for icons
   const readme = `# Icons
 
-This folder contains icons generated from the AIHub logo (\`dai-miner-source.png\`).
+This folder contains icons generated from the DAI wordmark (\`dai-miner-source.png\`).
 
 ## Files
 
