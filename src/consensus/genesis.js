@@ -12,7 +12,7 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { PohBlock } from '../core/block.js';
+import { DAIBlock } from '../core/block.js';
 import { computeChainWork } from './chain-selection.js';
 
 // ── Active network genesis (migration pin) ───────────────────────────────────
@@ -37,10 +37,10 @@ export const LEGACY_GENESIS_TIMESTAMP = 1780700000000;
 export const GENESIS_MINER = 'bootnode-genesis';
 
 /** Canonical, deterministic allocation array from a snapshot's balances map.
- *  Entry values may be a raw μPOH number or { balance, nonce, assets? } where
+ *  Entry values may be a raw μDAI number or { balance, nonce, assets? } where
  *  `assets` is { ticker: rawInt } (stablecoin genesis supply — normally only the
  *  treasury row). The assets key is emitted ONLY when non-empty, with sorted
- *  tickers, so POH-only allocations serialize exactly as before. */
+ *  tickers, so DAI-only allocations serialize exactly as before. */
 export function buildAllocations(balances) {
   return Object.entries(balances)
     .map(([address, v]) => {
@@ -78,7 +78,7 @@ export function buildMigrationGenesis(snapshot, { timestamp, difficulty = 4 } = 
     for (const [t, v] of Object.entries(a.assets)) assetTotals[t] = (assetTotals[t] || 0) + v;
   }
 
-  const genesis = new PohBlock({
+  const genesis = new DAIBlock({
     height: 0,
     previousHash: '0'.repeat(64),
     // Timestamp order of precedence: explicit opt → the value stamped into the
@@ -119,7 +119,7 @@ export function createGenesisBlock({ snapshot = null, timestamp, difficulty = 4 
     const { genesis, total, count } = buildMigrationGenesis(snap, { timestamp, difficulty });
     return { genesis, migration: true, total, count, snapshotHash: snap.snapshotHash || null };
   }
-  const genesis = new PohBlock({
+  const genesis = new DAIBlock({
     height: 0,
     previousHash: '0'.repeat(64),
     timestamp: timestamp ?? LEGACY_GENESIS_TIMESTAMP,

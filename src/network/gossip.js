@@ -1,5 +1,5 @@
 /**
- * Very simple gossip / message bus for the PoH Miner Network (MVP)
+ * Very simple gossip / message bus for the DAI Miner Network (MVP)
  *
  * In production this would be replaced with:
  * - libp2p + gossipsub

@@ -31,29 +31,29 @@ function clearLogs() {
 function updateStatus(status) {
   if (!status) return;
 
-  const POH_DECIMALS = 1_000_000_000;
-  const addr   = status.pohWallet || status.wallet || '';
-  const rawBal = typeof status.pohBalance === 'number' ? status.pohBalance
+  const DAI_DECIMALS = 1_000_000_000;
+  const addr   = status.daiWallet || status.wallet || '';
+  const rawBal = typeof status.daiBalance === 'number' ? status.daiBalance
                : typeof status.balance    === 'number' ? status.balance : null;
-  const poh    = rawBal !== null ? rawBal / POH_DECIMALS : null;
-  const pohStr = poh !== null ? poh.toFixed(poh < 1 ? 4 : 2) + ' POH' : null;
+  const dai    = rawBal !== null ? rawBal / DAI_DECIMALS : null;
+  const daiStr = dai !== null ? dai.toFixed(dai < 1 ? 4 : 2) + ' DAI' : null;
 
   // Left sidebar
   const set = (id, val) => { const el = document.getElementById(id); if (el && val != null) el.textContent = val; };
   if (addr) {
     const short = addr.length > 16 ? addr.slice(0, 8) + '…' + addr.slice(-6) : addr;
-    set('poh-wallet-address', short);
+    set('dai-wallet-address', short);
     window._localWallet = addr;
   } else {
     // Clear "Loading..." once we've received at least one status update
-    const el = document.getElementById('poh-wallet-address');
+    const el = document.getElementById('dai-wallet-address');
     if (el && el.textContent === 'Loading...') el.textContent = '—';
   }
-  if (pohStr) set('poh-wallet-balance', pohStr);
+  if (daiStr) set('dai-wallet-balance', daiStr);
   // Home panel
-  if (poh !== null) {
+  if (dai !== null) {
     const numEl = document.getElementById('home-balance-num');
-    if (numEl) numEl.textContent = poh.toFixed(poh < 1 ? 4 : 2);
+    if (numEl) numEl.textContent = dai.toFixed(dai < 1 ? 4 : 2);
     _updateUsdBalanceDisplay();
   }
   if (addr) {
@@ -104,12 +104,12 @@ function updateStatus(status) {
 }
 
 // Listen for live logs
-if (window.pohMinerAPI) {
-  window.pohMinerAPI.onLog((message) => {
+if (window.daiMinerAPI) {
+  window.daiMinerAPI.onLog((message) => {
     addLog(message);
   });
 
-  window.pohMinerAPI.onStatus((status) => {
+  window.daiMinerAPI.onStatus((status) => {
     // Keep port in sync so chat always hits the right endpoint
     if (status?.walletApiPort) window._minerApiPort = status.walletApiPort;
     updateStatus(status);
@@ -127,8 +127,8 @@ if (window.pohMinerAPI) {
   });
 
   // Listen for explicit command from main process to enter onboarding
-  if (window.pohMinerAPI?.onEnterOnboardingMode) {
-    window.pohMinerAPI.onEnterOnboardingMode(async () => {
+  if (window.daiMinerAPI?.onEnterOnboardingMode) {
+    window.daiMinerAPI.onEnterOnboardingMode(async () => {
       console.log('[Onboarding] Received force enter onboarding from main process');
       const onboardingDiv = document.getElementById('onboarding');
       const mainAppDiv = document.getElementById('main-app');
@@ -136,7 +136,7 @@ if (window.pohMinerAPI) {
       if (onboardingDiv) {
         onboardingDiv.classList.remove('hidden');
         // Run AI setup check first; skip to welcome if setup not available
-        if (window.pohMinerAPI?.setup?.check) {
+        if (window.daiMinerAPI?.setup?.check) {
           await runAiSetupStep();
         } else {
           showOnboardingStep('welcome');
@@ -146,8 +146,8 @@ if (window.pohMinerAPI) {
   }
 
   // Listen for command from main process (authoritative) to show the main miner UI
-  if (window.pohMinerAPI?.onShowMainApp) {
-    window.pohMinerAPI.onShowMainApp(() => {
+  if (window.daiMinerAPI?.onShowMainApp) {
+    window.daiMinerAPI.onShowMainApp(() => {
       console.log('[Onboarding] Received show-main-app from main process');
       const onboardingDiv = document.getElementById('onboarding');
       const mainAppDiv = document.getElementById('main-app');
@@ -157,14 +157,14 @@ if (window.pohMinerAPI) {
   }
 
   // Show rejection modal whenever a skill audit fails (local or gossip path)
-  if (window.pohMinerAPI?.onSkillRejected) {
-    window.pohMinerAPI.onSkillRejected(({ reason, issues }) => {
+  if (window.daiMinerAPI?.onSkillRejected) {
+    window.daiMinerAPI.onSkillRejected(({ reason, issues }) => {
       showAuditRejectionModal(reason, issues);
     });
   }
 
   // Load initial logs and status
-  window.pohMinerAPI.getLogs().then((initialLogs) => {
+  window.daiMinerAPI.getLogs().then((initialLogs) => {
     if (Array.isArray(initialLogs)) {
       initialLogs.forEach(entry => {
         const msg = typeof entry === 'string' ? entry : entry.message || JSON.stringify(entry);
@@ -173,7 +173,7 @@ if (window.pohMinerAPI) {
     }
   });
 
-  window.pohMinerAPI.getStatus().then(status => {
+  window.daiMinerAPI.getStatus().then(status => {
     updateStatus(status);
     setTimeout(loadBrainState, 1500);
   });
@@ -185,7 +185,7 @@ if (window.pohMinerAPI) {
 
 // Initial state - safely set if elements exist
 if (walletAddressEl) walletAddressEl.textContent = 'Loading...';
-if (walletBalanceEl) walletBalanceEl.textContent = '0.00 POH';
+if (walletBalanceEl) walletBalanceEl.textContent = '0.00 DAI';
 
 // =====================================================
 // RPC Providers UI Logic
@@ -202,7 +202,7 @@ const statusEl = document.getElementById('rpc-status');
 let currentNetworksGrouped = null;
 
 async function initRpcUI() {
-  if (!window.pohMinerAPI?.rpc) {
+  if (!window.daiMinerAPI?.rpc) {
     statusEl.textContent = 'RPC API not available (running outside Electron)';
     statusEl.style.color = '#f87171';
     return;
@@ -210,7 +210,7 @@ async function initRpcUI() {
 
   try {
     // Load grouped networks
-    currentNetworksGrouped = await window.pohMinerAPI.rpc.getNetworksGrouped();
+    currentNetworksGrouped = await window.daiMinerAPI.rpc.getNetworksGrouped();
 
     // Populate network dropdown with optgroups
     networkSelect.innerHTML = '<option value="">Select network...</option>';
@@ -265,7 +265,7 @@ async function onNetworkChange() {
   }
 
   try {
-    const providers = await window.pohMinerAPI.rpc.getProvidersForNetwork(networkId);
+    const providers = await window.daiMinerAPI.rpc.getProvidersForNetwork(networkId);
 
     providerSelect.innerHTML = '<option value="">Select provider...</option>';
 
@@ -313,7 +313,7 @@ async function updatePreview() {
   }
 
   try {
-    const url = await window.pohMinerAPI.rpc.previewUrl({ networkId, providerId, apiKey });
+    const url = await window.daiMinerAPI.rpc.previewUrl({ networkId, providerId, apiKey });
     if (url) {
       previewEl.innerHTML = `<span style="color:#888">Preview:</span> <span style="color:#22c55e">${url}</span>`;
     } else {
@@ -340,7 +340,7 @@ async function saveCurrentNetwork() {
   statusEl.style.color = '#888';
 
   try {
-    await window.pohMinerAPI.rpc.saveNetworkConfig({ networkId, provider, apiKey });
+    await window.daiMinerAPI.rpc.saveNetworkConfig({ networkId, provider, apiKey });
     statusEl.textContent = `Saved ${networkId} → ${provider}`;
     statusEl.style.color = '#22c55e';
 
@@ -371,7 +371,7 @@ async function bulkApplyToEvm() {
   statusEl.style.color = '#888';
 
   try {
-    const result = await window.pohMinerAPI.rpc.bulkApplyEvm({ provider, apiKey });
+    const result = await window.daiMinerAPI.rpc.bulkApplyEvm({ provider, apiKey });
     statusEl.textContent = `Applied to ${result.appliedTo} EVM chains`;
     statusEl.style.color = '#22c55e';
 
@@ -391,7 +391,7 @@ initRpcUI();
 // =====================================================
 
 let currentOnboardingData = {
-  pohWallet: null,
+  daiWallet: null,
   privateKey: null,
   walletBackupKey: null,
 };
@@ -404,32 +404,32 @@ async function checkAndStartOnboarding() {
   if (onboardingDiv) onboardingDiv.classList.add('hidden');
   if (mainAppDiv) mainAppDiv.classList.add('hidden');
 
-  if (!window.pohMinerAPI?.onboarding) {
+  if (!window.daiMinerAPI?.onboarding) {
     console.warn('Running outside Electron — showing main UI as fallback');
     if (mainAppDiv) mainAppDiv.classList.remove('hidden');
     return;
   }
 
   try {
-    const status = await window.pohMinerAPI.onboarding.getStatus();
+    const status = await window.daiMinerAPI.onboarding.getStatus();
 
     console.log('[Onboarding] Status check:', status);
 
-    if (status.onboarded || status.hasPohWallet) {
-      // User already has a PoH wallet on disk or in config, or onboarding was completed.
+    if (status.onboarded || status.hasDAIWallet) {
+      // User already has a DAI wallet on disk or in config, or onboarding was completed.
       // Go straight to main app.
       // (Solana address and RPC can still be configured later in Settings)
       if (mainAppDiv) mainAppDiv.classList.remove('hidden');
       if (onboardingDiv) onboardingDiv.classList.add('hidden');
 
       // Make sure the miner is running
-      if (window.pohMinerAPI?.miner?.start) {
-        window.pohMinerAPI.miner.start().catch(() => {});
+      if (window.daiMinerAPI?.miner?.start) {
+        window.daiMinerAPI.miner.start().catch(() => {});
       }
       return;
     }
 
-    // No PoH wallet yet and not marked onboarded → show the full onboarding wizard
+    // No DAI wallet yet and not marked onboarded → show the full onboarding wizard
     if (onboardingDiv) {
       onboardingDiv.classList.remove('hidden');
       showOnboardingStep('welcome');
@@ -473,7 +473,7 @@ async function runAiSetupStep() {
     if (modelIcon) modelIcon.textContent = '⬇️';
     if (modelStatus) modelStatus.textContent = `Preparing ${model} (first run downloads it)…`;
     if (progressWrap) progressWrap.classList.remove('hidden');
-    await window.pohMinerAPI.setup.pullModel(model);
+    await window.daiMinerAPI.setup.pullModel(model);
   };
 
   // Inference engine is QVAC, in-process — nothing to install.
@@ -481,7 +481,7 @@ async function runAiSetupStep() {
   if (engineStatus) engineStatus.textContent = 'QVAC (in-process)';
 
   // Listen for streaming warm-up progress from the main process.
-  window.pohMinerAPI.setup.onProgress((msg) => {
+  window.daiMinerAPI.setup.onProgress((msg) => {
     if (logEl) logEl.textContent = msg.message || '';
     if (msg.status === 'pulling') {
       if (msg.pct != null) {
@@ -510,7 +510,7 @@ async function runAiSetupStep() {
 
   // Manual retry after a failed download (network drop, registry outage, …).
   if (retryBtn) retryBtn.onclick = async () => {
-    const model = currentModel || (await window.pohMinerAPI.setup.check().catch(() => null))?.model || 'qwen3-1.7b';
+    const model = currentModel || (await window.daiMinerAPI.setup.check().catch(() => null))?.model || 'qwen3-1.7b';
     await startPull(model);
   };
 
@@ -523,7 +523,7 @@ async function runAiSetupStep() {
   };
 
   // 1. Check current state (which QVAC model, and whether it's already loaded)
-  const state = await window.pohMinerAPI.setup.check();
+  const state = await window.daiMinerAPI.setup.check();
 
   if (state.ready) {
     if (modelIcon) modelIcon.textContent = '✅';
@@ -553,7 +553,7 @@ async function promptModelChoice(fallback) {
   picker.classList.remove('hidden');
 
   let data;
-  try { data = await window.pohMinerAPI.onboarding.getModelOptions(); }
+  try { data = await window.daiMinerAPI.onboarding.getModelOptions(); }
   catch { return fallback; }
   if (!data?.options?.length) return fallback;
 
@@ -586,7 +586,7 @@ async function promptModelChoice(fallback) {
   return await new Promise(resolve => {
     btn.onclick = async () => {
       btn.disabled = true;
-      try { await window.pohMinerAPI.onboarding.setModel(selected); } catch { /* non-fatal */ }
+      try { await window.daiMinerAPI.onboarding.setModel(selected); } catch { /* non-fatal */ }
       resolve(selected);
     };
   });
@@ -605,26 +605,26 @@ window.goToStep = function(step) {
   showOnboardingStep(step);
 };
 
-window.createPohWallet = async function() {
-  if (!window.pohMinerAPI?.onboarding?.createPohWallet) {
+window.createDAIWallet = async function() {
+  if (!window.daiMinerAPI?.onboarding?.createDAIWallet) {
     console.error('Onboarding API not available yet. Try refreshing or restarting the app.');
     alert('Error: Could not reach the backend. Please restart the app.');
     return;
   }
 
   try {
-    const result = await window.pohMinerAPI.onboarding.createPohWallet();
+    const result = await window.daiMinerAPI.onboarding.createDAIWallet();
     
-    currentOnboardingData.pohWallet = result.address;
+    currentOnboardingData.daiWallet = result.address;
     currentOnboardingData.privateKey = result.privateKey;
 
-    document.getElementById('poh-address').textContent = result.address;
-    document.getElementById('poh-private-key').textContent = result.privateKey;
+    document.getElementById('dai-address').textContent = result.address;
+    document.getElementById('dai-private-key').textContent = result.privateKey;
 
     document.getElementById('wallet-creation-ui').classList.add('hidden');
     document.getElementById('wallet-display').classList.remove('hidden');
   } catch (err) {
-    console.error('Failed to create PoH wallet:', err);
+    console.error('Failed to create DAI wallet:', err);
     alert('Failed to create wallet. Check the console for details.');
   }
 };
@@ -665,11 +665,11 @@ window.checkBackupConfirmation = function() {
 
 window.proceedToWalletKeyBackup = async function() {
   goToStep('wallet-key');
-  const keyEl = document.getElementById('poh-wallet-key');
+  const keyEl = document.getElementById('dai-wallet-key');
   if (keyEl) keyEl.textContent = 'Generating…';
 
   try {
-    const result = await window.pohMinerAPI.onboarding.generateWalletBackupKey();
+    const result = await window.daiMinerAPI.onboarding.generateWalletBackupKey();
     currentOnboardingData.walletBackupKey = result.walletBackupKey;
     if (keyEl) keyEl.textContent = result.walletBackupKey;
   } catch (err) {
@@ -755,12 +755,12 @@ window.closeRpcConfig = closeRpcConfig;
 
 window.completeOnboarding = async function() {
   const payload = {
-    pohWallet: currentOnboardingData.pohWallet,
+    daiWallet: currentOnboardingData.daiWallet,
     solanaAddress: currentOnboardingData.solanaAddress,
     walletBackupKeyConfirmed: !!currentOnboardingData.walletBackupKey,
   };
 
-  await window.pohMinerAPI.onboarding.complete(payload);
+  await window.daiMinerAPI.onboarding.complete(payload);
 
   try {
     window.location.reload();
@@ -768,7 +768,7 @@ window.completeOnboarding = async function() {
     document.getElementById('onboarding').classList.add('hidden');
     document.getElementById('main-app').classList.remove('hidden');
     try {
-      await window.pohMinerAPI.miner.start();
+      await window.daiMinerAPI.miner.start();
     } catch (_) {}
   }
 };
@@ -787,9 +787,9 @@ window.saveEtherscanAndContinue = async function() {
   const key = document.getElementById('ob-etherscan-key')?.value.trim() || '';
   const statusEl = document.getElementById('ob-etherscan-status');
 
-  if (key && window.pohMinerAPI?.rpc?.saveEtherscanKey) {
+  if (key && window.daiMinerAPI?.rpc?.saveEtherscanKey) {
     try {
-      await window.pohMinerAPI.rpc.saveEtherscanKey(key);
+      await window.daiMinerAPI.rpc.saveEtherscanKey(key);
       if (statusEl) { statusEl.textContent = 'Key saved.'; statusEl.style.color = '#22c55e'; }
     } catch (err) {
       if (statusEl) { statusEl.textContent = 'Failed to save key — try again.'; statusEl.style.color = '#f87171'; }
@@ -808,7 +808,7 @@ async function initOnboardEvmStep() {
   if (window._obEvmInited) return;
   window._obEvmInited = true;
 
-  if (!window.pohMinerAPI?.rpc) return;
+  if (!window.daiMinerAPI?.rpc) return;
 
   const netSel = document.getElementById('ob-evm-network');
   const provSel = document.getElementById('ob-evm-provider');
@@ -819,7 +819,7 @@ async function initOnboardEvmStep() {
   const statusEl = document.getElementById('ob-evm-status');
 
   try {
-    const grouped = await window.pohMinerAPI.rpc.getNetworksGrouped();
+    const grouped = await window.daiMinerAPI.rpc.getNetworksGrouped();
     const evmNets = grouped['EVM'] || [];
 
     netSel.innerHTML = '<option value="">Select EVM network...</option>';
@@ -843,7 +843,7 @@ async function initOnboardEvmStep() {
         return;
       }
 
-      const providers = await window.pohMinerAPI.rpc.getProvidersForNetwork(networkId);
+      const providers = await window.daiMinerAPI.rpc.getProvidersForNetwork(networkId);
       provSel.innerHTML = '<option value="">Select provider...</option>';
       providers.forEach(p => {
         const opt = document.createElement('option');
@@ -871,7 +871,7 @@ async function initOnboardEvmStep() {
     previewEl.textContent = '';
     if (!networkId || !providerId || !apiKey) return;
     try {
-      const url = await window.pohMinerAPI.rpc.previewUrl({ networkId, providerId, apiKey });
+      const url = await window.daiMinerAPI.rpc.previewUrl({ networkId, providerId, apiKey });
       if (url) previewEl.innerHTML = `<span style="color:#666">Preview:</span> <span style="color:#22c55e">${url}</span>`;
     } catch {}
   }
@@ -897,7 +897,7 @@ async function initOnboardEvmStep() {
     statusEl.style.color = '#888';
 
     try {
-      await window.pohMinerAPI.rpc.saveNetworkConfig({ networkId, provider, apiKey });
+      await window.daiMinerAPI.rpc.saveNetworkConfig({ networkId, provider, apiKey });
       const netLabel = netSel.options[netSel.selectedIndex].text;
       statusEl.textContent = `Saved: ${netLabel} → ${provider}`;
       statusEl.style.color = '#22c55e';
@@ -923,7 +923,7 @@ async function initOnboardEvmStep() {
     statusEl.style.color = '#888';
 
     try {
-      const result = await window.pohMinerAPI.rpc.bulkApplyEvm({ provider, apiKey });
+      const result = await window.daiMinerAPI.rpc.bulkApplyEvm({ provider, apiKey });
       statusEl.textContent = `Applied to ${result.appliedTo} EVM chains`;
       statusEl.style.color = '#22c55e';
       apiKeyIn.value = '';
@@ -943,7 +943,7 @@ async function initOnboardSolanaRpcStep() {
   if (window._obSolRpcInited) return;
   window._obSolRpcInited = true;
 
-  if (!window.pohMinerAPI?.rpc) return;
+  if (!window.daiMinerAPI?.rpc) return;
 
   const provSel = document.getElementById('ob-sol-provider');
   const apiKeyIn = document.getElementById('ob-sol-apikey');
@@ -952,7 +952,7 @@ async function initOnboardSolanaRpcStep() {
   const statusEl = document.getElementById('ob-sol-status');
 
   try {
-    const providers = await window.pohMinerAPI.rpc.getProvidersForNetwork('solana');
+    const providers = await window.daiMinerAPI.rpc.getProvidersForNetwork('solana');
     provSel.innerHTML = '<option value="">Select provider...</option>';
     providers.forEach(p => {
       const opt = document.createElement('option');
@@ -968,7 +968,7 @@ async function initOnboardSolanaRpcStep() {
       previewEl.textContent = '';
       if (!providerId || !apiKey) return;
       try {
-        const url = await window.pohMinerAPI.rpc.previewUrl({ networkId: 'solana', providerId, apiKey });
+        const url = await window.daiMinerAPI.rpc.previewUrl({ networkId: 'solana', providerId, apiKey });
         if (url) previewEl.innerHTML = `<span style="color:#666">Preview:</span> <span style="color:#22c55e">${url}</span>`;
       } catch {}
     };
@@ -990,7 +990,7 @@ async function initOnboardSolanaRpcStep() {
       statusEl.style.color = '#888';
 
       try {
-        await window.pohMinerAPI.rpc.saveNetworkConfig({ networkId: 'solana', provider, apiKey });
+        await window.daiMinerAPI.rpc.saveNetworkConfig({ networkId: 'solana', provider, apiKey });
         statusEl.textContent = `Saved: ${provider}`;
         statusEl.style.color = '#22c55e';
         apiKeyIn.value = '';
@@ -1014,14 +1014,14 @@ async function initOnboardOtherChainsStep() {
   if (window._obOtherChainsInited) return;
   window._obOtherChainsInited = true;
 
-  if (!window.pohMinerAPI?.rpc) return;
+  if (!window.daiMinerAPI?.rpc) return;
 
   for (const chainId of ['btc', 'ton', 'tron', 'xlm']) {
     try {
       const provSel = document.getElementById(`ob-${chainId}-provider`);
       if (!provSel) continue;
 
-      const providers = await window.pohMinerAPI.rpc.getProvidersForNetwork(chainId);
+      const providers = await window.daiMinerAPI.rpc.getProvidersForNetwork(chainId);
       provSel.innerHTML = '<option value="">Select provider...</option>';
       providers.forEach(p => {
         const opt = document.createElement('option');
@@ -1065,7 +1065,7 @@ window.saveOtherChain = async function(chainId) {
   }
 
   try {
-    await window.pohMinerAPI.rpc.saveNetworkConfig({ networkId: chainId, provider, apiKey });
+    await window.daiMinerAPI.rpc.saveNetworkConfig({ networkId: chainId, provider, apiKey });
     if (statusEl) { statusEl.textContent = 'Saved!'; statusEl.style.color = '#22c55e'; }
     if (badge) {
       badge.textContent = 'Configured';
@@ -1110,11 +1110,11 @@ async function loadSettingsPanel() {
   // Populate fields from status
   let status = null;
   try {
-    status = await window.pohMinerAPI?.getStatus?.();
+    status = await window.daiMinerAPI?.getStatus?.();
     if (status) {
-      const addrEl  = document.getElementById('settings-poh-address');
+      const addrEl  = document.getElementById('settings-dai-address');
       const solInput = document.getElementById('settings-solana');
-      if (addrEl)  addrEl.textContent = status.pohWallet || status.wallet || '—';
+      if (addrEl)  addrEl.textContent = status.daiWallet || status.wallet || '—';
       if (solInput) solInput.value = status.solanaAddress || '';
     }
   } catch (e) {}
@@ -1225,20 +1225,20 @@ window.hideSettings = function() {
 
 window.saveSettings = async function() {
   const solInput = document.getElementById('settings-solana');
-  if (!solInput || !window.pohMinerAPI?.onboarding) return;
+  if (!solInput || !window.daiMinerAPI?.onboarding) return;
 
   const miningModelSel = document.getElementById('settings-mining-model');
   const model = miningModelSel?.value?.trim() || undefined;
   const statusEl = document.getElementById('settings-save-status');
 
   try {
-    await window.pohMinerAPI.onboarding.complete({
+    await window.daiMinerAPI.onboarding.complete({
       solanaAddress: solInput.value.trim(),
       ...(model ? { model } : {}),
     });
     if (statusEl) { statusEl.textContent = 'Saved ✓'; statusEl.style.color = '#22c55e'; }
     setTimeout(() => { if (statusEl) statusEl.textContent = ''; }, 2000);
-    const newStatus = await window.pohMinerAPI.getStatus?.();
+    const newStatus = await window.daiMinerAPI.getStatus?.();
     if (newStatus) updateStatus(newStatus);
   } catch (err) {
     if (statusEl) { statusEl.textContent = 'Failed to save'; statusEl.style.color = '#f87171'; }
@@ -1248,7 +1248,7 @@ window.saveSettings = async function() {
 window.showPrivateKeyWarning = function() {
   const confirmed = confirm(
     "⚠️ WARNING: Never share your private key.\n\n" +
-    "This will display your PoH private key. Only do this in a secure environment.\n\n" +
+    "This will display your DAI private key. Only do this in a secure environment.\n\n" +
     "Are you sure you want to continue?"
   );
 
@@ -1257,7 +1257,7 @@ window.showPrivateKeyWarning = function() {
   // For safety, we don't auto-expose the key from main process easily.
   // In a real version we'd have a dedicated secure reveal flow.
   alert("Private key reveal is not implemented for security reasons in this build.\n\n" +
-        "Your key is stored at: ~/.poh-miner/wallets/");
+        "Your key is stored at: ~/.dai-miner/wallets/");
   hideSettings();
 };
 
@@ -1370,7 +1370,7 @@ window._hfDatasetApprove = function() {
 window.restartApp = async function() {
   if (!confirm('Restart the app now? This will reload the miner and clear any stuck transactions.')) return;
   try {
-    await window.pohMinerAPI?.app?.restart();
+    await window.daiMinerAPI?.app?.restart();
   } catch (e) {
     alert('Restart failed: ' + e.message);
   }
@@ -1391,18 +1391,18 @@ setTimeout(async () => {
   const mainAppDiv = document.getElementById('main-app');
 
   try {
-    if (!window.pohMinerAPI?.onboarding?.getStatus) return;
+    if (!window.daiMinerAPI?.onboarding?.getStatus) return;
 
-    const status = await window.pohMinerAPI.onboarding.getStatus();
+    const status = await window.daiMinerAPI.onboarding.getStatus();
 
-    if (status.onboarded || status.hasPohWallet) {
+    if (status.onboarded || status.hasDAIWallet) {
       // User should be in the main app
       if (onboardingDiv) onboardingDiv.classList.add('hidden');
       if (mainAppDiv) mainAppDiv.classList.remove('hidden');
 
       // Try to ensure miner is running
-      if (window.pohMinerAPI?.miner?.start) {
-        window.pohMinerAPI.miner.start().catch(() => {});
+      if (window.daiMinerAPI?.miner?.start) {
+        window.daiMinerAPI.miner.start().catch(() => {});
       }
     } else if (mainAppDiv && mainAppDiv.classList.contains('hidden') && onboardingDiv && onboardingDiv.classList.contains('hidden')) {
       // Nothing visible — show onboarding as fallback
@@ -1417,11 +1417,11 @@ setTimeout(async () => {
 // === Dev helper: reset onboarding ===
 // You can run this in DevTools console:  resetOnboarding()
 window.resetOnboarding = async function() {
-  if (!window.pohMinerAPI?.onboarding?.reset) {
+  if (!window.daiMinerAPI?.onboarding?.reset) {
     console.error('Onboarding reset not available');
     return;
   }
-  const result = await window.pohMinerAPI.onboarding.reset();
+  const result = await window.daiMinerAPI.onboarding.reset();
   console.log(result.message || 'Onboarding has been reset.');
   console.log('Please restart the app (or reload with Cmd/Ctrl+R) to see the onboarding flow again.');
 };
@@ -1469,10 +1469,10 @@ const etherscanSaveBtn = document.getElementById('etherscan-save-btn');
 const etherscanStatus = document.getElementById('etherscan-status');
 
 async function initEtherscanUI() {
-  if (!window.pohMinerAPI?.rpc?.getEtherscanKey) return;
+  if (!window.daiMinerAPI?.rpc?.getEtherscanKey) return;
 
   try {
-    const currentKey = await window.pohMinerAPI.rpc.getEtherscanKey();
+    const currentKey = await window.daiMinerAPI.rpc.getEtherscanKey();
     if (currentKey) {
       etherscanInput.placeholder = '•••••••••••••••••••••••• (key saved)';
     }
@@ -1484,7 +1484,7 @@ async function initEtherscanUI() {
       etherscanStatus.style.color = '#888';
 
       try {
-        await window.pohMinerAPI.rpc.saveEtherscanKey(key);
+        await window.daiMinerAPI.rpc.saveEtherscanKey(key);
         etherscanStatus.textContent = key ? 'Etherscan key saved' : 'Etherscan key cleared';
         etherscanStatus.style.color = '#22c55e';
 
@@ -1517,10 +1517,10 @@ const AI_PROVIDER_DEFS = [
 
 async function initAiProvidersUI() {
   const list = document.getElementById('ai-providers-list');
-  if (!list || !window.pohMinerAPI?.aiProviders) return;
+  if (!list || !window.daiMinerAPI?.aiProviders) return;
 
   let saved = {};
-  try { saved = await window.pohMinerAPI.aiProviders.get(); } catch {}
+  try { saved = await window.daiMinerAPI.aiProviders.get(); } catch {}
 
   list.innerHTML = '';
 
@@ -1556,7 +1556,7 @@ async function initAiProvidersUI() {
       status.textContent = 'Saving...';
       status.style.color = '#888';
       try {
-        await window.pohMinerAPI.aiProviders.save({ id: def.id, apiKey, model, enabled });
+        await window.daiMinerAPI.aiProviders.save({ id: def.id, apiKey, model, enabled });
         status.textContent = 'Saved';
         status.style.color = '#22c55e';
         cfg.apiKey = apiKey;
@@ -1573,7 +1573,7 @@ async function initAiProvidersUI() {
     document.getElementById(`ai-${def.id}-remove`).addEventListener('click', async () => {
       const status = document.getElementById(`ai-${def.id}-status`);
       try {
-        await window.pohMinerAPI.aiProviders.delete(def.id);
+        await window.daiMinerAPI.aiProviders.delete(def.id);
         initAiProvidersUI();
       } catch {
         status.textContent = 'Failed to remove';
@@ -1594,11 +1594,11 @@ async function initMcpServersUI() {
   const addBtn = document.getElementById('mcp-add-btn');
   const importBtn = document.getElementById('mcp-import-btn');
   const status = document.getElementById('mcp-status');
-  if (!list || !addBtn || !window.pohMinerAPI?.mcp) return;
+  if (!list || !addBtn || !window.daiMinerAPI?.mcp) return;
 
   async function renderList() {
     let servers = [];
-    try { servers = await window.pohMinerAPI.mcp.getServers(); } catch {}
+    try { servers = await window.daiMinerAPI.mcp.getServers(); } catch {}
 
     list.innerHTML = '';
     if (!servers.length) {
@@ -1621,11 +1621,11 @@ async function initMcpServersUI() {
         </div>
       `;
       row.querySelector('[data-action="toggle"]').addEventListener('click', async () => {
-        await window.pohMinerAPI.mcp.saveServer({ ...s, enabled: !s.enabled });
+        await window.daiMinerAPI.mcp.saveServer({ ...s, enabled: !s.enabled });
         renderList();
       });
       row.querySelector('[data-action="remove"]').addEventListener('click', async () => {
-        await window.pohMinerAPI.mcp.deleteServer(s.id);
+        await window.daiMinerAPI.mcp.deleteServer(s.id);
         renderList();
       });
       list.appendChild(row);
@@ -1652,7 +1652,7 @@ async function initMcpServersUI() {
     status.textContent = 'Adding...';
     status.style.color = '#888';
     try {
-      await window.pohMinerAPI.mcp.saveServer({ id: name, name, command, args, env, enabled: true });
+      await window.daiMinerAPI.mcp.saveServer({ id: name, name, command, args, env, enabled: true });
       document.getElementById('mcp-new-name').value = '';
       document.getElementById('mcp-new-command').value = '';
       document.getElementById('mcp-new-args').value = '';
@@ -1672,7 +1672,7 @@ async function initMcpServersUI() {
     status.textContent = 'Importing...';
     status.style.color = '#888';
     try {
-      const r = await window.pohMinerAPI.mcp.importJson(paste);
+      const r = await window.daiMinerAPI.mcp.importJson(paste);
       if (!r.success) throw new Error(r.error);
       status.textContent = `Imported ${r.count} server(s)`;
       status.style.color = '#22c55e';
@@ -1828,7 +1828,7 @@ To install a dataset:
 1. Ask in Chat about a dataset (e.g. "search huggingface for squad")
 2. Approve the download prompt when it appears
 3. Or use **Settings → Datasets**, or call \`POST /api/hf-dataset/{datasetId}/download\` on your miner API (port ${window._minerApiPort || 3456})
-4. Requires internet; files are stored under \`~/.poh-miner/brain-data/hf-datasets/\``;
+4. Requires internet; files are stored under \`~/.dai-miner/brain-data/hf-datasets/\``;
 
 function _updateChatQueuePill() {
   const pill = document.getElementById('chat-queue-pill');
@@ -2350,10 +2350,10 @@ function finalizeLastBubble(bubble) {
 // ── Send + stream ──────────────────────────────────────────────────────────────
 
 // ── Fee currency ──────────────────────────────────────────────────────────────
-// Jobs can be paid in POH or any on-chain stablecoin (the miner receives exactly
+// Jobs can be paid in DAI or any on-chain stablecoin (the miner receives exactly
 // what is paid). The asset list comes from GET /api/assets; the picker shows the
 // Greek display ticker (αιGEL) while the wire uses the ASCII code (aiGEL).
-window._feeCurrency = 'POH';
+window._feeCurrency = 'DAI';
 window._assetRegistry = null;    // { ticker → {ticker,decimals,display,sign} }
 
 async function loadAssetRegistry() {
@@ -2364,7 +2364,7 @@ async function loadAssetRegistry() {
     const data = await r.json();
     window._assetRegistry = Object.fromEntries((data.assets || []).map(a => [a.ticker, a]));
   } catch {
-    window._assetRegistry = { POH: { ticker: 'POH', decimals: 9, display: 'POH', sign: '' } };
+    window._assetRegistry = { DAI: { ticker: 'DAI', decimals: 9, display: 'DAI', sign: '' } };
   }
   const sel = document.getElementById('chat-fee-currency');
   if (sel && !sel.options.length) {
@@ -2380,23 +2380,23 @@ async function loadAssetRegistry() {
 }
 
 window.onFeeCurrencyChange = function(ticker) {
-  window._feeCurrency = ticker || 'POH';
+  window._feeCurrency = ticker || 'DAI';
   const slider = document.getElementById('chat-budget-slider');
   if (slider) window.updateChatBudgetDisplay(slider.value);
 };
 
 function _feeAsset() {
   return (window._assetRegistry && window._assetRegistry[window._feeCurrency])
-    || { ticker: 'POH', decimals: 9, display: 'POH' };
+    || { ticker: 'DAI', decimals: 9, display: 'DAI' };
 }
 
-// Budget in RAW units of the selected fee currency. POH keeps the log slider
-// (1 kPOH → 1 POH); stablecoins map the same slider onto 0.01 → 100.00 units.
+// Budget in RAW units of the selected fee currency. DAI keeps the log slider
+// (1 kDAI → 1 DAI); stablecoins map the same slider onto 0.01 → 100.00 units.
 function getChatBudget() {
-  // Slider min is 1 (= 0.01 POH) — 0/"no fee" is no longer a selectable value.
+  // Slider min is 1 (= 0.01 DAI) — 0/"no fee" is no longer a selectable value.
   const step = Math.max(1, parseInt(document.getElementById('chat-budget-slider')?.value || '1', 10));
   const asset = _feeAsset();
-  if (asset.ticker === 'POH') return Math.round(_sliderStepToPoh(step) * BUDGET_DECIMALS);
+  if (asset.ticker === 'DAI') return Math.round(_sliderStepToDai(step) * BUDGET_DECIMALS);
   // Stablecoin: log scale 0.01 → 100.00 display units, in raw (×10^decimals).
   const frac = step / _BLOG_STEPS;
   const display = 0.01 * Math.pow(100 / 0.01, frac);   // 0.01 … 100
@@ -2411,8 +2411,8 @@ window.updateChatBudgetDisplay = function(val) {
   const el = document.getElementById('chat-budget-display');
   if (!el) return;
   const asset = _feeAsset();
-  if (asset.ticker === 'POH') {
-    el.textContent = _formatPoh(_sliderStepToPoh(step));
+  if (asset.ticker === 'DAI') {
+    el.textContent = _formatDai(_sliderStepToDai(step));
   } else {
     const raw = getChatBudget();
     el.textContent = `${(raw / 10 ** asset.decimals).toFixed(asset.decimals)} ${asset.display}`;
@@ -2484,7 +2484,7 @@ async function promptModelDownloadChoice() {
   listEl.innerHTML = '<div class="mp-empty">Detecting hardware…</div>';
 
   let data = null;
-  try { data = await window.pohMinerAPI?.onboarding?.getModelOptions(); } catch { /* fall through */ }
+  try { data = await window.daiMinerAPI?.onboarding?.getModelOptions(); } catch { /* fall through */ }
   // Fallback when hardware grading is unavailable: plain QVAC tier list.
   const options = data?.options?.length ? data.options : [
     { name: 'qwen3-0.6b' }, { name: 'qwen3-1.7b' }, { name: 'qwen3-4b' }, { name: 'qwen3-8b' },
@@ -2514,7 +2514,7 @@ async function promptModelDownloadChoice() {
 // the freshly-downloaded model is selectable.
 window.installChatModel = async function(model = null) {
   const btn = document.getElementById('chat-model-install-btn');
-  if (!window.pohMinerAPI?.setup?.pullModel) {
+  if (!window.daiMinerAPI?.setup?.pullModel) {
     alert('Model download is only available in the desktop app.');
     return;
   }
@@ -2522,15 +2522,15 @@ window.installChatModel = async function(model = null) {
     model = await promptModelDownloadChoice();
     if (!model) return; // user closed the chooser
     // Persist as the default so scans/restarts use the same model (non-fatal).
-    try { await window.pohMinerAPI.onboarding?.setModel?.(model); } catch { /* ignore */ }
+    try { await window.daiMinerAPI.onboarding?.setModel?.(model); } catch { /* ignore */ }
   }
   const orig = btn ? btn.textContent : '';
   if (btn) { btn.disabled = true; btn.textContent = '⬇ Downloading…'; }
   // Surface SDK download progress on the button if the setup channel emits it.
   let offProgress = null;
   try {
-    if (window.pohMinerAPI.setup.onProgress) {
-      offProgress = window.pohMinerAPI.setup.onProgress((msg) => {
+    if (window.daiMinerAPI.setup.onProgress) {
+      offProgress = window.daiMinerAPI.setup.onProgress((msg) => {
         if (!btn || !msg) return;
         // msg is a progress object ({status, message, pct}), not a string.
         if (msg.pct != null) btn.textContent = `⬇ Downloading… ${msg.pct}%`;
@@ -2538,7 +2538,7 @@ window.installChatModel = async function(model = null) {
       });
     }
     // warmUpQvacModel resolves { ok, error } rather than throwing, so inspect it.
-    const res = await window.pohMinerAPI.setup.pullModel(model);
+    const res = await window.daiMinerAPI.setup.pullModel(model);
     if (res && res.ok === false) {
       throw new Error(res.error || 'inference backend could not load the model');
     }
@@ -3812,10 +3812,10 @@ async function pollTxHistory() {
     const { entries } = await res.json();
     const el = document.getElementById('home-txs');
     if (!el || !entries?.length) return;
-    const POH = 1_000_000_000;
+    const DAI = 1_000_000_000;
     el.innerHTML = entries.map(e => {
       const sign  = e.delta > 0 ? '+' : '-';
-      const amt   = Math.abs(e.delta / POH).toFixed(3);
+      const amt   = Math.abs(e.delta / DAI).toFixed(3);
       const amtCls = e.delta > 0 ? 'pos' : 'neg';
       const ts    = e.ts ? new Date(e.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
       const { icon, cls } = _homeTxIcon(e.label);
@@ -3828,7 +3828,7 @@ async function pollTxHistory() {
           </div>
           <div class="home-tx-right">
             <div class="home-tx-amount ${amtCls}">${sign}${amt}</div>
-            <div class="home-tx-unit">POH</div>
+            <div class="home-tx-unit">DAI</div>
           </div>
         </div>`;
     }).join('');
@@ -3869,12 +3869,12 @@ window.scannerWelcomeSetup = function() {
 
 // ── Budget slider ──────────────────────────────────────────────────────────────
 
-// POH token has 9 decimals; slider value is in whole POH
+// DAI token has 9 decimals; slider value is in whole DAI
 const BUDGET_DECIMALS = 1_000_000_000;
-// Fee slider: 1 μPOH (1e-9 POH) → 1 POH, logarithmic.
-const _BLOG_MIN = 0.000001, _BLOG_MAX = 1, _BLOG_STEPS = 200;   // 1 kPOH (=1000 μPOH) → 1 POH   // 199 => pct 1/3 lands exactly on 1000 μPOH
+// Fee slider: 1 μDAI (1e-9 DAI) → 1 DAI, logarithmic.
+const _BLOG_MIN = 0.000001, _BLOG_MAX = 1, _BLOG_STEPS = 200;   // 1 kDAI (=1000 μDAI) → 1 DAI   // 199 => pct 1/3 lands exactly on 1000 μDAI
 
-function _sliderStepToPoh(step) {
+function _sliderStepToDai(step) {
   if (step <= 1) return _BLOG_MIN;
   return _BLOG_MIN * Math.pow(_BLOG_MAX / _BLOG_MIN, (step - 1) / (_BLOG_STEPS - 1));
 }
@@ -3884,13 +3884,13 @@ function _pctToSliderStep(pct) {
   return Math.round(1 + pct * (_BLOG_STEPS - 1));
 }
 
-function _formatPoh(poh) {
-  if (poh <= 0)      return 'no fee';
-  const k = poh * 1e6;                       // kPOH — 1 kPOH = 1000 μPOH = 1e-6 POH
-  if (k < 1000)      return (k < 10 ? String(Math.round(k * 10) / 10) : Math.round(k).toLocaleString()) + ' kPOH';
-  if (poh < 1)       return poh.toPrecision(2) + ' POH';
-  if (poh < 10)      return poh.toFixed(2) + ' POH';
-  return Math.round(poh) + ' POH';
+function _formatDai(dai) {
+  if (dai <= 0)      return 'no fee';
+  const k = dai * 1e6;                       // kDAI — 1 kDAI = 1000 μDAI = 1e-6 DAI
+  if (k < 1000)      return (k < 10 ? String(Math.round(k * 10) / 10) : Math.round(k).toLocaleString()) + ' kDAI';
+  if (dai < 1)       return dai.toPrecision(2) + ' DAI';
+  if (dai < 10)      return dai.toFixed(2) + ' DAI';
+  return Math.round(dai) + ' DAI';
 }
 
 // Fee preset marks: default 0%, low 25%, high 60%, max 100%.
@@ -3912,7 +3912,7 @@ window.updateBudgetDisplay = function(val) {
   const step = parseInt(val, 10);
   const display = document.getElementById('budget-display');
   if (!display) return;
-  display.textContent = step <= 0 ? 'no fee' : _formatPoh(_sliderStepToPoh(step));
+  display.textContent = step <= 0 ? 'no fee' : _formatDai(_sliderStepToDai(step));
   const slider = document.getElementById('budget-slider');
   if (slider) slider.style.setProperty('--fill', `${(step / _BLOG_STEPS) * 100}%`);
 };
@@ -3922,7 +3922,7 @@ function getBudgetValue() {
   if (!slider) return 0;
   const step = parseInt(slider.value, 10);
   if (step <= 0) return 0;
-  return Math.round(_sliderStepToPoh(step) * BUDGET_DECIMALS);
+  return Math.round(_sliderStepToDai(step) * BUDGET_DECIMALS);
 }
 
 // ── Search (identity scanner) ──────────────────────────────────────────────────
@@ -4134,7 +4134,7 @@ function _profileBadges(p, verdict, conf, ofac, eu, uk) {
 
   const ip = p.identityProtocols || {};
   if (ip.worldId)   b.push(badge('ok',   '🌍 World ID'));
-  if (ip.poh)       b.push(badge('ok',   '⚖️ PoH'));
+  if (ip.dai)       b.push(badge('ok',   '⚖️ DAI'));
   if (ip.brightid)  b.push(badge('ok',   '🔆 BrightID'));
   if (ip.bab)       b.push(badge('ok',   '🏦 BAB KYC'));
 
@@ -4172,7 +4172,7 @@ function _identityProtocols(p) {
     </div>`;
 
   if (ip.worldId  != null) cards.push(card('🌍', 'World ID',          ip.worldId  ? 'Verified human' : 'Not verified',   ip.worldId,  null));
-  if (ip.poh      != null) cards.push(card('⚖️', 'Proof of Humanity', ip.poh      ? 'Registered'     : 'Not registered', ip.poh,      null));
+  if (ip.dai      != null) cards.push(card('⚖️', 'Decentralized Artificial Intelligence', ip.dai      ? 'Registered'     : 'Not registered', ip.dai,      null));
   if (ip.humanity != null) cards.push(card('🖐️', 'Humanity Protocol', ip.humanity ? 'Palm verified'  : 'Not verified',   ip.humanity, null));
   if (ip.brightid != null) cards.push(card('🔆', 'BrightID',          ip.brightid ? 'Verified unique' : 'Not verified',  ip.brightid, null));
   if (ip.bab      != null) cards.push(card('🏦', 'BAB Token',         ip.bab      ? 'Binance KYC'    : 'No BAB token',   ip.bab,      null));
@@ -4671,18 +4671,18 @@ function submitFeedback(type) {
 // ── Send / Receive ─────────────────────────────────────────────────────────────
 
 let _sendWalletAddr = '';
-let _sendWalletPoh  = 0;
+let _sendWalletDai  = 0;
 
 // Currently selected send asset (ticker). Balance shown/validated in it.
-window._sendCurrency = 'POH';
+window._sendCurrency = 'DAI';
 
 function _sendAsset() {
   return (window._assetRegistry && window._assetRegistry[window._sendCurrency])
-    || { ticker: 'POH', decimals: 9, display: 'POH', sign: '' };
+    || { ticker: 'DAI', decimals: 9, display: 'DAI', sign: '' };
 }
 
 window.onSendCurrencyChange = function(ticker) {
-  window._sendCurrency = ticker || 'POH';
+  window._sendCurrency = ticker || 'DAI';
   const unitEl = document.getElementById('amount-display-unit');
   if (unitEl) unitEl.textContent = _sendAsset().display;
   syncSendWallet();
@@ -4716,14 +4716,14 @@ function syncSendWallet() {
     .then(r => r.json())
     .then(data => {
       const asset = _sendAsset();
-      if (asset.ticker === 'POH') {
-        const POH_DECIMALS = 1_000_000_000;
-        _sendWalletPoh = (data.balance || 0) / POH_DECIMALS;
+      if (asset.ticker === 'DAI') {
+        const DAI_DECIMALS = 1_000_000_000;
+        _sendWalletDai = (data.balance || 0) / DAI_DECIMALS;
       } else {
         const raw = data.assets?.[asset.ticker]?.raw || 0;
-        _sendWalletPoh = raw / 10 ** asset.decimals;   // balance in DISPLAY units of the asset
+        _sendWalletDai = raw / 10 ** asset.decimals;   // balance in DISPLAY units of the asset
       }
-      const str = `${_sendWalletPoh.toFixed(asset.decimals === 2 ? 2 : 4)} ${asset.display}`;
+      const str = `${_sendWalletDai.toFixed(asset.decimals === 2 ? 2 : 4)} ${asset.display}`;
       const el = document.getElementById('send-balance');
       if (el) el.textContent = str;
       const rel = document.getElementById('receive-balance');
@@ -4741,7 +4741,7 @@ function setSendMax() {
   const el = document.getElementById('send-amount');
   if (!el) return;
   const asset = _sendAsset();
-  const v = asset.ticker === 'POH' ? Math.max(0, _sendWalletPoh - 0.001) : _sendWalletPoh;
+  const v = asset.ticker === 'DAI' ? Math.max(0, _sendWalletDai - 0.001) : _sendWalletDai;
   el.value = v.toFixed(asset.decimals === 2 ? 2 : 4);
   updateSendSummary();
 }
@@ -4760,15 +4760,15 @@ function updateSendSummary() {
   const sumFee = document.getElementById('summary-fee');
   if (sumAmt) sumAmt.textContent = amount > 0 ? `${amount.toFixed(dp)} ${asset.display}` : '—';
   if (sumTo)  sumTo.textContent  = to.length > 16 ? to.slice(0, 8) + '…' + to.slice(-6) : (to || '—');
-  if (sumFee) sumFee.textContent = asset.ticker === 'POH' ? '0.001 POH' : `0.01 ${asset.display}`;
+  if (sumFee) sumFee.textContent = asset.ticker === 'DAI' ? '0.001 DAI' : `0.01 ${asset.display}`;
 }
 
 function syncHomeBalance() {
-  const bal = document.getElementById('poh-wallet-balance')?.textContent || '';
+  const bal = document.getElementById('dai-wallet-balance')?.textContent || '';
   const addr = window._localWallet || '';
   const numEl = document.getElementById('home-balance-num');
   const addrEl = document.getElementById('home-balance-addr');
-  if (numEl && bal) numEl.textContent = bal.replace(' POH', '');
+  if (numEl && bal) numEl.textContent = bal.replace(' DAI', '');
   if (addrEl && addr) addrEl.textContent = addr.length > 16 ? addr.slice(0, 8) + '…' + addr.slice(-6) : addr;
   _updateUsdBalanceDisplay();
   _refreshAssetList();
@@ -4804,13 +4804,13 @@ async function executeSend() {
   const btn    = document.getElementById('send-btn');
   const res    = document.getElementById('send-result');
 
-  const isValidAddr = a => /^poh[0-9a-f]{40}$/i.test(a) || /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(a);
+  const isValidAddr = a => /^dai[0-9a-f]{40}$/i.test(a) || /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(a);
   if (!_sendWalletAddr)  { showSendResult(res, false, 'No wallet loaded — start the miner first'); return; }
   if (!to)               { showSendResult(res, false, 'Enter a recipient address'); return; }
-  if (!isValidAddr(to))  { showSendResult(res, false, 'Invalid address — must be a PoH or Solana wallet address'); return; }
+  if (!isValidAddr(to))  { showSendResult(res, false, 'Invalid address — must be a DAI or Solana wallet address'); return; }
   if (!(amount > 0))     { showSendResult(res, false, 'Enter a valid amount'); return; }
   const sendAsset = _sendAsset();
-  if (amount > _sendWalletPoh) { showSendResult(res, false, `Insufficient balance (${_sendWalletPoh.toFixed(sendAsset.decimals === 2 ? 2 : 4)} ${sendAsset.display} available)`); return; }
+  if (amount > _sendWalletDai) { showSendResult(res, false, `Insufficient balance (${_sendWalletDai.toFixed(sendAsset.decimals === 2 ? 2 : 4)} ${sendAsset.display} available)`); return; }
 
   btn.disabled = true;
   btn.textContent = 'Sending…';
@@ -4818,7 +4818,7 @@ async function executeSend() {
 
   const port = window._minerApiPort || 3456;
   try {
-    // On-chain send: node builds + signs the PoHTransaction using the wallet's stored signing key,
+    // On-chain send: node builds + signs the DAITransaction using the wallet's stored signing key,
     // submits to mempool, and gossips to all peers. Returns txHash + status:'pending'.
     const r = await fetch(`http://localhost:${port}/api/wallet/send`, {
       method: 'POST',
@@ -4880,7 +4880,7 @@ function populateReceiveView() {
 
   // Sync balance
   const balEl = document.getElementById('receive-balance');
-  if (balEl) balEl.textContent = document.getElementById('send-balance')?.textContent || '0 POH';
+  if (balEl) balEl.textContent = document.getElementById('send-balance')?.textContent || '0 DAI';
 
   // Draw QR code
   if (addr) drawQR('receive-qr', addr);
@@ -4913,7 +4913,7 @@ async function drawQR(canvasId, text) {
   const canvas = document.getElementById(canvasId);
   if (!canvas || !text) return;
   try {
-    const dataUrl = await window.pohMinerAPI.generateQR(text, canvas.width || 220);
+    const dataUrl = await window.daiMinerAPI.generateQR(text, canvas.width || 220);
     const img = new Image();
     img.onload = () => {
       const ctx = canvas.getContext('2d');
@@ -4987,18 +4987,18 @@ function showSkillDetail(id) {
   }
 
   // Staking section
-  const gradPoh = window._skillEconomics?.graduationThresholdPoh || 1000;
-  const STAKE_THRESHOLD = gradPoh * 1e9;
+  const gradDai = window._skillEconomics?.graduationThresholdDai || 1000;
+  const STAKE_THRESHOLD = gradDai * 1e9;
   const staked    = s.totalStaked || 0;
   const myStake   = s.myStake || 0;
   const pct       = Math.min(100, Math.round((staked / STAKE_THRESHOLD) * 100));
-  const stakedPoh = (staked / 1e9).toFixed(2);
-  const myPoh     = (myStake / 1e9).toFixed(2);
+  const stakedDai = (staked / 1e9).toFixed(2);
+  const myDai     = (myStake / 1e9).toFixed(2);
 
   document.getElementById('skill-detail-stake-bar').style.width = `${pct}%`;
   document.getElementById('skill-detail-stake-pct').textContent = pct > 0 ? `${pct}%` : '';
   document.getElementById('skill-detail-stake-info').textContent =
-    `${stakedPoh} / ${gradPoh.toLocaleString()} POH staked${myStake > 0 ? ` · yours: ${myPoh} POH` : ''}`;
+    `${stakedDai} / ${gradDai.toLocaleString()} DAI staked${myStake > 0 ? ` · yours: ${myDai} DAI` : ''}`;
   document.getElementById('skill-stake-amount').value = '';
   const resultEl = document.getElementById('skill-stake-result');
   resultEl.style.display = 'none';
@@ -5024,9 +5024,9 @@ async function stakeSkill() {
     });
     const data = await res.json();
     if (!res.ok || data.error) { _stakeMsg(data.error || 'Stake failed', '#ef4444'); return; }
-    const totalPoh = (data.total / 1e9).toFixed(2);
-    const myPoh    = (data.myStake / 1e9).toFixed(2);
-    _stakeMsg(`Staked! Total: ${totalPoh} POH · yours: ${myPoh} POH${data.txHash ? ` · tx: ${data.txHash.slice(0,12)}…` : ''}`, '#22c55e');
+    const totalDai = (data.total / 1e9).toFixed(2);
+    const myDai    = (data.myStake / 1e9).toFixed(2);
+    _stakeMsg(`Staked! Total: ${totalDai} DAI · yours: ${myDai} DAI${data.txHash ? ` · tx: ${data.txHash.slice(0,12)}…` : ''}`, '#22c55e');
     // Refresh skill data
     loadSkills().then(() => {
       if (window._skillsData[skillId]) showSkillDetail(skillId);
@@ -5048,9 +5048,9 @@ async function unstakeSkill() {
     });
     const data = await res.json();
     if (!res.ok || data.error) { _stakeMsg(data.error || 'Unstake failed', '#ef4444'); return; }
-    const totalPoh = (data.total / 1e9).toFixed(2);
-    const myPoh    = ((data.myStake || 0) / 1e9).toFixed(2);
-    _stakeMsg(`Unstaked! Total: ${totalPoh} POH · yours: ${myPoh} POH${data.txHash ? ` · tx: ${data.txHash.slice(0,12)}…` : ''}`, '#22c55e');
+    const totalDai = (data.total / 1e9).toFixed(2);
+    const myDai    = ((data.myStake || 0) / 1e9).toFixed(2);
+    _stakeMsg(`Unstaked! Total: ${totalDai} DAI · yours: ${myDai} DAI${data.txHash ? ` · tx: ${data.txHash.slice(0,12)}…` : ''}`, '#22c55e');
     loadSkills().then(() => {
       if (window._skillsData[skillId]) showSkillDetail(skillId);
     });
@@ -5089,8 +5089,8 @@ async function loadSkills() {
     window._skillsData = {};
     skills.forEach(s => { window._skillsData[s.id] = s; });
 
-    const gradPoh = window._skillEconomics?.graduationThresholdPoh || 1000;
-    const STAKE_THRESHOLD = gradPoh * 1e9;
+    const gradDai = window._skillEconomics?.graduationThresholdDai || 1000;
+    const STAKE_THRESHOLD = gradDai * 1e9;
     const card = (s) => {
       const staked = s.totalStaked || 0;
       const pct = Math.min(100, Math.round((staked / STAKE_THRESHOLD) * 100));
@@ -5156,17 +5156,17 @@ async function pollSkillAuditResult(jobId, skillId, resultEl, attempt = 0) {
     const stillPending = !data || ['queued', 'running', 'computing', 'ignored'].includes(data.status);
     if (stillPending) {
       const dots = '.'.repeat((attempt % 3) + 1);
-      resultEl.textContent = `Auditing skill code on network${dots} (${window._skillEconomics?.proposeFeePoh || 1} POH escrowed)`;
+      resultEl.textContent = `Auditing skill code on network${dots} (${window._skillEconomics?.proposeFeeDai || 1} DAI escrowed)`;
       pollSkillAuditResult(jobId, skillId, resultEl, attempt + 1);
       return;
     }
     if (data.rejected || data.verdict === 'REJECTED') {
       showAuditRejectionModal(data.reason || 'Dangerous code detected', data.issues || []);
       resultEl.style.color = '#ef4444';
-      resultEl.textContent = `Skill rejected by network audit · ${window._skillEconomics?.proposeFeePoh || 1} POH refunded`;
+      resultEl.textContent = `Skill rejected by network audit · ${window._skillEconomics?.proposeFeeDai || 1} DAI refunded`;
     } else if (data.status === 'done' || data.verdict === 'SKILL_RESULT') {
       resultEl.style.color = '#22c55e';
-      resultEl.textContent = `Proposed: ${skillId} · audit passed · ${window._skillEconomics?.proposeFeePoh || 1} POH paid to auditing miner`;
+      resultEl.textContent = `Proposed: ${skillId} · audit passed · ${window._skillEconomics?.proposeFeeDai || 1} DAI paid to auditing miner`;
       skillsView('browse');
     } else {
       // Error or unexpected state
@@ -5200,7 +5200,7 @@ async function submitSkill() {
     resultEl.style.display = 'block';
     if (res.status === 402) {
       resultEl.style.color = '#ef4444';
-      const bal = data.balance != null ? ` (balance: ${(data.balance / 1_000_000_000).toFixed(2)} POH)` : '';
+      const bal = data.balance != null ? ` (balance: ${(data.balance / 1_000_000_000).toFixed(2)} DAI)` : '';
       resultEl.textContent = (data.error || 'Insufficient balance') + bal;
     } else if (res.status === 422 || data.rejected) {
       // Synchronous rejection (context-only skills with no code aren't possible, but keep as fallback)
@@ -5210,11 +5210,11 @@ async function submitSkill() {
     } else if (data.pending && data.jobId) {
       // Skill submitted for network audit — poll until the auditing miner returns a result
       resultEl.style.color = '#f59e0b';
-      resultEl.textContent = `Auditing skill code on network… ${window._skillEconomics?.proposeFeePoh || 1} POH escrowed`;
+      resultEl.textContent = `Auditing skill code on network… ${window._skillEconomics?.proposeFeeDai || 1} DAI escrowed`;
       pollSkillAuditResult(data.jobId, id, resultEl);
     } else if (data.ok) {
       resultEl.style.color = '#22c55e';
-      resultEl.textContent = `Proposed: ${id} · ${window._skillEconomics?.proposeFeePoh || 1} POH deducted`;
+      resultEl.textContent = `Proposed: ${id} · ${window._skillEconomics?.proposeFeeDai || 1} DAI deducted`;
       skillsView('browse');
     } else {
       resultEl.style.color = '#ef4444';
@@ -5233,7 +5233,7 @@ async function submitSkill() {
 // Static fallback only — the live lists come from GET /api/p2p/currencies
 // (off-chain quote legs + on-chain assets) via _p2pLoadCurrencies().
 let QUOTE_CURRENCIES = ['USDT-ERC20','USDT-TRC20','USDT-TON','USDT-SOL','USDT-BEP20','USDC-ERC20','BTC','ETH','SOL','Bank Transfer'];
-let P2P_ONCHAIN = ['POH'];
+let P2P_ONCHAIN = ['DAI'];
 async function _p2pLoadCurrencies() {
   try {
     const data = await _p2pApiFetch('/api/p2p/currencies');
@@ -5243,15 +5243,15 @@ async function _p2pLoadCurrencies() {
 }
 function _p2pAssetMeta(ticker) {
   return (window._assetRegistry && window._assetRegistry[ticker])
-    || { ticker, decimals: ticker === 'POH' ? 9 : 2, display: ticker, sign: '' };
+    || { ticker, decimals: ticker === 'DAI' ? 9 : 2, display: ticker, sign: '' };
 }
-// Format a raw base amount in the order's base asset (μPOH for POH, ×100 for stables).
+// Format a raw base amount in the order's base asset (μDAI for DAI, ×100 for stables).
 function _p2pFmtBase(order) {
-  const t = order.baseAsset || 'POH';
+  const t = order.baseAsset || 'DAI';
   const a = _p2pAssetMeta(t);
-  return `${(order.pohAmount / 10 ** a.decimals).toFixed(a.decimals === 2 ? 2 : 3)} ${a.display}`;
+  return `${(order.daiAmount / 10 ** a.decimals).toFixed(a.decimals === 2 ? 2 : 3)} ${a.display}`;
 }
-const POH_DECIMALS_P2P = 1_000_000_000;
+const DAI_DECIMALS_P2P = 1_000_000_000;
 
 let _p2pCurrency = '';
 let _p2pOrders = [];
@@ -5262,8 +5262,8 @@ let _p2pBestUsdRate = null;
 
 function _p2pPort() { return window._minerApiPort || 3456; }
 
-function _p2pFmt(uPOH) {
-  const n = uPOH / 1e9;
+function _p2pFmt(uDAI) {
+  const n = uDAI / 1e9;
   return n.toLocaleString(undefined, { maximumFractionDigits: n < 1 ? 6 : 4 });
 }
 
@@ -5302,9 +5302,9 @@ function _p2pFmtMethod(m) {
 function _updateUsdBalanceDisplay() {
   const el = document.getElementById('home-balance-usd');
   if (!el) return;
-  const poh = parseFloat(document.getElementById('home-balance-num')?.textContent || '0') || 0;
-  if (_p2pBestUsdRate != null && poh > 0) {
-    el.textContent = `≈ $${(poh * _p2pBestUsdRate).toFixed(2)} USD`;
+  const dai = parseFloat(document.getElementById('home-balance-num')?.textContent || '0') || 0;
+  if (_p2pBestUsdRate != null && dai > 0) {
+    el.textContent = `≈ $${(dai * _p2pBestUsdRate).toFixed(2)} USD`;
   } else {
     el.textContent = '≈ — USD';
   }
@@ -5399,7 +5399,7 @@ function p2pShowCreateOrder() {
         const o = document.createElement('option'); o.value = c; o.textContent = _p2pAssetMeta(c).display; baseSel.appendChild(o);
       }
     }
-    _p2pPopulateQuoteSelect(baseSel?.value || 'POH');
+    _p2pPopulateQuoteSelect(baseSel?.value || 'DAI');
   }).catch(() => {});
   _p2pPaymentMethods = [];
   _p2pRenderPaymentMethodList();
@@ -5422,7 +5422,7 @@ function p2pBuildCurrencyPills() {
   const container = document.getElementById('p2p-currency-pills');
   if (!container) return;
   container.innerHTML = '';
-  const all = ['', ...P2P_ONCHAIN.filter(c => c !== 'POH'), ...QUOTE_CURRENCIES];
+  const all = ['', ...P2P_ONCHAIN.filter(c => c !== 'DAI'), ...QUOTE_CURRENCIES];
   all.forEach(c => {
     const btn = document.createElement('button');
     btn.textContent = c || 'ALL';
@@ -5448,7 +5448,7 @@ async function p2pLoadOrders(silent = false) {
     ['USDT-ERC20','USDT-TRC20','USDT-TON','USDT-SOL','USDT-BEP20','USDC-ERC20'].includes(o.quoteCurrency)
   );
   _p2pBestUsdRate = stableOrders.length
-    ? Math.max(...stableOrders.map(o => parseFloat(o.pricePerPOH) || 0))
+    ? Math.max(...stableOrders.map(o => parseFloat(o.pricePerDAI) || 0))
     : null;
   _updateUsdBalanceDisplay();
   p2pBuildCurrencyPills();
@@ -5473,7 +5473,7 @@ function p2pRenderOrders() {
         <span style="font-size:12px;color:#fff;font-family:monospace;">${_p2pFmtBase(order)}</span>
         <span style="font-size:9px;padding:2px 6px;border-radius:3px;background:#7f1d1d22;color:#fca5a5;font-family:monospace;">SELL</span>
       </div>
-      <div style="font-size:11px;color:#22c55e;font-family:monospace;margin-bottom:3px;">${order.pricePerPOH} ${order.quoteCurrency}/${_p2pAssetMeta(order.baseAsset||'POH').display}</div>
+      <div style="font-size:11px;color:#22c55e;font-family:monospace;margin-bottom:3px;">${order.pricePerDAI} ${order.quoteCurrency}/${_p2pAssetMeta(order.baseAsset||'DAI').display}</div>
       <div style="font-size:10px;color:#555;font-family:monospace;">Limit ${order.minTrade}–${(order.maxTrade||0).toFixed(2)} ${order.quoteCurrency}</div>
       ${order.paymentMethods?.length ? `<div style="font-size:10px;color:#444;font-family:monospace;margin-top:2px;">${order.paymentMethods.map(m=>typeof m==='string'?m:(m.network||'?')).join(', ')}</div>` : ''}
       <div style="font-size:9px;color:#374151;font-family:monospace;margin-top:4px;">${_p2pTimeAgo(order.createdAt)} · ${order.maker.slice(0,10)}…</div>
@@ -5504,7 +5504,7 @@ async function p2pOpenOrder(order) {
       </div>
       <div style="display:flex;justify-content:space-between;">
         <span style="font-size:10px;color:#555;font-family:monospace;">PRICE</span>
-        <span style="font-size:12px;color:#22c55e;font-family:monospace;">${order.pricePerPOH} ${order.quoteCurrency}/${_p2pAssetMeta(order.baseAsset||'POH').display}</span>
+        <span style="font-size:12px;color:#22c55e;font-family:monospace;">${order.pricePerDAI} ${order.quoteCurrency}/${_p2pAssetMeta(order.baseAsset||'DAI').display}</span>
       </div>
       <div style="display:flex;justify-content:space-between;">
         <span style="font-size:10px;color:#555;font-family:monospace;">LIMIT</span>
@@ -5522,10 +5522,10 @@ async function p2pOpenOrder(order) {
     </div>
     ${isMine && isOpen ? `<button id="p2p-cancel-order-btn" onclick="p2pCancelOrder('${order.id}')" style="width:100%;padding:8px;border:1px solid #7f1d1d44;background:#7f1d1d11;color:#fca5a5;border-radius:4px;cursor:pointer;font-size:11px;font-family:monospace;">CANCEL ORDER</button>` : ''}
     ${!isMine && isOpen ? (() => {
-      const baseT = order.baseAsset || 'POH';
+      const baseT = order.baseAsset || 'DAI';
       const baseMeta = _p2pAssetMeta(baseT);
       const atomic = P2P_ONCHAIN.includes(order.quoteCurrency);
-      const baseDisp = order.pohAmount / 10 ** baseMeta.decimals;
+      const baseDisp = order.daiAmount / 10 ** baseMeta.decimals;
       return `
     <div>
       <div style="font-size:10px;color:#444;margin-bottom:4px;letter-spacing:0.1em;">${baseMeta.display.toUpperCase()} AMOUNT TO TRADE</div>
@@ -5534,7 +5534,7 @@ async function p2pOpenOrder(order) {
       <div id="p2p-select-quote" style="font-size:10px;color:#555;font-family:monospace;margin-top:3px;"></div>
     </div>
     ${atomic ? `<div style="font-size:10px;color:#22c55e;font-family:monospace;">⚡ Atomic on-chain swap — settles instantly to your wallet address, no payment step.</div>` : ''}
-    <button onclick="p2pSelectOrder('${order.id}','${order.pricePerPOH}','${order.quoteCurrency}')"
+    <button onclick="p2pSelectOrder('${order.id}','${order.pricePerDAI}','${order.quoteCurrency}')"
             style="width:100%;padding:10px;border:none;background:#22c55e;color:#000;border-radius:4px;font-weight:600;cursor:pointer;font-size:12px;font-family:monospace;">${atomic ? 'SWAP' : `BUY ${baseMeta.display}`}</button>
     <div id="p2p-select-result" style="font-size:11px;display:none;padding:8px;border-radius:4px;font-family:monospace;"></div>`;
     })() : ''}
@@ -5547,7 +5547,7 @@ async function p2pOpenOrder(order) {
     const qMeta = P2P_ONCHAIN.includes(order.quoteCurrency) ? _p2pAssetMeta(order.quoteCurrency) : null;
     const updateQuote = () => {
       const amt = parseFloat(amtInput.value)||0;
-      quoteEl.textContent = `You pay ≈ ${(amt*order.pricePerPOH).toFixed(qMeta && qMeta.decimals === 2 ? 2 : 4)} ${qMeta ? qMeta.display : order.quoteCurrency}`;
+      quoteEl.textContent = `You pay ≈ ${(amt*order.pricePerDAI).toFixed(qMeta && qMeta.decimals === 2 ? 2 : 4)} ${qMeta ? qMeta.display : order.quoteCurrency}`;
     };
     amtInput.addEventListener('input', updateQuote);
     updateQuote();
@@ -5570,23 +5570,23 @@ async function p2pCancelOrder(orderId) {
   }
 }
 
-async function p2pSelectOrder(orderId, pricePerPOH, quoteCurrency) {
+async function p2pSelectOrder(orderId, pricePerDAI, quoteCurrency) {
   const amtInput  = document.getElementById('p2p-select-amount');
   const resultEl  = document.getElementById('p2p-select-result');
   // Base amount in RAW units of the order's base asset; on-chain quote amounts in raw units too.
   const order = _p2pOrders.find(o => o.id === orderId) || {};
-  const baseMeta = _p2pAssetMeta(order.baseAsset || 'POH');
-  const pohAmount = Math.round(parseFloat(amtInput?.value||'0') * 10 ** baseMeta.decimals);
+  const baseMeta = _p2pAssetMeta(order.baseAsset || 'DAI');
+  const daiAmount = Math.round(parseFloat(amtInput?.value||'0') * 10 ** baseMeta.decimals);
   const quoteIsOnchain = P2P_ONCHAIN.includes(quoteCurrency);
   const quoteMeta = quoteIsOnchain ? _p2pAssetMeta(quoteCurrency) : null;
-  const quoteDisplay = parseFloat(amtInput?.value||'0') * parseFloat(pricePerPOH);
+  const quoteDisplay = parseFloat(amtInput?.value||'0') * parseFloat(pricePerDAI);
   const quoteAmount = quoteIsOnchain ? Math.round(quoteDisplay * 10 ** quoteMeta.decimals) : quoteDisplay;
-  if (!pohAmount) { if (resultEl) { resultEl.style.display='block'; resultEl.style.color='#ef4444'; resultEl.textContent='Enter POH amount'; } return; }
+  if (!daiAmount) { if (resultEl) { resultEl.style.display='block'; resultEl.style.color='#ef4444'; resultEl.textContent='Enter DAI amount'; } return; }
   if (resultEl) { resultEl.style.display='block'; resultEl.style.color='#888'; resultEl.textContent='Processing…'; }
   try {
-    const auth = await _p2pLocalAuth('select-order', { orderId, pohAmount, quoteAmount });
+    const auth = await _p2pLocalAuth('select-order', { orderId, daiAmount, quoteAmount });
     const data = await _p2pApiFetch(`/api/p2p/orders/${orderId}/select`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...auth, pohAmount, quoteAmount }),
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...auth, daiAmount, quoteAmount }),
     });
     if (data.error) throw new Error(data.error);
     if (data.atomic) {
@@ -5628,7 +5628,7 @@ function p2pRenderTrade(body, trade, order) {
   body.innerHTML = `
     <div style="background:#0a0a0a;border:1px solid #1e1e1e;border-radius:6px;padding:12px;display:flex;flex-direction:column;gap:6px;">
       <div style="display:flex;justify-content:space-between;"><span style="font-size:10px;color:#555;font-family:monospace;">STATUS</span><span style="font-size:11px;color:${color};font-family:monospace;">${trade.status.replace('_',' ').toUpperCase()}</span></div>
-      <div style="display:flex;justify-content:space-between;"><span style="font-size:10px;color:#555;font-family:monospace;">AMOUNT</span><span style="font-size:12px;color:#fff;font-family:monospace;">${(() => { const m = _p2pAssetMeta(order?.baseAsset || 'POH'); return `${(trade.pohAmount / 10 ** m.decimals).toFixed(m.decimals === 2 ? 2 : 3)} ${m.display}`; })()}</span></div>
+      <div style="display:flex;justify-content:space-between;"><span style="font-size:10px;color:#555;font-family:monospace;">AMOUNT</span><span style="font-size:12px;color:#fff;font-family:monospace;">${(() => { const m = _p2pAssetMeta(order?.baseAsset || 'DAI'); return `${(trade.daiAmount / 10 ** m.decimals).toFixed(m.decimals === 2 ? 2 : 3)} ${m.display}`; })()}</span></div>
       <div style="display:flex;justify-content:space-between;"><span style="font-size:10px;color:#555;font-family:monospace;">TOTAL</span><span style="font-size:12px;color:#22c55e;font-family:monospace;">${(trade.quoteAmount||0).toFixed(4)} ${order?.quoteCurrency||''}</span></div>
       <div style="display:flex;justify-content:space-between;"><span style="font-size:10px;color:#555;font-family:monospace;">ROLE</span><span style="font-size:11px;color:#aaa;font-family:monospace;">${isMaker?'Maker':'Taker'} · ${isSeller?'Seller':'Buyer'}</span></div>
       ${deadline}
@@ -5642,8 +5642,8 @@ function p2pRenderTrade(body, trade, order) {
     </div>
     <button onclick="p2pMarkPaymentSent('${trade.id}')" style="width:100%;padding:10px;border:none;background:#3b82f6;color:#fff;border-radius:4px;font-weight:600;cursor:pointer;font-size:12px;font-family:monospace;">MARK PAYMENT SENT</button>` : ''}
     ${trade.status === 'payment_sent' && isSeller ? `
-    <div style="background:#0c1a0c;border:1px solid #1a3a1a;border-radius:6px;padding:10px;font-size:11px;color:#86efac;font-family:monospace;">Buyer claims payment sent. Verify, then release POH.</div>
-    <button onclick="p2pReleaseTrade('${trade.id}')" style="width:100%;padding:10px;border:none;background:#22c55e;color:#000;border-radius:4px;font-weight:600;cursor:pointer;font-size:12px;font-family:monospace;">RELEASE POH TO BUYER</button>` : ''}
+    <div style="background:#0c1a0c;border:1px solid #1a3a1a;border-radius:6px;padding:10px;font-size:11px;color:#86efac;font-family:monospace;">Buyer claims payment sent. Verify, then release DAI.</div>
+    <button onclick="p2pReleaseTrade('${trade.id}')" style="width:100%;padding:10px;border:none;background:#22c55e;color:#000;border-radius:4px;font-weight:600;cursor:pointer;font-size:12px;font-family:monospace;">RELEASE DAI TO BUYER</button>` : ''}
     ${['selected','payment_sent'].includes(trade.status) ? `
     <div style="display:flex;gap:6px;">
       <button onclick="p2pCancelTrade('${trade.id}')" style="flex:1;padding:8px;border:1px solid #7f1d1d44;background:#7f1d1d11;color:#fca5a5;border-radius:4px;cursor:pointer;font-size:11px;font-family:monospace;">CANCEL</button>
@@ -5676,16 +5676,16 @@ function p2pDisputeTrade(tradeId)    { const r = prompt('Dispute reason:'); if (
 
 async function p2pSubmitCreateOrder() {
   const resultEl  = document.getElementById('p2p-create-result');
-  const pohAmt    = parseFloat(document.getElementById('p2p-form-amount')?.value || '0');
+  const daiAmt    = parseFloat(document.getElementById('p2p-form-amount')?.value || '0');
   const currency  = document.getElementById('p2p-form-currency')?.value;
   const price     = parseFloat(document.getElementById('p2p-form-price')?.value || '0');
   const minT      = parseFloat(document.getElementById('p2p-form-min')?.value || '0');
   const maxT      = parseFloat(document.getElementById('p2p-form-max')?.value || '0');
   const refCode   = (document.getElementById('p2p-form-referral')?.value || '').trim().toUpperCase();
   const methods   = _p2pPaymentMethods;
-  const baseAsset = document.getElementById('p2p-form-base')?.value || 'POH';
+  const baseAsset = document.getElementById('p2p-form-base')?.value || 'DAI';
   const atomic    = P2P_ONCHAIN.includes(currency);
-  if (!pohAmt || !currency || !price) {
+  if (!daiAmt || !currency || !price) {
     resultEl.style.display='block'; resultEl.style.color='#ef4444'; resultEl.textContent='Fill in amount, currency, and price.'; return;
   }
   // Atomic on-chain swaps settle automatically — no payment method needed.
@@ -5694,7 +5694,7 @@ async function p2pSubmitCreateOrder() {
   }
   resultEl.style.display='block'; resultEl.style.color='#888'; resultEl.textContent='Posting order…';
   const baseMeta = _p2pAssetMeta(baseAsset);
-  const pohAmountRaw = Math.round(pohAmt * 10 ** baseMeta.decimals);
+  const daiAmountRaw = Math.round(daiAmt * 10 ** baseMeta.decimals);
   try {
     // Apply referral code if provided (non-blocking)
     if (refCode && window._localWallet) {
@@ -5703,8 +5703,8 @@ async function p2pSubmitCreateOrder() {
         body: JSON.stringify({ address: window._localWallet, code: refCode }),
       }).catch(() => {});
     }
-    const orderFields = { side: 'sell', pohAmount: pohAmountRaw, baseAsset, baseDecimals: baseMeta.decimals, quoteCurrency: currency, pricePerPOH: price, minTrade: minT||0, maxTrade: maxT||pohAmt*price, paymentMethods: atomic ? [] : methods };
-    const auth = await _p2pLocalAuth('create-order', { side: 'sell', pohAmount: pohAmountRaw });
+    const orderFields = { side: 'sell', daiAmount: daiAmountRaw, baseAsset, baseDecimals: baseMeta.decimals, quoteCurrency: currency, pricePerDAI: price, minTrade: minT||0, maxTrade: maxT||daiAmt*price, paymentMethods: atomic ? [] : methods };
+    const auth = await _p2pLocalAuth('create-order', { side: 'sell', daiAmount: daiAmountRaw });
     const data = await _p2pApiFetch('/api/p2p/orders', {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...auth, ...orderFields }),
     });
@@ -5766,7 +5766,7 @@ async function p2pLoadActivity() {
           </div>
           <div style="flex:1;background:#0a0a0a;border:1px solid #1e1e1e;border-radius:6px;padding:10px;text-align:center;">
             <div style="font-size:14px;color:#22c55e;font-family:monospace;">${((data.earnedFees||0)/1e9).toFixed(4)}</div>
-            <div style="font-size:10px;color:#555;font-family:monospace;margin-top:2px;">POH Earned</div>
+            <div style="font-size:10px;color:#555;font-family:monospace;margin-top:2px;">DAI Earned</div>
           </div>
         </div>
         ${!data.referredBy ? `
@@ -5796,7 +5796,7 @@ async function p2pLoadActivity() {
             <span style="font-size:12px;color:#fff;font-family:monospace;">${_p2pFmtBase(order)}</span>
             <span style="font-size:9px;padding:2px 6px;border-radius:3px;background:${sc}22;color:${sc};font-family:monospace;">${order.status.toUpperCase()}</span>
           </div>
-          <div style="font-size:11px;color:#22c55e;font-family:monospace;">${order.pricePerPOH} ${order.quoteCurrency}/${_p2pAssetMeta(order.baseAsset||'POH').display}</div>
+          <div style="font-size:11px;color:#22c55e;font-family:monospace;">${order.pricePerDAI} ${order.quoteCurrency}/${_p2pAssetMeta(order.baseAsset||'DAI').display}</div>
           <div style="font-size:10px;color:#555;font-family:monospace;margin-top:2px;">${order.side.toUpperCase()} · ${_p2pTimeAgo(order.createdAt)}</div>
         `;
         card.onclick = () => p2pOpenOrder(order);
@@ -5814,7 +5814,7 @@ async function p2pLoadActivity() {
         card.style.cssText = 'background:#111;border:1px solid #1e1e1e;border-radius:6px;padding:10px;cursor:pointer;';
         card.innerHTML = `
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
-            <span style="font-size:12px;color:#fff;font-family:monospace;">${_p2pFmt(trade.pohAmount)} POH</span>
+            <span style="font-size:12px;color:#fff;font-family:monospace;">${_p2pFmt(trade.daiAmount)} DAI</span>
             <span style="font-size:9px;padding:2px 6px;border-radius:3px;background:${sc}22;color:${sc};font-family:monospace;">${trade.status.replace('_',' ').toUpperCase()}</span>
           </div>
           <div style="font-size:11px;color:#22c55e;font-family:monospace;">${(trade.quoteAmount||0).toFixed(4)} ${order?.quoteCurrency||''}</div>
@@ -5991,7 +5991,7 @@ async function explorerLoadBlocks() {
   try {
     const data = await _explorerFetch(`/api/explorer/blocks?page=${_explorerPage}&limit=20`);
     const blocks = data.blocks || [];
-    const POH = 1e9;
+    const DAI = 1e9;
     list.innerHTML = '';
     if (!blocks.length) { list.innerHTML = '<div style="color:#374151;font-size:11px;text-align:center;padding:20px 0;font-family:monospace;">No blocks yet</div>'; return; }
     blocks.forEach(b => {
@@ -6003,7 +6003,7 @@ async function explorerLoadBlocks() {
           <div style="font-size:9px;color:#555;font-family:monospace;margin-top:1px;">${b.miner?.slice(0,14)||'—'}… · ${b.txCount} tx${b.jobCount ? ` · ${b.jobCount} job${b.jobCount === 1 ? '' : 's'}` : ''}</div>
         </div>
         <div style="text-align:right;">
-          <div style="font-size:10px;color:#aaa;font-family:monospace;">${b.reward > 0 ? '+' + (b.reward/POH).toFixed(2) + ' POH' : ''}</div>
+          <div style="font-size:10px;color:#aaa;font-family:monospace;">${b.reward > 0 ? '+' + (b.reward/DAI).toFixed(2) + ' DAI' : ''}</div>
           <div style="font-size:9px;color:#374151;font-family:monospace;">${b.timestamp ? new Date(b.timestamp).toLocaleTimeString() : ''}</div>
         </div>
       `;
@@ -6031,14 +6031,14 @@ async function explorerViewBlock(height) {
     const data = await _explorerFetch(`/api/explorer/block/${height}`);
     const txs  = data.transactions || [];
     const jobsHtml = _explorerBlockJobsHtml(data);
-    const POH  = 1e9;
+    const DAI  = 1e9;
     view.innerHTML = `
       <div style="background:#0a0a0a;border:1px solid #1e1e1e;border-radius:6px;padding:12px;display:flex;flex-direction:column;gap:5px;">
         <div style="display:flex;justify-content:space-between;"><span style="font-size:10px;color:#555;font-family:monospace;">HEIGHT</span><span style="font-size:11px;color:#22c55e;font-family:monospace;">#${data.height}</span></div>
         <div style="display:flex;justify-content:space-between;"><span style="font-size:10px;color:#555;font-family:monospace;">HASH</span><span style="font-size:9px;color:#aaa;font-family:monospace;word-break:break-all;max-width:200px;">${data.hash||'—'}</span></div>
         <div style="display:flex;justify-content:space-between;"><span style="font-size:10px;color:#555;font-family:monospace;">MINER</span><span style="font-size:10px;color:#aaa;font-family:monospace;cursor:pointer;" onclick="explorerSearchAddr('${data.minerWallet||''}')">${data.minerWallet||'—'}</span></div>
         <div style="display:flex;justify-content:space-between;"><span style="font-size:10px;color:#555;font-family:monospace;">TIME</span><span style="font-size:10px;color:#aaa;font-family:monospace;">${data.timestamp ? new Date(data.timestamp).toLocaleString() : '—'}</span></div>
-        <div style="display:flex;justify-content:space-between;"><span style="font-size:10px;color:#555;font-family:monospace;">REWARD</span><span style="font-size:10px;color:#22c55e;font-family:monospace;">${data.coinbaseReward > 0 ? (data.coinbaseReward/POH).toFixed(4)+' POH' : '—'}</span></div>
+        <div style="display:flex;justify-content:space-between;"><span style="font-size:10px;color:#555;font-family:monospace;">REWARD</span><span style="font-size:10px;color:#22c55e;font-family:monospace;">${data.coinbaseReward > 0 ? (data.coinbaseReward/DAI).toFixed(4)+' DAI' : '—'}</span></div>
         <div style="display:flex;justify-content:space-between;"><span style="font-size:10px;color:#555;font-family:monospace;">TXS</span><span style="font-size:10px;color:#aaa;font-family:monospace;">${txs.length}</span></div>
       </div>
       ${jobsHtml}
@@ -6047,7 +6047,7 @@ async function explorerViewBlock(height) {
           <div style="font-size:9px;color:#60a5fa;font-family:monospace;word-break:break-all;margin-bottom:3px;">${tx.hash||tx.txHash||'—'}</div>
           <div style="display:flex;justify-content:space-between;">
             <span style="font-size:9px;color:#555;font-family:monospace;cursor:pointer;" onclick="explorerSearchAddr('${tx.from||''}')">${(tx.from||'').slice(0,12)}…</span>
-            <span style="font-size:9px;color:#22c55e;font-family:monospace;">${tx.amount > 0 ? (tx.amount/POH).toFixed(4)+' POH' : ''}</span>
+            <span style="font-size:9px;color:#22c55e;font-family:monospace;">${tx.amount > 0 ? (tx.amount/DAI).toFixed(4)+' DAI' : ''}</span>
             <span style="font-size:9px;color:#555;font-family:monospace;cursor:pointer;" onclick="explorerSearchAddr('${tx.to||''}')">${(tx.to||'').slice(0,12)}…</span>
           </div>
         </div>`).join('') : ''}
@@ -6071,7 +6071,7 @@ async function explorerSearch() {
   view.innerHTML = '<div style="color:#444;font-size:11px;text-align:center;padding:20px 0;font-family:monospace;">Searching…</div>';
   try {
     const data = await _explorerFetch(`/api/explorer/search?q=${encodeURIComponent(q)}`);
-    const POH = 1e9;
+    const DAI = 1e9;
     if (data.type === 'block') {
       explorerViewBlock(data.block.height);
     } else if (data.type === 'tx') {
@@ -6083,7 +6083,7 @@ async function explorerSearch() {
           <div style="display:flex;justify-content:space-between;"><span style="font-size:10px;color:#555;font-family:monospace;">BLOCK</span><span style="font-size:11px;color:#22c55e;font-family:monospace;cursor:pointer;" onclick="explorerViewBlock(${block.height})">#${block.height}</span></div>
           <div style="display:flex;justify-content:space-between;"><span style="font-size:10px;color:#555;font-family:monospace;">FROM</span><span style="font-size:10px;color:#aaa;font-family:monospace;cursor:pointer;" onclick="explorerSearchAddr('${tx.from||''}')">${tx.from||'—'}</span></div>
           <div style="display:flex;justify-content:space-between;"><span style="font-size:10px;color:#555;font-family:monospace;">TO</span><span style="font-size:10px;color:#aaa;font-family:monospace;cursor:pointer;" onclick="explorerSearchAddr('${tx.to||''}')">${tx.to||'—'}</span></div>
-          <div style="display:flex;justify-content:space-between;"><span style="font-size:10px;color:#555;font-family:monospace;">AMOUNT</span><span style="font-size:11px;color:#22c55e;font-family:monospace;">${((tx.amount||0)/POH).toFixed(4)} POH</span></div>
+          <div style="display:flex;justify-content:space-between;"><span style="font-size:10px;color:#555;font-family:monospace;">AMOUNT</span><span style="font-size:11px;color:#22c55e;font-family:monospace;">${((tx.amount||0)/DAI).toFixed(4)} DAI</span></div>
           <div style="display:flex;justify-content:space-between;"><span style="font-size:10px;color:#555;font-family:monospace;">TIME</span><span style="font-size:10px;color:#aaa;font-family:monospace;">${block.timestamp ? new Date(block.timestamp).toLocaleString() : '—'}</span></div>
         </div>
       `;
@@ -6093,7 +6093,7 @@ async function explorerSearch() {
         const color = e.delta > 0 ? '#22c55e' : '#ef4444';
         return `<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid #111;">
           <span style="font-size:9px;color:#555;font-family:monospace;">${e.label} · Block #${e.height||'?'}</span>
-          <span style="font-size:10px;color:${color};font-family:monospace;">${sign}${((e.delta||0)/POH).toFixed(4)} POH</span>
+          <span style="font-size:10px;color:${color};font-family:monospace;">${sign}${((e.delta||0)/DAI).toFixed(4)} DAI</span>
         </div>`;
       }).join('');
       const completedJobs = (data.jobs || []).filter(j => j.mined || (j.verdict && j.verdict !== 'pending' && j.verdict !== 'submitted'));
@@ -6102,7 +6102,7 @@ async function explorerSearch() {
         <div style="background:#0a0a0a;border:1px solid #1e1e1e;border-radius:6px;padding:12px;display:flex;flex-direction:column;gap:5px;">
           <div style="font-size:10px;color:#555;font-family:monospace;letter-spacing:0.1em;margin-bottom:2px;">ADDRESS</div>
           <div style="font-size:10px;color:#aaa;font-family:monospace;word-break:break-all;">${data.address}</div>
-          <div style="display:flex;justify-content:space-between;margin-top:4px;"><span style="font-size:10px;color:#555;font-family:monospace;">BALANCE</span><span style="font-size:14px;color:#22c55e;font-family:monospace;">${((data.balance||0)/POH).toFixed(4)} POH</span></div>
+          <div style="display:flex;justify-content:space-between;margin-top:4px;"><span style="font-size:10px;color:#555;font-family:monospace;">BALANCE</span><span style="font-size:14px;color:#22c55e;font-family:monospace;">${((data.balance||0)/DAI).toFixed(4)} DAI</span></div>
         </div>
         ${jobsHtml}
         ${data.entries?.length ? `<div style="font-size:10px;color:#555;font-family:monospace;letter-spacing:0.1em;padding-bottom:2px;">RECENT TRANSACTIONS</div><div style="background:#0a0a0a;border:1px solid #1e1e1e;border-radius:6px;padding:8px 10px;">${txRows}</div>` : ''}

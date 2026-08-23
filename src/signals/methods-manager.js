@@ -1,14 +1,14 @@
 /**
- * PoH Miner Network - Verified Signals / Methods Manager
+ * DAI Miner Network - Verified Signals / Methods Manager
  *
  * Every miner MUST run with the exact same set of signals (methods).
  * This module ensures fault-tolerant synchronization of the canonical
  * verified signals list.
  *
  * Sources (in priority order):
- * 1. Published signals transactions received via the PoH chain / gossip
- * 2. Direct fetch from https://proofofhuman.ge/methods/verifyer (and fallbacks)
- * 3. Locally cached copy (~/.poh-miner/methods.json)
+ * 1. Published signals transactions received via the DAI chain / gossip
+ * 2. Direct fetch from https://iamai.kg/methods/verifyer (and fallbacks)
+ * 3. Locally cached copy (~/.dai-miner/methods.json)
  *
  * All miners compute a deterministic `methodsHash` so the network can
  * detect and penalize results computed against stale method sets.
@@ -22,16 +22,16 @@ import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-const CONFIG_DIR = path.join(os.homedir(), '.poh-miner');
+const CONFIG_DIR = path.join(os.homedir(), '.dai-miner');
 const METHODS_FILE = path.join(CONFIG_DIR, 'methods.json');
 
-const PRIMARY_SOURCE = 'https://proofofhuman.ge/methods/verifyer';
+const PRIMARY_SOURCE = 'https://iamai.kg/methods/verifyer';
 
-// Robust list of HTTP gateways (in priority order). proofofhuman.ge is primary (reliable
-// DNS); proofofhuman.ge kept as a fallback. Both proxy the same backend.
+// Robust list of HTTP gateways (in priority order). iamai.kg is primary (reliable
+// DNS); iamai.kg kept as a fallback. Both proxy the same backend.
 const GATEWAYS = [
-  'https://proofofhuman.ge/methods/verifyer',
-  'https://proofofhuman.ge/methods/verifyer',
+  'https://iamai.kg/methods/verifyer',
+  'https://iamai.kg/methods/verifyer',
 ];
 
 // Public IPFS gateways used when lastKnownCID is set
@@ -43,8 +43,8 @@ const IPFS_GATEWAYS = [
 
 // New: Sources for "signals that have live conviction curves" (the canonical set for miners)
 const LIVE_SIGNALS_SOURCES = [
-  'https://proofofhuman.ge/miner/signals/live',
-  'https://proofofhuman.ge/miner/signals/transactions',
+  'https://iamai.kg/miner/signals/live',
+  'https://iamai.kg/miner/signals/transactions',
 ];
 
 // Local supplemental signals (always merged into the active set when available)
@@ -164,7 +164,7 @@ export class MethodsManager {
 
           const res = await fetch(url, {
             signal: controller.signal,
-            headers: { 'Accept': 'application/json', 'User-Agent': 'poh-miner/0.1' },
+            headers: { 'Accept': 'application/json', 'User-Agent': 'dai-miner/0.1' },
           });
           clearTimeout(timeout);
 

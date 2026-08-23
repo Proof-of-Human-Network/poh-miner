@@ -27,7 +27,7 @@ balances from that replay). So:
 | `src/consensus/genesis.js` | `createGenesisBlock({snapshot})` — builds the migration genesis. |
 
 The genesis source is config/arg-gated (absent → legacy empty genesis, unchanged):
-- **bootnode:** `--genesis-snapshot=<path>` or `POH_GENESIS_SNAPSHOT=<path>`
+- **bootnode:** `--genesis-snapshot=<path>` or `DAI_GENESIS_SNAPSHOT=<path>`
 - **miner:** `config.json` → `"genesisSnapshot": "<path>"`
 
 ## Runbook
@@ -38,7 +38,7 @@ The genesis source is config/arg-gated (absent → legacy empty genesis, unchang
 
 2. **Snapshot** (on the node with the canonical chain, e.g. the bootnode host):
    ```sh
-   node scripts/genesis/export-snapshot.mjs --data-dir ~/.poh-bootnode \
+   node scripts/genesis/export-snapshot.mjs --data-dir ~/.dai-bootnode \
      --out /root/genesis-snapshot.json
    # audit vault + other system addresses are excluded by default; --include-system to keep
    ```
@@ -83,11 +83,11 @@ The multi-currency reset follows the same procedure with two additions:
 1. Set the real `TREASURY_ADDRESS` and `INITIAL_STABLE_SUPPLY_RAW` in
    `src/assets.js` (raw units: 2 decimals → ×100).
 2. Export with `--mint-stables`:
-   `node scripts/genesis/export-snapshot.mjs --data-dir ~/.poh-bootnode --out snap.json --mint-stables [--treasury poh…]`
+   `node scripts/genesis/export-snapshot.mjs --data-dir ~/.dai-bootnode --out snap.json --mint-stables [--treasury dai…]`
    The treasury row gains an `assets` map; existing per-asset balances (if any)
    are carried over automatically.
 3. Build the genesis, pin the new `EXPECTED_GENESIS_HASH`, bundle the snapshot —
    unchanged from the standard runbook.
 
 Snapshot rows with assets extend the canonical hash tuple to
-`[addr, balance, nonce, assets]`; POH-only snapshots hash exactly as before.
+`[addr, balance, nonce, assets]`; DAI-only snapshots hash exactly as before.

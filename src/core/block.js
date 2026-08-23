@@ -1,12 +1,12 @@
 /**
- * PoH Miner Network - Core Block Structure
+ * DAI Miner Network - Core Block Structure
  */
 
 import crypto from 'crypto';
 import { Wallet } from '../wallet/wallet.js';
 import { blockHashOf } from '../consensus/block-hash.js';
 
-export class PohBlock {
+export class DAIBlock {
   constructor({
     height,
     previousHash,
@@ -14,7 +14,7 @@ export class PohBlock {
     minerWallet,
     scanResults = [],
     stateTransitions = [],
-    transactions = [],     // formal PoHTransaction objects (Fix 4)
+    transactions = [],     // formal DAITransaction objects (Fix 4)
     coinbaseReward = null,
     nonce = 0,
     difficulty = 0,
@@ -93,6 +93,6 @@ export class PohBlock {
   }
 
   static fromJSON(json) {
-    return new PohBlock(json);
+    return new DAIBlock(json);
   }
 }

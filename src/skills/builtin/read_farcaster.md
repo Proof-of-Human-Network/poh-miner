@@ -127,7 +127,7 @@ Returns `null` if no Farcaster account is linked to the address.
 
 "What have they posted about X?" → use `query: "X"` in the input to filter casts, then summarize the filtered casts.
 
-"Are they human?" → use human/bot signals above, cross-reference with poh_identity for a formal verdict.
+"Are they human?" → use human/bot signals above, cross-reference with dai_identity for a formal verdict.
 
 ## Code
 

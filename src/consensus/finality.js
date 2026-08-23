@@ -31,16 +31,16 @@ import { Wallet } from '../wallet/wallet.js';
 
 /**
  * Blocks buried deeper than this below the tip are FINAL. At the 60 s block
- * cadence, 100 ≈ ~100 minutes of confirmations. Override with POH_FINALITY_DEPTH.
+ * cadence, 100 ≈ ~100 minutes of confirmations. Override with DAI_FINALITY_DEPTH.
  */
 export const FINALITY_DEPTH = (() => {
-  const n = parseInt(process.env.POH_FINALITY_DEPTH || '', 10);
+  const n = parseInt(process.env.DAI_FINALITY_DEPTH || '', 10);
   return Number.isInteger(n) && n > 0 ? n : 100;
 })();
 
 /** Canonical bytes a checkpoint signature covers. */
 export function checkpointMessage({ height, hash }) {
-  return JSON.stringify({ kind: 'poh-checkpoint', height, hash });
+  return JSON.stringify({ kind: 'dai-checkpoint', height, hash });
 }
 
 /** Sign a finalized (height, hash) with a Wallet. Returns the wire checkpoint. */
@@ -64,9 +64,9 @@ export function verifyCheckpoint(cp, { pinnedPublicKey = null } = {}) {
     return { ok: false, reason: 'malformed checkpoint' };
   }
   if (pinnedPublicKey) {
-    // Accept either the short poh… address (log-friendly to pin) or the full PEM.
+    // Accept either the short dai… address (log-friendly to pin) or the full PEM.
     const pin = String(pinnedPublicKey).trim();
-    const matches = pin.startsWith('poh')
+    const matches = pin.startsWith('dai')
       ? Wallet.deriveAddressFromSigningKey(cp.signingPublicKey) === pin
       : cp.signingPublicKey.trim() === pin;
     if (!matches) return { ok: false, reason: 'checkpoint not signed by pinned key' };
@@ -97,7 +97,7 @@ export function evaluateReorg({
   finalityDepth = FINALITY_DEPTH,
   allowDeep = false,
 }) {
-  if (allowDeep) return { allowed: true, reason: 'deep reorg explicitly allowed (POH_ALLOW_DEEP_REORG)' };
+  if (allowDeep) return { allowed: true, reason: 'deep reorg explicitly allowed (DAI_ALLOW_DEEP_REORG)' };
 
   const kept = typeof forkHeight === 'number' ? forkHeight : -1;
 

@@ -111,7 +111,7 @@ export async function pickRelevantModels(question, candidates, { model } = {}, m
   ].join('\n');
 
   try {
-    const { getQvacModels } = await import('../compute/adapters/real-poh.js');
+    const { getQvacModels } = await import('../compute/adapters/real-dai.js');
     const qvac = await getQvacModels();
     if (!qvac || !qvac.ENABLED) return pool.slice(0, max);
     const raw = await qvac.complete(prompt, { model, timeLimit: 20_000 });

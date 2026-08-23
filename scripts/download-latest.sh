@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# download-latest.sh  —  Download the latest PoH Miner binary for your platform.
+# download-latest.sh  —  Download the latest DAI Miner binary for your platform.
 #
 # Usage:
 #   ./scripts/download-latest.sh
@@ -9,7 +9,7 @@
 
 set -e
 
-BASE_URL="https://miner.poh.ge"
+BASE_URL="https://miner.iamai.kg"
 
 detect_platform() {
   OS=$(uname -s | tr '[:upper:]' '[:lower:]')
@@ -47,9 +47,9 @@ if [ "$PLATFORM" = "unsupported" ]; then
 fi
 
 case "$PLATFORM" in
-  linux-x64)   FILENAME="poh-miner-linux-x64.AppImage" ;;
-  linux-arm64) FILENAME="poh-miner-linux-arm64.AppImage" ;;
-  win-x64)     FILENAME="poh-miner-windows-x64.exe" ;;
+  linux-x64)   FILENAME="dai-miner-linux-x64.AppImage" ;;
+  linux-arm64) FILENAME="dai-miner-linux-arm64.AppImage" ;;
+  win-x64)     FILENAME="dai-miner-windows-x64.exe" ;;
   macos-*)     echo "macOS builds are coming soon. Use the AppImage on Linux."; exit 0 ;;
 esac
 
@@ -58,7 +58,7 @@ echo "Detected platform: $PLATFORM"
 echo "Downloading: $DOWNLOAD_URL"
 
 if ! curl -fsSL -o "$FILENAME" "$DOWNLOAD_URL"; then
-  echo "❌ Download failed. Check https://miner.poh.ge for manual downloads."
+  echo "❌ Download failed. Check https://miner.iamai.kg for manual downloads."
   exit 1
 fi
 
@@ -69,8 +69,8 @@ echo "✅ Downloaded: $FILENAME"
 
 if [[ "$1" == "--install" || "$1" == "-i" ]]; then
   mkdir -p "$HOME/.local/bin"
-  mv "$FILENAME" "$HOME/.local/bin/poh-miner"
-  echo "Installed to ~/.local/bin/poh-miner"
+  mv "$FILENAME" "$HOME/.local/bin/dai-miner"
+  echo "Installed to ~/.local/bin/dai-miner"
   echo "Make sure ~/.local/bin is in your PATH."
 else
   echo "Run with: ./$FILENAME"

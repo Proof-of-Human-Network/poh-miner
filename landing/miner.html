@@ -3,11 +3,11 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>PoH Miner • Run AI Compute. Earn While You Sleep.</title>
+  <title>DAI Miner • Run AI Compute. Earn While You Sleep.</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://fonts.googleapis.com/css2?family=Iceland&display=swap" rel="stylesheet">
-  <!-- PoH favicons (self-contained in landing/ for direct / sub-CID use; also staged at root for full site) -->
-  <link rel="icon" type="image/svg+xml" href="poh-miner.svg">
+  <!-- DAI favicons (self-contained in landing/ for direct / sub-CID use; also staged at root for full site) -->
+  <link rel="icon" type="image/svg+xml" href="dai-miner.svg">
   <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
   <link rel="shortcut icon" href="favicon.ico">
   <script src="i18n.js" defer></script>
@@ -17,7 +17,7 @@
       --accent: #22c55e;
     }
 
-    /* Match poh.ge exactly */
+    /* Match iamai.kg exactly */
     body {
       font-family: 'Iceland', sans-serif;
       background: #000;
@@ -96,15 +96,15 @@
     <div class="max-w-7xl mx-auto px-4 sm:px-8 h-16 sm:h-20 flex items-center justify-between">
       <div class="flex items-center gap-x-2 sm:gap-x-4">
         <div class="flex items-center gap-x-2 sm:gap-x-3">
-          <img src="poh-miner.svg" alt="PoH Logo" width="36" height="36" class="sm:w-[48px] sm:h-[48px]" style="vertical-align: middle;" />
+          <img src="dai-miner.svg" alt="DAI Logo" width="36" height="36" class="sm:w-[48px] sm:h-[48px]" style="vertical-align: middle;" />
           <span class="font-display text-[32px] sm:text-[48px] md:text-[60px] leading-none">Miner</span>
         </div>
       </div>
       <div class="nav-links items-center gap-x-6 xl:gap-x-9 text-[17px] xl:text-[20px]">
         <a href="framework.html" class="hover:text-[#22c55e] transition whitespace-nowrap" data-i18n="nav.framework">Framework</a>
-        <a href="poh.html" data-i18n="nav.poh" class="hover:text-[#22c55e] transition whitespace-nowrap">POH</a>
+        <a href="dai.html" data-i18n="nav.dai" class="hover:text-[#22c55e] transition whitespace-nowrap">DAI</a>
         <a href="wallet/" data-i18n="nav.wallet" class="hover:text-[#22c55e] transition whitespace-nowrap">Wallet</a>
-        <a href="poh.html" data-i18n="nav.poh" class="px-3 lg:px-5 py-2 rounded-[4px] border border-[#22c55e]/60 text-[#22c55e] hover:bg-[#22c55e]/10 transition whitespace-nowrap">POH</a>
+        <a href="dai.html" data-i18n="nav.dai" class="px-3 lg:px-5 py-2 rounded-[4px] border border-[#22c55e]/60 text-[#22c55e] hover:bg-[#22c55e]/10 transition whitespace-nowrap">DAI</a>
         <div data-i18n-switch></div>
       </div>
       <button class="hamburger" id="hamburger" aria-label="Open menu">
@@ -116,9 +116,9 @@
   <!-- Mobile nav drawer -->
   <div class="mobile-drawer" id="mobile-drawer">
     <a href="framework.html" data-i18n="nav.framework">Framework</a>
-    <a href="poh.html" data-i18n="nav.poh">POH</a>
+    <a href="dai.html" data-i18n="nav.dai">DAI</a>
     <a href="wallet/" data-i18n="nav.wallet">Wallet</a>
-    <a href="poh.html" data-i18n="mnr.nav.pohcoin">POH coin</a>
+    <a href="dai.html" data-i18n="mnr.nav.daicoin">DAI coin</a>
     <div data-i18n-switch style="padding:14px 0"></div>
   </div>
 
@@ -173,8 +173,8 @@
 
       <div class="text-center mb-4">
         <div data-i18n="mnr.app.eyebrow" class="uppercase tracking-[3px] text-xs text-[#22c55e] mb-4">THE DESKTOP APP</div>
-        <h2 class="font-display text-[56px] sm:text-[80px] md:text-[130px] leading-[0.88]">PoH Miner.</h2>
-        <p data-i18n="mnr.app.desc" class="mt-6 text-[16px] sm:text-[20px] md:text-[26px] text-white/55 max-w-2xl mx-auto">One native app. Your node joins the network, your local LLM solves incoming AI tasks, and you earn POH each time.</p>
+        <h2 class="font-display text-[56px] sm:text-[80px] md:text-[130px] leading-[0.88]">DAI Miner.</h2>
+        <p data-i18n="mnr.app.desc" class="mt-6 text-[16px] sm:text-[20px] md:text-[26px] text-white/55 max-w-2xl mx-auto">One native app. Your node joins the network, your local LLM solves incoming AI tasks, and you earn DAI each time.</p>
       </div>
 
       <!-- Mobile app summary card (hidden on sm+) -->
@@ -183,17 +183,17 @@
           <span class="w-3 h-3 rounded-full bg-[#ff5f57]"></span>
           <span class="w-3 h-3 rounded-full bg-[#febc2e]"></span>
           <span class="w-3 h-3 rounded-full bg-[#28c840]"></span>
-          <span class="text-white/30 text-xs ml-2" style="font-family:system-ui">PoH Miner — Mining Active</span>
+          <span class="text-white/30 text-xs ml-2" style="font-family:system-ui">DAI Miner — Mining Active</span>
         </div>
         <div class="font-mono text-xs space-y-2 text-white/70">
-          <div><span class="text-white/30">14:22:01</span> <span class="text-[#22c55e]">[PoH-Miner] Connected · 14 peers</span></div>
+          <div><span class="text-white/30">14:22:01</span> <span class="text-[#22c55e]">[DAI-Miner] Connected · 14 peers</span></div>
           <div><span class="text-white/30">14:22:05</span> <span class="text-[#22c55e]">[LLM] ✓ qwen3-1.7b ready · serving compute</span></div>
           <div><span class="text-white/30">14:22:19</span> <span class="text-[#22c55e]">[Task] ⚡ AI task received · running inference</span></div>
-          <div><span class="text-white/30">14:22:32</span> <span class="text-[#22c55e]">[Reward] ✓ +0.42 POH earned · compute share</span></div>
+          <div><span class="text-white/30">14:22:32</span> <span class="text-[#22c55e]">[Reward] ✓ +0.42 DAI earned · compute share</span></div>
         </div>
         <div class="flex items-center gap-2 pt-2 border-t border-white/10">
           <span class="w-2 h-2 rounded-full bg-[#22c55e] animate-pulse"></span>
-          <span class="text-[#22c55e] text-xs font-mono">MINING ACTIVE · Balance: 12.48 POH</span>
+          <span class="text-[#22c55e] text-xs font-mono">MINING ACTIVE · Balance: 12.48 DAI</span>
         </div>
       </div>
 
@@ -206,7 +206,7 @@
             <span style="width:13px;height:13px;border-radius:50%;background:#ff5f57;display:inline-block;"></span>
             <span style="width:13px;height:13px;border-radius:50%;background:#febc2e;display:inline-block;"></span>
             <span style="width:13px;height:13px;border-radius:50%;background:#28c840;display:inline-block;"></span>
-            <span class="mx-auto text-white/25 text-xs" style="font-family:system-ui;letter-spacing:0.03em;">PoH Miner — Mining Active</span>
+            <span class="mx-auto text-white/25 text-xs" style="font-family:system-ui;letter-spacing:0.03em;">DAI Miner — Mining Active</span>
           </div>
           <!-- App SVG -->
           <svg viewBox="0 0 1280 720" xmlns="http://www.w3.org/2000/svg" style="width:100%;display:block;background:#0a0a0a;">
@@ -217,12 +217,12 @@
             <text x="18" y="30" fill="#22c55e" font-size="10" font-family="monospace" letter-spacing="2.5">NODE STATUS</text>
             <line x1="0" y1="40" x2="210" y2="40" stroke="#1c1c1c" stroke-width="1"/>
             <!-- Wallet -->
-            <text x="18" y="64" fill="#4b5563" font-size="8.5" font-family="monospace" letter-spacing="1.5">POH WALLET</text>
-            <text x="18" y="80" fill="#e5e7eb" font-size="10.5" font-family="monospace">poh3a7f…c2e9</text>
+            <text x="18" y="64" fill="#4b5563" font-size="8.5" font-family="monospace" letter-spacing="1.5">DAI WALLET</text>
+            <text x="18" y="80" fill="#e5e7eb" font-size="10.5" font-family="monospace">dai3a7f…c2e9</text>
             <!-- Balance -->
             <text x="18" y="108" fill="#4b5563" font-size="8.5" font-family="monospace" letter-spacing="1.5">BALANCE</text>
             <text x="18" y="132" fill="#22c55e" font-size="30" font-family="sans-serif" font-weight="300">12.48</text>
-            <text x="106" y="132" fill="#22c55e" font-size="13" font-family="monospace">POH</text>
+            <text x="106" y="132" fill="#22c55e" font-size="13" font-family="monospace">DAI</text>
             <!-- Chain height -->
             <text x="18" y="162" fill="#4b5563" font-size="8.5" font-family="monospace" letter-spacing="1.5">CHAIN HEIGHT</text>
             <text x="18" y="184" fill="#f9fafb" font-size="26" font-family="sans-serif" font-weight="300">7,284</text>
@@ -267,16 +267,16 @@
 
             <!-- Log lines -->
             <text x="224" y="66" fill="#374151" font-size="10" font-family="monospace">14:22:01</text>
-            <text x="298" y="66" fill="#22c55e" font-size="10" font-family="monospace">[PoH-Miner] Connected to bootnode · 14 peers discovered</text>
+            <text x="298" y="66" fill="#22c55e" font-size="10" font-family="monospace">[DAI-Miner] Connected to bootnode · 14 peers discovered</text>
 
             <text x="224" y="86" fill="#374151" font-size="10" font-family="monospace">14:22:04</text>
-            <text x="298" y="86" fill="#9ca3af" font-size="10" font-family="monospace">[RealPOH] Brain state dir: ~/.poh-miner/brain  signals=47</text>
+            <text x="298" y="86" fill="#9ca3af" font-size="10" font-family="monospace">[RealDAI] Brain state dir: ~/.dai-miner/brain  signals=47</text>
 
             <text x="224" y="106" fill="#374151" font-size="10" font-family="monospace">14:22:05</text>
-            <text x="298" y="106" fill="#22c55e" font-size="10" font-family="monospace">[RealPOH] ✓ Loaded checker + brain  model=qwen3-1.7b</text>
+            <text x="298" y="106" fill="#22c55e" font-size="10" font-family="monospace">[RealDAI] ✓ Loaded checker + brain  model=qwen3-1.7b</text>
 
             <text x="224" y="126" fill="#374151" font-size="10" font-family="monospace">14:22:19</text>
-            <text x="298" y="126" fill="#22c55e" font-size="10" font-family="monospace">[PoH-Miner] ⚡ New job: 0x7a3f…c891  starting inference</text>
+            <text x="298" y="126" fill="#22c55e" font-size="10" font-family="monospace">[DAI-Miner] ⚡ New job: 0x7a3f…c891  starting inference</text>
 
             <text x="224" y="146" fill="#374151" font-size="10" font-family="monospace">14:22:23</text>
             <text x="298" y="146" fill="#9ca3af" font-size="10" font-family="monospace">[Checker] Running 47 signals for 0x7a3f…c891</text>
@@ -285,13 +285,13 @@
             <text x="298" y="166" fill="#22c55e" font-size="10" font-family="monospace">[brain] HUMAN (conf: 0.91) — "ENS + Gitcoin + Farcaster confirmed"</text>
 
             <text x="224" y="186" fill="#374151" font-size="10" font-family="monospace">14:22:32</text>
-            <text x="298" y="186" fill="#22c55e" font-size="10" font-family="monospace">[Reward] ✓ Block #7284 — +0.42 POH compute share to poh3a7f…c2e9</text>
+            <text x="298" y="186" fill="#22c55e" font-size="10" font-family="monospace">[Reward] ✓ Block #7284 — +0.42 DAI compute share to dai3a7f…c2e9</text>
 
             <text x="224" y="206" fill="#374151" font-size="10" font-family="monospace">14:22:45</text>
             <text x="298" y="206" fill="#6b7280" font-size="10" font-family="monospace">[Gossip] Broadcasting block #7284 to 14 peers</text>
 
             <text x="224" y="226" fill="#374151" font-size="10" font-family="monospace">14:22:58</text>
-            <text x="298" y="226" fill="#22c55e" font-size="10" font-family="monospace">[PoH-Miner] ⚡ New job: FGdBhX…G15Z  starting inference</text>
+            <text x="298" y="226" fill="#22c55e" font-size="10" font-family="monospace">[DAI-Miner] ⚡ New job: FGdBhX…G15Z  starting inference</text>
 
             <text x="224" y="246" fill="#374151" font-size="10" font-family="monospace">14:23:06</text>
             <text x="298" y="246" fill="#9ca3af" font-size="10" font-family="monospace">[Checker] Running 47 signals for FGdBhX…G15Z</text>
@@ -300,7 +300,7 @@
             <text x="298" y="266" fill="#22c55e" font-size="10" font-family="monospace">[brain] HUMAN (conf: 0.88) — "Solana DeFi activity + age confirmed"</text>
 
             <text x="224" y="286" fill="#374151" font-size="10" font-family="monospace">14:23:15</text>
-            <text x="298" y="286" fill="#22c55e" font-size="10" font-family="monospace">[Reward] ✓ Block #7285 — +0.42 POH compute share to poh3a7f…c2e9</text>
+            <text x="298" y="286" fill="#22c55e" font-size="10" font-family="monospace">[Reward] ✓ Block #7285 — +0.42 DAI compute share to dai3a7f…c2e9</text>
 
             <text x="224" y="306" fill="#1f2937" font-size="10" font-family="monospace">14:23:31</text>
             <text x="298" y="306" fill="#1f2937" font-size="10" font-family="monospace">[Gossip] Peer EU-03 reconnected  peers: 14</text>
@@ -477,11 +477,11 @@
           </div>
           <div data-i18n="mnr.dl.linux.desc" class="text-sm text-white/70 mb-4 flex-1">Portable AppImage — one file, runs on any distro. Download → chmod +x → double-click or run from anywhere. No root install.</div>
           <div class="flex flex-col gap-2">
-            <a href="https://github.com/Proof-of-Human-Network/poh-miner/releases/latest/download/poh-miner-linux-x64.AppImage" download="poh-miner-linux-x64.AppImage" data-i18n="mnr.dl.linux.btn1"
+            <a href="https://github.com/Proof-of-Human-Network/poh-miner/releases/latest/download/dai-miner-linux-x64.AppImage" download="dai-miner-linux-x64.AppImage" data-i18n="mnr.dl.linux.btn1"
                class="block w-full text-center bg-[#22c55e] hover:bg-white hover:text-black transition text-black py-3 rounded-[4px] text-sm font-medium">
               Download AppImage (x64)
             </a>
-            <a href="https://github.com/Proof-of-Human-Network/poh-miner/releases/latest/download/poh-miner-linux-arm64.AppImage" download="poh-miner-linux-arm64.AppImage" data-i18n="mnr.dl.linux.btn2"
+            <a href="https://github.com/Proof-of-Human-Network/poh-miner/releases/latest/download/dai-miner-linux-arm64.AppImage" download="dai-miner-linux-arm64.AppImage" data-i18n="mnr.dl.linux.btn2"
                class="block w-full text-center border border-white/30 hover:bg-white/5 py-3 rounded-[4px] text-sm font-medium transition">
               Download AppImage (ARM64)
             </a>
@@ -498,11 +498,11 @@
           </div>
           <div data-i18n="mnr.dl.mac.desc" class="text-sm text-white/70 mb-3 flex-1">Open .dmg → drag to Applications • may need “Open Anyway” in Security &amp; Privacy</div>
           <div class="flex flex-col gap-2">
-            <a href="https://github.com/Proof-of-Human-Network/poh-miner/releases/latest/download/poh-miner-macos-amd.dmg" download="poh-miner-macos-amd.dmg" data-i18n="mnr.dl.mac.btn1"
+            <a href="https://github.com/Proof-of-Human-Network/poh-miner/releases/latest/download/dai-miner-macos-amd.dmg" download="dai-miner-macos-amd.dmg" data-i18n="mnr.dl.mac.btn1"
                class="block w-full text-center bg-[#22c55e] hover:bg-white hover:text-black transition text-black py-3 rounded-[4px] text-sm font-medium">
               Download Apple Silicon .dmg
             </a>
-            <a href="https://github.com/Proof-of-Human-Network/poh-miner/releases/latest/download/poh-miner-macos-intel.dmg" download="poh-miner-macos-intel.dmg" data-i18n="mnr.dl.mac.btn2"
+            <a href="https://github.com/Proof-of-Human-Network/poh-miner/releases/latest/download/dai-miner-macos-intel.dmg" download="dai-miner-macos-intel.dmg" data-i18n="mnr.dl.mac.btn2"
                class="block w-full text-center border border-white/30 hover:bg-white/5 py-3 rounded-[4px] text-sm font-medium transition">
               Download Intel .dmg installer
             </a>
@@ -518,7 +518,7 @@
             </div>
           </div>
           <div data-i18n="mnr.dl.win.desc" class="text-sm text-white/70 mb-4 flex-1">Standard .exe installer with shortcuts, Start Menu entry, and clean uninstaller. Built with NSIS.</div>
-          <a href="https://github.com/Proof-of-Human-Network/poh-miner/releases/latest/download/poh-miner-windows-x64.exe" download="poh-miner-windows-x64.exe" data-i18n="mnr.dl.win.btn"
+          <a href="https://github.com/Proof-of-Human-Network/poh-miner/releases/latest/download/dai-miner-windows-x64.exe" download="dai-miner-windows-x64.exe" data-i18n="mnr.dl.win.btn"
              class="block w-full text-center bg-[#22c55e] hover:bg-white hover:text-black transition text-black py-3 rounded-[4px] text-sm font-medium">
             Download Windows Installer
           </a>
@@ -529,7 +529,7 @@
       <div class="mt-8 text-center">
         <div data-i18n="mnr.dl.power.title" class="text-[18px] uppercase tracking-[1.5px] text-white/50 mb-2">Power users &amp; one-liner install</div>
         <div class="inline-flex flex-col sm:flex-row items-center gap-2 bg-black/60 border border-white/10 rounded-[4px] px-5 py-3 text-sm font-mono max-w-full overflow-x-auto">
-          curl -fsSL https://miner.poh.ge/scripts/easy-start.sh | bash
+          curl -fsSL https://miner.iamai.kg/scripts/easy-start.sh | bash
         </div>
         <div class="mt-3 flex flex-wrap justify-center gap-x-4 text-xs">
           <a href="scripts/easy-start.sh" download="easy-start.sh" data-i18n="mnr.dl.power.link1" class="text-[#22c55e] hover:underline">Download easy-start.sh</a>
@@ -547,7 +547,7 @@
   <div id="wallet" class="max-w-6xl mx-auto px-6 py-16 border-t border-white/10">
     <div class="text-center mb-10">
       <div data-i18n="mnr.wal.eyebrow" class="inline-block px-4 py-1 rounded-full border border-[#22c55e]/40 text-[#22c55e] text-sm tracking-[2px] mb-4">COMPANION APP</div>
-      <h2 data-i18n="mnr.wal.title" class="font-display text-[40px] sm:text-[52px] md:text-[64px] leading-none tracking-[-2px]">POH Miner Wallet</h2>
+      <h2 data-i18n="mnr.wal.title" class="font-display text-[40px] sm:text-[52px] md:text-[64px] leading-none tracking-[-2px]">DAI Miner Wallet</h2>
       <p data-i18n="mnr.wal.sub" class="mt-4 text-[16px] sm:text-[22px] md:text-[28px] text-white/70 max-w-2xl mx-auto">
         Send, receive, and track your mining rewards in real time — directly from your phone.
       </p>
@@ -597,7 +597,7 @@
           </svg>
         </div>
         <div data-i18n="mnr.wal.f2t" class="font-semibold text-[22px] mb-1">Send &amp; Receive</div>
-        <div data-i18n="mnr.wal.f2d" class="text-[17px] text-white/60">Full POH transfers between addresses. Works with any node that knows the wallet.</div>
+        <div data-i18n="mnr.wal.f2d" class="text-[17px] text-white/60">Full DAI transfers between addresses. Works with any node that knows the wallet.</div>
       </div>
 
       <!-- Transaction History -->
@@ -651,7 +651,7 @@
          class="inline-flex items-center justify-center px-10 py-4 bg-white hover:bg-[#22c55e] hover:text-black transition text-black text-[24px] font-medium rounded-[4px]">
         See Wallet →
       </a>
-      <a href="https://expo.dev/artifacts/eas/h00uqL7NSssIokdi6st-JTO4MEilS1vpRpZfjewMyRE.apk" data-i18n="mnr.wal.cta2"
+      <a href="binaries/dai-miner-wallet.apk" download="dai-miner-wallet.apk" data-i18n="mnr.wal.cta2"
          class="inline-flex items-center justify-center px-10 py-4 bg-[#22c55e] hover:bg-white hover:text-black transition text-black text-[24px] font-medium rounded-[4px]">
         Download Android (.apk)
       </a>
@@ -660,10 +660,12 @@
 
   <footer class="border-t border-white/10 py-8 footer-text text-white/50">
     <div class="max-w-7xl mx-auto px-4 sm:px-8 flex flex-col sm:flex-row gap-2 sm:justify-between">
-      <div data-i18n="mnr.foot.tag">PoH Miner Network — Decentralized AI compute, powered by local LLMs</div>
+      <div data-i18n="mnr.foot.tag">DAI Miner Network — Decentralized AI compute, powered by local LLMs</div>
       <div class="flex gap-4">
         <a href="docs/" data-i18n="mnr.foot.docs" class="hover:text-white">Docs</a>
-        <a href="https://poh.ge" class="hover:text-white">poh.ge</a>
+        <a href="https://iamai.kg" class="hover:text-white">iamai.kg</a>
+        <a href="https://t.me/iamaihub" target="_blank" rel="noopener" class="hover:text-white">Telegram</a>
+        <a href="https://x.com/iamaihub" target="_blank" rel="noopener" class="hover:text-white">X</a>
         <a href="https://github.com/Proof-of-Human-Network" target="_blank" class="hover:text-white">GitHub</a>
       </div>
     </div>
@@ -767,7 +769,7 @@
       return n.toLocaleString();
     }
 
-    const MINER_API = 'https://miner.poh.ge';
+    const MINER_API = 'https://miner.iamai.kg';
 
     async function fetchMinerApi(path) {
       const controller = new AbortController();

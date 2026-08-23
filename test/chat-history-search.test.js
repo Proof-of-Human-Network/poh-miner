@@ -5,14 +5,14 @@ import os from 'os';
 import { ChatHistorySearch } from '../src/search/chat-history-search.js';
 import { jobToSearchDocument, extractReplyText } from '../src/chain/chain-job-index.js';
 
-const WALLET = 'pohabc123';
+const WALLET = 'daiabc123';
 
 describe('chat-history-search', () => {
   let tmpDir;
   let search;
 
   beforeEach(() => {
-    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'poh-search-'));
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'dai-search-'));
     search = new ChatHistorySearch({ enabled: true, requireMeilisearch: false, dataDir: tmpDir, host: 'http://127.0.0.1:1' });
   });
 

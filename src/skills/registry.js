@@ -1,15 +1,15 @@
 /**
  * SkillsRegistry — execute(skillId, input, config, sharedState)
  *
- * Built-in skill: 'poh_identity' (wraps checker + brain pipeline).
+ * Built-in skill: 'dai_identity' (wraps checker + brain pipeline).
  * Third-party skills are proposed on-chain, pinned to IPFS, and loaded here
  * once they graduate the conviction curve.
  */
 
-import { run as pohRun, POH_SKILL_MANIFEST } from './poh-skill.js';
+import { run as daiRun, DAI_SKILL_MANIFEST } from './dai-skill.js';
 
 const BUILTIN_SKILLS = {
-  poh_identity: { manifest: POH_SKILL_MANIFEST, run: pohRun },
+  dai_identity: { manifest: DAI_SKILL_MANIFEST, run: daiRun },
 };
 
 export class SkillsRegistry {
@@ -40,7 +40,7 @@ export class SkillsRegistry {
   }
 
   unregisterSkill(skillId) {
-    if (skillId === 'poh_identity') return; // built-in cannot be removed
+    if (skillId === 'dai_identity') return; // built-in cannot be removed
     delete this._skills[skillId];
   }
 

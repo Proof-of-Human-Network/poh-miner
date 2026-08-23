@@ -1,5 +1,5 @@
 /**
- * Real Geo-IP and Geographic utilities for the PoH Miner Network
+ * Real Geo-IP and Geographic utilities for the DAI Miner Network
  *
  * Supports all countries using ISO 3166-1 alpha-2 codes.
  * Designed to be lightweight and work on any device (Mac Mini, Pi, etc.).
@@ -11,7 +11,7 @@ import os from 'os';
 import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const CACHE_FILE = path.join(os.homedir(), '.poh-miner', 'my-location.json');
+const CACHE_FILE = path.join(os.homedir(), '.dai-miner', 'my-location.json');
 
 // Simple but comprehensive country → continent map
 // Source: UN geoscheme + common mappings
@@ -25,7 +25,7 @@ export const COUNTRY_TO_CONTINENT = {
   'MD': 'Europe', 'MC': 'Europe', 'ME': 'Europe', 'NL': 'Europe', 'MK': 'Europe',
   'NO': 'Europe', 'PL': 'Europe', 'PT': 'Europe', 'RO': 'Europe', 'SM': 'Europe',
   'RS': 'Europe', 'SK': 'Europe', 'SI': 'Europe', 'ES': 'Europe', 'SE': 'Europe',
-  'CH': 'Europe', 'UA': 'Europe', 'GB': 'Europe', 'VA': 'Europe', 'GE': 'Europe', // Georgia is Europe/Asia, we put it in Europe for POH relevance
+  'CH': 'Europe', 'UA': 'Europe', 'GB': 'Europe', 'VA': 'Europe', 'GE': 'Europe', // Georgia is Europe/Asia, we put it in Europe for DAI relevance
 
   // Asia
   'AF': 'Asia', 'AM': 'Asia', 'AZ': 'Asia', 'BH': 'Asia', 'BD': 'Asia',

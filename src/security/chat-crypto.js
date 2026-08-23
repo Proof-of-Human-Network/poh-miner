@@ -24,8 +24,8 @@ import crypto from 'crypto';
 // can import it. Mobile/SDK clients that use raw-key libs (noble, tweetnacl) skip these.
 const PKCS8_X25519 = Buffer.from('302e020100300506032b656e04220420', 'hex'); // + 32-byte scalar
 const SPKI_X25519  = Buffer.from('302a300506032b656e032100', 'hex');         // + 32-byte point
-const HKDF_INFO    = Buffer.from('poh-chat-seal-v1');
-const SCALAR_INFO  = Buffer.from('poh-x25519-v1');
+const HKDF_INFO    = Buffer.from('dai-chat-seal-v1');
+const SCALAR_INFO  = Buffer.from('dai-x25519-v1');
 
 export function scalarToPrivateKey(raw32) {
   return crypto.createPrivateKey({ key: Buffer.concat([PKCS8_X25519, raw32]), format: 'der', type: 'pkcs8' });

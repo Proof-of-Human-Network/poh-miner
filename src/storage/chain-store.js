@@ -1,5 +1,5 @@
 /**
- * Persistent chain storage for PoH Miner.
+ * Persistent chain storage for DAI Miner.
  *
  * Two-tier storage:
  *   chain.ndjson  — append-only, one block per line (O(1) write per block)
@@ -12,7 +12,7 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 
-const DEFAULT_CHAIN_DIR = path.join(os.homedir(), '.poh-miner', 'chain');
+const DEFAULT_CHAIN_DIR = path.join(os.homedir(), '.dai-miner', 'chain');
 
 export class ChainStore {
   constructor(dataDir = DEFAULT_CHAIN_DIR) {

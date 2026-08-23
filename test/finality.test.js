@@ -87,7 +87,7 @@ describe('signed checkpoint', () => {
     expect(v.reason).toMatch(/pinned key/);
   });
 
-  it('accepts a checkpoint pinned by the signer poh… address (log-friendly form)', () => {
+  it('accepts a checkpoint pinned by the signer dai… address (log-friendly form)', () => {
     const cp = signCheckpoint(signer, cpData);
     expect(verifyCheckpoint(cp, { pinnedPublicKey: signer.address }).ok).toBe(true);
 

@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { PohMinerNode } from '../src/miner-node.js';
+import { DAIMinerNode } from '../src/miner-node.js';
 import { ScanResult } from '../src/core/scanRequest.js';
 
 /**
@@ -15,7 +15,7 @@ describe('durable pending-reward queue', () => {
 
   beforeEach(() => {
     dir = fs.mkdtempSync(path.join(os.tmpdir(), 'pending-rewards-'));
-    node = Object.create(PohMinerNode.prototype);
+    node = Object.create(DAIMinerNode.prototype);
     node._pendingResultsPath = path.join(dir, 'pending-results.json');
     node.pendingValidResults = [];
   });
@@ -25,7 +25,7 @@ describe('durable pending-reward queue', () => {
     const sr = new ScanResult({
       requestId: jobId, address: '0xabc', verdict: 'HUMAN', confidence: 0.9,
       reasoning: 'ok', signalsUsed: ['a', 'b', 'c'], minerWallet: worker,
-      methodsCount: 3, computationTimeMs: 4200, realPohUsed: true, profile: { x: 1 },
+      methodsCount: 3, computationTimeMs: 4200, realDAIUsed: true, profile: { x: 1 },
     });
     sr.isValidWork = true;
     sr.signingPublicKey = 'PUB';
@@ -33,12 +33,12 @@ describe('durable pending-reward queue', () => {
   };
 
   it('persists queued rewards and restores them on the next startup', () => {
-    node.pendingValidResults.push(mkResult('job-1', 'pohworkerA'));
-    node.pendingValidResults.push(mkResult('job-2', 'pohworkerB'));
+    node.pendingValidResults.push(mkResult('job-1', 'daiworkerA'));
+    node.pendingValidResults.push(mkResult('job-2', 'daiworkerB'));
     node._persistPendingResults();
 
     // Simulate a restart: a fresh node loads from the same path.
-    const restarted = Object.create(PohMinerNode.prototype);
+    const restarted = Object.create(DAIMinerNode.prototype);
     restarted._pendingResultsPath = node._pendingResultsPath;
     const loaded = restarted._loadPendingResults();
 
@@ -46,7 +46,7 @@ describe('durable pending-reward queue', () => {
     expect(loaded.map(r => r.requestId).sort()).toEqual(['job-1', 'job-2']);
     // reward attribution + anti-fraud fields survive
     const a = loaded.find(r => r.requestId === 'job-1');
-    expect(a.minerWallet).toBe('pohworkerA');
+    expect(a.minerWallet).toBe('daiworkerA');
     expect(a.computationTimeMs).toBe(4200);
     expect(a.isValidWork).toBe(true);
     // still a usable ScanResult (methods intact) for block inclusion
@@ -66,7 +66,7 @@ describe('durable pending-reward queue', () => {
     node.pendingValidResults = node.pendingValidResults.filter(r => r.requestId !== 'job-1');
     node._persistPendingResults();
 
-    const restarted = Object.create(PohMinerNode.prototype);
+    const restarted = Object.create(DAIMinerNode.prototype);
     restarted._pendingResultsPath = node._pendingResultsPath;
     expect(restarted._loadPendingResults().map(r => r.requestId)).toEqual(['job-2']);
   });

@@ -10,7 +10,7 @@ curl -fsSL https://raw.githubusercontent.com/poh/poh-miner-network/main/scripts/
 
 This script will:
 - Set up the miner (inference runs in-process via QVAC — nothing extra to install)
-- Create a clean config at `~/.poh-miner/config.json`
+- Create a clean config at `~/.dai-miner/config.json`
 - Give you a simple `start.sh`
 
 The AI model (default `qwen3-1.7b`) is downloaded automatically the first time
@@ -18,8 +18,8 @@ the miner needs it — no separate engine or `pull` step.
 
 ## After Installation
 
-1. Edit `~/.poh-miner/config.json` and set your Solana wallet address (this receives POH rewards).
-2. Run `./start.sh` (or `poh-miner start` after global install).
+1. Edit `~/.dai-miner/config.json` and set your Solana wallet address (this receives DAI rewards).
+2. Run `./start.sh` (or `dai-miner start` after global install).
 
 ## Platform Specific Notes & GPU/CPU Choice
 
@@ -39,7 +39,7 @@ You can change this anytime in `config.json`. This gives you full control:
 - Very low power draw while idle.
 
 ### Windows
-- Download the PoH Miner `.exe` from [miner.poh.ge](https://miner.poh.ge) and run it.
+- Download the DAI Miner `.exe` from [miner.iamai.kg](https://miner.iamai.kg) and run it.
 - No engine to install — QVAC runs in-process; the model downloads on first launch.
 - Works great on gaming PCs (will detect NVIDIA GPU automatically).
 - For VPS or no-GPU machines, manually set `"inferenceMode": "cpu"` in config.
@@ -52,7 +52,7 @@ You can change this anytime in `config.json`. This gives you full control:
 
 ### Manually Changing Mode Later
 
-Edit `~/.poh-miner/config.json`:
+Edit `~/.dai-miner/config.json`:
 
 ```json
 {
@@ -77,4 +77,4 @@ model picker in the desktop app (Settings and above the chat box).
 
 ## Need Help?
 
-Join the discussion on poh.ge or open an issue on GitHub.
+Join the discussion on iamai.kg or open an issue on GitHub.

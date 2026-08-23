@@ -1,5 +1,5 @@
 /**
- * PoH Miner - RPC Networks Definition
+ * DAI Miner - RPC Networks Definition
  *
  * Centralized list of all networks we care about for signals.
  * This powers both config resolution and the GUI dropdowns.

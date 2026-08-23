@@ -9,7 +9,7 @@ import path from 'path';
 import os from 'os';
 import { buildAllSearchDocuments } from '../chain/chain-job-index.js';
 
-const DEFAULT_INDEX = 'poh-chat-history';
+const DEFAULT_INDEX = 'dai-chat-history';
 const DEFAULT_HOST = 'http://127.0.0.1:7700';
 
 function normalizeText(s) {
@@ -56,7 +56,7 @@ export class ChatHistorySearch {
     this.host = opts.host || DEFAULT_HOST;
     this.apiKey = opts.apiKey || '';
     this.indexName = opts.indexName || DEFAULT_INDEX;
-    this.dataDir = opts.dataDir || path.join(os.homedir(), '.poh-miner', 'search');
+    this.dataDir = opts.dataDir || path.join(os.homedir(), '.dai-miner', 'search');
     this.storePath = path.join(this.dataDir, 'chat-history.ndjson');
     this.docs = new Map();
     this._meiliClient = null;
@@ -122,7 +122,7 @@ export class ChatHistorySearch {
           sortableAttributes: ['submittedAt'],
         });
         this._meiliReady = true;
-        console.log(`[PoH-Search] Meilisearch connected at ${this.host} (index: ${this.indexName})`);
+        console.log(`[DAI-Search] Meilisearch connected at ${this.host} (index: ${this.indexName})`);
         return;
       } catch (e) {
         lastErr = e;
@@ -130,7 +130,7 @@ export class ChatHistorySearch {
       }
     }
     this._meiliReady = false;
-    const msg = `[PoH-Search] Meilisearch unavailable (${lastErr?.message})`;
+    const msg = `[DAI-Search] Meilisearch unavailable (${lastErr?.message})`;
     if (this.requireMeilisearch) throw new Error(msg);
     console.log(`${msg} — using local index (${this.docs.size} docs)`);
   }
@@ -179,10 +179,10 @@ export class ChatHistorySearch {
         // fields (id + jobId), so pin it explicitly or every add fails on a PK-less index.
         if (docs.length) await this._meiliIndex.addDocuments(docs, { primaryKey: 'id' });
       } catch (e) {
-        console.warn('[PoH-Search] Meilisearch reindex failed:', e.message);
+        console.warn('[DAI-Search] Meilisearch reindex failed:', e.message);
       }
     }
-    console.log(`[PoH-Search] Indexed ${docs.length} chat history document(s)`);
+    console.log(`[DAI-Search] Indexed ${docs.length} chat history document(s)`);
     return { count: docs.length };
   }
 
@@ -224,7 +224,7 @@ export class ChatHistorySearch {
     }
 
     if (this.requireMeilisearch && !this._meiliReady) {
-      throw new Error('[PoH-Search] Meilisearch required but not connected');
+      throw new Error('[DAI-Search] Meilisearch required but not connected');
     }
 
     const ranked = this._filterWallet([...this.docs.values()], wallet)

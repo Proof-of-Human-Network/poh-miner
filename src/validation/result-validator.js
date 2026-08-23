@@ -1,5 +1,5 @@
 /**
- * PoH Miner Network - Result Validator
+ * DAI Miner Network - Result Validator
  *
  * Enforces that miners performed proper inference work.
  * Used for both local acceptance and future slashing / reward qualification.
@@ -31,7 +31,7 @@ const MIN_SIGNALS_FRACTION = 0.50;
 
 /**
  * Detect which blockchain chains an address belongs to.
- * Returns an array of chain tags: 'evm', 'solana', 'bitcoin', 'ton', 'poh'
+ * Returns an array of chain tags: 'evm', 'solana', 'bitcoin', 'ton', 'dai'
  */
 function detectAddressChains(address) {
   if (!address || typeof address !== 'string') return ['universal'];
@@ -40,7 +40,7 @@ function detectAddressChains(address) {
   if (/^0x[0-9a-fA-F]{40}$/.test(a))  return ['evm'];
   if (/^(1|3)[a-km-zA-HJ-NP-Z1-9]{24,33}$/.test(a) || /^bc1[a-z0-9]{6,87}$/.test(a)) return ['bitcoin'];
   if (/^(EQ|UQ)[A-Za-z0-9+/=_-]{46}$/.test(a)) return ['ton'];
-  if (/^poh[0-9a-f]{40}$/i.test(a)) return ['poh'];
+  if (/^dai[0-9a-f]{40}$/i.test(a)) return ['dai'];
   // Solana: base58, 32-44 chars, no 0 or O or l or I
   if (/^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(a)) return ['solana'];
   return ['universal'];
@@ -141,7 +141,7 @@ export async function validateResultWork(result, request = {}) {
   if (result.methodsHash && String(result.methodsHash).startsWith('sim-')) {
     // Still require profile for shape, but do not spam "insufficient" for sims
     if (!result.profile) {
-      errors.push('Missing profile (miners must return full POH output including profile)');
+      errors.push('Missing profile (miners must return full DAI output including profile)');
     }
     return {
       isValid: errors.length === 0,
@@ -194,12 +194,12 @@ export async function validateResultWork(result, request = {}) {
     console.log(`[validator] No applicable live signals for chain ${chains.join('+')} — skipping coverage check`);
   }
 
-  // 3. Must include verdict + profile (as required for proper POH work)
+  // 3. Must include verdict + profile (as required for proper DAI work)
   if (!result.verdict) {
     errors.push('Missing verdict');
   }
   if (!result.profile) {
-    errors.push('Missing profile (miners must return full POH output including profile)');
+    errors.push('Missing profile (miners must return full DAI output including profile)');
   }
   if (!result.reasoning) {
     errors.push('Missing reasoning');

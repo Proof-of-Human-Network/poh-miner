@@ -1,8 +1,8 @@
 /**
- * Scan Request & Result types for the PoH Miner Network
+ * Scan Request & Result types for the DAI Miner Network
  *
  * When a user (via the App Layer) wants a verdict, they submit a ScanRequest.
- * Miners race to compute it using the existing POH checker + brain logic.
+ * Miners race to compute it using the existing DAI checker + brain logic.
  * First valid result wins.
  */
 import crypto from 'crypto';
@@ -14,7 +14,7 @@ export class ScanRequest {
     chains = [],       // ['evm', 'solana', 'bitcoin', ...] or auto-detect
     options = {},      // depth, includeBrain, etc.
     requesterWallet,   // Who pays the fee
-    fee,               // Amount in POH (raw units)
+    fee,               // Amount in DAI (raw units)
     timestamp,
     signature,         // Signature proving the requester controls the wallet (optional for now)
   }) {
@@ -30,11 +30,11 @@ export class ScanRequest {
 }
 
 // Layer 5: SkillRequest extends ScanRequest with a skillId field.
-// 'poh_identity' is the built-in skill; third-party skills use their own ids.
+// 'dai_identity' is the built-in skill; third-party skills use their own ids.
 export class SkillRequest extends ScanRequest {
   constructor(params) {
     super(params);
-    this.skillId = params.skillId || 'poh_identity';
+    this.skillId = params.skillId || 'dai_identity';
   }
 }
 
@@ -53,8 +53,8 @@ export class ScanResult {
     blockHeight,       // Which block this result was included in
     methodsHash,       // Hash of the verified signals set used for this computation (for consensus)
     methodsCount,
-    realPohUsed = false,
-    profile = null,    // Full POH profile returned by enrichProfile (required for valid work)
+    realDAIUsed = false,
+    profile = null,    // Full DAI profile returned by enrichProfile (required for valid work)
     isValidWork = false,      // restored on re-hydration so getResultHash() stays deterministic
     validationErrors = [],
   }) {
@@ -76,8 +76,8 @@ export class ScanResult {
     this.deliveredAt = Date.now();
     this.methodsHash = methodsHash;     // ← Used for network-wide signals consensus
     this.methodsCount = methodsCount;
-    this.realPohUsed = realPohUsed;     // ← Indicates whether real POH checker/brain was used
-    this.profile = profile || null;     // ← Required by validateResultWork for full POH output
+    this.realDAIUsed = realDAIUsed;     // ← Indicates whether real DAI checker/brain was used
+    this.profile = profile || null;     // ← Required by validateResultWork for full DAI output
 
     // Work quality flags (set by validator before block inclusion).
     // MUST be restored from input when re-hydrating a stored/gossiped result: both are
@@ -121,7 +121,7 @@ export class ScanResult {
       signalsUsed: su.map(s => s.methodId || s.id || s),
       methodsHash: this.methodsHash,
       isValidWork: this.isValidWork,
-      realPohUsed: this.realPohUsed,
+      realDAIUsed: this.realDAIUsed,
       profileFp: this.profile ? crypto.createHash('sha256').update(JSON.stringify(this.profile)).digest('hex').slice(0, 12) : null,
     });
     return crypto.createHash('sha256').update(data).digest('hex');

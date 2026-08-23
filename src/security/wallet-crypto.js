@@ -1,9 +1,9 @@
 /**
  * Wallet-at-rest encryption for private/signing keys.
  *
- * Key is created automatically on first run at ~/.poh-miner/.wallet-key
+ * Key is created automatically on first run at ~/.dai-miner/.wallet-key
  * (mode 0600). Binary / Electron users never need to set an env var.
- * Optional POH_WALLET_KEY env overrides for advanced / portable setups.
+ * Optional DAI_WALLET_KEY env overrides for advanced / portable setups.
  */
 
 import crypto from 'crypto';
@@ -12,12 +12,12 @@ import os from 'os';
 import path from 'path';
 
 const ALGO = 'aes-256-gcm';
-const SALT = 'poh-miner-wallet-v1';
-const KEY_FILE = path.join(os.homedir(), '.poh-miner', '.wallet-key');
+const SALT = 'dai-miner-wallet-v1';
+const KEY_FILE = path.join(os.homedir(), '.dai-miner', '.wallet-key');
 
 let _cachedKey = null;
 
-/** Clear cached key after POH_WALLET_KEY changes (e.g. onboarding backup setup). */
+/** Clear cached key after DAI_WALLET_KEY changes (e.g. onboarding backup setup). */
 export function resetKeyCache() {
   _cachedKey = null;
 }
@@ -35,7 +35,7 @@ function legacyMachineKey() {
 function loadOrCreateKey() {
   if (_cachedKey) return _cachedKey;
 
-  const envKey = process.env.POH_WALLET_KEY;
+  const envKey = process.env.DAI_WALLET_KEY;
   if (envKey && envKey.length >= 16) {
     _cachedKey = crypto.createHash('sha256').update(envKey).digest();
     return _cachedKey;

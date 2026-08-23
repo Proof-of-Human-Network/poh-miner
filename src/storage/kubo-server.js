@@ -1,18 +1,18 @@
 /**
- * Managed Kubo (go-ipfs) daemon for PoH Miner — the local IPFS write backend
+ * Managed Kubo (go-ipfs) daemon for DAI Miner — the local IPFS write backend
  * that makes chain/brain backups work out of the box.
  *
  * Behaviour mirrors search/meilisearch-server.js:
  *   - If a Kubo daemon is already healthy on the API port, reuse it.
- *   - Otherwise ensure a binary (PATH → bundled/downloaded under ~/.poh-miner/bin),
- *     init an isolated repo under ~/.poh-miner/ipfs, and spawn `ipfs daemon`.
+ *   - Otherwise ensure a binary (PATH → bundled/downloaded under ~/.dai-miner/bin),
+ *     init an isolated repo under ~/.dai-miner/ipfs, and spawn `ipfs daemon`.
  *
  * IPFS is best-effort: any failure here degrades to "no local pinning" and the
  * miner keeps running (IPFSStore.add() simply returns null). We never throw out
  * of ensureKubo() into the startup path.
  *
  * Ports: API defaults to 5001 (writes/pins go here), Gateway defaults to 8081
- * to avoid colliding with the PoH bootnode which uses 8080.
+ * to avoid colliding with the DAI bootnode which uses 8080.
  */
 
 import { spawn, execFileSync } from 'child_process';
@@ -25,16 +25,16 @@ import { pipeline } from 'stream/promises';
 
 export const KUBO_VERSION = 'v0.32.1';
 const DEFAULT_API_PORT     = 5001;
-const DEFAULT_GATEWAY_PORT = 8081; // NOT 8080 — the PoH bootnode owns 8080
+const DEFAULT_GATEWAY_PORT = 8081; // NOT 8080 — the DAI bootnode owns 8080
 const DEFAULT_BIND         = '127.0.0.1';
 const DIST_BASE            = 'https://dist.ipfs.tech/kubo';
 
 function repoDir() {
-  return path.join(os.homedir(), '.poh-miner', 'ipfs');
+  return path.join(os.homedir(), '.dai-miner', 'ipfs');
 }
 
 function binDir() {
-  return path.join(os.homedir(), '.poh-miner', 'bin');
+  return path.join(os.homedir(), '.dai-miner', 'bin');
 }
 
 export function kuboApiUrl(cfg = {}) {
@@ -133,7 +133,7 @@ export async function ensureKuboBinary(customPath) {
   const archivePath = path.join(dir, info.asset);
   const url = `${DIST_BASE}/${KUBO_VERSION}/${info.asset}`;
 
-  console.log(`[PoH-IPFS] Downloading Kubo ${KUBO_VERSION} (${info.asset})…`);
+  console.log(`[DAI-IPFS] Downloading Kubo ${KUBO_VERSION} (${info.asset})…`);
   await downloadFile(url, archivePath);
 
   const extractRoot = path.join(dir, 'kubo-extract');
@@ -148,7 +148,7 @@ export async function ensureKuboBinary(customPath) {
 
   fs.rmSync(extractRoot, { recursive: true, force: true });
   try { fs.unlinkSync(archivePath); } catch { /* */ }
-  console.log(`[PoH-IPFS] Installed binary → ${local}`);
+  console.log(`[DAI-IPFS] Installed binary → ${local}`);
   return local;
 }
 
@@ -224,7 +224,7 @@ export class KuboDaemon {
       fs.mkdirSync(this.repoPath, { recursive: true });
       // lowpower keeps a miner's footprint small; still reprovides its own pins.
       this._run(bin, ['init', '--profile', 'lowpower']);
-      console.log(`[PoH-IPFS] Initialised repo → ${this.repoPath}`);
+      console.log(`[DAI-IPFS] Initialised repo → ${this.repoPath}`);
     }
     // Force our ports every start — repo may have been created with defaults (8080 clash).
     this._run(bin, ['config', 'Addresses.API',     `/ip4/${this.bindHost}/tcp/${this.apiPort}`]);
@@ -233,7 +233,7 @@ export class KuboDaemon {
 
   async ensureRunning({ maxWaitMs = 60_000 } = {}) {
     if (await kuboHealthy(this.apiUrl)) {
-      console.log(`[PoH-IPFS] Using existing Kubo daemon at ${this.apiUrl}`);
+      console.log(`[DAI-IPFS] Using existing Kubo daemon at ${this.apiUrl}`);
       this._external = true;
       return this;
     }
@@ -250,7 +250,7 @@ export class KuboDaemon {
     const bin = await ensureKuboBinary(this.binaryPath);
     this._initRepo(bin);
 
-    console.log(`[PoH-IPFS] Starting Kubo daemon (${bin}) — API ${this.apiUrl}, gateway ${this.gatewayUrl}`);
+    console.log(`[DAI-IPFS] Starting Kubo daemon (${bin}) — API ${this.apiUrl}, gateway ${this.gatewayUrl}`);
     let stderr = '';
     this._proc = spawn(bin, ['daemon', '--enable-gc'], {
       env: this._env(),
@@ -259,17 +259,17 @@ export class KuboDaemon {
     });
     this._managed = true;
     this._proc.stderr?.on('data', c => { stderr = (stderr + c.toString()).slice(-2000); });
-    this._proc.on('error', err => console.error('[PoH-IPFS] Process error:', err.message));
+    this._proc.on('error', err => console.error('[DAI-IPFS] Process error:', err.message));
     this._proc.on('exit', (code, sig) => {
       this._proc = null;
       this._managed = false;
       if (code == null || code === 0) return;
       const detail = stderr.trim().split('\n').filter(Boolean).pop() || '';
-      console.warn(`[PoH-IPFS] Daemon exited code=${code} signal=${sig}${detail ? ` — ${detail}` : ''}`);
+      console.warn(`[DAI-IPFS] Daemon exited code=${code} signal=${sig}${detail ? ` — ${detail}` : ''}`);
     });
 
     if (await waitForHealthy(this.apiUrl, maxWaitMs)) {
-      console.log(`[PoH-IPFS] Ready at ${this.apiUrl}`);
+      console.log(`[DAI-IPFS] Ready at ${this.apiUrl}`);
       return this;
     }
     throw new Error(`Kubo daemon did not become healthy at ${this.apiUrl} within ${maxWaitMs}ms`);
@@ -291,7 +291,7 @@ export class KuboDaemon {
  * IPFS is skipped/unavailable (never throws — backups are best-effort).
  */
 export async function ensureKubo(cfg = {}) {
-  if (process.env.POH_SKIP_IPFS === '1' || process.env.VITEST) return null;
+  if (process.env.DAI_SKIP_IPFS === '1' || process.env.VITEST) return null;
   if (cfg.autoStart === false) return null;
   try {
     const daemon = new KuboDaemon({
@@ -304,7 +304,7 @@ export async function ensureKubo(cfg = {}) {
     await daemon.ensureRunning({ maxWaitMs: cfg.startupTimeoutMs || 60_000 });
     return daemon;
   } catch (e) {
-    console.warn(`[PoH-IPFS] Auto-start failed — backups disabled this run: ${e.message}`);
+    console.warn(`[DAI-IPFS] Auto-start failed — backups disabled this run: ${e.message}`);
     return null;
   }
 }

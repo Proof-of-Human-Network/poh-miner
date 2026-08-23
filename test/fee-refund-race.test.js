@@ -4,7 +4,7 @@ import { settleFee, estimateChatTokens, outputTokenCap, GAS } from '../src/jobs/
 
 // A signed paymentTx is required for paid board jobs.
 const PT = { txHash: 'h', signature: 's' };
-const paidJob = (id, maxBudget) => ({ id, type: 'compute', model: 'm', requesterAddress: 'pohreq', maxBudget, paymentTx: PT });
+const paidJob = (id, maxBudget) => ({ id, type: 'compute', model: 'm', requesterAddress: 'daireq', maxBudget, paymentTx: PT });
 
 describe('no-refund settlement (change 1)', () => {
   it('takes the whole bid as the fee regardless of tokens used', () => {
@@ -36,7 +36,7 @@ describe('chat estimate + budget hard cap', () => {
 
   it('outputTokenCap: spare budget stretches output only up to the quality ceiling', () => {
     // A huge budget does NOT buy unbounded output — capped at OUTPUT_HARD_MAX so
-    // small models stay coherent (extra uPOH buys queue priority, not tokens).
+    // small models stay coherent (extra uDAI buys queue priority, not tokens).
     expect(outputTokenCap(1_000_000, 1, 0)).toBe(GAS.OUTPUT_HARD_MAX);
   });
 

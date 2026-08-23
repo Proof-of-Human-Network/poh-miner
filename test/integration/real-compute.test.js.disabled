@@ -1,7 +1,7 @@
 /**
- * Extensive Integration Tests for PoH Miner Network
+ * Extensive Integration Tests for DAI Miner Network
  *
- * These tests exercise the *full* miner stack with the real POH checker/brain
+ * These tests exercise the *full* miner stack with the real DAI checker/brain
  * (loaded from the sibling `dev/` directory).
  *
  * They are only executed when running:
@@ -12,7 +12,7 @@
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import {
-  hasRealPohChecker,
+  hasRealDAIChecker,
   startTestMiner,
   stopTestMiner,
   submitTestJob,
@@ -26,12 +26,12 @@ const shouldRun = process.env.RUN_INTEGRATION === '1';
 // This prevents Vitest from even trying to run the suite during normal `npm test`.
 const integrationSuite = shouldRun ? describe : describe.skip;
 
-integrationSuite('Full Miner + Real POH Checker Integration', () => {
+integrationSuite('Full Miner + Real DAI Checker Integration', () => {
   let miner;
 
   beforeAll(async () => {
-    if (!hasRealPohChecker()) {
-      console.warn('\n[Integration] Real POH checker (dev/) not found. Skipping full integration tests.\n');
+    if (!hasRealDAIChecker()) {
+      console.warn('\n[Integration] Real DAI checker (dev/) not found. Skipping full integration tests.\n');
       return;
     }
 
@@ -49,8 +49,8 @@ integrationSuite('Full Miner + Real POH Checker Integration', () => {
     }
   });
 
-  it('should start a miner that loads the real POH checker', async () => {
-    if (!hasRealPohChecker()) return;
+  it('should start a miner that loads the real DAI checker', async () => {
+    if (!hasRealDAIChecker()) return;
 
     // The miner should have successfully loaded the real modules
     expect(miner).toBeDefined();
@@ -58,8 +58,8 @@ integrationSuite('Full Miner + Real POH Checker Integration', () => {
     expect(miner.config.computeEnabled).toBe(true);
   });
 
-  it('should compute a job using the real POH brain (not simulation)', async () => {
-    if (!hasRealPohChecker()) return;
+  it('should compute a job using the real DAI brain (not simulation)', async () => {
+    if (!hasRealDAIChecker()) return;
 
     const job = submitTestJob(miner, {
       payload: { address: 'bc1qrealintegrationtest' },
@@ -75,15 +75,15 @@ integrationSuite('Full Miner + Real POH Checker Integration', () => {
     }
 
     expect(realResult).toBeDefined();
-    expect(realResult.realPohUsed).toBe(true); // This is the critical assertion
+    expect(realResult.realDAIUsed).toBe(true); // This is the critical assertion
     expect(realResult.verdict).toBeDefined();
-    expect(realResult.profile).toBeDefined(); // Full POH output required
+    expect(realResult.profile).toBeDefined(); // Full DAI output required
     expect(realResult.reasoning).toBeDefined();
     expect(realResult.methodsHash).toBeDefined();
   });
 
   it('should produce a block containing a validated real ScanResult', async () => {
-    if (!hasRealPohChecker()) return;
+    if (!hasRealDAIChecker()) return;
 
     // Submit another job
     submitTestJob(miner, {
@@ -99,12 +99,12 @@ integrationSuite('Full Miner + Real POH Checker Integration', () => {
     expect(Array.isArray(block.scanResults)).toBe(true);
 
     // At least one result in the block should be real
-    const hasRealResult = block.scanResults.some(r => r.realPohUsed === true);
+    const hasRealResult = block.scanResults.some(r => r.realDAIUsed === true);
     expect(hasRealResult).toBe(true);
   });
 
   it('should enforce work quality rules on real results', async () => {
-    if (!hasRealPohChecker()) return;
+    if (!hasRealDAIChecker()) return;
 
     // This test submits a job and then inspects whether the produced
     // result would pass the strict validation rules from the yellow paper.

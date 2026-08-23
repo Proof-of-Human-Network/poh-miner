@@ -25,7 +25,7 @@ console.log(`[brain] Inference: QVAC (default=${DEFAULT_MODEL})${QVAC_ENABLED ? 
 // Set process.env.BRAIN_DATA_DIR before requiring this module to override.
 const BRAIN_DATA_DIR   = process.env.BRAIN_DATA_DIR
   ? path.resolve(process.env.BRAIN_DATA_DIR)
-  : path.join(os.homedir(), '.poh-miner', 'brain');
+  : path.join(os.homedir(), '.dai-miner', 'brain');
 
 const BRAIN_STATE_PATH = path.join(BRAIN_DATA_DIR, 'brain_state.md');
 const DATASET_PATH     = path.join(BRAIN_DATA_DIR, 'dataset.json');
@@ -183,7 +183,7 @@ async function compilerChat(prompt, opts = {}) {
   return qvacChat(prompt, {
     ...opts,
     model: opts.model || COMPILER_MODEL,
-    systemPrompt: 'You are a precise, technical summarizer for a decentralized Proof-of-Humanity detection system. Output only the requested summary text. Be concise, factual, and avoid speculation or JSON.',
+    systemPrompt: 'You are a precise, technical summarizer for a decentralized Decentralized Artificial Intelligence detection system. Output only the requested summary text. Be concise, factual, and avoid speculation or JSON.',
   });
 }
 
@@ -249,7 +249,7 @@ async function analyzeHumanness(address, methodResults, methods) {
     : '';
 
   // Stronger prompt for signal aggregation + negative signal awareness
-  const basePrompt = `You are an expert Proof-of-Humanity evaluator for cryptocurrency wallet addresses.
+  const basePrompt = `You are an expert Decentralized Artificial Intelligence evaluator for cryptocurrency wallet addresses.
 
 Your job is to determine whether the address shows strong evidence of being controlled by a real human versus an AI/bot/Sybil.
 
@@ -389,7 +389,7 @@ Reply with ONLY this JSON (new_weight must be within 0.05 of current weight ${cu
 
 async function onNewMethod(method) {
   const prompt = `SYSTEM:
-You are evaluating a new detection method for a Proof of Human network.
+You are evaluating a new detection method for a Decentralized Artificial Intelligence network.
 Be technical and concise. Max 2 sentences.
 
 METHOD:
@@ -520,7 +520,7 @@ STYLE:
 
 // ── 5. validateDescription ────────────────────────────────────────────────────
 async function validateDescription(description) {
-  const prompt = `You are validating a method description submitted to a Proof of Human detection network.
+  const prompt = `You are validating a method description submitted to a Decentralized Artificial Intelligence detection network.
 The description must clearly explain what on-chain or API signal is being checked and why it indicates human activity.
 
 Description to evaluate: "${description.slice(0, 300)}"
@@ -543,7 +543,7 @@ or
 
 // ── 6. validateFeedback ───────────────────────────────────────────────────────
 async function validateFeedback(feedback) {
-  const prompt = `You are moderating a vote comment submitted to a Proof of Human detection network.
+  const prompt = `You are moderating a vote comment submitted to a Decentralized Artificial Intelligence detection network.
 The comment explains why a voter thinks a detection method is or isn't valid for identifying humans.
 
 Comment to evaluate: "${feedback.slice(0, 400)}"

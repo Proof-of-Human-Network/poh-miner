@@ -14,7 +14,7 @@
  */
 
 import { IPFSStore } from './ipfs-store.js';
-import { getBrainDataDir } from '../compute/adapters/real-poh.js';
+import { getBrainDataDir } from '../compute/adapters/real-dai.js';
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
@@ -25,7 +25,7 @@ const PUSH_TIMEOUT_MS   = 8_000;
 
 // Local cache file — stores the last known CIDs so the node survives
 // a bootnode outage across restarts.
-const CID_CACHE_FILE = path.join(os.homedir(), '.poh-miner', 'ipfs_cid_cache.json');
+const CID_CACHE_FILE = path.join(os.homedir(), '.dai-miner', 'ipfs_cid_cache.json');
 
 function loadCIDCache() {
   try {

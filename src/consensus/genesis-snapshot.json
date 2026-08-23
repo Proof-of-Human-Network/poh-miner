@@ -2,6 +2,6 @@
   "balances": {},
   "genesisTimestamp": 1784592000000,
   "snapshotHash": null,
-  "note": "Fresh chain 2026-07-21 — new genesis, all balances 0, POH earned by mining from block 1.",
+  "note": "Fresh chain 2026-07-21 — new genesis, all balances 0, DAI earned by mining from block 1.",
   "generatedAt": "2026-07-21T00:00:00.000Z"
 }

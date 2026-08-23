@@ -1,7 +1,7 @@
 /**
- * Managed Meilisearch process for PoH Miner — mandatory chat history backend.
+ * Managed Meilisearch process for DAI Miner — mandatory chat history backend.
  * Uses an existing instance on the configured port (e.g. Docker) or spawns a
- * bundled/downloaded binary under ~/.poh-miner/bin/.
+ * bundled/downloaded binary under ~/.dai-miner/bin/.
  */
 
 import { spawn, execSync, execFileSync } from 'child_process';
@@ -20,7 +20,7 @@ const MASTER_KEY_MIN_LEN = 16;
 const MASTER_KEY_FILE = 'meilisearch-master-key';
 
 export function meilisearchMasterKeyPath() {
-  return path.join(os.homedir(), '.poh-miner', MASTER_KEY_FILE);
+  return path.join(os.homedir(), '.dai-miner', MASTER_KEY_FILE);
 }
 
 /** Read configured master key (config, env, or persisted file). Does not generate. */
@@ -47,7 +47,7 @@ export function ensureMeilisearchMasterKey(cfg = {}) {
   const keyPath = meilisearchMasterKeyPath();
   fs.mkdirSync(path.dirname(keyPath), { recursive: true });
   fs.writeFileSync(keyPath, `${key}\n`, { mode: 0o600 });
-  console.log(`[PoH-Meili] Generated master key → ${keyPath}`);
+  console.log(`[DAI-Meili] Generated master key → ${keyPath}`);
   return key;
 }
 
@@ -60,7 +60,7 @@ function platformAsset() {
 }
 
 function binDir() {
-  return path.join(os.homedir(), '.poh-miner', 'bin');
+  return path.join(os.homedir(), '.dai-miner', 'bin');
 }
 
 function defaultBinaryPath() {
@@ -177,12 +177,12 @@ export async function ensureMeilisearchBinary(customPath) {
   const tmp = `${dest}.download`;
   const url = `https://github.com/meilisearch/meilisearch/releases/download/${MEILI_VERSION}/${asset}`;
 
-  console.log(`[PoH-Meili] Downloading Meilisearch ${MEILI_VERSION} (${asset})…`);
+  console.log(`[DAI-Meili] Downloading Meilisearch ${MEILI_VERSION} (${asset})…`);
   await downloadFile(url, tmp);
   fs.renameSync(tmp, dest);
   if (process.platform !== 'win32') fs.chmodSync(dest, 0o755);
   ensureMacExecutable(dest);   // dequarantine + ad-hoc sign so macOS will run it
-  console.log(`[PoH-Meili] Installed binary → ${dest}`);
+  console.log(`[DAI-Meili] Installed binary → ${dest}`);
   return dest;
 }
 
@@ -190,7 +190,7 @@ export class MeilisearchServer {
   constructor(opts = {}) {
     this.port = opts.port || DEFAULT_PORT;
     this.bindHost = opts.bindHost || DEFAULT_BIND;
-    this.dataDir = opts.dataDir || path.join(os.homedir(), '.poh-miner', 'meilisearch-data');
+    this.dataDir = opts.dataDir || path.join(os.homedir(), '.dai-miner', 'meilisearch-data');
     this.binaryPath = opts.binaryPath || null;
     this.masterKey = opts.masterKey || null;
     this.hostUrl = resolveMeilisearchUrl({ host: opts.host, port: this.port, bindHost: this.bindHost });
@@ -200,21 +200,21 @@ export class MeilisearchServer {
 
   async ensureRunning({ maxWaitMs = 60_000 } = {}) {
     if (await meilisearchHealthy(this.hostUrl)) {
-      console.log(`[PoH-Meili] Using existing Meilisearch at ${this.hostUrl}`);
+      console.log(`[DAI-Meili] Using existing Meilisearch at ${this.hostUrl}`);
       return this;
     }
 
     // Existing instance (Docker, prior run) may still be starting — wait before spawning.
     const warmUpMs = Math.min(15_000, maxWaitMs);
     if (await waitForHealthy(this.hostUrl, warmUpMs)) {
-      console.log(`[PoH-Meili] Using existing Meilisearch at ${this.hostUrl}`);
+      console.log(`[DAI-Meili] Using existing Meilisearch at ${this.hostUrl}`);
       return this;
     }
 
     if (await isPortListening(this.bindHost, this.port)) {
       const remaining = Math.max(5_000, maxWaitMs - warmUpMs);
       if (await waitForHealthy(this.hostUrl, remaining)) {
-        console.log(`[PoH-Meili] Using existing Meilisearch at ${this.hostUrl} (port ${this.port} in use)`);
+        console.log(`[DAI-Meili] Using existing Meilisearch at ${this.hostUrl} (port ${this.port} in use)`);
         return this;
       }
       throw new Error(
@@ -231,7 +231,7 @@ export class MeilisearchServer {
 
     const args = ['--db-path', this.dataDir, '--http-addr', `${this.bindHost}:${this.port}`];
     if (this.masterKey) args.push('--master-key', this.masterKey);
-    console.log(`[PoH-Meili] Starting Meilisearch (${bin}) on ${this.hostUrl}`);
+    console.log(`[DAI-Meili] Starting Meilisearch (${bin}) on ${this.hostUrl}`);
 
     let stderr = '';
     this._proc = spawn(bin, args, {
@@ -247,24 +247,24 @@ export class MeilisearchServer {
     this._proc.stderr?.on('data', chunk => {
       stderr = (stderr + chunk.toString()).slice(-2000);
     });
-    this._proc.on('error', err => console.error('[PoH-Meili] Process error:', err.message));
+    this._proc.on('error', err => console.error('[DAI-Meili] Process error:', err.message));
     this._proc.on('exit', (code, sig) => {
       this._proc = null;
       this._managed = false;
       if (code == null || code === 0) return;
       meilisearchHealthy(this.hostUrl, 1500).then(ok => {
         if (ok) {
-          console.log(`[PoH-Meili] Using existing Meilisearch at ${this.hostUrl} (managed process exited code=${code})`);
+          console.log(`[DAI-Meili] Using existing Meilisearch at ${this.hostUrl} (managed process exited code=${code})`);
           return;
         }
         const detail = stderr.trim().split('\n').filter(Boolean).pop() || '';
         console.warn(
-          `[PoH-Meili] Exited code=${code} signal=${sig}${detail ? ` — ${detail}` : ''}`,
+          `[DAI-Meili] Exited code=${code} signal=${sig}${detail ? ` — ${detail}` : ''}`,
         );
         // 0xC0000135 = STATUS_DLL_NOT_FOUND: meilisearch.exe needs the MSVC runtime.
         if (process.platform === 'win32' && (code === 3221225781 || code === 0xC0000135)) {
           console.warn(
-            '[PoH-Meili] Windows is missing the Microsoft Visual C++ Redistributable required by meilisearch.exe. ' +
+            '[DAI-Meili] Windows is missing the Microsoft Visual C++ Redistributable required by meilisearch.exe. ' +
             'Install it from https://aka.ms/vs/17/release/vc_redist.x64.exe and restart the miner. ' +
             'Mining continues without chat-history search until then.',
           );
@@ -275,7 +275,7 @@ export class MeilisearchServer {
     const remaining = Math.max(5_000, maxWaitMs - warmUpMs);
     if (await waitForHealthy(this.hostUrl, remaining)) {
       if (this._managed && this._proc) {
-        console.log(`[PoH-Meili] Ready at ${this.hostUrl}`);
+        console.log(`[DAI-Meili] Ready at ${this.hostUrl}`);
       }
       return this;
     }
@@ -294,7 +294,7 @@ export class MeilisearchServer {
 }
 
 export async function ensureMeilisearch(cfg = {}) {
-  if (process.env.POH_SKIP_MEILI === '1' || process.env.VITEST) {
+  if (process.env.DAI_SKIP_MEILI === '1' || process.env.VITEST) {
     return null;
   }
   const server = new MeilisearchServer({

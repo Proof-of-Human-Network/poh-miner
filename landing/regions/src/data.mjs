@@ -6,7 +6,7 @@ export const COUNTRIES = [
   {
     cc: 'ge',
     langs: ['en'],
-    domain: 'poh.ge',
+    domain: 'iamai.kg',
     stableLive: false,  // like everywhere else, the local stablecoin is minted with a partner issuer
     country: 'Georgia',
     countryOf: 'Georgia',
@@ -38,7 +38,7 @@ export const COUNTRIES = [
   {
     cc: 'am',
     langs: ['en', 'ru'],
-    domain: 'poh.am',
+    domain: 'dai.am',
     country: 'Armenia',
     countryOf: 'Armenia',
     adjective: 'Armenian',
@@ -69,7 +69,7 @@ export const COUNTRIES = [
   {
     cc: 'kg',
     langs: ['en', 'ru'],
-    domain: 'poh.kg',
+    domain: 'iamai.kg',
     country: 'the Kyrgyzstan',
     countryOf: 'the Kyrgyzstan',
     adjective: 'Kyrgyz',
@@ -100,7 +100,7 @@ export const COUNTRIES = [
   {
     cc: 'et',
     langs: ['en'],
-    domain: 'poh.et',
+    domain: 'et.iamai.kg',
     country: 'Ethiopia',
     countryOf: 'Ethiopia',
     adjective: 'Ethiopian',
@@ -131,7 +131,7 @@ export const COUNTRIES = [
   {
     cc: 'bt',
     langs: ['en'],
-    domain: 'poh.bt',
+    domain: 'bt.iamai.kg',
     country: 'Bhutan',
     countryOf: 'Bhutan',
     adjective: 'Bhutanese',

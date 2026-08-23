@@ -1,19 +1,19 @@
 #!/usr/bin/env node
 /**
- * PoH Miner Node
+ * DAI Miner Node
  *
  * This is the main software that Bitcoin miners run on their companion hardware.
  *
  * Responsibilities:
- * - Sync the PoH chain
+ * - Sync the DAI chain
  * - Listen for ScanRequests broadcast on the network
- * - Use the EXISTING POH software (checker + brain) to compute verdicts
- * - Race to deliver the first correct result → earn POH
+ * - Use the EXISTING DAI software (checker + brain) to compute verdicts
+ * - Race to deliver the first correct result → earn DAI
  * - Participate in block production (useful compute + PoW)
  */
 
 import { ScanRequest, ScanResult } from './core/scanRequest.js';
-import { PohBlock } from './core/block.js';
+import { DAIBlock } from './core/block.js';
 import { JobQueue } from './jobs/job-queue.js';
 import { computeBoardJobPaymentHash } from './jobs/board-payment.js';
 import { detectMyCountry, getCountryProximityMultiplier } from './jobs/geo.js';
@@ -23,12 +23,12 @@ import { validateResultWork } from './validation/result-validator.js';
 import {
   calculateBlockRewards,
   workTokens,
-  BLOCK_REWARD_POH,
-  POH_DECIMALS,
-  SKILL_PROPOSE_FEE_UPOH,
-  SKILL_GRADUATION_THRESHOLD_UPOH,
-  SKILL_PROPOSE_FEE_POH,
-  SKILL_GRADUATION_THRESHOLD_POH,
+  BLOCK_REWARD_DAI,
+  DAI_DECIMALS,
+  SKILL_PROPOSE_FEE_UDAI,
+  SKILL_GRADUATION_THRESHOLD_UDAI,
+  SKILL_PROPOSE_FEE_DAI,
+  SKILL_GRADUATION_THRESHOLD_DAI,
 } from './rewards/reward.js';
 import { computeChainWork, compareChainWork, getTipChainWork } from './consensus/chain-selection.js';
 import { createGenesisBlock, buildMigrationGenesis, loadSnapshot, defaultMigrationSnapshot, EXPECTED_GENESIS_HASH } from './consensus/genesis.js';
@@ -45,10 +45,10 @@ import {
 import { replayChainLedger, replayChainLedgerAsync } from './consensus/tx-ledger.js';
 import { FINALITY_DEPTH, evaluateReorg, verifyCheckpoint, chainHonorsCheckpoint } from './consensus/finality.js';
 import { autoForwardPort } from './net/port-forward.js';
-import { computeVerdictWithExistingPoh } from './compute/poh-adapter.js';
-import { getBrain, getBrainDataDir, getQvacModels } from './compute/adapters/real-poh.js';
+import { computeVerdictWithExistingDai } from './compute/dai-adapter.js';
+import { getBrain, getBrainDataDir, getQvacModels } from './compute/adapters/real-dai.js';
 import { BrainSync } from './brain/brain-sync.js';
-import { PoHTransaction, TxMempool } from './core/transaction.js';
+import { DAITransaction, TxMempool } from './core/transaction.js';
 import { BalanceJournal } from './storage/balance-journal.js';
 import { IPFSSync } from './storage/ipfs-sync.js';
 import { ensureKubo, kuboApiUrl, kuboGatewayUrl } from './storage/kubo-server.js';
@@ -92,7 +92,7 @@ import { ensureMeilisearch, getMeilisearchMasterKey, resolveMeilisearchUrl } fro
 
 // Returns true when a message segment clearly signals it needs live internet data.
 // Prevents web_search from firing on general knowledge questions the LLM already knows.
-const SOCIAL_SKILL_IDS = new Set(['read_farcaster', 'read_paragraph', 'read_zora', 'poh_identity']);
+const SOCIAL_SKILL_IDS = new Set(['read_farcaster', 'read_paragraph', 'read_zora', 'dai_identity']);
 
 function _isFollowUpQuestion(message) {
   return /\b(link|url|that|this|it|same|previous|above|latest|most recent|last (?:one|post|cast|article)|give me|show me|what was)\b/i.test(message || '');
@@ -288,7 +288,7 @@ function _formatSkillOutputFallback(skillId, output) {
 // Builtin skills that are ON by default for every node.
 // All other skills (community-proposed) start disabled until the node operator enables them.
 const DEFAULT_ENABLED_SKILLS = new Set([
-  'poh_identity',
+  'dai_identity',
   'read_farcaster',
   'read_paragraph',
   'read_zora',
@@ -324,9 +324,9 @@ const FEE_REQUIRED_JOB_TYPES = new Set(['skill', 'compute']);
 // so a signature over it can't be replayed against a different job or a higher budget.
 // KEEP IN SYNC with the mobile wallet (dev/wallet/src/services/signing.js
 // buildJobPaymentTx) and every SDK signer. `currency` joins the preimage as the
-// SIXTH key ONLY when non-POH — existing POH signers stay valid unmodified.
+// SIXTH key ONLY when non-DAI — existing DAI signers stay valid unmodified.
 function computeJobPaymentHash({ jobId, requesterAddress, minerAddress, amount, nonce, currency }) {
-  const payload = (currency && currency !== 'POH')
+  const payload = (currency && currency !== 'DAI')
     ? { jobId, requesterAddress, minerAddress, amount, nonce, currency }
     : { jobId, requesterAddress, minerAddress, amount, nonce };
   return crypto.createHash('sha256')
@@ -354,10 +354,10 @@ function isTrulyLocalRequest(req) {
 // Well-known production bootnodes. Used when no bootnodes are configured
 // (e.g. fresh GUI onboarding). Individual users can override via config.bootnodes.
 const DEFAULT_BOOTNODES = [
-  "https://miner.poh.ge",
+  "https://miner.iamai.kg",
 ];
 
-export class PohMinerNode {
+export class DAIMinerNode {
   constructor(config) {
     // Resolve new friendly RPC format ("rpc" + providers) into legacy format
     const resolvedRpc = resolveRpcConfig(config);
@@ -381,12 +381,12 @@ export class PohMinerNode {
     this.chain = [];
     this.peers = [];
     this.knownPeers = [];
-    this.orphanPool = new Map();   // previousHash → PohBlock[]
+    this.orphanPool = new Map();   // previousHash → DAIBlock[]
 
     // Finality: latest bootnode-signed checkpoint we've verified ({height, hash}),
     // and an operator escape hatch to permit deep reorgs during recovery.
     this.finalizedCheckpoint = null;
-    this._allowDeepReorg = process.env.POH_ALLOW_DEEP_REORG === '1';
+    this._allowDeepReorg = process.env.DAI_ALLOW_DEEP_REORG === '1';
     this.txMempool = null;         // initialized after walletManager is ready
     // Set of requestIds already included in a mined block. Used to prevent
     // the same scan job being computed and rewarded twice across the network.
@@ -415,7 +415,7 @@ export class PohMinerNode {
       requireMeilisearch: msCfg.mandatory !== false,
       host: msHost,
       apiKey: msCfg.apiKey,
-      indexName: msCfg.indexJobs || 'poh-chat-history',
+      indexName: msCfg.indexJobs || 'dai-chat-history',
     });
     this._meilisearchServer = null;
     this.walletManager = new WalletManager();
@@ -430,7 +430,7 @@ export class PohMinerNode {
     this.pushTokens = new Map();
     this.rewardClaimStore = new RewardClaimStore();
     this.balanceJournal = new BalanceJournal(
-      path.join(os.homedir(), '.poh-miner', 'chain'),
+      path.join(os.homedir(), '.dai-miner', 'chain'),
       this.walletManager
     );
 
@@ -458,7 +458,7 @@ export class PohMinerNode {
     // Queue of high-quality ScanResults ready to be included in the next block.
     // Persisted to disk so a restart doesn't drop pending compute rewards before
     // they're mined (workers still get paid after the node comes back).
-    this._pendingResultsPath = path.join(os.homedir(), '.poh-miner', 'chain', 'pending-results.json');
+    this._pendingResultsPath = path.join(os.homedir(), '.dai-miner', 'chain', 'pending-results.json');
     this.pendingValidResults = this._loadPendingResults();
 
     // Submission history for pattern detection and strike system (software protection)
@@ -467,9 +467,9 @@ export class PohMinerNode {
     // Load persisted quality/reputation + history if available
     this._loadQualityState();
 
-    // Resolve mining wallet — must be a PoH-native wallet (poh... address with a local private key).
+    // Resolve mining wallet — must be a DAI-native wallet (dai... address with a local private key).
     // solanaAddress in config is for future bridge/withdrawal only, never used as rewards recipient.
-    const isNativePoH = addr => addr && addr.startsWith('poh');
+    const isNativeDAI = addr => addr && addr.startsWith('dai');
 
     // Persist the resolved mining wallet into the config file that was actually
     // loaded (config._configPath, set by start.js) so the next start reuses it.
@@ -477,13 +477,13 @@ export class PohMinerNode {
     this._persistWalletToConfig = (address) => {
       try {
         const cfgPath = this.config._configPath
-          || path.join(os.homedir(), '.poh-miner', 'config.json');
+          || path.join(os.homedir(), '.dai-miner', 'config.json');
         const saved = fs.existsSync(cfgPath) ? JSON.parse(fs.readFileSync(cfgPath, 'utf8')) : {};
-        saved.pohWallet = address;
+        saved.daiWallet = address;
         saved.wallet    = address;
         fs.writeFileSync(cfgPath, JSON.stringify(saved, null, 2));
       } catch (e) {
-        console.warn('[PoH-Miner] Could not persist wallet to config:', e.message);
+        console.warn('[DAI-Miner] Could not persist wallet to config:', e.message);
       }
     };
     // Fresh-chain hard reset: if the on-disk genesis is stale, wipe chain + WALLETS +
@@ -491,8 +491,8 @@ export class PohMinerNode {
     // the new genesis (a brand-new wallet is minted just below).
     this._hardResetIfGenesisStale();
 
-    const candidateAddr = isNativePoH(this.config.pohWallet) ? this.config.pohWallet
-                        : isNativePoH(this.config.wallet)    ? this.config.wallet
+    const candidateAddr = isNativeDAI(this.config.daiWallet) ? this.config.daiWallet
+                        : isNativeDAI(this.config.wallet)    ? this.config.wallet
                         : null;
 
     // Try to load an existing native wallet; fall through to create if missing or stub (no privateKey).
@@ -501,7 +501,7 @@ export class PohMinerNode {
 
     if (!resolvedWallet) {
       // Look for any existing native wallet on disk
-      const existing = this.walletManager.listWallets().filter(a => a.startsWith('poh'));
+      const existing = this.walletManager.listWallets().filter(a => a.startsWith('dai'));
       if (existing.length > 0) {
         resolvedWallet = this.walletManager.loadWallet(existing[0]);
         if (resolvedWallet && !resolvedWallet.privateKey) resolvedWallet = null;
@@ -510,7 +510,7 @@ export class PohMinerNode {
 
     if (!resolvedWallet) {
       resolvedWallet = this.walletManager.createWallet();
-      console.log(`[PoH-Miner] Created new PoH wallet: ${resolvedWallet.address}`);
+      console.log(`[DAI-Miner] Created new DAI wallet: ${resolvedWallet.address}`);
       // Persist to the SAME config file we loaded so restarts reuse it. Using a
       // hardcoded home path here re-minted a fresh wallet every start whenever the
       // loaded config lived elsewhere (e.g. cwd/config.json in a source-tree run).
@@ -518,17 +518,17 @@ export class PohMinerNode {
     }
 
     resolvedWallet = this.walletManager.ensureCanonicalAddress(resolvedWallet);
-    if (resolvedWallet.address !== (this.config.pohWallet || this.config.wallet)) {
-      this.config.pohWallet = resolvedWallet.address;
+    if (resolvedWallet.address !== (this.config.daiWallet || this.config.wallet)) {
+      this.config.daiWallet = resolvedWallet.address;
       this.config.wallet    = resolvedWallet.address;
       this._persistWalletToConfig(resolvedWallet.address);
     } else {
-      this.config.pohWallet = resolvedWallet.address;
+      this.config.daiWallet = resolvedWallet.address;
       this.config.wallet    = resolvedWallet.address;
     }
     this.identityWallet = resolvedWallet;
 
-    console.log(`[PoH-Miner] Mining wallet: ${resolvedWallet.address}`);
+    console.log(`[DAI-Miner] Mining wallet: ${resolvedWallet.address}`);
 
     // BrainSync initialized lazily after brain data dir is set (happens on first compute)
     this.brainSync = null; // populated in _initBrainSync()
@@ -536,7 +536,7 @@ export class PohMinerNode {
     // Brain mutations buffered since last block — flushed into block.stateTransitions at mining time
     this.pendingBrainTransitions = [];
 
-    // Skill staking: skillId → { total: number (μPOH), stakers: Map(address → amount) }
+    // Skill staking: skillId → { total: number (μDAI), stakers: Map(address → amount) }
     this._skillStakes = new Map();
     this._appliedStakeTxs = new Set(); // txHashes of applied skill-staked/skill-unstaked transitions (prevents double-apply)
     this.SKILL_STAKE_VAULT = null; // address of stake vault wallet, set in _initStakeVault()
@@ -566,11 +566,11 @@ export class PohMinerNode {
     this._loadSkillStakes();
     this._loadSkillPrefs();
 
-    console.log(`[PoH-Miner] Starting node for wallet ${this.config.wallet}`);
+    console.log(`[DAI-Miner] Starting node for wallet ${this.config.wallet}`);
 
     const mode = this.config.inferenceMode;
     const model = this.config.model;
-    console.log(`[PoH-Miner] Inference mode: ${mode.toUpperCase()} | Model: ${model}`);
+    console.log(`[DAI-Miner] Inference mode: ${mode.toUpperCase()} | Model: ${model}`);
 
     // Benchmark compute speed (non-blocking)
     this.tflops = null;
@@ -579,21 +579,21 @@ export class PohMinerNode {
     // Run GPU detection asynchronously so it doesn't block startup
     this.detectGpuCapability().then(actualGpu => {
       if (mode === 'cpu') {
-        console.log(`[PoH-Miner] → Running in CPU-only mode (good for VPS without GPU)`);
+        console.log(`[DAI-Miner] → Running in CPU-only mode (good for VPS without GPU)`);
         if (actualGpu.available) {
-          console.log(`[PoH-Miner] ⚠️  WARNING: A ${actualGpu.type} GPU was detected, but you are forcing CPU mode.`);
+          console.log(`[DAI-Miner] ⚠️  WARNING: A ${actualGpu.type} GPU was detected, but you are forcing CPU mode.`);
         }
       } else if (mode === 'gpu') {
-        console.log(`[PoH-Miner] → GPU acceleration requested`);
+        console.log(`[DAI-Miner] → GPU acceleration requested`);
         if (!actualGpu.available) {
-          console.log(`[PoH-Miner] ⚠️  WARNING: No GPU detected. QVAC will fall back to CPU.`);
+          console.log(`[DAI-Miner] ⚠️  WARNING: No GPU detected. QVAC will fall back to CPU.`);
         } else {
-          console.log(`[PoH-Miner] → Detected: ${actualGpu.type}`);
+          console.log(`[DAI-Miner] → Detected: ${actualGpu.type}`);
         }
       } else {
-        console.log(`[PoH-Miner] → Auto mode: QVAC will use GPU if available`);
+        console.log(`[DAI-Miner] → Auto mode: QVAC will use GPU if available`);
         if (actualGpu.available) {
-          console.log(`[PoH-Miner] → Detected GPU: ${actualGpu.type}`);
+          console.log(`[DAI-Miner] → Detected GPU: ${actualGpu.type}`);
         }
       }
     });
@@ -605,23 +605,23 @@ export class PohMinerNode {
       if (url && typeof url === 'string') {
         const envKey = `RPC_${chainId}`;
         process.env[envKey] = url;
-        console.log(`[PoH-Miner] Custom RPC for chain ${chainId} → ${url}`);
+        console.log(`[DAI-Miner] Custom RPC for chain ${chainId} → ${url}`);
       }
     }
     if (this.config.solanaRpc) {
       process.env.SOLANA_RPC = this.config.solanaRpc;
-      console.log(`[PoH-Miner] Custom Solana RPC → ${this.config.solanaRpc}`);
+      console.log(`[DAI-Miner] Custom Solana RPC → ${this.config.solanaRpc}`);
     }
 
     // Etherscan (and Etherscan-family) API key — used by many signals
     if (this.config.etherscanApiKey) {
       process.env.ETHERSCAN_API_KEY = this.config.etherscanApiKey;
-      console.log(`[PoH-Miner] Etherscan API key configured`);
+      console.log(`[DAI-Miner] Etherscan API key configured`);
     }
 
     // Also expose the new-style config for the GUI / external tools
     if (this.config.rpc && Object.keys(this.config.rpc).length > 0) {
-      process.env.POH_RPC_CONFIG = JSON.stringify(this.config.rpc);
+      process.env.DAI_RPC_CONFIG = JSON.stringify(this.config.rpc);
     }
   }
 
@@ -710,12 +710,12 @@ export class PohMinerNode {
     if (nvidiaRaw) {
       const name = nvidiaRaw.trim().split('\n')[0].trim().toLowerCase();
       const found = lookupName(name);
-      if (found) { console.log(`[PoH-Miner] TFLOPS: GPU "${name}" → ${found} TFLOPS`); return found; }
+      if (found) { console.log(`[DAI-Miner] TFLOPS: GPU "${name}" → ${found} TFLOPS`); return found; }
       // Unknown NVIDIA model — estimate from VRAM
       const vramRaw = this._runNvidiaSmi('--query-gpu=memory.total --format=csv,noheader,nounits', { encoding: 'utf8' });
       const vramMb = vramRaw ? parseInt(vramRaw.trim()) : 0;
       const est = vramMb >= 40000 ? 60 : vramMb >= 20000 ? 35 : vramMb >= 10000 ? 20 : vramMb >= 6000 ? 12 : 8;
-      console.log(`[PoH-Miner] TFLOPS: GPU "${name}" (~${Math.round(vramMb/1024)}GB VRAM) → ~${est} TFLOPS`);
+      console.log(`[DAI-Miner] TFLOPS: GPU "${name}" (~${Math.round(vramMb/1024)}GB VRAM) → ~${est} TFLOPS`);
       return est;
     }
 
@@ -724,7 +724,7 @@ export class PohMinerNode {
       const macName = this._macGpuName();
       if (macName) {
         const found = lookupName(macName);
-        if (found) { console.log(`[PoH-Miner] TFLOPS: Mac GPU "${macName}" → ${found} TFLOPS`); return found; }
+        if (found) { console.log(`[DAI-Miner] TFLOPS: Mac GPU "${macName}" → ${found} TFLOPS`); return found; }
       }
       if (process.arch === 'arm64') return 2.6; // conservative Apple Silicon fallback
     }
@@ -733,7 +733,7 @@ export class PohMinerNode {
     if (process.platform === 'win32') {
       for (const name of this._wmicGpuNames()) {
         const found = lookupName(name);
-        if (found) { console.log(`[PoH-Miner] TFLOPS: GPU "${name}" → ${found} TFLOPS`); return found; }
+        if (found) { console.log(`[DAI-Miner] TFLOPS: GPU "${name}" → ${found} TFLOPS`); return found; }
       }
     }
 
@@ -742,8 +742,8 @@ export class PohMinerNode {
       const rocmOut = _execSync('rocm-smi --showproductname', { timeout: 5000, encoding: 'utf8' });
       const name = (rocmOut.match(/GPU\[\d+\]\s*:\s*Card series:\s*(.+)/i) || [])[1]?.trim().toLowerCase() || '';
       const found = lookupName(name);
-      if (found) { console.log(`[PoH-Miner] TFLOPS: AMD GPU "${name}" → ${found} TFLOPS`); return found; }
-      if (name) { console.log(`[PoH-Miner] TFLOPS: AMD GPU "${name}" (unknown model) → ~10 TFLOPS`); return 10; }
+      if (found) { console.log(`[DAI-Miner] TFLOPS: AMD GPU "${name}" → ${found} TFLOPS`); return found; }
+      if (name) { console.log(`[DAI-Miner] TFLOPS: AMD GPU "${name}" (unknown model) → ~10 TFLOPS`); return 10; }
     } catch {}
 
     // 5. Linux Intel GPU via lspci (Iris Xe integrated + Arc discrete)
@@ -767,12 +767,12 @@ export class PohMinerNode {
           const gpuName = gpuLine.toLowerCase();
           for (const [key, tflops] of Object.entries(INTEL_TFLOPS)) {
             if (gpuName.includes(key)) {
-              console.log(`[PoH-Miner] TFLOPS: Intel GPU "${gpuLine.trim()}" → ${tflops} TFLOPS`);
+              console.log(`[DAI-Miner] TFLOPS: Intel GPU "${gpuLine.trim()}" → ${tflops} TFLOPS`);
               return tflops;
             }
           }
           // Unknown Intel GPU — report minimal compute
-          console.log(`[PoH-Miner] TFLOPS: Intel GPU detected (unknown model) → ~0.5 TFLOPS`);
+          console.log(`[DAI-Miner] TFLOPS: Intel GPU detected (unknown model) → ~0.5 TFLOPS`);
           return 0.5;
         }
       } catch {}
@@ -799,7 +799,7 @@ export class PohMinerNode {
     const perCore = (2 * N * N * N) / elapsed / 1e12; // TFLOPS, single thread
     const cores = Math.max(1, os.cpus()?.length || 1);
     const tflops = Math.round(perCore * cores * 1000) / 1000;
-    console.log(`[PoH-Miner] TFLOPS: CPU matmul → ${perCore.toFixed(4)}/core × ${cores} cores → ${tflops} TFLOPS`);
+    console.log(`[DAI-Miner] TFLOPS: CPU matmul → ${perCore.toFixed(4)}/core × ${cores} cores → ${tflops} TFLOPS`);
     return tflops || 0.001;
   }
 
@@ -849,7 +849,7 @@ export class PohMinerNode {
 
   /**
    * Ensures the miner has the minimum required RPC / API keys configured.
-   * Without these, many signals in the real POH checker will fail or return poor data.
+   * Without these, many signals in the real DAI checker will fail or return poor data.
    */
   _validateRequiredApiKeys() {
     // All signals have public-endpoint fallbacks; missing keys are fine at startup.
@@ -861,7 +861,7 @@ export class PohMinerNode {
     const hasEtherscan = !!(this.config.etherscanApiKey || process.env.ETHERSCAN_API_KEY);
 
     console.log(
-      `[PoH-Miner] API keys: solana=${hasSolanaRpc ? 'configured' : 'public fallback'} ` +
+      `[DAI-Miner] API keys: solana=${hasSolanaRpc ? 'configured' : 'public fallback'} ` +
       `evm=${hasEvmRpc ? 'configured' : 'public fallback'} ` +
       `etherscan=${hasEtherscan ? 'configured' : 'not set (enrichment signals disabled)'}`
     );
@@ -872,7 +872,7 @@ export class PohMinerNode {
   // has its own OS-level single-instance lock; this is the equivalent for
   // `node src/miner-node.js` / `node start.js` / the packaged binary).
   _acquireSingleInstanceLock() {
-    const lockPath = path.join(os.homedir(), '.poh-miner', 'miner.lock');
+    const lockPath = path.join(os.homedir(), '.dai-miner', 'miner.lock');
     try {
       fs.mkdirSync(path.dirname(lockPath), { recursive: true });
       if (fs.existsSync(lockPath)) {
@@ -882,12 +882,12 @@ export class PohMinerNode {
           try { process.kill(existingPid, 0); alive = true; } catch { alive = false; }
           if (alive) {
             const msg = `Another miner instance is already running (PID ${existingPid}) against this data directory. Refusing to start a second one — stop it first.`;
-            console.error(`[PoH-Miner] ${msg}`);
+            console.error(`[DAI-Miner] ${msg}`);
             const err = new Error(msg);
             err.code = 'MINER_LOCK_CONFLICT';
             throw err;
           }
-          console.log(`[PoH-Miner] Found a stale lock from PID ${existingPid} (process no longer running) — taking over.`);
+          console.log(`[DAI-Miner] Found a stale lock from PID ${existingPid} (process no longer running) — taking over.`);
         }
       }
       fs.writeFileSync(lockPath, String(process.pid));
@@ -903,12 +903,12 @@ export class PohMinerNode {
       process.on('SIGINT', () => { release(); process.exit(0); });
       process.on('SIGTERM', () => { release(); process.exit(0); });
     } catch (e) {
-      console.warn('[PoH-Miner] Could not acquire single-instance lock (continuing anyway):', e.message);
+      console.warn('[DAI-Miner] Could not acquire single-instance lock (continuing anyway):', e.message);
     }
   }
 
   async start() {
-    console.log('[PoH-Miner] Initializing...');
+    console.log('[DAI-Miner] Initializing...');
 
     // Refuse to start a second instance against the same wallet/chain data dir —
     // two processes writing the same JSON files (wallets, chain, config) at once
@@ -916,7 +916,7 @@ export class PohMinerNode {
     this._acquireSingleInstanceLock();
 
     // Validate that required API keys / RPCs are present before doing anything heavy.
-    // Many signals in the real POH checker require paid or reliable RPC endpoints.
+    // Many signals in the real DAI checker require paid or reliable RPC endpoints.
     this._validateRequiredApiKeys();
 
     // Bind the HTTP port immediately so nginx never 502 during the long startup
@@ -931,10 +931,10 @@ export class PohMinerNode {
     await this.detectLocation();
 
     // 2. Synchronize verified signals (CRITICAL - all miners must use the same set)
-    console.log('[PoH-Miner] Synchronizing verified signals...');
+    console.log('[DAI-Miner] Synchronizing verified signals...');
     this.methodsManager = await getMethodsManager();
     const status = this.methodsManager.getStatus();
-    console.log(`[PoH-Miner] Active signals: ${status.count} (hash=${status.hash}, source=${status.source})`);
+    console.log(`[DAI-Miner] Active signals: ${status.count} (hash=${status.hash}, source=${status.source})`);
 
     // 2c. Local IPFS (Kubo) — the write backend that makes chain/brain backups
     // work out of the box. Best-effort: if it can't start, pinning is skipped
@@ -981,8 +981,8 @@ export class PohMinerNode {
       const localRecords = this.jobResults ? Array.from(this.jobResults.values()) : [];
       await this.chatHistorySearch.reindexAll(this.chain, localRecords, this._encKeyFor(this.config.wallet));
     } catch (e) {
-      console.warn(`[PoH-Miner] Chat-history search disabled — Meilisearch unavailable: ${e.message}`);
-      console.warn('[PoH-Miner] Mining continues without search. Fix Meilisearch and restart to re-enable.');
+      console.warn(`[DAI-Miner] Chat-history search disabled — Meilisearch unavailable: ${e.message}`);
+      console.warn('[DAI-Miner] Mining continues without search. Fix Meilisearch and restart to re-enable.');
     }
 
     // 3. Connect to the P2P network
@@ -992,7 +992,7 @@ export class PohMinerNode {
     {
       const brainDir = getBrainDataDir();
       if (brainDir && this.peers?.length) {
-        pullDataset(this.peers, brainDir).catch(e => console.warn('[PoH-Miner] Dataset sync failed:', e.message));
+        pullDataset(this.peers, brainDir).catch(e => console.warn('[DAI-Miner] Dataset sync failed:', e.message));
       }
     }
 
@@ -1004,9 +1004,9 @@ export class PohMinerNode {
     // so it only forks itself against the network and forces constant reorgs on
     // reachable nodes. Follower mode still syncs the chain and computes jobs.
     const miningDisabled = this.config.mining === false || this.config.followerOnly === true
-      || process.env.POH_NO_MINING === '1';
+      || process.env.DAI_NO_MINING === '1';
     if (miningDisabled) {
-      console.log('[PoH-Miner] Follower-only mode — block production disabled (syncs + computes jobs, does not mine).');
+      console.log('[DAI-Miner] Follower-only mode — block production disabled (syncs + computes jobs, does not mine).');
     } else {
       this.startBlockProduction();
       // Proposers pull completed board results and pay the worker who computed
@@ -1019,9 +1019,9 @@ export class PohMinerNode {
     // rewards. Default on; disable with config.computeWorker === false.
     this.startBoardWorker();
 
-    console.log('[PoH-Miner] Node is live and ready to compute.');
-    console.log(`[PoH-Miner] Signals: ${this.methodsManager?.getStatus().hash} (${this.methodsManager?.getStatus().count} methods) | Region:`, this.myLatencyProfile?.region);
-    console.log(`[PoH-Miner] Discovered peers: ${this.peers.length}`);
+    console.log('[DAI-Miner] Node is live and ready to compute.');
+    console.log(`[DAI-Miner] Signals: ${this.methodsManager?.getStatus().hash} (${this.methodsManager?.getStatus().count} methods) | Region:`, this.myLatencyProfile?.region);
+    console.log(`[DAI-Miner] Discovered peers: ${this.peers.length}`);
 
     // Periodic reputation recovery for good behavior (software protection)
     setInterval(() => this.decayReputation(), 10 * 60 * 1000); // every 10 minutes
@@ -1030,7 +1030,7 @@ export class PohMinerNode {
 
   _startP2PPriceSampler() {
     if (this._p2pSampleTimer || !this.p2pPriceHistory) return;
-    const ms = Number(process.env.POH_P2P_SAMPLE_MS || 60_000);
+    const ms = Number(process.env.DAI_P2P_SAMPLE_MS || 60_000);
     const tick = () => {
       try { this.p2pPriceHistory.sample(this.p2pOrderStore); }
       catch (e) { console.warn('[P2P] price sample failed:', e.message); }
@@ -1083,7 +1083,7 @@ export class PohMinerNode {
         for (const t of stage) {
           if (t.kind === 'skill') {
             t.input = { ...globalInput, ...(t.input || {}) };
-            const SOCIAL_SKILLS = new Set(['read_farcaster','read_paragraph','read_zora','poh_identity']);
+            const SOCIAL_SKILLS = new Set(['read_farcaster','read_paragraph','read_zora','dai_identity']);
             if (SOCIAL_SKILLS.has(t.skillId) && !t.input.username && !t.input.address) {
               const skill = allSkills.find(s => s.id === t.skillId);
               const triggerWords = new Set((skill?.triggers || []).map(x => x.toLowerCase().split(/\s+/)).flat());
@@ -1192,10 +1192,10 @@ export class PohMinerNode {
         _execSync(`"${fw}" --add "${bin}"`, { stdio: 'ignore', timeout: 5000 });
         _execSync(`"${fw}" --unblockapp "${bin}"`, { stdio: 'ignore', timeout: 5000 });
       } else if (p === 'linux') {
-        try { _execSync(`ufw allow ${port}/tcp comment poh-miner`, { stdio: 'ignore', timeout: 5000 }); } catch {}
+        try { _execSync(`ufw allow ${port}/tcp comment dai-miner`, { stdio: 'ignore', timeout: 5000 }); } catch {}
         try { _execSync(`iptables -C INPUT -p tcp --dport ${port} -j ACCEPT 2>/dev/null || iptables -I INPUT -p tcp --dport ${port} -j ACCEPT`, { stdio: 'ignore', timeout: 5000 }); } catch {}
       } else if (p === 'win32') {
-        _execSync(`netsh advfirewall firewall add rule name="PoH Miner API" dir=in action=allow protocol=TCP localport=${port}`, { stdio: 'ignore', timeout: 5000 });
+        _execSync(`netsh advfirewall firewall add rule name="DAI Miner API" dir=in action=allow protocol=TCP localport=${port}`, { stdio: 'ignore', timeout: 5000 });
       }
     } catch { /* no firewall access — OS may still allow it */ }
   }
@@ -1217,7 +1217,7 @@ export class PohMinerNode {
 
       // Health probe used by SDK node-discovery (HEAD or GET /healthz)
       if (url.pathname === '/healthz') {
-        return res.end(JSON.stringify({ status: 'ok', node: 'poh-miner' }));
+        return res.end(JSON.stringify({ status: 'ok', node: 'dai-miner' }));
       }
 
       if (req.method === 'GET' && url.pathname === '/api/miner/info') {
@@ -1247,9 +1247,9 @@ export class PohMinerNode {
           return res.end(JSON.stringify({ error: 'address required' }));
         }
         const confirmed  = this._confirmedBalance(address);
-        const pendingOut = this.txMempool ? (this.txMempool.pendingOut.get(`${address}:POH`) || 0) : 0;
+        const pendingOut = this.txMempool ? (this.txMempool.pendingOut.get(`${address}:DAI`) || 0) : 0;
         const pendingIn  = this.txMempool
-          ? this.txMempool.getPending(1000).filter(tx => tx.to === address && normalizeCurrency(tx.currency) === 'POH').reduce((s, tx) => s + tx.amount, 0)
+          ? this.txMempool.getPending(1000).filter(tx => tx.to === address && normalizeCurrency(tx.currency) === 'DAI').reduce((s, tx) => s + tx.amount, 0)
           : 0;
         const balance = Math.max(0, confirmed - pendingOut + pendingIn);
         // Per-asset balances (stablecoins). Raw integer units + display value.
@@ -1329,7 +1329,7 @@ export class PohMinerNode {
 
       // Sign a job payment proof using THIS node's own wallet — for the common case
       // of a local UI (desktop/mobile chat) paying a job out of its own node's balance.
-      // Localhost-only: this signs away POH on request, so it must never be reachable
+      // Localhost-only: this signs away DAI on request, so it must never be reachable
       // from outside the machine running the node.
       if (req.method === 'POST' && url.pathname === '/api/wallet/sign-job-payment') {
         if (!isTrulyLocalRequest(req)) {
@@ -1340,7 +1340,7 @@ export class PohMinerNode {
         req.on('data', c => body += c);
         req.on('end', () => {
           try {
-            const { jobId, amount, currency = 'POH' } = JSON.parse(body);
+            const { jobId, amount, currency = 'DAI' } = JSON.parse(body);
             if (!jobId || !(amount > 0)) {
               res.statusCode = 400;
               return res.end(JSON.stringify({ error: 'jobId and amount (>0) are required' }));
@@ -1354,7 +1354,7 @@ export class PohMinerNode {
             if (wallet) wallet = this.walletManager.ensureCanonicalAddress(wallet);
             const requesterAddress = wallet?.address
               || Wallet.deriveAddressFromSigningKey(wallet?.signingPublicKey)
-              || this.config.pohWallet
+              || this.config.daiWallet
               || this.config.wallet;
             wallet = wallet || this.walletManager.resolveWallet(requesterAddress);
             if (!wallet) {
@@ -1409,7 +1409,7 @@ export class PohMinerNode {
 
       // Balance journal history for the sidebar transaction feed
       if (url.pathname === '/api/wallet/history') {
-        const address = url.searchParams.get('address') || (this.config.pohWallet || this.config.wallet);
+        const address = url.searchParams.get('address') || (this.config.daiWallet || this.config.wallet);
         const limit   = parseInt(url.searchParams.get('limit') || '30', 10);
         const entries = (this.balanceJournal?._entries || [])
           .filter(e => !address || e.address === address)
@@ -1425,7 +1425,7 @@ export class PohMinerNode {
         return res.end(JSON.stringify({ address, entries }));
       }
 
-      // Send endpoint — builds, signs, and submits a proper on-chain PoHTransaction.
+      // Send endpoint — builds, signs, and submits a proper on-chain DAITransaction.
       // For local wallets (created by this node) the signing key is on disk; for external
       // wallets that registered a key via /api/wallet/register-key this also works.
       // POST /api/wallet/rebuild — recompute wallet balances from the canonical chain.
@@ -1442,7 +1442,7 @@ export class PohMinerNode {
           }));
         }
         this._lastBalanceRebuildAt = now;
-        this._rebuildBalancesFromChain().catch(e => console.warn('[PoH-Miner] API-triggered balance rebuild failed:', e.message));
+        this._rebuildBalancesFromChain().catch(e => console.warn('[DAI-Miner] API-triggered balance rebuild failed:', e.message));
         res.statusCode = 202;
         return res.end(JSON.stringify({ ok: true, status: 'rebuilding' }));
       }
@@ -1469,13 +1469,13 @@ export class PohMinerNode {
         req.on('data', chunk => body += chunk);
         req.on('end', async () => {
           try {
-            const { from, to, amount, fee = 0, memo = '', currency = 'POH', idempotencyKey } = JSON.parse(body);
+            const { from, to, amount, fee = 0, memo = '', currency = 'DAI', idempotencyKey } = JSON.parse(body);
             const cur = normalizeCurrency(currency);
             if (!isKnownAsset(cur)) {
               res.statusCode = 400;
               return res.end(JSON.stringify({ error: `Unknown currency "${currency}". See /api/assets.` }));
             }
-            // Display → raw units at the asset's own decimals (POH ×1e9, stables ×100)
+            // Display → raw units at the asset's own decimals (DAI ×1e9, stables ×100)
             const amt = Math.round(parseFloat(amount) * 10 ** decimalsOf(cur));
 
             if (!from || !to || !amt || amt <= 0) {
@@ -1501,7 +1501,7 @@ export class PohMinerNode {
             } else {
               const dup = this.txMempool.getPending(1000).find(t =>
                 t.from === from && t.to === to && t.amount === amt && (t.memo || '') === (memo || '') &&
-                (t.currency || 'POH') === cur);
+                (t.currency || 'DAI') === cur);
               if (dup) {
                 return res.end(JSON.stringify({ success: true, txHash: dup.txHash, status: 'pending', idempotent: true, message: 'Identical transfer already pending — not resent' }));
               }
@@ -1516,7 +1516,7 @@ export class PohMinerNode {
             const confirmedNonce = this._confirmedNonce(from);
             const pendingNonce   = this.txMempool.accountPendingNonce.get(from) ?? confirmedNonce;
             const nonce = pendingNonce + 1;
-            const tx = new PoHTransaction({ from, to, amount: amt, fee, nonce, memo, currency: cur });
+            const tx = new DAITransaction({ from, to, amount: amt, fee, nonce, memo, currency: cur });
             tx.sign(senderWallet);
 
             const submitResult = this.txMempool.submit(tx);
@@ -1532,7 +1532,7 @@ export class PohMinerNode {
             this.gossip.publish('new-tx', tx.toJSON()).catch(() => {});
 
             // Also relay directly to bootnodes — gossip peer records use "localhost"
-            // (no POH_PUBLIC_HOST set), so P2P gossip stays local. Direct bootnode
+            // (no DAI_PUBLIC_HOST set), so P2P gossip stays local. Direct bootnode
             // relay ensures active miners on the public network see the tx.
             const txJSON = tx.toJSON();
             for (const bootnode of (this.config.bootnodes || [])) {
@@ -1554,7 +1554,7 @@ export class PohMinerNode {
       }
 
       // === Job endpoints: "search -> check status -> verdict/profile/evidence" ===
-      // These are available on *every* poh-miner node. Frontend (or any client) can
+      // These are available on *every* dai-miner node. Frontend (or any client) can
       // discover nodes via bootnode /peers then talk directly to e.g. http://<host>:<walletApiPort>/job
       // for a self-contained verdict flow without going through central checker.
 
@@ -1589,7 +1589,7 @@ export class PohMinerNode {
             if (feeRequired && !(rawJob.maxBudget > 0)) {
               res.statusCode = 402;
               return res.end(JSON.stringify({
-                error: `${rawJob.type} jobs require a fee (maxBudget > 0) paid in POH. The default LLM chat is free, but real compute tips the developer/dataset and the miner.`,
+                error: `${rawJob.type} jobs require a fee (maxBudget > 0) paid in DAI. The default LLM chat is free, but real compute tips the developer/dataset and the miner.`,
                 code: 'FEE_REQUIRED',
               }));
             }
@@ -1616,7 +1616,7 @@ export class PohMinerNode {
               return res.end(JSON.stringify({ error: 'payload.address is required for verdict jobs' }));
             }
 
-            // Fee currency — POH by default; any registered stablecoin accepted.
+            // Fee currency — DAI by default; any registered stablecoin accepted.
             // The miner receives EXACTLY the currency paid (no conversion).
             job.currency = normalizeCurrency(job.currency);
             if (!isKnownAsset(job.currency)) {
@@ -1628,7 +1628,7 @@ export class PohMinerNode {
               // Fee floor: the escrowed budget must cover at least the AI tokens this job
               // will use, priced per currency (config.gasPrices overridable). A job can
               // never be settled for less than the tokens it consumes.
-              const gasPrice = job.currency === 'POH'
+              const gasPrice = job.currency === 'DAI'
                 ? (this.config.gasPrice || GAS.DEFAULT_GAS_PRICE)
                 : gasPriceFor(job.currency, this.config);
               const minTokens = estimateTokens(0, job.payload?.address);
@@ -1716,10 +1716,10 @@ export class PohMinerNode {
               }
 
               // Balance check — in the job's fee currency
-              const balance = this._confirmedBalance(job.requesterAddress, job.currency || 'POH');
+              const balance = this._confirmedBalance(job.requesterAddress, job.currency || 'DAI');
               if (balance < job.maxBudget) {
                 res.statusCode = 402;
-                return res.end(JSON.stringify({ error: 'Insufficient balance', balance, required: job.maxBudget, currency: job.currency || 'POH' }));
+                return res.end(JSON.stringify({ error: 'Insufficient balance', balance, required: job.maxBudget, currency: job.currency || 'DAI' }));
               }
 
               job._paymentTxHash = paymentTx?.txHash || null;
@@ -1728,9 +1728,9 @@ export class PohMinerNode {
 
             // Skill jobs may not have an address — skip address-specific processing
             if (job.type !== 'skill' && job.payload?.address) {
-              // Allow username/handle queries (e.g. "KsaRedFx") — real-poh adapter will
+              // Allow username/handle queries (e.g. "KsaRedFx") — real-dai adapter will
               // resolve via IdentityHub. Skip chain detection for non-address queries.
-              const queryLooksLikeAddress = /^(0x[0-9a-fA-F]{40}|[1-9A-HJ-NP-Za-km-z]{32,44}|(bc1|[13])[a-zA-HJ-NP-Z0-9]{25,87}|(EQ|UQ)[A-Za-z0-9+/=_-]{46}|poh[0-9a-f]{40})$/i.test(job.payload.address.trim());
+              const queryLooksLikeAddress = /^(0x[0-9a-fA-F]{40}|[1-9A-HJ-NP-Za-km-z]{32,44}|(bc1|[13])[a-zA-HJ-NP-Z0-9]{25,87}|(EQ|UQ)[A-Za-z0-9+/=_-]{46}|dai[0-9a-f]{40})$/i.test(job.payload.address.trim());
               const queryLooksLikeDomain = /^[a-zA-Z0-9_-]+\.[a-zA-Z0-9]+$/.test(job.payload.address.trim()) && !queryLooksLikeAddress;
 
               // Auto-detect chain type from address format if no chainFilter was specified.
@@ -1743,7 +1743,7 @@ export class PohMinerNode {
               }
             }
 
-            console.log(`[PoH-Miner] Received job via ${url.pathname}: ${job.id} (${job.type}) for ${job.payload?.address || job.skillId || 'skill-job'}` + (job.payload?.chainFilter ? ` [chain:${job.payload.chainFilter}]` : ''));
+            console.log(`[DAI-Miner] Received job via ${url.pathname}: ${job.id} (${job.type}) for ${job.payload?.address || job.skillId || 'skill-job'}` + (job.payload?.chainFilter ? ` [chain:${job.payload.chainFilter}]` : ''));
 
             // Record for status polling immediately (non-blocking)
             this._recordJob(job);
@@ -1834,7 +1834,7 @@ export class PohMinerNode {
               jobId,
               status: hist.isValid ? 'done' : 'error',
               isValid: hist.isValid,
-              realPohUsed: hist.realPohUsed,
+              realDAIUsed: hist.realDAIUsed,
               signalsEvaluated: hist.signalsEvaluated,
               liveCount: hist.liveCount,
               note: 'limited info from legacy history; full result may be in chain or logs'
@@ -1907,7 +1907,7 @@ export class PohMinerNode {
               methodsHash: r.methodsHash,
               methodsCount: r.methodsCount,
               computationTimeMs: r.computationTimeMs,
-              realPohUsed: r.realPohUsed,
+              realDAIUsed: r.realDAIUsed,
               modelUsed: r.modelUsed,
               isValidWork: r.isValidWork,
             },
@@ -1987,7 +1987,7 @@ export class PohMinerNode {
             // Slash own reputation if the negative feedback targets this node's work
             if (transition.rating === 'negative' && transition.minerAddress === this.config.wallet) {
               this.applySlashing(0.05);
-              console.log(`[PoH-Miner] Reputation slashed (${hasStars ? stars + '★' : 'dislike'} on job ${jobId}): ${this.reputation.toFixed(3)}`);
+              console.log(`[DAI-Miner] Reputation slashed (${hasStars ? stars + '★' : 'dislike'} on job ${jobId}): ${this.reputation.toFixed(3)}`);
             }
             res.end(JSON.stringify({ ok: true, jobId, rating, stars: transition.stars }));
 
@@ -2011,7 +2011,7 @@ export class PohMinerNode {
                     this.peers, this.config.bootnodes
                   ).catch(() => {});
                 }
-              }).catch(e => console.warn('[PoH-Miner] Brain update from job feedback failed:', e.message));
+              }).catch(e => console.warn('[DAI-Miner] Brain update from job feedback failed:', e.message));
             }
             return;
           } catch (e) {
@@ -2049,7 +2049,7 @@ export class PohMinerNode {
           ...s,
           activeJobs: active,
           walletApiPort: port,
-          version: 'poh-miner-network',
+          version: 'dai-miner-network',
           installedHfDatasets,
         }));
       }
@@ -2066,7 +2066,7 @@ export class PohMinerNode {
               return res.end(JSON.stringify({ error: 'address and token required' }));
             }
             this.pushTokens.set(address, { token, platform: platform || 'unknown', registeredAt: Date.now() });
-            console.log(`[PoH-Miner] Push token registered for ${address.slice(0, 12)}… (${platform})`);
+            console.log(`[DAI-Miner] Push token registered for ${address.slice(0, 12)}… (${platform})`);
             res.end(JSON.stringify({ ok: true }));
           } catch (e) {
             res.statusCode = 400;
@@ -2126,7 +2126,7 @@ export class PohMinerNode {
               } catch { /* skip failed batch */ }
             }
 
-            console.log(`[PoH-Miner] Push sent: "${title}" → ${sent}/${targets.length} tokens`);
+            console.log(`[DAI-Miner] Push sent: "${title}" → ${sent}/${targets.length} tokens`);
             res.end(JSON.stringify({ ok: true, sent, total: targets.length }));
           } catch (e) {
             res.statusCode = 500;
@@ -2150,7 +2150,7 @@ export class PohMinerNode {
         req.on('end', () => {
           try {
             const txData = JSON.parse(body);
-            const tx = PoHTransaction.fromJSON(txData);
+            const tx = DAITransaction.fromJSON(txData);
             const result = this.txMempool.submit(tx);
             if (result === true) {
               // Gossip to peers so all miners can include it
@@ -2362,18 +2362,18 @@ export class PohMinerNode {
 
       // ── OpenAI-compatible API (/v1/models, /v1/chat/completions) ─────────────
       // Public compute surface. Local/private calls run free on the operator's own
-      // node; REMOTE calls must carry a signed per-request bid (poh.paymentTx) and
-      // are billed in μPOH at the tokens consumed — no refund, the whole bid is the
+      // node; REMOTE calls must carry a signed per-request bid (dai.paymentTx) and
+      // are billed in μDAI at the tokens consumed — no refund, the whole bid is the
       // fee (overpaying buys queue priority, see the job-board fee race). The
       // response carries an OpenAI-shaped `usage` block metered from the real run,
-      // plus X-POH-Fee / X-POH-Model headers.
+      // plus X-DAI-Fee / X-DAI-Model headers.
       if (url.pathname === '/v1/models') {
         const sendJson = (code, obj) => { res.statusCode = code; res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify(obj)); };
         (async () => {
           try {
             const qvac = await getQvacModels();
             const list = qvac ? await qvac.listModels() : [];
-            sendJson(200, { object: 'list', data: list.map(m => ({ id: m.name, object: 'model', created: 0, owned_by: 'poh', label: m.label, loaded: m.loaded })) });
+            sendJson(200, { object: 'list', data: list.map(m => ({ id: m.name, object: 'model', created: 0, owned_by: 'dai', label: m.label, loaded: m.loaded })) });
           } catch (e) {
             sendJson(502, { error: { message: 'QVAC unavailable: ' + e.message, type: 'server_error' } });
           }
@@ -2397,15 +2397,15 @@ export class PohMinerNode {
             if (!qvac || !qvac.ENABLED) return oaiError(503, 'Inference backend (QVAC) is unavailable', 'server_error');
             const model = payload.model || this.config.model || 'qwen3-1.7b';
 
-            // Payment envelope: body.poh { jobId, requesterAddress, maxBudget, paymentTx }
+            // Payment envelope: body.dai { jobId, requesterAddress, maxBudget, paymentTx }
             // (headers accepted as an alternative for OpenAI SDKs that can't extend the body).
-            const poh = payload.poh || {};
-            const jobId            = poh.jobId            || req.headers['x-poh-job-id'] || null;
-            const requesterAddress = poh.requesterAddress || req.headers['x-poh-requester'] || null;
-            const maxBudget        = Number(poh.maxBudget != null ? poh.maxBudget : req.headers['x-poh-max-budget']) || 0;
-            let   paymentTx        = poh.paymentTx || null;
-            if (!paymentTx && req.headers['x-poh-payment']) {
-              try { paymentTx = JSON.parse(req.headers['x-poh-payment']); } catch { /* malformed header — treated as missing proof */ }
+            const dai = payload.dai || {};
+            const jobId            = dai.jobId            || req.headers['x-dai-job-id'] || null;
+            const requesterAddress = dai.requesterAddress || req.headers['x-dai-requester'] || null;
+            const maxBudget        = Number(dai.maxBudget != null ? dai.maxBudget : req.headers['x-dai-max-budget']) || 0;
+            let   paymentTx        = dai.paymentTx || null;
+            if (!paymentTx && req.headers['x-dai-payment']) {
+              try { paymentTx = JSON.parse(req.headers['x-dai-payment']); } catch { /* malformed header — treated as missing proof */ }
             }
 
             const buildResponse = (text, usage) => ({
@@ -2421,16 +2421,16 @@ export class PohMinerNode {
             if (isTrulyLocalRequest(req) && !requesterAddress) {
               const usage = await qvac.chat(messages, { model, timeLimit: 90_000, withUsage: true });
               if (usage == null || usage.text == null) return oaiError(503, `Model "${model}" produced no output`, 'server_error');
-              res.setHeader('X-POH-Model', model);
-              res.setHeader('X-POH-Fee', '0');
+              res.setHeader('X-DAI-Model', model);
+              res.setHeader('X-DAI-Fee', '0');
               return sendJson(200, buildResponse(usage.text, usage));
             }
 
             // Remote → require a signed bid and bill it.
             const r = await this._runPaidCompute({ jobId, requesterAddress, maxBudget, paymentTx, messages, model });
             if (r.error) return oaiError(r.status || 402, r.error, 'payment_required', { code: r.code, minFee: r.minFee, minTokens: r.minTokens });
-            res.setHeader('X-POH-Model', r.model);
-            res.setHeader('X-POH-Fee', String(r.fee));
+            res.setHeader('X-DAI-Model', r.model);
+            res.setHeader('X-DAI-Fee', String(r.fee));
             return sendJson(200, buildResponse(r.text, r.usage));
           } catch (e) {
             return oaiError(400, e.message);
@@ -2609,8 +2609,8 @@ export class PohMinerNode {
           skills,
           stakeVault: this.SKILL_STAKE_VAULT,
           economics: {
-            proposeFeePoh: SKILL_PROPOSE_FEE_POH,
-            graduationThresholdPoh: SKILL_GRADUATION_THRESHOLD_POH,
+            proposeFeeDai: SKILL_PROPOSE_FEE_DAI,
+            graduationThresholdDai: SKILL_GRADUATION_THRESHOLD_DAI,
           },
         }));
       }
@@ -2695,7 +2695,7 @@ export class PohMinerNode {
             }
             if (!message) message = 'Please analyze the attached file(s).';
 
-            const requesterAddress = reqRequester || (!isPrivate ? (this.config.pohWallet || this.config.wallet) : null);
+            const requesterAddress = reqRequester || (!isPrivate ? (this.config.daiWallet || this.config.wallet) : null);
 
             if (!skipHistoryMatch && this.chatHistorySearch?.enabled) {
               try {
@@ -2910,7 +2910,7 @@ export class PohMinerNode {
                       'Approve the download prompt in Chat, or',
                       `POST /api/hf-dataset/${datasetId}/download on your miner API`,
                       'Settings → Datasets lists installed copies',
-                      'Stored under ~/.poh-miner/brain-data/hf-datasets/',
+                      'Stored under ~/.dai-miner/brain-data/hf-datasets/',
                     ].join(' '),
                   }));
                 }
@@ -3100,12 +3100,12 @@ export class PohMinerNode {
             const isPrivate = !!payload.private;
             if (!manifest?.id) { res.statusCode = 400; return res.end(JSON.stringify({ error: 'manifest.id required' })); }
 
-            // Public proposals cost SKILL_PROPOSE_FEE_POH (escrowed for code_audit)
-            const PROPOSE_FEE = SKILL_PROPOSE_FEE_UPOH;
+            // Public proposals cost SKILL_PROPOSE_FEE_DAI (escrowed for code_audit)
+            const PROPOSE_FEE = SKILL_PROPOSE_FEE_UDAI;
             if (!isPrivate) {
               if (!requesterAddress) {
                 res.statusCode = 402;
-                return res.end(JSON.stringify({ error: `requesterAddress required to pay the ${SKILL_PROPOSE_FEE_POH} POH proposal fee` }));
+                return res.end(JSON.stringify({ error: `requesterAddress required to pay the ${SKILL_PROPOSE_FEE_DAI} DAI proposal fee` }));
               }
               const balance = this.walletManager.getBalance(requesterAddress);
               if (balance < PROPOSE_FEE) {
@@ -3151,7 +3151,7 @@ export class PohMinerNode {
               this._pendingProposals.set(auditJobId, { manifest, code, context, authorSignature, proposerAddress: requesterAddress });
               // Fire local compute in background (this node competes too)
               setImmediate(() => this._processJobInBackground(auditJob).catch(() => {}));
-              return res.end(JSON.stringify({ pending: true, jobId: auditJobId, skillId: manifest.id, message: `Skill submitted for network security audit. ${SKILL_PROPOSE_FEE_POH} POH escrowed. Result will be broadcast once an auditing miner completes the job.` }));
+              return res.end(JSON.stringify({ pending: true, jobId: auditJobId, skillId: manifest.id, message: `Skill submitted for network security audit. ${SKILL_PROPOSE_FEE_DAI} DAI escrowed. Result will be broadcast once an auditing miner completes the job.` }));
             }
 
             // No sandboxed code (context-only skill) — publish immediately
@@ -3201,10 +3201,10 @@ export class PohMinerNode {
             if (!amount || amount <= 0) { res.statusCode = 400; return res.end(JSON.stringify({ error: 'amount must be positive' })); }
 
             // Staker is always this node's own wallet — staking is a local-node action
-            const stakerAddress = this.config.pohWallet || this.config.wallet;
+            const stakerAddress = this.config.daiWallet || this.config.wallet;
             if (!stakerAddress) { res.statusCode = 400; return res.end(JSON.stringify({ error: 'node wallet not initialized' })); }
 
-            const amountRaw = Math.round(parseFloat(amount) * POH_DECIMALS);
+            const amountRaw = Math.round(parseFloat(amount) * DAI_DECIMALS);
 
             // Debit node wallet → credit stake vault. Balance change is immediate;
             // the on-chain record is the skill-staked stateTransition in the next block.
@@ -3221,7 +3221,7 @@ export class PohMinerNode {
             entry.stakers.set(stakerAddress, (entry.stakers.get(stakerAddress) || 0) + amountRaw);
             entry.total = (entry.total || 0) + amountRaw;
 
-            if (entry.total >= SKILL_GRADUATION_THRESHOLD_UPOH) {
+            if (entry.total >= SKILL_GRADUATION_THRESHOLD_UDAI) {
               const skill = skillsManager.getAllSkills().find(s => s.id === skillId);
               if (skill && skill.status !== 'active') {
                 const transition = { type: 'skill-graduated', skillId };
@@ -3246,7 +3246,7 @@ export class PohMinerNode {
               skillId, stakerAddress, amount: amountRaw, txHash,
               signature: stakeSignature, signingPublicKey: stakeSigningPublicKey,
             }).catch(() => {});
-            console.log(`[PoH-Miner] Skill stake: ${(amountRaw / POH_DECIMALS).toFixed(2)} POH → ${skillId} (staker=${stakerAddress.slice(0,10)}…)`);
+            console.log(`[DAI-Miner] Skill stake: ${(amountRaw / DAI_DECIMALS).toFixed(2)} DAI → ${skillId} (staker=${stakerAddress.slice(0,10)}…)`);
             return res.end(JSON.stringify({ ok: true, total: entry.total, myStake: entry.stakers.get(stakerAddress), txHash }));
           } catch (e) { res.statusCode = 400; res.end(JSON.stringify({ error: e.message })); }
         });
@@ -3264,10 +3264,10 @@ export class PohMinerNode {
             const { amount } = JSON.parse(body || '{}');
             if (!amount || amount <= 0) { res.statusCode = 400; return res.end(JSON.stringify({ error: 'amount must be positive' })); }
 
-            const stakerAddress = this.config.pohWallet || this.config.wallet;
+            const stakerAddress = this.config.daiWallet || this.config.wallet;
             if (!stakerAddress) { res.statusCode = 400; return res.end(JSON.stringify({ error: 'node wallet not initialized' })); }
 
-            const amountRaw = Math.round(parseFloat(amount) * POH_DECIMALS);
+            const amountRaw = Math.round(parseFloat(amount) * DAI_DECIMALS);
             const entry = this._skillStakes.get(skillId);
             const currentStake = entry?.stakers?.get(stakerAddress) || 0;
             if (currentStake < amountRaw) { res.statusCode = 400; return res.end(JSON.stringify({ error: 'insufficient stake' })); }
@@ -3287,7 +3287,7 @@ export class PohMinerNode {
             this.pendingBrainTransitions.push(unstakeTransition);
             this._appliedStakeTxs.add(txHash);
             this.gossip.publish('skill-unstaked', { skillId, stakerAddress, amount: amountRaw, total: entry.total, txHash }).catch(() => {});
-            console.log(`[PoH-Miner] Skill unstake: ${(amountRaw / POH_DECIMALS).toFixed(2)} POH returned from ${skillId} (staker=${stakerAddress.slice(0,10)}…)`);
+            console.log(`[DAI-Miner] Skill unstake: ${(amountRaw / DAI_DECIMALS).toFixed(2)} DAI returned from ${skillId} (staker=${stakerAddress.slice(0,10)}…)`);
             return res.end(JSON.stringify({ ok: true, total: entry.total, myStake: entry.stakers.get(stakerAddress), txHash }));
           } catch (e) { res.statusCode = 400; res.end(JSON.stringify({ error: e.message })); }
         });
@@ -3599,9 +3599,9 @@ export class PohMinerNode {
       }
 
       // GET /api/p2p/candles — mid-price snapshot OHLC. ?pair=BASE-QUOTE or
-      // ?quoteCurrency= (+ optional ?baseAsset=POH). interval=1m|1h|1d, limit<=1000.
+      // ?quoteCurrency= (+ optional ?baseAsset=DAI). interval=1m|1h|1d, limit<=1000.
       if (req.method === 'GET' && url.pathname === '/api/p2p/candles') {
-        let baseAsset = url.searchParams.get('baseAsset') || 'POH';
+        let baseAsset = url.searchParams.get('baseAsset') || 'DAI';
         let quoteCurrency = url.searchParams.get('quoteCurrency');
         const pairParam = url.searchParams.get('pair');
         if (pairParam) {
@@ -3633,12 +3633,12 @@ export class PohMinerNode {
 
       // GET /api/p2p/price — reference price for a (baseAsset, quoteCurrency) pair,
       // derived ONLY from the best open P2P order(s). ?quoteCurrency= for a single
-      // quote, ?baseAsset= to price a stablecoin (default POH), omit for a map.
+      // quote, ?baseAsset= to price a stablecoin (default DAI), omit for a map.
       if (req.method === 'GET' && url.pathname === '/api/p2p/price') {
         const quoteCurrency = url.searchParams.get('quoteCurrency') || null;
-        const baseAsset     = url.searchParams.get('baseAsset') || 'POH';
+        const baseAsset     = url.searchParams.get('baseAsset') || 'DAI';
         return res.end(JSON.stringify({
-          poh: this.p2pOrderStore.getReferencePrice(quoteCurrency, baseAsset),
+          dai: this.p2pOrderStore.getReferencePrice(quoteCurrency, baseAsset),
           note: 'On-chain assets have no fixed price — the market (best P2P order) defines it.',
         }));
       }
@@ -3680,11 +3680,11 @@ export class PohMinerNode {
         readBody().then(body => {
           const { address, signingPublicKey, signature, timestamp, ...orderFields } = body;
           const auth = verifyP2PAuth(address, signingPublicKey, signature,
-            { address, timestamp, action: 'create-order', side: orderFields.side, pohAmount: orderFields.pohAmount });
+            { address, timestamp, action: 'create-order', side: orderFields.side, daiAmount: orderFields.daiAmount });
           if (auth.error) { res.statusCode = 401; return res.end(JSON.stringify(auth)); }
           const ownerAddress = auth.address;
 
-          const baseAsset = orderFields.baseAsset || 'POH';
+          const baseAsset = orderFields.baseAsset || 'DAI';
           // Atomic (on-chain quote) swaps are sell-side only: the maker escrows the
           // base at creation and the taker's quote debits at select — both parties'
           // authorizations exist at the moment funds move. A "buy X with Y" is the
@@ -3696,14 +3696,14 @@ export class PohMinerNode {
 
           // For sell orders: lock the BASE asset in escrow now
           if (orderFields.side === 'sell') {
-            const lockResult = this.p2pEscrow.lock(this.walletManager, ownerAddress, orderFields.pohAmount, baseAsset);
+            const lockResult = this.p2pEscrow.lock(this.walletManager, ownerAddress, orderFields.daiAmount, baseAsset);
             if (lockResult !== true) { res.statusCode = 400; return res.end(JSON.stringify(lockResult)); }
           }
 
           const result = this.p2pOrderStore.createOrder({ maker: ownerAddress, ...orderFields });
           if (result.error) {
             // Refund escrow if order creation failed after locking
-            if (orderFields.side === 'sell') this.p2pEscrow.release(this.walletManager, ownerAddress, orderFields.pohAmount, baseAsset);
+            if (orderFields.side === 'sell') this.p2pEscrow.release(this.walletManager, ownerAddress, orderFields.daiAmount, baseAsset);
             res.statusCode = 400; return res.end(JSON.stringify(result));
           }
 
@@ -3735,19 +3735,19 @@ export class PohMinerNode {
             if (order.maker !== ownerAddress && order.maker !== address) { res.statusCode = 403; return res.end(JSON.stringify({ error: 'not your order' })); }
 
             // Capture before cancelOrder mutates the object in-place via Object.assign
-            const { side: orderSide, escrowLocked: wasEscrowLocked, pohAmount: orderPohAmount } = order;
-            const cancelBase = order.baseAsset || 'POH';
+            const { side: orderSide, escrowLocked: wasEscrowLocked, daiAmount: orderDAIAmount } = order;
+            const cancelBase = order.baseAsset || 'DAI';
 
             const result = this.p2pOrderStore.cancelOrder(orderId);
             if (result.error) { res.statusCode = 400; return res.end(JSON.stringify(result)); }
 
             // Refund escrow for sell orders (in the order's base asset)
             if (orderSide === 'sell' && wasEscrowLocked) {
-              this.p2pEscrow.release(this.walletManager, ownerAddress, orderPohAmount, cancelBase);
+              this.p2pEscrow.release(this.walletManager, ownerAddress, orderDAIAmount, cancelBase);
             }
             // Refund escrow for buy orders where taker locked (handled in trade cancel)
             this._appliedP2PIds.add(`order-cancel-${orderId}`);
-            this.pendingBrainTransitions.push({ type: 'p2p-order-cancelled', orderId, maker: ownerAddress, side: orderSide, escrowLocked: wasEscrowLocked, pohAmount: orderPohAmount, ...(cancelBase !== 'POH' ? { baseAsset: cancelBase } : {}), updatedAt: Date.now() });
+            this.pendingBrainTransitions.push({ type: 'p2p-order-cancelled', orderId, maker: ownerAddress, side: orderSide, escrowLocked: wasEscrowLocked, daiAmount: orderDAIAmount, ...(cancelBase !== 'DAI' ? { baseAsset: cancelBase } : {}), updatedAt: Date.now() });
             this.gossip.publish('p2p-order', result.order).catch(() => {});
             return res.end(JSON.stringify(result));
           }).catch(e => { res.statusCode = 400; res.end(JSON.stringify({ error: e.message })); });
@@ -3757,21 +3757,21 @@ export class PohMinerNode {
         // POST /api/p2p/orders/:id/select — taker selects order
         if (action === 'select') {
           readBody().then(body => {
-            const { address, signingPublicKey, signature, timestamp, pohAmount, quoteAmount, takerPayoutAddress } = body;
+            const { address, signingPublicKey, signature, timestamp, daiAmount, quoteAmount, takerPayoutAddress } = body;
             const auth = verifyP2PAuth(address, signingPublicKey, signature,
-              { address, timestamp, action: 'select-order', orderId, pohAmount, quoteAmount });
+              { address, timestamp, action: 'select-order', orderId, daiAmount, quoteAmount });
             if (auth.error) { res.statusCode = 401; return res.end(JSON.stringify(auth)); }
             const ownerAddress = auth.address;
 
             const order = this.p2pOrderStore.getOrder(orderId);
             if (!order) { res.statusCode = 404; return res.end(JSON.stringify({ error: 'order not found' })); }
-            const baseAsset = order.baseAsset || 'POH';
+            const baseAsset = order.baseAsset || 'DAI';
 
             // ── Atomic on-chain swap ────────────────────────────────────────────
             // Sell order whose quote is another on-chain asset (e.g. KGST/aiGEL):
             // maker's base already sits in escrow; the taker's quote debits here.
             // Both legs settle in ONE p2p-swap-filled transition — no payment-sent
-            // step: the taker's own poh address receives the base, the maker's
+            // step: the taker's own dai address receives the base, the maker's
             // address receives the quote.
             if (order.side === 'sell' && isOnChainAsset(order.quoteCurrency)) {
               const quoteAsset = order.quoteCurrency;
@@ -3781,27 +3781,27 @@ export class PohMinerNode {
                 return res.end(JSON.stringify({ error: `insufficient ${quoteAsset} balance: have ${takerQuoteBal}, need ${quoteAmount}`, currency: quoteAsset }));
               }
 
-              const result = this.p2pOrderStore.selectOrder(orderId, { taker: ownerAddress, pohAmount, quoteAmount, takerPayoutAddress });
+              const result = this.p2pOrderStore.selectOrder(orderId, { taker: ownerAddress, daiAmount, quoteAmount, takerPayoutAddress });
               if (result.error) { res.statusCode = 400; return res.end(JSON.stringify(result)); }
               const tradeId = result.trade.id;
 
               // Referral fee (0.3% of the base leg), same policy as manual release.
               const referrer = this.p2pReferral.getReferrer(ownerAddress);
-              const referralFee = referrer ? this.p2pReferral.creditFee(referrer, pohAmount) : 0;
+              const referralFee = referrer ? this.p2pReferral.creditFee(referrer, daiAmount) : 0;
 
               // Move both legs locally (wallet files); the transition replays the
               // same movement on the canonical ledger everywhere else.
               this.walletManager.debit(ownerAddress, quoteAmount, quoteAsset);
               this.walletManager.credit(order.maker, quoteAmount, quoteAsset);
-              this.p2pEscrow.release(this.walletManager, ownerAddress, pohAmount - referralFee, baseAsset);
+              this.p2pEscrow.release(this.walletManager, ownerAddress, daiAmount - referralFee, baseAsset);
               if (referralFee > 0) this.p2pEscrow.release(this.walletManager, referrer, referralFee, baseAsset);
 
               const done = this.p2pOrderStore.completeTrade(tradeId);
               const swapTransition = {
                 type: 'p2p-swap-filled', tradeId, orderId,
                 maker: order.maker, taker: ownerAddress,
-                ...(baseAsset !== 'POH' ? { baseAsset } : {}),
-                baseAmount: pohAmount, quoteAsset, quoteAmount,
+                ...(baseAsset !== 'DAI' ? { baseAsset } : {}),
+                baseAmount: daiAmount, quoteAsset, quoteAmount,
                 baseRecipient: ownerAddress, quoteRecipient: order.maker,
                 referrer: referrer || null, referralFee,
                 updatedAt: Date.now(),
@@ -3816,18 +3816,18 @@ export class PohMinerNode {
             // ── Manual flow (off-chain quote) ───────────────────────────────────
             // For buy orders: taker is selling the base, so lock taker's base in escrow
             if (order.side === 'buy') {
-              const lockResult = this.p2pEscrow.lock(this.walletManager, ownerAddress, pohAmount, baseAsset);
+              const lockResult = this.p2pEscrow.lock(this.walletManager, ownerAddress, daiAmount, baseAsset);
               if (lockResult !== true) { res.statusCode = 400; return res.end(JSON.stringify(lockResult)); }
             }
 
-            const result = this.p2pOrderStore.selectOrder(orderId, { taker: ownerAddress, pohAmount, quoteAmount, takerPayoutAddress });
+            const result = this.p2pOrderStore.selectOrder(orderId, { taker: ownerAddress, daiAmount, quoteAmount, takerPayoutAddress });
             if (result.error) {
-              if (order.side === 'buy') this.p2pEscrow.release(this.walletManager, ownerAddress, pohAmount, baseAsset);
+              if (order.side === 'buy') this.p2pEscrow.release(this.walletManager, ownerAddress, daiAmount, baseAsset);
               res.statusCode = 400; return res.end(JSON.stringify(result));
             }
 
             this._appliedP2PIds.add(`trade-${result.trade.id}`);
-            this.pendingBrainTransitions.push({ type: 'p2p-trade-created', ...result.trade, orderSide: order.side, ...(baseAsset !== 'POH' ? { baseAsset } : {}) });
+            this.pendingBrainTransitions.push({ type: 'p2p-trade-created', ...result.trade, orderSide: order.side, ...(baseAsset !== 'DAI' ? { baseAsset } : {}) });
             this.gossip.publish('p2p-order', this.p2pOrderStore.getOrder(orderId)).catch(() => {});
             this.gossip.publish('p2p-trade', result.trade).catch(() => {});
             return res.end(JSON.stringify(result));
@@ -3887,7 +3887,7 @@ export class PohMinerNode {
           }
 
           if (action === 'release') {
-            // Seller releases escrow → POH goes to buyer
+            // Seller releases escrow → DAI goes to buyer
             // Sell order: maker is seller, taker is buyer. Maker releases to taker.
             // Buy order: taker is seller, maker is buyer. Taker releases to maker.
             const releaser = order?.side === 'sell' ? order?.maker : trade.taker;
@@ -3896,10 +3896,10 @@ export class PohMinerNode {
 
             // Referral fee: deduct from escrow before releasing to buyer
             const referrer = this.p2pReferral.getReferrer(recipient);
-            const referralFee = referrer ? this.p2pReferral.creditFee(referrer, trade.pohAmount) : 0;
-            const releaseAmount = trade.pohAmount - referralFee;
+            const referralFee = referrer ? this.p2pReferral.creditFee(referrer, trade.daiAmount) : 0;
+            const releaseAmount = trade.daiAmount - referralFee;
 
-            const relBase = order?.baseAsset || 'POH';
+            const relBase = order?.baseAsset || 'DAI';
             const releaseResult = this.p2pEscrow.release(this.walletManager, recipient, releaseAmount, relBase);
             if (releaseResult !== true) { res.statusCode = 400; return res.end(JSON.stringify(releaseResult)); }
             if (referralFee > 0) {
@@ -3909,7 +3909,7 @@ export class PohMinerNode {
             const result = this.p2pOrderStore.completeTrade(tradeId);
             if (result.error) { res.statusCode = 400; return res.end(JSON.stringify(result)); }
             this._appliedP2PIds.add(`trade-${tradeId}-release`);
-            this.pendingBrainTransitions.push({ type: 'p2p-trade-release', tradeId, recipient, pohAmount: releaseAmount, referrer: referrer || null, referralFee, ...(relBase !== 'POH' ? { baseAsset: relBase } : {}), updatedAt: Date.now() });
+            this.pendingBrainTransitions.push({ type: 'p2p-trade-release', tradeId, recipient, daiAmount: releaseAmount, referrer: referrer || null, referralFee, ...(relBase !== 'DAI' ? { baseAsset: relBase } : {}), updatedAt: Date.now() });
             this.gossip.publish('p2p-trade', result.trade).catch(() => {});
             this.gossip.publish('p2p-order', this.p2pOrderStore.getOrder(trade.orderId)).catch(() => {});
             return res.end(JSON.stringify({ ...result, referralFee }));
@@ -3923,8 +3923,8 @@ export class PohMinerNode {
             // Sell orders: maker locked at order creation (escrowLocked flag).
             // Buy orders: taker locked at selectOrder time (no flag on order).
             const locker = order?.side === 'sell' ? order?.maker : trade.taker;
-            const lockAmt = trade.pohAmount;
-            const cnclBase = order?.baseAsset || 'POH';
+            const lockAmt = trade.daiAmount;
+            const cnclBase = order?.baseAsset || 'DAI';
             const hadEscrow = order?.side === 'sell' ? !!order?.escrowLocked : true;
             if (hadEscrow) {
               this.p2pEscrow.release(this.walletManager, locker, lockAmt, cnclBase);
@@ -3932,7 +3932,7 @@ export class PohMinerNode {
             const result = this.p2pOrderStore.cancelTrade(tradeId);
             if (result.error) { res.statusCode = 400; return res.end(JSON.stringify(result)); }
             this._appliedP2PIds.add(`trade-${tradeId}-cancel`);
-            this.pendingBrainTransitions.push({ type: 'p2p-trade-cancel', tradeId, locker, pohAmount: lockAmt, escrowLocked: hadEscrow, ...(cnclBase !== 'POH' ? { baseAsset: cnclBase } : {}), updatedAt: Date.now() });
+            this.pendingBrainTransitions.push({ type: 'p2p-trade-cancel', tradeId, locker, daiAmount: lockAmt, escrowLocked: hadEscrow, ...(cnclBase !== 'DAI' ? { baseAsset: cnclBase } : {}), updatedAt: Date.now() });
             this.gossip.publish('p2p-trade', result.trade).catch(() => {});
             this.gossip.publish('p2p-order', this.p2pOrderStore.getOrder(trade.orderId)).catch(() => {});
             return res.end(JSON.stringify(result));
@@ -3985,7 +3985,7 @@ export class PohMinerNode {
       // Renderer calls this to get a signed auth token without needing the private key.
       // Localhost-only: this signs an arbitrary caller-supplied payload with the node's
       // on-disk identity key, so a remote caller (e.g. via the nginx /api/ proxy) could
-      // mint P2P/OTC auth tokens as this node's wallet and move its escrowed POH.
+      // mint P2P/OTC auth tokens as this node's wallet and move its escrowed DAI.
       if (req.method === 'POST' && url.pathname === '/api/p2p/local-auth') {
         if (!isTrulyLocalRequest(req)) {
           res.statusCode = 403;
@@ -4002,8 +4002,8 @@ export class PohMinerNode {
           if (!action) { res.statusCode = 400; return res.end(JSON.stringify({ error: 'action required' })); }
           const timestamp = Date.now();
           const address = Wallet.deriveAddressFromSigningKey(wallet.signingPublicKey) || wallet.address;
-          if (address !== (this.config.wallet || this.config.pohWallet)) {
-            this.config.pohWallet = address;
+          if (address !== (this.config.wallet || this.config.daiWallet)) {
+            this.config.daiWallet = address;
             this.config.wallet = address;
             this.identityWallet = wallet;
             this._persistWalletToConfig?.(address);
@@ -4027,11 +4027,11 @@ export class PohMinerNode {
     // Handle listen errors gracefully (prevents hard crash on EADDRINUSE etc.)
     server.on('error', (err) => {
       if (err.code === 'EADDRINUSE') {
-        console.error(`[PoH-Miner] ❌ Wallet API port ${port} is already in use.`);
-        console.error('   Another PoH Miner instance (Electron or CLI) is probably still running.');
+        console.error(`[DAI-Miner] ❌ Wallet API port ${port} is already in use.`);
+        console.error('   Another DAI Miner instance (Electron or CLI) is probably still running.');
         console.error('   Kill it or change walletApiPort in your config to use a different port.');
       } else {
-        console.error('[PoH-Miner] Wallet API server error:', err.message);
+        console.error('[DAI-Miner] Wallet API server error:', err.message);
       }
       this.walletApiServer = null;
     });
@@ -4043,7 +4043,7 @@ export class PohMinerNode {
     server.listen(port, bindHost, () => {
       if (!localOnly) this._openFirewallPort(port);
       this._startP2PPriceSampler();
-      console.log(`[PoH-Miner] Wallet API listening on http://${bindHost}:${port}${localOnly ? ' (localOnly)' : ''}`);
+      console.log(`[DAI-Miner] Wallet API listening on http://${bindHost}:${port}${localOnly ? ' (localOnly)' : ''}`);
       console.log(`   Wallet: curl "http://localhost:${port}/api/wallet/balance?address=${this.config.wallet}"`);
       console.log(`   Submit job: curl -X POST http://localhost:${port}/job -d '{"payload":{"address":"bc1q..."}}'`);
       console.log(`   Check status: curl http://localhost:${port}/job/<jobId>/status`);
@@ -4070,11 +4070,11 @@ export class PohMinerNode {
       const location = await detectMyCountry();
       this.myLocation = location;
 
-      console.log(`[PoH-Miner] Detected location: ${location.countryName || location.country} (${location.continent})`);
-      console.log(`[PoH-Miner] → You will get strong preference on jobs from ${location.country}.`);
+      console.log(`[DAI-Miner] Detected location: ${location.countryName || location.country} (${location.continent})`);
+      console.log(`[DAI-Miner] → You will get strong preference on jobs from ${location.country}.`);
     } catch (e) {
       this.myLocation = { country: 'XX', countryName: 'Unknown', continent: 'Unknown' };
-      console.warn('[PoH-Miner] Could not detect location. Using global scoring.');
+      console.warn('[DAI-Miner] Could not detect location. Using global scoring.');
     }
   }
 
@@ -4089,17 +4089,17 @@ export class PohMinerNode {
     if (!EXPECTED_GENESIS_HASH) return true;
     const g = blocks[0]?.getHashSync();
     if (g === EXPECTED_GENESIS_HASH) return true;
-    console.warn(`[PoH-Miner] Ignoring IPFS chain snapshot — genesis ${g?.slice(0, 12) ?? 'none'}… ≠ pinned ${EXPECTED_GENESIS_HASH.slice(0, 12)}…`);
+    console.warn(`[DAI-Miner] Ignoring IPFS chain snapshot — genesis ${g?.slice(0, 12) ?? 'none'}… ≠ pinned ${EXPECTED_GENESIS_HASH.slice(0, 12)}…`);
     return false;
   }
 
   async syncChain() {
-    console.log('[PoH-Miner] Syncing chain...');
+    console.log('[DAI-Miner] Syncing chain...');
 
     // 1. Load persisted chain from disk
     const persisted = this.chainStore.loadChain();
     if (persisted.length > 0) {
-      this.chain = persisted.map(b => PohBlock.fromJSON ? PohBlock.fromJSON(b) : new PohBlock(b));
+      this.chain = persisted.map(b => DAIBlock.fromJSON ? DAIBlock.fromJSON(b) : new DAIBlock(b));
       // Rebuild minedRequestIds from the persisted chain so we never re-compute
       // a job that was already included in a block before a restart.
       for (const block of this.chain) {
@@ -4107,7 +4107,7 @@ export class PohMinerNode {
           if (r.requestId) this.minedRequestIds.add(r.requestId);
         }
       }
-      console.log(`[PoH-Miner] Loaded ${this.chain.length} blocks from disk (${this.minedRequestIds.size} known request IDs)`);
+      console.log(`[DAI-Miner] Loaded ${this.chain.length} blocks from disk (${this.minedRequestIds.size} known request IDs)`);
       // Ledger replay is deferred — eager replay of 50k blocks OOMs the Electron shell.
     }
 
@@ -4129,7 +4129,7 @@ export class PohMinerNode {
       this.chain.push(g.genesis);
       this.chainStore.saveChain(this.chain);
       if (g.migration) {
-        console.log(`[PoH-Miner] Migration genesis: ${g.count} allocations, ${(g.total / 1e9).toFixed(4)} POH minted ` +
+        console.log(`[DAI-Miner] Migration genesis: ${g.count} allocations, ${(g.total / 1e9).toFixed(4)} DAI minted ` +
           `(hash ${g.genesis.getHashSync().slice(0, 12)}…). Balances derive from the chain on rebuild.`);
       } else {
         // Legacy config.genesisAlloc (applied outside the ledger — NOTE: this is
@@ -4140,7 +4140,7 @@ export class PohMinerNode {
             const raw = Number(amount);
             if (raw > 0) {
               this.walletManager.credit(address, raw);
-              console.log(`[PoH-Miner] Genesis alloc: ${address} +${raw} (${(raw / 1e9).toFixed(4)} POH)`);
+              console.log(`[DAI-Miner] Genesis alloc: ${address} +${raw} (${(raw / 1e9).toFixed(4)} DAI)`);
             }
           }
         }
@@ -4166,7 +4166,7 @@ export class PohMinerNode {
       const localHeight = this.chain.length ? this.chain[this.chain.length - 1].height : -1;
       if (snap.height > localHeight) {
         try {
-          const blocks = snap.blocks.map(b => PohBlock.fromJSON(b));
+          const blocks = snap.blocks.map(b => DAIBlock.fromJSON(b));
           const chainCheck = this._ipfsSnapshotGenesisOk(blocks)
             ? validateBlockChain(blocks, [])
             : { valid: false };
@@ -4179,10 +4179,10 @@ export class PohMinerNode {
                 if (r.requestId) this.minedRequestIds.add(r.requestId);
               }
             }
-            console.log(`[PoH-Miner] Applied IPFS chain snapshot: ${this.chain.length} blocks (height ${snap.height})`);
+            console.log(`[DAI-Miner] Applied IPFS chain snapshot: ${this.chain.length} blocks (height ${snap.height})`);
           }
         } catch (e) {
-          console.warn('[PoH-Miner] Failed to apply IPFS chain snapshot:', e.message);
+          console.warn('[DAI-Miner] Failed to apply IPFS chain snapshot:', e.message);
         }
       }
     }
@@ -4204,7 +4204,7 @@ export class PohMinerNode {
     // 5. Layer 4: cold-start brain sync — find latest state-snapshot in chain and apply
     await this._applyColdStartBrainSnapshot();
 
-    console.log(`[PoH-Miner] Synced to height ${this.chain.length - 1}`);
+    console.log(`[DAI-Miner] Synced to height ${this.chain.length - 1}`);
   }
 
   async _applyColdStartBrainSnapshot() {
@@ -4227,7 +4227,7 @@ export class PohMinerNode {
       // Write weights (and pools if present) from snapshot
       fs.writeFileSync(path.join(brainDir, 'weights.json'), JSON.stringify(snap.weights, null, 2));
       if (snap.pools) fs.writeFileSync(path.join(brainDir, 'pools.json'), JSON.stringify(snap.pools, null, 2));
-      console.log(`[PoH-Miner] Cold-start: applied brain snapshot from height ${snapshotHeight} (CID ${snapshotCID.slice(0, 16)}…)`);
+      console.log(`[DAI-Miner] Cold-start: applied brain snapshot from height ${snapshotHeight} (CID ${snapshotCID.slice(0, 16)}…)`);
 
       // Replay any stateTransitions from snapshotHeight+1 to tip
       const brain = await getBrain().catch(() => null);
@@ -4241,7 +4241,7 @@ export class PohMinerNode {
         }
       }
     } catch (e) {
-      console.warn('[PoH-Miner] Cold-start brain sync failed:', e.message);
+      console.warn('[DAI-Miner] Cold-start brain sync failed:', e.message);
     }
   }
 
@@ -4278,7 +4278,7 @@ export class PohMinerNode {
     if (this.ipfsSync) {
       try {
         await this.ipfsSync.fetchLatestCIDs();
-        const walletAddr = this.config.pohWallet || this.config.wallet;
+        const walletAddr = this.config.daiWallet || this.config.wallet;
         const ipfsPeers  = await this.ipfsSync.fetchPeerDirectory(walletAddr);
         const known = new Set(candidates.map(c => c.base));
         for (const p of ipfsPeers) {
@@ -4292,10 +4292,10 @@ export class PohMinerNode {
     }
 
     if (!candidates.length) {
-      console.log('[PoH-Miner] No sync candidates found');
+      console.log('[DAI-Miner] No sync candidates found');
       return;
     }
-    console.log(`[PoH-Miner] [Sync] ${candidates.length} candidates — querying tips…`);
+    console.log(`[DAI-Miner] [Sync] ${candidates.length} candidates — querying tips…`);
 
     // 3. Find the candidate with the most chainWork (heaviest chain) across the whole network
     let bestHeight = -1;
@@ -4306,20 +4306,20 @@ export class PohMinerNode {
     await Promise.allSettled(candidates.map(async c => {
       try {
         const r = await fetch(`${c.base}/chain/tip`, { signal: AbortSignal.timeout(15000) });
-        if (!r.ok) { console.log(`[PoH-Miner] [Sync] ${c.base} tip → non-ok ${r.status}`); return; }
+        if (!r.ok) { console.log(`[DAI-Miner] [Sync] ${c.base} tip → non-ok ${r.status}`); return; }
         const tip = await r.json();
         const work = tip.chainWork || '0';
-        console.log(`[PoH-Miner] [Sync] ${c.label ?? c.base} height=${tip.height} work=${work}`);
+        console.log(`[DAI-Miner] [Sync] ${c.label ?? c.base} height=${tip.height} work=${work}`);
         if (compareChainWork(work, bestWork) > 0) {
           bestHeight = tip.height ?? -1;
           bestBase   = c.base;
           bestLabel  = c.label;
           bestWork   = work;
         }
-      } catch (e) { console.log(`[PoH-Miner] [Sync] ${c.base} tip fail: ${e.message}`); }
+      } catch (e) { console.log(`[DAI-Miner] [Sync] ${c.base} tip fail: ${e.message}`); }
     }));
     const localWork = getTipChainWork(this.chain);
-    console.log(`[PoH-Miner] [Sync] best=${bestLabel} height=${bestHeight} work=${bestWork} | local work=${localWork}`);
+    console.log(`[DAI-Miner] [Sync] best=${bestLabel} height=${bestHeight} work=${bestWork} | local work=${localWork}`);
 
     // 3b. Fork detection: compare our block at min(local, peer) height against the peer's.
     // Covers two cases:
@@ -4338,16 +4338,16 @@ export class PohMinerNode {
         const r = await fetch(`${bestBase}/chain/blocks?from=${forkCheckHeight}&to=${forkTo}`, { signal: AbortSignal.timeout(30000) });
         if (r.ok) {
           const blocks = await r.json();
-          const peerRaw = selectPeerBlockOnTip(blocks, forkCheckHeight, PohBlock);
+          const peerRaw = selectPeerBlockOnTip(blocks, forkCheckHeight, DAIBlock);
           if (peerRaw) {
-            const peerBlock  = PohBlock.fromJSON ? PohBlock.fromJSON(peerRaw) : new PohBlock(peerRaw);
+            const peerBlock  = DAIBlock.fromJSON ? DAIBlock.fromJSON(peerRaw) : new DAIBlock(peerRaw);
             const peerHash   = peerBlock.blockHash || peerBlock.getHashSync();
             const localBlock = this.chain.find(b => b.height === forkCheckHeight)
               ?? this.chain[forkCheckHeight - chainOffset];
             const localHash  = localBlock?.blockHash || localBlock?.getHashSync();
             if (localHash && peerHash !== localHash) {
               isFork = true;
-              console.warn(`[PoH-Miner] Fork detected at block ${forkCheckHeight} (local: ${localHash.slice(0, 8)}… vs peer: ${peerHash.slice(0, 8)}…) — wiping local chain and resyncing`);
+              console.warn(`[DAI-Miner] Fork detected at block ${forkCheckHeight} (local: ${localHash.slice(0, 8)}… vs peer: ${peerHash.slice(0, 8)}…) — wiping local chain and resyncing`);
             }
           }
         }
@@ -4367,22 +4367,22 @@ export class PohMinerNode {
             if (r.ok) {
               const blocks = await r.json();
               if (Array.isArray(blocks) && blocks.length > 0) {
-                const peerGenesis     = PohBlock.fromJSON ? PohBlock.fromJSON(blocks[0]) : new PohBlock(blocks[0]);
+                const peerGenesis     = DAIBlock.fromJSON ? DAIBlock.fromJSON(blocks[0]) : new DAIBlock(blocks[0]);
                 const peerGenesisHash = peerGenesis.getHashSync();
                 if (peerGenesisHash !== localGenesisHash) {
-                  console.error(`[PoH-Miner] ⛔ GENESIS MISMATCH — peer ${bestLabel} is on a different network!`);
-                  console.error(`[PoH-Miner]    local genesis: ${localGenesisHash}`);
-                  console.error(`[PoH-Miner]    peer  genesis: ${peerGenesisHash}`);
-                  console.error(`[PoH-Miner]    Refusing to sync. Wipe ~/.poh-miner/chain if you intend to join a new network.`);
+                  console.error(`[DAI-Miner] ⛔ GENESIS MISMATCH — peer ${bestLabel} is on a different network!`);
+                  console.error(`[DAI-Miner]    local genesis: ${localGenesisHash}`);
+                  console.error(`[DAI-Miner]    peer  genesis: ${peerGenesisHash}`);
+                  console.error(`[DAI-Miner]    Refusing to sync. Wipe ~/.dai-miner/chain if you intend to join a new network.`);
                   return;
                 }
-                console.log(`[PoH-Miner] [Sync] Genesis hash verified ✓ (${localGenesisHash.slice(0, 12)}…)`);
+                console.log(`[DAI-Miner] [Sync] Genesis hash verified ✓ (${localGenesisHash.slice(0, 12)}…)`);
                 genesisVerified = true;
               }
             }
           } catch (e) {
             if (attempt === 3) {
-              console.warn(`[PoH-Miner] [Sync] Could not verify genesis hash against ${bestLabel}: ${e.message}`);
+              console.warn(`[DAI-Miner] [Sync] Could not verify genesis hash against ${bestLabel}: ${e.message}`);
             }
           }
         }
@@ -4393,9 +4393,9 @@ export class PohMinerNode {
     if (!bestBase && this.ipfsSync) {
       const snap = await this.ipfsSync.fetchChainSnapshot();
       if (snap?.blocks?.length && snap.height > localChainHeight) {
-        console.log(`[PoH-Miner] Applying IPFS chain snapshot (height ${snap.height})`);
+        console.log(`[DAI-Miner] Applying IPFS chain snapshot (height ${snap.height})`);
         try {
-          const blocks = snap.blocks.map(b => PohBlock.fromJSON ? PohBlock.fromJSON(b) : new PohBlock(b));
+          const blocks = snap.blocks.map(b => DAIBlock.fromJSON ? DAIBlock.fromJSON(b) : new DAIBlock(b));
           const chainCheck = this._ipfsSnapshotGenesisOk(blocks)
             ? validateBlockChain(blocks, [])
             : { valid: false };
@@ -4407,14 +4407,14 @@ export class PohMinerNode {
                 if (r.requestId) this.minedRequestIds.add(r.requestId);
               }
             }
-            console.log(`[PoH-Miner] IPFS sync: now at height ${snap.height}`);
+            console.log(`[DAI-Miner] IPFS sync: now at height ${snap.height}`);
           }
-        } catch (e) { console.warn('[PoH-Miner] IPFS chain apply failed:', e.message); }
+        } catch (e) { console.warn('[DAI-Miner] IPFS chain apply failed:', e.message); }
       }
       return;
     }
 
-    if (!bestBase) { console.log('[PoH-Miner] [Sync] no reachable peer found — aborting'); return; }
+    if (!bestBase) { console.log('[DAI-Miner] [Sync] no reachable peer found — aborting'); return; }
 
     // 5. Download blocks in chunks of 500
     // On a fresh start (only genesis locally) download from 0 and replace the whole
@@ -4423,7 +4423,7 @@ export class PohMinerNode {
     // Heaviest-chain rule: only sync if the best peer has strictly more chainWork.
     // Height alone is misleading — a fork with lower difficulty can have more blocks but less work.
     if (compareChainWork(bestWork, localWork) <= 0 && !isFork) {
-      console.log(`[PoH-Miner] [Sync] local chain has equal or more chainWork — keeping`);
+      console.log(`[DAI-Miner] [Sync] local chain has equal or more chainWork — keeping`);
       return;
     }
 
@@ -4434,7 +4434,7 @@ export class PohMinerNode {
     if (isFork && bestBase && compareChainWork(bestWork, localWork) > 0) {
       const healed = await this._tryBoundedReorg(bestBase, bestHeight);
       if (healed) {
-        console.log('[PoH-Miner] [Sync] Fork healed via bounded reorg — chains converged.');
+        console.log('[DAI-Miner] [Sync] Fork healed via bounded reorg — chains converged.');
         return;
       }
     }
@@ -4461,7 +4461,7 @@ export class PohMinerNode {
     if (bestHeight <= localChainHeight && !isFork && compareChainWork(bestWork, localWork) <= 0) return;
 
     const syncModeLabel = !isFreshStart ? '' : localHeight >= 0 ? ` [fork reorg from ${localHeight + 1}]` : ' [fresh start — replacing chain from 0]';
-    console.log(`[PoH-Miner] Syncing from ${bestLabel} (peer height ${bestHeight}, local ${localChainHeight})${syncModeLabel}`);
+    console.log(`[DAI-Miner] Syncing from ${bestLabel} (peer height ${bestHeight}, local ${localChainHeight})${syncModeLabel}`);
 
     const downloadedBlocks = [];
     const MAX_CHUNK_RETRIES = 3;
@@ -4479,7 +4479,7 @@ export class PohMinerNode {
         } else {
           let added = 0;
           for (const bd of blocks) {
-            const block = PohBlock.fromJSON ? PohBlock.fromJSON(bd) : new PohBlock(bd);
+            const block = DAIBlock.fromJSON ? DAIBlock.fromJSON(bd) : new DAIBlock(bd);
             const prev  = this.chain[this.chain.length - 1];
             // Use block.height (not array index) so truncated chains work correctly.
             // Prefer stored blockHash over re-computation: getHashSync() changes when block.js fields change.
@@ -4489,7 +4489,7 @@ export class PohMinerNode {
                 parent: prev, chainPrefix: this.chain, ledger: this.txLedger, strictTx: false,
               });
               if (!check.valid) {
-                console.warn(`[PoH-Miner] Sync rejected block #${block.height} (${check.reason})`);
+                console.warn(`[DAI-Miner] Sync rejected block #${block.height} (${check.reason})`);
                 break;
               }
               this._applyBlockState(block);
@@ -4505,12 +4505,12 @@ export class PohMinerNode {
             }
           }
           if (!added) {
-            const first = PohBlock.fromJSON ? PohBlock.fromJSON(blocks[0]) : new PohBlock(blocks[0]);
+            const first = DAIBlock.fromJSON ? DAIBlock.fromJSON(blocks[0]) : new DAIBlock(blocks[0]);
             const prev  = this.chain[this.chain.length - 1];
             const prevHash = prev?.blockHash || prev?.getHashSync();
             if (prevHash && first.previousHash !== prevHash) {
               console.warn(
-                `[PoH-Miner] Fork at tip: block #${first.height} parent ${first.previousHash.slice(0, 8)}… ` +
+                `[DAI-Miner] Fork at tip: block #${first.height} parent ${first.previousHash.slice(0, 8)}… ` +
                 `≠ local tip ${prevHash.slice(0, 8)}… at #${prev.height}`
               );
             }
@@ -4521,10 +4521,10 @@ export class PohMinerNode {
               // hundreds of blocks and orphans in-flight jobs/payments (multi-miner churn).
               const stallHealed = await this._tryBoundedReorg(bestBase, bestHeight);
               if (stallHealed) {
-                console.log('[PoH-Miner] [Sync] Incremental stall healed via bounded reorg — chains converged.');
+                console.log('[DAI-Miner] [Sync] Incremental stall healed via bounded reorg — chains converged.');
                 return;
               }
-              console.warn(`[PoH-Miner] Incremental sync stalled at height ${localChainHeight} — full resync from ${bestLabel}`);
+              console.warn(`[DAI-Miner] Incremental sync stalled at height ${localChainHeight} — full resync from ${bestLabel}`);
               isFreshStart = true;
               isFork = true;
               localHeight = -1;
@@ -4540,9 +4540,9 @@ export class PohMinerNode {
         chunkRetries = 0;
       } catch (e) {
         chunkRetries++;
-        console.warn(`[PoH-Miner] Chunk fetch failed (attempt ${chunkRetries}/${MAX_CHUNK_RETRIES}):`, e.message);
+        console.warn(`[DAI-Miner] Chunk fetch failed (attempt ${chunkRetries}/${MAX_CHUNK_RETRIES}):`, e.message);
         if (chunkRetries >= MAX_CHUNK_RETRIES) {
-          console.warn(`[PoH-Miner] Giving up on chunk ${from}-${to} after ${MAX_CHUNK_RETRIES} attempts`);
+          console.warn(`[DAI-Miner] Giving up on chunk ${from}-${to} after ${MAX_CHUNK_RETRIES} attempts`);
           break;
         }
       }
@@ -4554,10 +4554,10 @@ export class PohMinerNode {
       // partial prefix would truncate local history. Abort and retry next cycle.
       const lastDownloaded = downloadedBlocks[downloadedBlocks.length - 1]?.height ?? -1;
       if (lastDownloaded < bestHeight) {
-        console.warn(`[PoH-Miner] Full sync incomplete (got up to ${lastDownloaded} of ${bestHeight}) — aborting, will retry next cycle`);
+        console.warn(`[DAI-Miner] Full sync incomplete (got up to ${lastDownloaded} of ${bestHeight}) — aborting, will retry next cycle`);
         return;
       }
-      const parsed = downloadedBlocks.map(b => PohBlock.fromJSON ? PohBlock.fromJSON(b) : new PohBlock(b));
+      const parsed = downloadedBlocks.map(b => DAIBlock.fromJSON ? DAIBlock.fromJSON(b) : new DAIBlock(b));
 
       // effectiveAnchorHeight: where to splice. Starts as anchorHeight (fork anchor),
       // overridden to -1 if anchor check fails (full replacement).
@@ -4576,10 +4576,10 @@ export class PohMinerNode {
           // chain re-download.
           const anchorHealed = await this._tryBoundedReorg(bestBase, bestHeight);
           if (anchorHealed) {
-            console.log('[PoH-Miner] [Sync] Anchor mismatch healed via bounded reorg — chains converged.');
+            console.log('[DAI-Miner] [Sync] Anchor mismatch healed via bounded reorg — chains converged.');
             return;
           }
-          console.warn(`[PoH-Miner] Partial reorg anchor mismatch at ${anchorHeight} — falling back to full resync`);
+          console.warn(`[DAI-Miner] Partial reorg anchor mismatch at ${anchorHeight} — falling back to full resync`);
           // Re-download the full chain from genesis
           downloadedBlocks.length = 0;
           let h = -1;
@@ -4597,7 +4597,7 @@ export class PohMinerNode {
               fullResyncRetries = 0;
             } catch (e) {
               fullResyncRetries++;
-              console.warn(`[PoH-Miner] Full resync chunk failed (attempt ${fullResyncRetries}/3):`, e.message);
+              console.warn(`[DAI-Miner] Full resync chunk failed (attempt ${fullResyncRetries}/3):`, e.message);
               if (fullResyncRetries >= 3) break;
             }
           }
@@ -4605,12 +4605,12 @@ export class PohMinerNode {
           // must never replace the local chain.
           const lastRedownloaded = downloadedBlocks[downloadedBlocks.length - 1]?.height ?? -1;
           if (lastRedownloaded < bestHeight) {
-            console.warn(`[PoH-Miner] Full resync incomplete (got up to ${lastRedownloaded} of ${bestHeight}) — aborting, will retry next cycle`);
+            console.warn(`[DAI-Miner] Full resync incomplete (got up to ${lastRedownloaded} of ${bestHeight}) — aborting, will retry next cycle`);
             return;
           }
           // Re-parse for the outer apply block below
           parsed.length = 0;
-          parsed.push(...downloadedBlocks.map(b => PohBlock.fromJSON ? PohBlock.fromJSON(b) : new PohBlock(b)));
+          parsed.push(...downloadedBlocks.map(b => DAIBlock.fromJSON ? DAIBlock.fromJSON(b) : new DAIBlock(b)));
           // Force full replacement (no anchor)
           effectiveAnchorHeight = -1;
         }
@@ -4631,14 +4631,14 @@ export class PohMinerNode {
           allowDeep: this._allowDeepReorg,
         });
         if (!finReplace.allowed) {
-          console.warn(`[PoH-Miner] ⛔ Resync REJECTED by finality rule: ${finReplace.reason}. ` +
-            `Wipe ~/.poh-miner/chain or set POH_ALLOW_DEEP_REORG=1 to recover.`);
+          console.warn(`[DAI-Miner] ⛔ Resync REJECTED by finality rule: ${finReplace.reason}. ` +
+            `Wipe ~/.dai-miner/chain or set DAI_ALLOW_DEEP_REORG=1 to recover.`);
           return;
         }
         if (this.finalizedCheckpoint &&
             !chainHonorsCheckpoint(parsed, this.finalizedCheckpoint,
               b => (b.blockHash || b.getHashSync()))) {
-          console.warn(`[PoH-Miner] ⛔ Resync REJECTED: downloaded chain conflicts with finalized ` +
+          console.warn(`[DAI-Miner] ⛔ Resync REJECTED: downloaded chain conflicts with finalized ` +
             `checkpoint #${this.finalizedCheckpoint.height} (${this.finalizedCheckpoint.hash.slice(0, 12)}…)`);
           return;
         }
@@ -4654,11 +4654,11 @@ export class PohMinerNode {
           ? validateBootstrapChain(parsed)
           : validateBlockChain(parsed, prefix, { extended: false, skipPoW: true });
         if (!chainCheck.valid) {
-          console.warn(`[PoH-Miner] Fresh-start sync rejected at #${chainCheck.height} (${chainCheck.reason})`);
+          console.warn(`[DAI-Miner] Fresh-start sync rejected at #${chainCheck.height} (${chainCheck.reason})`);
           return;
         }
         if (isFullReplacement && chainCheck.gaps > 0) {
-          console.warn(`[PoH-Miner] Bootstrap chain has ${chainCheck.gaps} known gap(s) in deep history — tolerated (matches canonical chain)`);
+          console.warn(`[DAI-Miner] Bootstrap chain has ${chainCheck.gaps} known gap(s) in deep history — tolerated (matches canonical chain)`);
         }
         this.chain = isFullReplacement
           ? chainCheck.chain
@@ -4688,7 +4688,7 @@ export class PohMinerNode {
       await this._refreshTxLedger();
     }
 
-    console.log(`[PoH-Miner] Chain sync complete — height ${this.chain[this.chain.length - 1]?.height ?? this.chain.length - 1}`);
+    console.log(`[DAI-Miner] Chain sync complete — height ${this.chain[this.chain.length - 1]?.height ?? this.chain.length - 1}`);
   }
 
   /**
@@ -4698,7 +4698,7 @@ export class PohMinerNode {
   async discoverAndRegisterWithBootnodes() {
     if (!this.config.bootnodes || this.config.bootnodes.length === 0) return;
 
-    const walletAddr = this.config.pohWallet || this.config.wallet;
+    const walletAddr = this.config.daiWallet || this.config.wallet;
     const ts = Date.now();
     const methodsHash = this.methodsManager?.hash || 'unknown';
 
@@ -4737,7 +4737,7 @@ export class PohMinerNode {
     };
     if (!reachable) baseInfo.reachable = false;
 
-    // Attach proof that we are a real running poh-miner node (possess local wallet privkey)
+    // Attach proof that we are a real running dai-miner node (possess local wallet privkey)
     let registerPayload = { ...baseInfo };
     if (this.identityWallet && typeof this.identityWallet.sign === 'function') {
       // Must match the bootnode's buildPeerRegistrationMessage byte-for-byte.
@@ -4754,8 +4754,8 @@ export class PohMinerNode {
       registerPayload.signature = this.identityWallet.sign(toSign);
     }
 
-    console.log(`[PoH-Miner] Registering with bootnode(s): ${this.config.bootnodes.join(', ')}`);
-    console.log(`[PoH-Miner] Register payload: wallet=${registerPayload.wallet} host=${registerPayload.host} ` +
+    console.log(`[DAI-Miner] Registering with bootnode(s): ${this.config.bootnodes.join(', ')}`);
+    console.log(`[DAI-Miner] Register payload: wallet=${registerPayload.wallet} host=${registerPayload.host} ` +
       `mode=${reachable ? 'public-peer' : 'follower(relay)'} signed=${!!registerPayload.signature}`);
 
     for (const bootnode of this.config.bootnodes) {
@@ -4769,9 +4769,9 @@ export class PohMinerNode {
         });
         const regBody = await regRes.json().catch(() => ({}));
         if (!regRes.ok) {
-          console.warn(`[PoH-Miner] Bootnode rejected registration (${regRes.status}): ${regBody.error || JSON.stringify(regBody)}`);
+          console.warn(`[DAI-Miner] Bootnode rejected registration (${regRes.status}): ${regBody.error || JSON.stringify(regBody)}`);
         } else {
-          console.log(`[PoH-Miner] Registered with bootnode ${bootnode} — ${regBody.peersKnown ?? '?'} peers known`);
+          console.log(`[DAI-Miner] Registered with bootnode ${bootnode} — ${regBody.peersKnown ?? '?'} peers known`);
         }
 
         // Fetch current peer list
@@ -4783,10 +4783,10 @@ export class PohMinerNode {
             && (!p.signingPublicKey || Wallet.isAddressBoundToSigningKey(p.wallet, p.signingPublicKey))
           );
 
-          console.log(`[PoH-Miner] Discovered ${this.knownPeers.length} peers from ${bootnode}`);
+          console.log(`[DAI-Miner] Discovered ${this.knownPeers.length} peers from ${bootnode}`);
 
           if (this.knownPeers.length > 0) {
-            console.log('[PoH-Miner] Known peers:');
+            console.log('[DAI-Miner] Known peers:');
             this.knownPeers.forEach(p => {
               const v = p.signingPublicKey ? '✓verified' : 'unverified';
               console.log(`  - ${p.wallet?.slice(0,10)}... @ ${p.host}:${p.walletApiPort} (${p.region || 'unknown region'}) [${v}]`);
@@ -4794,7 +4794,7 @@ export class PohMinerNode {
           }
         }
       } catch (err) {
-        console.warn(`[PoH-Miner] Failed peer discovery with ${bootnode}:`, err.message);
+        console.warn(`[DAI-Miner] Failed peer discovery with ${bootnode}:`, err.message);
       }
     }
 
@@ -4855,7 +4855,7 @@ export class PohMinerNode {
     const intervalMs = this.config.inboxPollMs || 30_000;
     this._inboxTimer = setInterval(() => poll().catch(() => {}), intervalMs);
     poll().catch(() => {});
-    console.log('[PoH-Miner] NAT relay inbox poll started (fallback) — receiving gossip via bootnode relay while behind NAT.');
+    console.log('[DAI-Miner] NAT relay inbox poll started (fallback) — receiving gossip via bootnode relay while behind NAT.');
   }
 
   /**
@@ -4898,10 +4898,10 @@ export class PohMinerNode {
             });
             if (!res.ok || !res.body) {
               // 404 = old relay without /stream — fall back to inbox poll silently.
-              if (res.status !== 404) console.warn(`[PoH-Miner] Relay stream ${base} → ${res.status}`);
+              if (res.status !== 404) console.warn(`[DAI-Miner] Relay stream ${base} → ${res.status}`);
               throw new Error(`stream ${res.status}`);
             }
-            console.log(`[PoH-Miner] Relay stream connected: ${base} (live gossip push)`);
+            console.log(`[DAI-Miner] Relay stream connected: ${base} (live gossip push)`);
             state.backoff = 1000;
             const reader = res.body.getReader();
             const decoder = new TextDecoder();
@@ -4936,7 +4936,7 @@ export class PohMinerNode {
       };
       connect().catch(() => {});
     }
-    console.log('[PoH-Miner] Persistent relay streams started — live block/tx/job push via bootnode relay(s).');
+    console.log('[DAI-Miner] Persistent relay streams started — live block/tx/job push via bootnode relay(s).');
   }
 
   _stopRelayStream() {
@@ -4976,7 +4976,7 @@ export class PohMinerNode {
       if (this._reconnecting) return;
       const reachable = await probe();
       if (!reachable) {
-        if (this._online) console.warn('[PoH-Miner] Network/bootnode unreachable — will auto-reconnect when restored.');
+        if (this._online) console.warn('[DAI-Miner] Network/bootnode unreachable — will auto-reconnect when restored.');
         this._online = false;
         return;
       }
@@ -4984,7 +4984,7 @@ export class PohMinerNode {
       // Transition offline → online: reconnect now.
       this._online = true;
       this._reconnecting = true;
-      console.log('[PoH-Miner] Connection restored — re-registering, re-discovering peers, and re-syncing…');
+      console.log('[DAI-Miner] Connection restored — re-registering, re-discovering peers, and re-syncing…');
       try {
         await this.discoverAndRegisterWithBootnodes();
         if (!this.peers.length) await this._discoverPeersFromIPFS();
@@ -4993,9 +4993,9 @@ export class PohMinerNode {
           this._abortMining();
           try { await this.syncFromBootnodes(); } finally { this._syncInProgress = false; }
         }
-        console.log(`[PoH-Miner] Reconnected — ${this.peers.length} peer(s), chain re-synced.`);
+        console.log(`[DAI-Miner] Reconnected — ${this.peers.length} peer(s), chain re-synced.`);
       } catch (e) {
-        console.warn('[PoH-Miner] Reconnect attempt failed (will retry):', e.message);
+        console.warn('[DAI-Miner] Reconnect attempt failed (will retry):', e.message);
         this._online = false; // force another attempt next tick
       } finally {
         this._reconnecting = false;
@@ -5029,7 +5029,7 @@ export class PohMinerNode {
 
           const v = verifyCheckpoint(cp, { pinnedPublicKey });
           if (!v.ok) {
-            console.warn(`[PoH-Miner] Ignoring checkpoint from ${base}: ${v.reason}`);
+            console.warn(`[DAI-Miner] Ignoring checkpoint from ${base}: ${v.reason}`);
             continue;
           }
           // Monotonic: never move the finalized point backwards.
@@ -5042,14 +5042,14 @@ export class PohMinerNode {
           if (local) {
             const localHash = local.blockHash || local.getHashSync();
             if (localHash !== cp.hash) {
-              console.error(`[PoH-Miner] ⛔ CHECKPOINT CONFLICT at #${cp.height}: local ` +
+              console.error(`[DAI-Miner] ⛔ CHECKPOINT CONFLICT at #${cp.height}: local ` +
                 `${localHash.slice(0, 12)}… vs signed ${cp.hash.slice(0, 12)}…. Local chain is on a ` +
-                `finalized-orphan fork — manual recovery required (wipe ~/.poh-miner/chain).`);
+                `finalized-orphan fork — manual recovery required (wipe ~/.dai-miner/chain).`);
               return;
             }
           }
           this.finalizedCheckpoint = { height: cp.height, hash: cp.hash };
-          console.log(`[PoH-Miner] Finality checkpoint updated → #${cp.height} (${cp.hash.slice(0, 12)}…)`);
+          console.log(`[DAI-Miner] Finality checkpoint updated → #${cp.height} (${cp.hash.slice(0, 12)}…)`);
           return;
         } catch { /* try next bootnode */ }
       }
@@ -5065,7 +5065,7 @@ export class PohMinerNode {
    */
   async _discoverPeersFromIPFS() {
     if (!this.ipfsSync) return;
-    const walletAddr = this.config.pohWallet || this.config.wallet;
+    const walletAddr = this.config.daiWallet || this.config.wallet;
 
     // Ensure we have the latest CIDs (reads from disk cache if bootnode is down)
     await this.ipfsSync.fetchLatestCIDs();
@@ -5078,7 +5078,7 @@ export class PohMinerNode {
     const fresh = ipfsPeers.filter(p => !known.has(p.wallet));
     if (fresh.length) {
       this.peers = [...this.peers, ...fresh];
-      console.log(`[PoH-Miner] Added ${fresh.length} peer(s) from IPFS directory (bootnode fallback)`);
+      console.log(`[DAI-Miner] Added ${fresh.length} peer(s) from IPFS directory (bootnode fallback)`);
     }
   }
 
@@ -5086,7 +5086,7 @@ export class PohMinerNode {
     // Explicit config wins; otherwise the auto-resolved value (set by
     // _resolvePublicHost). Falls back to 'localhost' — which the bootnode rejects
     // as non-public, so an unresolved node simply stays a follower/compute client.
-    return process.env.POH_PUBLIC_HOST || this.config.publicHost || this._publicHost || 'localhost';
+    return process.env.DAI_PUBLIC_HOST || this.config.publicHost || this._publicHost || 'localhost';
   }
 
   /**
@@ -5095,12 +5095,12 @@ export class PohMinerNode {
    * (/whoami), then have the bootnode dial us back (/probe). Only if the probe
    * succeeds do we adopt the public IP as our host — otherwise we're behind
    * NAT/firewall and must not advertise an unreachable address (which would put a
-   * dead entry in /peers). An explicit POH_PUBLIC_HOST / config.publicHost skips
+   * dead entry in /peers). An explicit DAI_PUBLIC_HOST / config.publicHost skips
    * all of this. Resolved once and cached.
    */
   async _resolvePublicHost() {
     if (this._publicHostResolved) return this._publicHost;
-    const explicit = process.env.POH_PUBLIC_HOST || this.config.publicHost;
+    const explicit = process.env.DAI_PUBLIC_HOST || this.config.publicHost;
     if (explicit) { this._publicHost = explicit; this._publicHostResolved = true; return explicit; }
 
     const port = this.config.walletApiPort || 3456;
@@ -5108,12 +5108,12 @@ export class PohMinerNode {
     // Zero-config reachability: try to auto-open the port on the router (UPnP →
     // NAT-PMP) before probing. If the mapping (or an already-open port) works, the
     // /probe below succeeds and we register as a public peer with no user action.
-    // Skippable with POH_NO_UPNP=1. Never blocks startup on failure.
-    if (process.env.POH_NO_UPNP !== '1') {
+    // Skippable with DAI_NO_UPNP=1. Never blocks startup on failure.
+    if (process.env.DAI_NO_UPNP !== '1') {
       try {
-        const fwd = await autoForwardPort(port, { description: 'PoH Miner' });
-        if (fwd.ok) console.log(`[PoH-Miner] Auto-opened port ${port} via ${fwd.method.toUpperCase()}.`);
-        else console.log(`[PoH-Miner] Auto port-forward not available (${fwd.reason}) — will verify direct reachability.`);
+        const fwd = await autoForwardPort(port, { description: 'DAI Miner' });
+        if (fwd.ok) console.log(`[DAI-Miner] Auto-opened port ${port} via ${fwd.method.toUpperCase()}.`);
+        else console.log(`[DAI-Miner] Auto port-forward not available (${fwd.reason}) — will verify direct reachability.`);
       } catch { /* best-effort */ }
     }
 
@@ -5130,11 +5130,11 @@ export class PohMinerNode {
         if (probe?.reachable) {
           this._publicHost = ip;
           this._publicHostResolved = true;
-          console.log(`[PoH-Miner] Auto-detected public address ${ip}:${port} (reachable) — registering as a public peer.`);
+          console.log(`[DAI-Miner] Auto-detected public address ${ip}:${port} (reachable) — registering as a public peer.`);
           return ip;
         }
-        console.log(`[PoH-Miner] Not publicly reachable at ${ip}:${port} (NAT/firewall) — running as a follower/compute client. ` +
-          `To appear as a public node, forward port ${port} or set POH_PUBLIC_HOST.`);
+        console.log(`[DAI-Miner] Not publicly reachable at ${ip}:${port} (NAT/firewall) — running as a follower/compute client. ` +
+          `To appear as a public node, forward port ${port} or set DAI_PUBLIC_HOST.`);
         this._publicHost = null;
         this._publicHostResolved = true;
         return null;
@@ -5155,12 +5155,12 @@ export class PohMinerNode {
       identityWallet: this.identityWallet,
       walletApiPort: this.config.walletApiPort || 3456,
     });
-    console.log('[PoH-Miner] BrainSync initialized');
+    console.log('[DAI-Miner] BrainSync initialized');
   }
 
   async connectToNetwork() {
     // Real version: libp2p, gossipsub, or simple WebSocket mesh between miners
-    console.log('[PoH-Miner] Connecting to network...');
+    console.log('[DAI-Miner] Connecting to network...');
 
     // Connect any configured external MCP servers so the chat model can use
     // their tools. Independent of bootnodes; best-effort, non-blocking.
@@ -5171,13 +5171,13 @@ export class PohMinerNode {
     this._initBrainSync();
 
     if (this.config.bootnodes?.length > 0) {
-      console.log(`[PoH-Miner] Bootnodes: ${JSON.stringify(this.config.bootnodes)}`);
+      console.log(`[DAI-Miner] Bootnodes: ${JSON.stringify(this.config.bootnodes)}`);
 
       await this.discoverAndRegisterWithBootnodes();
 
       // If we got no peers from the bootnode, try the IPFS peer directory
       if (!this.peers.length) {
-        console.log('[PoH-Miner] No peers from bootnode — trying IPFS peer directory fallback');
+        console.log('[DAI-Miner] No peers from bootnode — trying IPFS peer directory fallback');
         await this._discoverPeersFromIPFS();
       }
 
@@ -5240,7 +5240,7 @@ export class PohMinerNode {
       // refused even on a freshly-started or eclipsed node.
       this.startCheckpointSync();
     } else {
-      console.log('[PoH-Miner] No bootnodes configured — running in local/dev mode only');
+      console.log('[DAI-Miner] No bootnodes configured — running in local/dev mode only');
     }
 
     // Drop in-progress work when another miner wins a job
@@ -5251,7 +5251,7 @@ export class PohMinerNode {
     // Accept transactions gossiped by peers
     this.gossip.subscribe('new-tx', (txData) => {
       try {
-        const tx = PoHTransaction.fromJSON(txData);
+        const tx = DAITransaction.fromJSON(txData);
         this.txMempool.submit(tx); // silently ignores duplicates / invalid
       } catch { /* malformed tx */ }
     });
@@ -5259,7 +5259,7 @@ export class PohMinerNode {
     // Subscribe to node status updates
     this.gossip.subscribe('node-status', (status, from) => {
       if (status.methodsHash && status.methodsHash !== this.methodsManager?.hash) {
-        console.log(`[PoH-Miner] Peer ${from?.slice(0,8)} is on different signals hash: ${status.methodsHash} (we have ${this.methodsManager?.hash})`);
+        console.log(`[DAI-Miner] Peer ${from?.slice(0,8)} is on different signals hash: ${status.methodsHash} (we have ${this.methodsManager?.hash})`);
       }
     });
 
@@ -5273,7 +5273,7 @@ export class PohMinerNode {
       if (transition?.manifest?.id) {
         const safeId = normalizeSkillId(transition.manifest.id);
         if (!safeId) {
-          console.warn(`[PoH-Miner] Rejected skill proposal with invalid id: ${transition.manifest.id}`);
+          console.warn(`[DAI-Miner] Rejected skill proposal with invalid id: ${transition.manifest.id}`);
           return;
         }
         const safeTransition = {
@@ -5289,9 +5289,9 @@ export class PohMinerNode {
           const brainDir = getBrainDataDir();
           const skillsDir = path.join(brainDir, 'skills');
           writeSkillFile(skillsDir, safeTransition.manifest, transition.code || null, transition.context || '');
-          console.log(`[PoH-Miner] Persisted skill ${safeId} to ${skillsDir} (not executable until locally trusted)`);
+          console.log(`[DAI-Miner] Persisted skill ${safeId} to ${skillsDir} (not executable until locally trusted)`);
         } catch (err) {
-          console.warn('[PoH-Miner] Failed to persist skill to disk:', err.message);
+          console.warn('[DAI-Miner] Failed to persist skill to disk:', err.message);
         }
       }
     });
@@ -5309,7 +5309,7 @@ export class PohMinerNode {
       const idx = this._pendingJobQueue.findIndex(j => j.id === jobId);
       if (idx !== -1) {
         this._pendingJobQueue.splice(idx, 1);
-        console.log(`[PoH-Miner] Job ${jobId} claimed by peer — removed from pending queue (${this._pendingJobQueue.length} remaining)`);
+        console.log(`[DAI-Miner] Job ${jobId} claimed by peer — removed from pending queue (${this._pendingJobQueue.length} remaining)`);
       }
     });
 
@@ -5377,7 +5377,7 @@ export class PohMinerNode {
       feedbackStore.apply(transition);
       if (transition.rating === 'negative' && transition.minerAddress === this.config.wallet) {
         this.applySlashing(0.05);
-        console.log(`[PoH-Miner] Reputation slashed via peer feedback (job ${transition.jobId}): ${this.reputation.toFixed(3)}`);
+        console.log(`[DAI-Miner] Reputation slashed via peer feedback (job ${transition.jobId}): ${this.reputation.toFixed(3)}`);
       }
     });
 
@@ -5395,7 +5395,7 @@ export class PohMinerNode {
       entry.total = (entry.total || 0) + amount;
       if (txHash) this._appliedStakeTxs.add(txHash);
       this._saveSkillStakes();
-      if (entry.total >= SKILL_GRADUATION_THRESHOLD_UPOH) {
+      if (entry.total >= SKILL_GRADUATION_THRESHOLD_UDAI) {
         const skill = skillsManager.getAllSkills().find(s => s.id === skillId);
         if (skill && skill.status !== 'active') {
           const transition = { type: 'skill-graduated', skillId };
@@ -5466,7 +5466,7 @@ export class PohMinerNode {
       // (the sync loop now yields to the event loop between blocks). Anything we
       // skip here is re-fetched by the sync itself or the next sync cycle.
       if (this._syncInProgress) return;
-      const newBlock = PohBlock.fromJSON(blockData);
+      const newBlock = DAIBlock.fromJSON(blockData);
       const currentHeight = this.chain[this.chain.length - 1]?.height ?? this.chain.length - 1;
       const tipHash = this.chain[this.chain.length - 1].getHashSync();
 
@@ -5475,14 +5475,14 @@ export class PohMinerNode {
       if (newBlock.height === 0) {
         const localGenesis = this.chain.find(b => b.height === 0);
         if (localGenesis && newBlock.getHashSync() !== localGenesis.getHashSync()) {
-          console.warn(`[PoH-Miner] Rejected genesis block from ${from} — different network (hash mismatch)`);
+          console.warn(`[DAI-Miner] Rejected genesis block from ${from} — different network (hash mismatch)`);
           return;
         }
       }
 
       // Always reject invalid signatures
       if (newBlock.minerSignature && !newBlock.verifySignature()) {
-        console.warn(`[PoH-Miner] Block #${newBlock.height} invalid signature — rejected`);
+        console.warn(`[DAI-Miner] Block #${newBlock.height} invalid signature — rejected`);
         return;
       }
 
@@ -5493,13 +5493,13 @@ export class PohMinerNode {
         const chainPrefix = this.chain.slice(0, parentIdx + 1);
         const check = validateBlock(newBlock, { parent, chainPrefix });
         if (!check.valid) {
-          console.warn(`[PoH-Miner] Block #${newBlock.height} rejected (${check.reason}) from ${from?.slice(0, 8)}`);
+          console.warn(`[DAI-Miner] Block #${newBlock.height} rejected (${check.reason}) from ${from?.slice(0, 8)}`);
           return;
         }
       } else if (newBlock.height > 0) {
         const powCheck = validateBlockPowOnly(newBlock);
         if (!powCheck.valid) {
-          console.warn(`[PoH-Miner] Block #${newBlock.height} rejected (${powCheck.reason}) from ${from?.slice(0, 8)}`);
+          console.warn(`[DAI-Miner] Block #${newBlock.height} rejected (${powCheck.reason}) from ${from?.slice(0, 8)}`);
           return;
         }
       }
@@ -5515,7 +5515,7 @@ export class PohMinerNode {
         // Keep the block with more cumulative work (longest/heaviest chain rule)
         const ourWork  = getTipChainWork(this.chain);
         if (compareChainWork(newBlock.chainWork, ourWork) > 0) {
-          console.log(`[PoH-Miner] Fork: incoming block #${newBlock.height} has more chainWork — switching`);
+          console.log(`[DAI-Miner] Fork: incoming block #${newBlock.height} has more chainWork — switching`);
           await this.reorgTo([newBlock]);
         } else {
           // Put in orphan pool; may become canonical if a longer chain follows
@@ -5533,7 +5533,7 @@ export class PohMinerNode {
         const now = Date.now();
         if (!this._lastBlockSyncAt || now - this._lastBlockSyncAt > 30_000) {
           this._lastBlockSyncAt = now;
-          console.log(`[PoH-Miner] Behind (peer at ${newBlock.height}, we at ${currentHeight}) — syncing`);
+          console.log(`[DAI-Miner] Behind (peer at ${newBlock.height}, we at ${currentHeight}) — syncing`);
           this.gossip.publish('block-request', {
             fromHeight: currentHeight + 1,
             toHeight: newBlock.height - 1,
@@ -5543,7 +5543,7 @@ export class PohMinerNode {
         }
       }
     } catch (err) {
-      console.warn(`[PoH-Miner] Failed to process incoming block from ${from}:`, err.message);
+      console.warn(`[DAI-Miner] Failed to process incoming block from ${from}:`, err.message);
     }
   }
 
@@ -5553,10 +5553,10 @@ export class PohMinerNode {
   _applyBlockState(block) {
     const appliedTxHashes = [];
     for (const txData of (block.transactions || [])) {
-      const tx = PoHTransaction.fromJSON(txData);
+      const tx = DAITransaction.fromJSON(txData);
       const result = this.walletManager.applyTransaction(tx);
       if (result === true) {
-        const txCur = tx.currency || 'POH';
+        const txCur = tx.currency || 'DAI';
         appliedTxHashes.push(tx.txHash);
         this.balanceJournal.record(block.height, tx.from, -(tx.amount + tx.fee), 1, tx.txHash, txCur);
         this.balanceJournal.record(block.height, tx.to, tx.amount, 0, tx.txHash, txCur);
@@ -5570,7 +5570,7 @@ export class PohMinerNode {
           blockHeight: block.height, status: 'mined',
         });
       } else {
-        console.warn(`[PoH-Miner] Tx ${tx.txHash.slice(0,12)} failed in block #${block.height}: ${result}`);
+        console.warn(`[DAI-Miner] Tx ${tx.txHash.slice(0,12)} failed in block #${block.height}: ${result}`);
       }
     }
     if (appliedTxHashes.length) this.txMempool.onBlockApplied(appliedTxHashes);
@@ -5586,7 +5586,7 @@ export class PohMinerNode {
     const dropped = before - this.pendingValidResults.length;
     if (dropped > 0) {
       this._persistPendingResults(); // durable queue: only drop rewards once mined
-      console.log(`[PoH-Miner] Dropped ${dropped} pending result(s) already mined in block #${block.height}`);
+      console.log(`[DAI-Miner] Dropped ${dropped} pending result(s) already mined in block #${block.height}`);
     }
 
     this.processIncomingBlockRewards(block);
@@ -5626,11 +5626,11 @@ export class PohMinerNode {
   // replay), which never drifts from the chain. Per-wallet files are a cache that
   // can lag after reorgs/rebuilds, so they're only a fallback before the ledger
   // is built (early startup).
-  _confirmedBalance(address, currency = 'POH') {
+  _confirmedBalance(address, currency = 'DAI') {
     return this.txLedger ? this.txLedger.getBalance(address, currency) : this.walletManager.getAssetBalance(address, currency);
   }
 
-  /** Non-POH holdings for an address from the canonical ledger (wallet-file fallback). */
+  /** Non-DAI holdings for an address from the canonical ledger (wallet-file fallback). */
   _confirmedAssets(address) {
     return this.txLedger ? this.txLedger.getAssetBalances(address) : this.walletManager.getAssetBalances(address);
   }
@@ -5680,7 +5680,7 @@ export class PohMinerNode {
   }
 
   _balanceRebuildStatePath() {
-    return path.join(os.homedir(), '.poh-miner', 'chain', 'balance-rebuild.json');
+    return path.join(os.homedir(), '.dai-miner', 'chain', 'balance-rebuild.json');
   }
 
   _getLastRebuiltHeight() {
@@ -5697,7 +5697,7 @@ export class PohMinerNode {
       fs.mkdirSync(path.dirname(this._balanceRebuildStatePath()), { recursive: true });
       fs.writeFileSync(this._balanceRebuildStatePath(), JSON.stringify({ height, at: Date.now() }));
     } catch (e) {
-      console.warn('[PoH-Miner] Could not persist balance-rebuild state:', e.message);
+      console.warn('[DAI-Miner] Could not persist balance-rebuild state:', e.message);
     }
   }
 
@@ -5720,7 +5720,7 @@ export class PohMinerNode {
   // Uses canonical tx-ledger replay (spent-tx dedup) so replay inflation is undone.
   // Async: yields to the event loop every 50 wallet I/O operations so HTTP stays live.
   async _rebuildBalancesFromChain() {
-    console.log(`[PoH-Miner] Rebuilding wallet balances from ${this.chain.length} canonical blocks…`);
+    console.log(`[DAI-Miner] Rebuilding wallet balances from ${this.chain.length} canonical blocks…`);
 
     const ledger = await replayChainLedgerAsync(this.chain, { applyP2P: true });
     this.txLedger = ledger;
@@ -5791,7 +5791,7 @@ export class PohMinerNode {
     const audit = ledger.checkSupplyInvariant();
     this._setLastRebuiltHeight(this._chainTipHeight());
     console.log(
-      `[PoH-Miner] Balance rebuild complete — ${this.chain.length} blocks, ` +
+      `[DAI-Miner] Balance rebuild complete — ${this.chain.length} blocks, ` +
       `supply ${audit.ok ? 'OK' : 'MISMATCH'} ` +
       `(minted ${audit.totalMinted}, balances ${audit.totalBalances}` +
       `${audit.coinbaseDust ? `, dust ${audit.coinbaseDust}` : ''})`
@@ -5805,20 +5805,20 @@ export class PohMinerNode {
         parent, chainPrefix: this.chain, ledger: this.txLedger, strictTx: true,
       });
       if (!check.valid) {
-        console.warn(`[PoH-Miner] Block #${block.height} rejected (${check.reason}) from ${from?.slice(0, 8)}`);
+        console.warn(`[DAI-Miner] Block #${block.height} rejected (${check.reason}) from ${from?.slice(0, 8)}`);
         return false;
       }
       if (checkStateRoot && block.stateRoot) {
         const localRoot = this.walletManager.getStateRoot();
         if (localRoot !== block.stateRoot) {
-          console.warn(`[PoH-Miner] Block #${block.height} stateRoot mismatch — rejected`);
+          console.warn(`[DAI-Miner] Block #${block.height} stateRoot mismatch — rejected`);
           return false;
         }
       }
       for (const result of (block.scanResults || [])) {
         const workCheck = await validateResultWork(result);
         if (!workCheck.isValid) {
-          console.warn(`[PoH-Miner] Block #${block.height} invalid scanResult: ${workCheck.errors?.join('; ')}`);
+          console.warn(`[DAI-Miner] Block #${block.height} invalid scanResult: ${workCheck.errors?.join('; ')}`);
           return false;
         }
       }
@@ -5871,7 +5871,7 @@ export class PohMinerNode {
         parent, chainPrefix: this.chain, ledger: this.txLedger, strictTx: true,
       });
       if (!check.valid) {
-        console.warn(`[PoH-Miner] Refused to append block #${block.height} (${check.reason}) from ${from?.slice(0, 8)}`);
+        console.warn(`[DAI-Miner] Refused to append block #${block.height} (${check.reason}) from ${from?.slice(0, 8)}`);
         return false;
       }
     }
@@ -5886,7 +5886,7 @@ export class PohMinerNode {
     this.chainStore.saveBlock(block);
     this._indexBlockInSearch(block);
     this.currentDifficulty = getNextDifficulty(this.chain);
-    console.log(`[PoH-Miner] Accepted block #${block.height} chainWork=${block.chainWork} txs=${(block.transactions||[]).length} [sig:${block.minerSignature ? '✓' : 'none'}] from ${from?.slice(0,8)}`);
+    console.log(`[DAI-Miner] Accepted block #${block.height} chainWork=${block.chainWork} txs=${(block.transactions||[]).length} [sig:${block.minerSignature ? '✓' : 'none'}] from ${from?.slice(0,8)}`);
 
     // Trigger IPFS chain snapshot every 100 blocks (fire-and-forget)
     this.ipfsSync.onBlockAppended(block).catch(() => {});
@@ -5938,7 +5938,7 @@ export class PohMinerNode {
    */
   async requestBlockSync(targetHeight) {
     if (!this.config.bootnodes || this.config.bootnodes.length === 0) {
-      console.log(`[PoH-Miner] [Sync] No bootnodes configured. Cannot catch up.`);
+      console.log(`[DAI-Miner] [Sync] No bootnodes configured. Cannot catch up.`);
       return;
     }
 
@@ -5948,7 +5948,7 @@ export class PohMinerNode {
 
     try {
       const currentHeight = this.chain[this.chain.length - 1]?.height ?? this.chain.length - 1;
-      console.log(`[PoH-Miner] [Sync] Requesting blocks ${currentHeight + 1} → ${targetHeight} from bootnodes...`);
+      console.log(`[DAI-Miner] [Sync] Requesting blocks ${currentHeight + 1} → ${targetHeight} from bootnodes...`);
 
       for (const bootnode of this.config.bootnodes) {
         try {
@@ -5958,7 +5958,7 @@ export class PohMinerNode {
           if (!res.ok) continue;
 
           const blocksData = await res.json();
-          const incoming = blocksData.map(b => PohBlock.fromJSON(b));
+          const incoming = blocksData.map(b => DAIBlock.fromJSON(b));
 
           // Check if incoming blocks represent a heavier chain (reorg needed)
           const incomingTip = incoming[incoming.length - 1];
@@ -5989,16 +5989,16 @@ export class PohMinerNode {
           }
 
           if (added > 0) {
-            console.log(`[PoH-Miner] [Sync] Synced ${added} blocks from ${bootnode}`);
+            console.log(`[DAI-Miner] [Sync] Synced ${added} blocks from ${bootnode}`);
             return;
           }
         } catch (err) {
-          console.warn(`[PoH-Miner] [Sync] Failed to fetch from ${bootnode}:`, err.message);
+          console.warn(`[DAI-Miner] [Sync] Failed to fetch from ${bootnode}:`, err.message);
         }
       }
 
       // Bootnodes unreachable — fall back to IPFS peer directory + peer/chain sync
-      console.log('[PoH-Miner] [Sync] Bootnode pull failed — trying IPFS-aware sync');
+      console.log('[DAI-Miner] [Sync] Bootnode pull failed — trying IPFS-aware sync');
       this._syncInProgress = false;
       await this.syncFromBootnodes();
     } finally {
@@ -6066,12 +6066,12 @@ export class PohMinerNode {
       if (snap) target = buildMigrationGenesis(snap, { difficulty: this.currentDifficulty }).genesis.getHashSync();
     } catch { /* fall through */ }
     if (target !== EXPECTED_GENESIS_HASH) {
-      console.warn('[PoH-Miner] On-disk genesis is stale but the migration snapshot is missing/invalid — ' +
-        'not resetting automatically. To join the new chain, wipe ~/.poh-miner/chain.');
+      console.warn('[DAI-Miner] On-disk genesis is stale but the migration snapshot is missing/invalid — ' +
+        'not resetting automatically. To join the new chain, wipe ~/.dai-miner/chain.');
       return;
     }
 
-    console.warn(`[PoH-Miner] ⛓ Migrating to the new network genesis ${EXPECTED_GENESIS_HASH.slice(0, 12)}… ` +
+    console.warn(`[DAI-Miner] ⛓ Migrating to the new network genesis ${EXPECTED_GENESIS_HASH.slice(0, 12)}… ` +
       `(local was ${local.slice(0, 12)}…). Wiping the old chain — wallets and keys are preserved.`);
     this._wipeStaleChainState();
     this.chain = []; // → the genesis-creation block rebuilds the new genesis
@@ -6098,7 +6098,7 @@ export class PohMinerNode {
       fs.closeSync(fd);
       const firstLine = buf.subarray(0, n).toString('utf8').split('\n')[0];
       if (!firstLine) return;
-      const onDisk = new PohBlock(JSON.parse(firstLine)).getHashSync();
+      const onDisk = new DAIBlock(JSON.parse(firstLine)).getHashSync();
       if (onDisk === EXPECTED_GENESIS_HASH) return; // already on the new chain
 
       // Safety: never wipe unless we can actually build the expected genesis from the
@@ -6106,8 +6106,8 @@ export class PohMinerNode {
       const snap = loadSnapshot(this.config.genesisSnapshot || defaultMigrationSnapshot());
       if (!snap || buildMigrationGenesis(snap, { difficulty: 3 }).genesis.getHashSync() !== EXPECTED_GENESIS_HASH) return;
 
-      const base = path.dirname(this.chainStore.dataDir); // ~/.poh-miner
-      console.warn(`[PoH-Miner] ⛓ Fresh-chain hard reset → genesis ${EXPECTED_GENESIS_HASH.slice(0, 12)}…: ` +
+      const base = path.dirname(this.chainStore.dataDir); // ~/.dai-miner
+      console.warn(`[DAI-Miner] ⛓ Fresh-chain hard reset → genesis ${EXPECTED_GENESIS_HASH.slice(0, 12)}…: ` +
         'wiping chain, WALLETS, and search. A brand-new wallet will be created.');
       for (const t of ['chain', 'wallets', 'search', 'meilisearch-data', 'rewards', 'p2p', 'data', 'ipfs', 'ipfs_cid_cache.json']) {
         try { fs.rmSync(path.join(base, t), { recursive: true, force: true }); } catch { /* best effort */ }
@@ -6117,9 +6117,9 @@ export class PohMinerNode {
       try { fs.mkdirSync(this.chainStore.dataDir, { recursive: true }); } catch { /* exists */ }
       try { fs.mkdirSync(this.walletManager.walletsDir, { recursive: true }); } catch { /* exists */ }
       this.config.wallet = null;
-      this.config.pohWallet = null;
+      this.config.daiWallet = null;
     } catch (e) {
-      console.warn('[PoH-Miner] hard-reset check failed (continuing normally):', e.message);
+      console.warn('[DAI-Miner] hard-reset check failed (continuing normally):', e.message);
     }
   }
 
@@ -6138,9 +6138,9 @@ export class PohMinerNode {
         path.join(base, 'data'),
       ];
       for (const t of targets) { try { fs.rmSync(t, { recursive: true, force: true }); } catch { /* best effort */ } }
-      console.warn('[PoH-Miner] Old chain state removed (wallets/keys/config kept).');
+      console.warn('[DAI-Miner] Old chain state removed (wallets/keys/config kept).');
     } catch (e) {
-      console.warn('[PoH-Miner] chain wipe encountered an error:', e.message);
+      console.warn('[DAI-Miner] chain wipe encountered an error:', e.message);
     }
   }
 
@@ -6407,7 +6407,7 @@ export class PohMinerNode {
         if (!Array.isArray(txs)) continue;
         for (const txData of txs) {
           try {
-            const tx = PoHTransaction.fromJSON(txData);
+            const tx = DAITransaction.fromJSON(txData);
             this.txMempool.submit(tx); // silently ignores duplicates / invalid nonce / insufficient balance
           } catch { /* malformed */ }
         }
@@ -6441,7 +6441,7 @@ export class PohMinerNode {
       this.balanceJournal.record(block.height, this.config.wallet, worker.amount, 0, claimKey);
 
       console.log(
-        `[PoH-Miner] Credited ${(worker.amount / POH_DECIMALS).toFixed(4)} POH (worker) from block #${block.height} to ${this.config.wallet}`
+        `[DAI-Miner] Credited ${(worker.amount / DAI_DECIMALS).toFixed(4)} DAI (worker) from block #${block.height} to ${this.config.wallet}`
       );
     });
   }
@@ -6480,7 +6480,7 @@ export class PohMinerNode {
       if (!r.ok) return false;
       const raw = await r.json();
       if (!Array.isArray(raw) || !raw.length) return false;
-      peerBlocks = raw.map(b => (PohBlock.fromJSON ? PohBlock.fromJSON(b) : new PohBlock(b)));
+      peerBlocks = raw.map(b => (DAIBlock.fromJSON ? DAIBlock.fromJSON(b) : new DAIBlock(b)));
     } catch { return false; }
 
     const peerByHeight = new Map(peerBlocks.map(b => [b.height, b]));
@@ -6494,13 +6494,13 @@ export class PohMinerNode {
       if (lh === ph) { commonHeight = h; break; }
     }
     if (commonHeight < 0) {
-      console.warn(`[PoH-Miner] [Sync] No common ancestor within ${FINALITY_DEPTH} blocks of #${localTip} — fork deeper than finality; not wiping.`);
+      console.warn(`[DAI-Miner] [Sync] No common ancestor within ${FINALITY_DEPTH} blocks of #${localTip} — fork deeper than finality; not wiping.`);
       return false;
     }
 
     const newBranch = peerBlocks.filter(b => b.height > commonHeight).sort((a, b) => a.height - b.height);
     if (!newBranch.length) return false;
-    console.log(`[PoH-Miner] [Sync] Bounded reorg: common ancestor #${commonHeight}, applying ${newBranch.length} peer block(s) → #${peerTipHeight}`);
+    console.log(`[DAI-Miner] [Sync] Bounded reorg: common ancestor #${commonHeight}, applying ${newBranch.length} peer block(s) → #${peerTipHeight}`);
     return await this.reorgTo(newBranch);
   }
 
@@ -6517,7 +6517,7 @@ export class PohMinerNode {
       }
     }
     if (commonHeight < 0) {
-      console.warn('[PoH-Miner] Reorg: no common ancestor in fetched segment — triggering full resync');
+      console.warn('[DAI-Miner] Reorg: no common ancestor in fetched segment — triggering full resync');
       return false;
     }
 
@@ -6534,19 +6534,19 @@ export class PohMinerNode {
       allowDeep: this._allowDeepReorg,
     });
     if (!fin.allowed) {
-      console.warn(`[PoH-Miner] ⛔ Reorg REJECTED by finality rule: ${fin.reason}. ` +
-        `Set POH_ALLOW_DEEP_REORG=1 to override (recovery only).`);
+      console.warn(`[DAI-Miner] ⛔ Reorg REJECTED by finality rule: ${fin.reason}. ` +
+        `Set DAI_ALLOW_DEEP_REORG=1 to override (recovery only).`);
       return false;
     }
     if (this.finalizedCheckpoint &&
         !chainHonorsCheckpoint(newBlocks, this.finalizedCheckpoint, b => b.getHashSync())) {
-      console.warn(`[PoH-Miner] ⛔ Reorg REJECTED: branch conflicts with finalized ` +
+      console.warn(`[DAI-Miner] ⛔ Reorg REJECTED: branch conflicts with finalized ` +
         `checkpoint #${this.finalizedCheckpoint.height} (${this.finalizedCheckpoint.hash.slice(0, 12)}…)`);
       return false;
     }
 
     const rolledBack = this.chain.splice(commonHeight + 1);
-    console.log(`[PoH-Miner] Reorg: rolling back ${rolledBack.length} blocks to height ${commonHeight}`);
+    console.log(`[DAI-Miner] Reorg: rolling back ${rolledBack.length} blocks to height ${commonHeight}`);
 
     // Undo balance changes for rolled-back blocks
     const undone = this.balanceJournal.rollbackTo(commonHeight);
@@ -6555,7 +6555,7 @@ export class PohMinerNode {
     // blocks can resubmit with the correct (reverted) nonces.
     this.txMempool.accountPendingNonce.clear();
     if (this.txMempool.pendingOut) this.txMempool.pendingOut.clear();
-    console.log(`[PoH-Miner] Reorg: reversed ${undone} journal entries`);
+    console.log(`[DAI-Miner] Reorg: reversed ${undone} journal entries`);
 
     // Unclaim reward claims so they can be re-earned on the new chain
     for (const block of rolledBack) {
@@ -6573,7 +6573,7 @@ export class PohMinerNode {
     for (const block of newBlocks) {
       const ok = await this._acceptBlock(block, 'reorg');
       if (!ok) {
-        console.warn(`[PoH-Miner] Reorg aborted at block #${block.height}`);
+        console.warn(`[DAI-Miner] Reorg aborted at block #${block.height}`);
         return false;
       }
     }
@@ -6631,12 +6631,12 @@ export class PohMinerNode {
     }
 
     this.chainStore.saveChain(this.chain);
-    console.log(`[PoH-Miner] Reorg complete. New tip: #${this.chain[this.chain.length - 1].height} (rolled back ${rolledBack.length}, reconciled ${touchedCount} wallet(s))`);
+    console.log(`[DAI-Miner] Reorg complete. New tip: #${this.chain[this.chain.length - 1].height} (rolled back ${rolledBack.length}, reconciled ${touchedCount} wallet(s))`);
     return true;
   }
 
   startJobListener() {
-    console.log('[PoH-Miner] Listening for jobs (with geo awareness)...');
+    console.log('[DAI-Miner] Listening for jobs (with geo awareness)...');
 
     this.onNewJob = (rawJob) => {
       // Skip if we already completed or are computing this job (prevents duplicate runs
@@ -6657,11 +6657,11 @@ export class PohMinerNode {
 
       if (score > 0 && this.config.computeEnabled) {
         const geoNote = job.originCountry ? ` [from: ${job.originCountry}]` : '';
-        console.log(`[PoH-Miner] New job ${job.id} (${job.type})${geoNote} → score: ${score}`);
+        console.log(`[DAI-Miner] New job ${job.id} (${job.type})${geoNote} → score: ${score}`);
         this._enqueueJob(job);
       } else {
         const reason = score === 0 ? 'different continent / low priority' : 'compute disabled';
-        console.log(`[PoH-Miner] Ignoring job ${job.id} (${reason})`);
+        console.log(`[DAI-Miner] Ignoring job ${job.id} (${reason})`);
         this._updateJob(job.id, { status: 'ignored', error: reason });
       }
     };
@@ -6676,7 +6676,7 @@ export class PohMinerNode {
         this._pendingJobQueue.sort((a, b) =>
           ((b.maxBudget || 0) - (a.maxBudget || 0)) || ((b.fee || 0) - (a.fee || 0))
         );
-        console.log(`[PoH-Miner] Job ${job.id} queued (slot busy with ${this._activeJobId}, queue depth: ${this._pendingJobQueue.length})`);
+        console.log(`[DAI-Miner] Job ${job.id} queued (slot busy with ${this._activeJobId}, queue depth: ${this._pendingJobQueue.length})`);
       }
     } else {
       this._startJob(job);
@@ -6694,18 +6694,18 @@ export class PohMinerNode {
     while (this._pendingJobQueue.length > 0) {
       const next = this._pendingJobQueue.shift();
       if (this.jobQueue.completed.has(next.id)) {
-        console.log(`[PoH-Miner] Skipping ${next.id} — already claimed by a peer`);
+        console.log(`[DAI-Miner] Skipping ${next.id} — already claimed by a peer`);
         continue;
       }
       const existing = this.jobResults?.get(next.id);
       if (existing && (existing.status === 'done' || existing.status === 'computing')) {
-        console.log(`[PoH-Miner] Skipping ${next.id} — already processed`);
+        console.log(`[DAI-Miner] Skipping ${next.id} — already processed`);
         continue;
       }
       this._startJob(next);
       return;
     }
-    console.log('[PoH-Miner] Job queue drained — idle');
+    console.log('[DAI-Miner] Job queue drained — idle');
   }
 
   // ── Pull-based compute worker (bootnode job board) ──────────────────────────
@@ -6717,14 +6717,14 @@ export class PohMinerNode {
     const bootnode = (this.config.bootnodes && this.config.bootnodes[0]) || null;
     if (!bootnode) return;
     if (!this.identityWallet?.signingPublicKey || !this.identityWallet?.sign) {
-      console.warn('[PoH-Worker] No identity signing key — compute worker disabled.');
+      console.warn('[DAI-Worker] No identity signing key — compute worker disabled.');
       return;
     }
     this._boardBase = bootnode.replace(/\/$/, '');
     const intervalMs = this.config.boardPollMs || 4_000;
     this._boardBusy = false;
     this._boardWorkerTimer = setInterval(() => this._pollBoardOnce().catch(() => {}), intervalMs);
-    console.log(`[PoH-Worker] Pull-based compute worker polling ${this._boardBase}/jobboard every ${intervalMs / 1000}s`);
+    console.log(`[DAI-Worker] Pull-based compute worker polling ${this._boardBase}/jobboard every ${intervalMs / 1000}s`);
   }
 
   _signBoardAction(action, extra, timestamp) {
@@ -6768,7 +6768,7 @@ export class PohMinerNode {
         }
       }
       if (!claimed) return;
-      console.log(`[PoH-Worker] Claimed board job ${claimed.id} (${claimed.type || 'verdict'}) — computing…`);
+      console.log(`[DAI-Worker] Claimed board job ${claimed.id} (${claimed.type || 'verdict'}) — computing…`);
 
       const result = await this._computeBoardJob(claimed);
       if (!result) return;
@@ -6779,7 +6779,7 @@ export class PohMinerNode {
         body: JSON.stringify({ jobId: claimed.id, result, timestamp: ts2, ...this._signBoardAction('job-result', { jobId: claimed.id }, ts2) }),
         signal: AbortSignal.timeout(15_000),
       });
-      if (postRes.ok) console.log(`[PoH-Worker] Completed board job ${claimed.id} ✓`);
+      if (postRes.ok) console.log(`[DAI-Worker] Completed board job ${claimed.id} ✓`);
     } finally {
       this._boardBusy = false;
     }
@@ -6795,7 +6795,7 @@ export class PohMinerNode {
     this._boardResultBase = bootnode.replace(/\/$/, '');
     const intervalMs = this.config.boardResultPollMs || 20_000;
     this._resultCollectorTimer = setInterval(() => this._collectBoardResults().catch(() => {}), intervalMs);
-    console.log(`[PoH-Miner] Board result collector active — paying compute workers from ${this._boardResultBase}`);
+    console.log(`[DAI-Miner] Board result collector active — paying compute workers from ${this._boardResultBase}`);
   }
 
   async _collectBoardResults() {
@@ -6815,7 +6815,7 @@ export class PohMinerNode {
       // via job-escrow + job-settled transitions instead of a coinbase reward.
       if (FEE_REQUIRED_JOB_TYPES.has(jobType)) {
         const settled = await this._settleBoardFeeJob({ jobId, worker, requesterAddress, maxBudget, paymentTx });
-        if (settled) console.log(`[PoH-Miner] Settled board fee job ${jobId} → worker ${worker.slice(0, 12)}… (${maxBudget} μPOH)`);
+        if (settled) console.log(`[DAI-Miner] Settled board fee job ${jobId} → worker ${worker.slice(0, 12)}… (${maxBudget} μDAI)`);
         includedJobIds.push(jobId); // consume regardless (invalid payment shouldn't loop forever)
         continue;
       }
@@ -6833,13 +6833,13 @@ export class PohMinerNode {
         computationTimeMs: result.computationTimeMs,
         minerWallet: worker,          // ← the worker who computed it gets rewarded
         methodsHash: result.methodsHash,
-        realPohUsed: result.realPohUsed,
+        realDAIUsed: result.realDAIUsed,
         profile: result.profile || null,
       });
 
       const check = await validateResultWork(sr, { id: jobId, payload: { address: result.address } });
       if (!check.isValid) {
-        console.warn(`[PoH-Miner] Board result for ${jobId} failed validation (${check.errors?.[0]}) — not rewarding`);
+        console.warn(`[DAI-Miner] Board result for ${jobId} failed validation (${check.errors?.[0]}) — not rewarding`);
         includedJobIds.push(jobId); // consume it so it isn't re-offered forever
         continue;
       }
@@ -6847,7 +6847,7 @@ export class PohMinerNode {
       this.pendingValidResults.push(sr);
       this._persistPendingResults();
       includedJobIds.push(jobId);
-      console.log(`[PoH-Miner] Queued board result ${jobId} for reward → worker ${worker.slice(0, 12)}…`);
+      console.log(`[DAI-Miner] Queued board result ${jobId} for reward → worker ${worker.slice(0, 12)}…`);
     }
 
     if (includedJobIds.length) {
@@ -6866,17 +6866,17 @@ export class PohMinerNode {
   async _settleBoardFeeJob({ jobId, worker, requesterAddress, maxBudget, paymentTx }) {
     if (this._appliedEscrowJobIds.has(jobId)) return false;
     if (!requesterAddress || !(maxBudget > 0) || !paymentTx?.signature || typeof paymentTx?.nonce !== 'number') {
-      console.warn(`[PoH-Miner] Board fee job ${jobId}: missing/invalid payment — not settling`);
+      console.warn(`[DAI-Miner] Board fee job ${jobId}: missing/invalid payment — not settling`);
       return false;
     }
     const senderWallet = this.walletManager.loadWallet(requesterAddress);
     if (!senderWallet?.signingPublicKey) {
-      console.warn(`[PoH-Miner] Board fee job ${jobId}: requester has no registered signing key — not settling`);
+      console.warn(`[DAI-Miner] Board fee job ${jobId}: requester has no registered signing key — not settling`);
       return false;
     }
     const expectedHash = computeBoardJobPaymentHash({ jobId, requesterAddress, amount: maxBudget, nonce: paymentTx.nonce });
     if (paymentTx.txHash !== expectedHash || !Wallet.verifySignature(senderWallet.signingPublicKey, expectedHash, paymentTx.signature)) {
-      console.warn(`[PoH-Miner] Board fee job ${jobId}: invalid payment proof — not settling`);
+      console.warn(`[DAI-Miner] Board fee job ${jobId}: invalid payment proof — not settling`);
       return false;
     }
 
@@ -6888,7 +6888,7 @@ export class PohMinerNode {
     };
     const applied = await this._applyEscrow(escrowTransition);
     if (applied !== true) {
-      console.warn(`[PoH-Miner] Board fee job ${jobId}: escrow debit failed (${applied}) — not settling`);
+      console.warn(`[DAI-Miner] Board fee job ${jobId}: escrow debit failed (${applied}) — not settling`);
       return false;
     }
     this.pendingBrainTransitions.push(escrowTransition);
@@ -6916,10 +6916,10 @@ export class PohMinerNode {
         sr.isValidWork = d.isValidWork !== false;
         out.push(sr);
       }
-      if (out.length) console.log(`[PoH-Miner] Restored ${out.length} pending compute reward(s) from disk`);
+      if (out.length) console.log(`[DAI-Miner] Restored ${out.length} pending compute reward(s) from disk`);
       return out;
     } catch (e) {
-      console.warn('[PoH-Miner] Could not load pending-results queue:', e.message);
+      console.warn('[DAI-Miner] Could not load pending-results queue:', e.message);
       return [];
     }
   }
@@ -6931,7 +6931,7 @@ export class PohMinerNode {
       fs.writeFileSync(tmp, JSON.stringify(this.pendingValidResults.map(r => ({ ...r }))));
       fs.renameSync(tmp, this._pendingResultsPath);
     } catch (e) {
-      console.warn('[PoH-Miner] Could not persist pending-results queue:', e.message);
+      console.warn('[DAI-Miner] Could not persist pending-results queue:', e.message);
     }
   }
 
@@ -7066,7 +7066,7 @@ export class PohMinerNode {
               signalsUsed: [],
               methodsHash: this.methodsManager?.getStatus().hash || 'compute',
               methodsCount: 0,
-              realPohUsed: false,
+              realDAIUsed: false,
               computationTimeMs: Date.now() - start,
             };
           }
@@ -7135,22 +7135,22 @@ export class PohMinerNode {
           signalsUsed: [],
           methodsHash: this.methodsManager?.getStatus().hash || 'compute',
           methodsCount: 0,
-          realPohUsed: false,
+          realDAIUsed: false,
           computationTimeMs: Date.now() - start,
         };
       }
-      const v = await computeVerdictWithExistingPoh(job, this.config);
+      const v = await computeVerdictWithExistingDai(job, this.config);
       return {
         type: 'verdict',
         address: job.payload?.address,
         verdict: v.verdict, confidence: v.confidence, reasoning: v.reasoning,
         profile: v.profile, methodsHash: v.methodsHash,
         signalsUsed: v.signalsUsed, methodsCount: v.methodsCount ?? (v.signalsUsed?.length || 0),
-        realPohUsed: v.realPohUsed,
+        realDAIUsed: v.realDAIUsed,
         computationTimeMs: Date.now() - start,   // real compute time — anti-fraud checks require it
       };
     } catch (e) {
-      console.warn(`[PoH-Worker] Compute failed for job ${job.id}: ${e.message}`);
+      console.warn(`[DAI-Worker] Compute failed for job ${job.id}: ${e.message}`);
       return null;
     }
   }
@@ -7162,16 +7162,16 @@ export class PohMinerNode {
     if (job.type === 'skill' && job.skillId) {
       // Gate: skill must be enabled on this node
       if (!this.isSkillEnabled(job.skillId)) {
-        console.log(`[PoH-Miner] Skipping skill job ${job.id} — skill ${job.skillId} is disabled on this node`);
+        console.log(`[DAI-Miner] Skipping skill job ${job.id} — skill ${job.skillId} is disabled on this node`);
         this._updateJob(job.id, { status: 'ignored', error: 'skill disabled by miner' });
         return;
       }
-      // poh_identity has no sandboxed code — delegate to the full verdict pipeline
-      if (job.skillId === 'poh_identity') {
+      // dai_identity has no sandboxed code — delegate to the full verdict pipeline
+      if (job.skillId === 'dai_identity') {
         return this.computeAndSubmitJob({ ...job, type: 'verdict' });
       }
       try {
-        console.log(`[PoH-Miner] Running skill ${job.skillId} for job ${job.id}`);
+        console.log(`[DAI-Miner] Running skill ${job.skillId} for job ${job.id}`);
         const { output, tokensUsed } = await skillsManager.runSkill(job.skillId, job.payload, this.config, job.maxBudget);
 
         // If the job carries a user question, generate a natural-language LLM response
@@ -7196,9 +7196,9 @@ export class PohMinerNode {
               ],
               { timeoutMs: 30_000 },
             )) || null;
-            if (nlResponse) console.log(`[PoH-Miner] LLM analysis done for job ${job.id} (${nlResponse.length} chars)`);
+            if (nlResponse) console.log(`[DAI-Miner] LLM analysis done for job ${job.id} (${nlResponse.length} chars)`);
           } catch (e) {
-            console.warn(`[PoH-Miner] LLM analysis skipped for job ${job.id}:`, e.message);
+            console.warn(`[DAI-Miner] LLM analysis skipped for job ${job.id}:`, e.message);
           }
         }
 
@@ -7214,7 +7214,7 @@ export class PohMinerNode {
           minerWallet:      this.config.wallet,
           methodsHash:      this.methodsManager?.getStatus().hash || 'skill',
           methodsCount:     0,
-          realPohUsed:      false,
+          realDAIUsed:      false,
           profile:          { skillOutput: output, skillId: job.skillId, tokensUsed, nlResponse },
         });
         // ── Proposal audit post-processing ── runs BEFORE submitResult so the renderer
@@ -7270,7 +7270,7 @@ export class PohMinerNode {
           const proposerAddress = (!job.payload?._isProposalAudit && skillEntry?.proposerAddress) ? skillEntry.proposerAddress : null;
           const proposerFee = proposerAddress ? Math.floor(fee * 0.2) : 0;
           const minerFee    = fee - proposerFee;
-          const settled = { type: 'job-settled', jobId: job.id, requesterAddress: job.requesterAddress, minerAddress: this.config.wallet, actualTokens: tokensUsed, actualFee: minerFee, proposerAddress, proposerFee, refund, gasPrice, ...(job.currency && job.currency !== 'POH' ? { currency: job.currency } : {}), completedAt: Date.now() };
+          const settled = { type: 'job-settled', jobId: job.id, requesterAddress: job.requesterAddress, minerAddress: this.config.wallet, actualTokens: tokensUsed, actualFee: minerFee, proposerAddress, proposerFee, refund, gasPrice, ...(job.currency && job.currency !== 'DAI' ? { currency: job.currency } : {}), completedAt: Date.now() };
           this.pendingBrainTransitions.push(settled);
           this._gossipedJobTransitions.add(`${job.id}:job-settled`);
           this.gossip.publish('job-transition', settled).catch(() => {});
@@ -7278,10 +7278,10 @@ export class PohMinerNode {
         }
         return result;
       } catch (err) {
-        console.error(`[PoH-Miner] Skill job ${job.id} failed:`, err.message);
+        console.error(`[DAI-Miner] Skill job ${job.id} failed:`, err.message);
         this._updateJob(job.id, { status: 'error', error: err.message });
         if (job.requesterAddress && job.maxBudget > 0 && this.escrow.has(job.id)) {
-          const timeout = { type: 'job-timeout', jobId: job.id, requesterAddress: job.requesterAddress, minerAddress: this.config.wallet, reservationFee: 0, refund: job.maxBudget, ...(job.currency && job.currency !== 'POH' ? { currency: job.currency } : {}), completedAt: Date.now() };
+          const timeout = { type: 'job-timeout', jobId: job.id, requesterAddress: job.requesterAddress, minerAddress: this.config.wallet, reservationFee: 0, refund: job.maxBudget, ...(job.currency && job.currency !== 'DAI' ? { currency: job.currency } : {}), completedAt: Date.now() };
           this.pendingBrainTransitions.push(timeout);
           this._applySettlement(timeout);
         }
@@ -7387,7 +7387,7 @@ export class PohMinerNode {
         // submitting + not settling here is exactly what keeps "first wins" true.
         if (this._supersededJobs.has(job.id)) {
           this._supersededJobs.delete(job.id);
-          console.log(`[PoH-Miner] Job ${job.id} superseded by a peer's result — discarding local compute (no settlement)`);
+          console.log(`[DAI-Miner] Job ${job.id} superseded by a peer's result — discarding local compute (no settlement)`);
           if (!this.jobQueue.completed.has(job.id)) this.jobQueue.markCompleted(job.id);
           return null;
         }
@@ -7414,7 +7414,7 @@ export class PohMinerNode {
           minerWallet:       this.config.wallet,
           methodsHash:       this.methodsManager?.getStatus().hash || 'compute',
           methodsCount:      0,
-          realPohUsed:       false,
+          realDAIUsed:       false,
           profile,
         });
 
@@ -7431,7 +7431,7 @@ export class PohMinerNode {
         if (job.requesterAddress && job.maxBudget > 0 && this.escrow.has(job.id)) {
           // No-refund: settleFee returns fee = maxBudget (the whole bid), refund = 0.
           const { fee, refund }  = settleFee(tokensUsed, gasPrice, job.maxBudget);
-          const settled = { type: 'job-settled', jobId: job.id, requesterAddress: job.requesterAddress, minerAddress: this.config.wallet, actualTokens: tokensUsed, actualFee: fee, refund, gasPrice, ...(job.currency && job.currency !== 'POH' ? { currency: job.currency } : {}), completedAt: Date.now() };
+          const settled = { type: 'job-settled', jobId: job.id, requesterAddress: job.requesterAddress, minerAddress: this.config.wallet, actualTokens: tokensUsed, actualFee: fee, refund, gasPrice, ...(job.currency && job.currency !== 'DAI' ? { currency: job.currency } : {}), completedAt: Date.now() };
           this.pendingBrainTransitions.push(settled);
           this._gossipedJobTransitions.add(`${job.id}:job-settled`);
           this.gossip.publish('job-transition', settled).catch(() => {});
@@ -7439,10 +7439,10 @@ export class PohMinerNode {
         }
         return result;
       } catch (err) {
-        console.error(`[PoH-Miner] Compute job ${job.id} failed:`, err.message);
+        console.error(`[DAI-Miner] Compute job ${job.id} failed:`, err.message);
         this._updateJob(job.id, { status: 'error', error: err.message });
         if (job.requesterAddress && job.maxBudget > 0 && this.escrow.has(job.id)) {
-          const timeout = { type: 'job-timeout', jobId: job.id, requesterAddress: job.requesterAddress, minerAddress: this.config.wallet, reservationFee: 0, refund: job.maxBudget, ...(job.currency && job.currency !== 'POH' ? { currency: job.currency } : {}), completedAt: Date.now() };
+          const timeout = { type: 'job-timeout', jobId: job.id, requesterAddress: job.requesterAddress, minerAddress: this.config.wallet, reservationFee: 0, refund: job.maxBudget, ...(job.currency && job.currency !== 'DAI' ? { currency: job.currency } : {}), completedAt: Date.now() };
           this.pendingBrainTransitions.push(timeout);
           this._applySettlement(timeout);
         }
@@ -7451,26 +7451,26 @@ export class PohMinerNode {
     }
 
     try {
-      console.log(`[PoH-Miner] Computing ${job.type} for job ${job.id} using real POH brain (geo-aware)`);
+      console.log(`[DAI-Miner] Computing ${job.type} for job ${job.id} using real DAI brain (geo-aware)`);
 
-      // This now calls the real existing POH checker + brain when available
-      const verdict = await computeVerdictWithExistingPoh(job, this.config);
+      // This now calls the real existing DAI checker + brain when available
+      const verdict = await computeVerdictWithExistingDai(job, this.config);
 
       // Quick local validation that we used current signals
       if (verdict.methodsHash && !this._validateResultMethods(verdict)) {
-        console.warn(`[PoH-Miner] Computed result used stale signals (hash=${verdict.methodsHash}). Re-syncing...`);
+        console.warn(`[DAI-Miner] Computed result used stale signals (hash=${verdict.methodsHash}). Re-syncing...`);
         await this.methodsManager?.sync();
       }
 
       // === NEW: Enforce proper inference work (protection against lazy/malicious miners) ===
       const workValidation = await validateResultWork(verdict, job);
       if (!workValidation.isValid) {
-        console.warn(`[PoH-Miner] Rejecting own low-quality result for ${job.id}:`, workValidation.errors);
+        console.warn(`[DAI-Miner] Rejecting own low-quality result for ${job.id}:`, workValidation.errors);
         // For now we still submit (for testing), but mark it
         verdict.lowQuality = true;
         verdict.validationErrors = workValidation.errors;
       } else {
-        console.log(`[PoH-Miner] Work quality OK for ${job.id} (${workValidation.signalsEvaluated}/${workValidation.liveCount} signals)`);
+        console.log(`[DAI-Miner] Work quality OK for ${job.id} (${workValidation.signalsEvaluated}/${workValidation.liveCount} signals)`);
       }
 
       const result = new ScanResult({
@@ -7485,7 +7485,7 @@ export class PohMinerNode {
         minerWallet: this.config.wallet,
         methodsHash: verdict.methodsHash,
         methodsCount: verdict.methodsCount,
-        realPohUsed: verdict.realPohUsed ?? false,
+        realDAIUsed: verdict.realDAIUsed ?? false,
         profile: verdict.profile,
       });
 
@@ -7534,7 +7534,7 @@ export class PohMinerNode {
 
       return result;
     } catch (err) {
-      console.error('[PoH-Miner] Job computation failed:', err.message);
+      console.error('[DAI-Miner] Job computation failed:', err.message);
       if (this.jobResults && this.jobResults.has(job.id)) {
         const rec = this.jobResults.get(job.id);
         rec.status = 'error';
@@ -7542,7 +7542,7 @@ export class PohMinerNode {
         rec.updatedAt = Date.now();
       }
       if (job.requesterAddress && job.maxBudget > 0 && this.escrow.has(job.id)) {
-        const timeout = { type: 'job-timeout', jobId: job.id, requesterAddress: job.requesterAddress, minerAddress: this.config.wallet, reservationFee: 0, refund: job.maxBudget, ...(job.currency && job.currency !== 'POH' ? { currency: job.currency } : {}), completedAt: Date.now() };
+        const timeout = { type: 'job-timeout', jobId: job.id, requesterAddress: job.requesterAddress, minerAddress: this.config.wallet, reservationFee: 0, refund: job.maxBudget, ...(job.currency && job.currency !== 'DAI' ? { currency: job.currency } : {}), completedAt: Date.now() };
         this.pendingBrainTransitions.push(timeout);
         this._applySettlement(timeout);
       }
@@ -7629,16 +7629,16 @@ export class PohMinerNode {
     if (!qvac || !qvac.ENABLED) return { status: 503, code: 'QVAC_UNAVAILABLE', error: 'Inference backend (QVAC) is unavailable' };
     if (!jobId)            return { status: 400, code: 'JOBID_REQUIRED',     error: 'a client-generated jobId (the value signed by paymentTx) is required' };
     if (!requesterAddress) return { status: 402, code: 'REQUESTER_REQUIRED', error: 'requesterAddress is required for paid compute' };
-    if (!(maxBudget > 0))  return { status: 402, code: 'FEE_REQUIRED',       error: 'maxBudget (μPOH) must be > 0 for paid compute' };
+    if (!(maxBudget > 0))  return { status: 402, code: 'FEE_REQUIRED',       error: 'maxBudget (μDAI) must be > 0 for paid compute' };
 
-    // Fee floor: the bid must cover at least the prompt tokens (gasPrice μPOH/token).
+    // Fee floor: the bid must cover at least the prompt tokens (gasPrice μDAI/token).
     const gasPrice  = this.config.gasPrice || GAS.DEFAULT_GAS_PRICE;
     const promptEst = qvac.estimateMessagesTokens(messages, systemPrompt);
     const minTokens = estimateChatTokens(promptEst, 0);
     const minFee    = minTokens * gasPrice;
     if (maxBudget < minFee) {
       return { status: 402, code: 'FEE_TOO_LOW', minFee, minTokens, gasPrice,
-        error: `maxBudget (${maxBudget} μPOH) is below the minimum compute cost of ${minFee} μPOH (~${minTokens} prompt tokens at ${gasPrice} μPOH/token).` };
+        error: `maxBudget (${maxBudget} μDAI) is below the minimum compute cost of ${minFee} μDAI (~${minTokens} prompt tokens at ${gasPrice} μDAI/token).` };
     }
 
     // Strict signed-fee verification — an Ed25519 signature from the requester's
@@ -7688,15 +7688,15 @@ export class PohMinerNode {
       minerAddress:      this.config.wallet,
       amount:            job.maxBudget,
       maxWait:           job.maxWait,
-      gasPrice:          cur === 'POH'
+      gasPrice:          cur === 'DAI'
         ? (this.config.gasPrice || GAS.DEFAULT_GAS_PRICE)
         : gasPriceFor(cur, this.config),
       estimatedTokens:   estTokens,
       paymentTxHash:     paymentTxHash || null,
       unverified:        unverified || false,
       nonce,
-      // Fee currency — omitted for POH so historical transitions keep their shape.
-      ...(cur !== 'POH' ? { currency: cur } : {}),
+      // Fee currency — omitted for DAI so historical transitions keep their shape.
+      ...(cur !== 'DAI' ? { currency: cur } : {}),
       timestamp:         Date.now(),
     };
   }
@@ -7785,7 +7785,7 @@ export class PohMinerNode {
       if (job) {
         this._updateJob(job.id, { status: 'done', verdict: 'REJECTED', reason: verdict.reason, issues: verdict.issues, rejected: true });
       }
-      console.log(`[PoH-Miner] Skill proposal ${verdict.skillId} REJECTED: ${verdict.reason}`);
+      console.log(`[DAI-Miner] Skill proposal ${verdict.skillId} REJECTED: ${verdict.reason}`);
       if (typeof this.onSkillRejectedHook === 'function') {
         this.onSkillRejectedHook({ skillId: verdict.skillId, reason: verdict.reason, issues: verdict.issues || [] });
       }
@@ -7795,7 +7795,7 @@ export class PohMinerNode {
       this.pendingBrainTransitions.push(transition);
       skillsManager.processTransition(transition);
       this.gossip.publish('skill-proposed', transition).catch(() => {});
-      console.log(`[PoH-Miner] Skill proposal ${verdict.skillId} APPROVED — broadcasting`);
+      console.log(`[DAI-Miner] Skill proposal ${verdict.skillId} APPROVED — broadcasting`);
     }
   }
 
@@ -7821,7 +7821,7 @@ export class PohMinerNode {
   async submitResult(request, result) {
     // 1. Basic methods hash check (already existed)
     if (!this._validateResultMethods(result)) {
-      console.warn(`[PoH-Miner] Rejecting result for ${request.id} — used stale methodsHash`);
+      console.warn(`[DAI-Miner] Rejecting result for ${request.id} — used stale methodsHash`);
       return;
     }
 
@@ -7836,7 +7836,7 @@ export class PohMinerNode {
       } else if (this.jobResults) {
         this.jobResults.set(request.id, { id: request.id, status: 'done', job: request, result, error: null, createdAt: Date.now(), updatedAt: Date.now() });
       }
-      console.log(`[PoH-Miner] ✓ ${result.verdict === 'COMPUTE_RESULT' ? 'Compute' : 'Skill'} result stored for polling: ${request.id}`);
+      console.log(`[DAI-Miner] ✓ ${result.verdict === 'COMPUTE_RESULT' ? 'Compute' : 'Skill'} result stored for polling: ${request.id}`);
       return;
     }
 
@@ -7844,14 +7844,14 @@ export class PohMinerNode {
     const workValidation = await validateResultWork(result, request);
 
     if (!workValidation.isValid) {
-      console.warn(`[PoH-Miner] ⚠️  LOW QUALITY / MALICIOUS result for ${request.id}:`, workValidation.errors);
+      console.warn(`[DAI-Miner] ⚠️  LOW QUALITY / MALICIOUS result for ${request.id}:`, workValidation.errors);
       result.isValidWork = false;
       result.validationErrors = workValidation.errors;
 
       this.qualityStats.invalidSubmissions++;
 
       // Record for history and strike detection
-      this._recordSubmission(false, request.id, { ...workValidation, realPohUsed: result.realPohUsed });
+      this._recordSubmission(false, request.id, { ...workValidation, realDAIUsed: result.realDAIUsed });
 
       // Do not slash for simulation fallbacks, local API jobs, or dev/testing
       const isSim    = result.methodsHash && String(result.methodsHash).startsWith('sim-');
@@ -7864,7 +7864,7 @@ export class PohMinerNode {
         this.applySlashing(0.15);
       } else {
         const reason = isApiJob ? 'local API job' : isSim ? 'simulation fallback' : 'unresolvable input';
-        console.log(`[PoH-Miner] Skipping self-slash — ${reason}`);
+        console.log(`[DAI-Miner] Skipping self-slash — ${reason}`);
       }
       return; // Do not propagate bad work
     }
@@ -7880,12 +7880,12 @@ export class PohMinerNode {
 
     // Another miner may have won this job while we were computing — drop it.
     if (this.minedRequestIds.has(request.id)) {
-      console.log(`[PoH-Miner] Job ${request.id} already mined by another node — dropping result`);
+      console.log(`[DAI-Miner] Job ${request.id} already mined by another node — dropping result`);
       return;
     }
 
     // Record successful submission
-    this._recordSubmission(true, request.id, { ...workValidation, realPohUsed: result.realPohUsed });
+    this._recordSubmission(true, request.id, { ...workValidation, realDAIUsed: result.realDAIUsed });
 
     // Add to the queue for block inclusion (only valid work goes into blocks)
     this.pendingValidResults.push(result);
@@ -7893,7 +7893,7 @@ export class PohMinerNode {
 
     this._saveQualityState();
 
-    console.log(`[PoH-Miner] ✓ Submitting VALID result for ${request.id} (${workValidation.signalsEvaluated}/${workValidation.liveCount} signals) — queued for block`);
+    console.log(`[DAI-Miner] ✓ Submitting VALID result for ${request.id} (${workValidation.signalsEvaluated}/${workValidation.liveCount} signals) — queued for block`);
 
     // Announce completion so other miners can drop in-progress work for this job
     this.gossip.publish('new-result', {
@@ -7917,7 +7917,7 @@ export class PohMinerNode {
 
     // Allow simulation results in dev, but flag them
     if (result.methodsHash.startsWith('sim-')) {
-      console.warn('[PoH-Miner] Result used simulation (no real signals). This will be rejected on mainnet.');
+      console.warn('[DAI-Miner] Result used simulation (no real signals). This will be rejected on mainnet.');
       return true; // still accept for local testing
     }
 
@@ -7927,7 +7927,7 @@ export class PohMinerNode {
     // quality. Hard-rejecting here would silently drop honest work with no
     // history entry and no reputation accounting.
     if (result.methodsHash !== currentHash) {
-      console.warn(`[PoH-Miner] Result methodsHash rotated mid-job (${result.methodsHash.slice(0, 12)}… vs ${String(currentHash).slice(0, 12)}…) — deferring to deep validation`);
+      console.warn(`[DAI-Miner] Result methodsHash rotated mid-job (${result.methodsHash.slice(0, 12)}… vs ${String(currentHash).slice(0, 12)}…) — deferring to deep validation`);
     }
     return true;
   }
@@ -7984,7 +7984,7 @@ export class PohMinerNode {
       await new Promise(r => setTimeout(r, Math.min(1000, earliest - Date.now())));
     }
 
-    // === Fixed 1 POH per block + Strict Work Quality Filter ===
+    // === Fixed 1 DAI per block + Strict Work Quality Filter ===
     // Only results that passed validateResultWork are allowed in blocks.
     // Non-destructive take: results stay in the (persisted) queue until a block
     // that includes them is actually applied (_applyBlockState removes them by
@@ -8007,7 +8007,7 @@ export class PohMinerNode {
     // When there's no compute work, share the 40% keepalive reward among
     // active peers (exclude self — proposer already gets the 60% share).
     const activePeersForReward = validWorkSubmissions.length === 0
-      ? (this.peers || []).filter(p => p.wallet && p.wallet !== (this.config.pohWallet || this.config.wallet))
+      ? (this.peers || []).filter(p => p.wallet && p.wallet !== (this.config.daiWallet || this.config.wallet))
       : [];
 
     const coinbase = calculateBlockRewards(validWorkSubmissions, previous.height + 1, activePeersForReward);
@@ -8024,7 +8024,7 @@ export class PohMinerNode {
       r => !this.minedRequestIds.has(r.requestId)
     );
     if (dedupedResults.length < validResultsForBlock.length) {
-      console.log(`[PoH-Miner] Filtered ${validResultsForBlock.length - dedupedResults.length} duplicate result(s) before block inclusion`);
+      console.log(`[DAI-Miner] Filtered ${validResultsForBlock.length - dedupedResults.length} duplicate result(s) before block inclusion`);
     }
 
     // Pull any pending txs from bootnodes that we missed via gossip (e.g. after a restart)
@@ -8039,7 +8039,7 @@ export class PohMinerNode {
     const brainTransitions = [...this.pendingBrainTransitions];
     if (brainStateRoot) brainTransitions.push({ type: 'brain-state-root', hash: brainStateRoot });
 
-    const newBlock = new PohBlock({
+    const newBlock = new DAIBlock({
       height: previous.height + 1,
       previousHash: previous.blockHash || await previous.getHash(),
       timestamp: Date.now(),
@@ -8077,16 +8077,16 @@ export class PohMinerNode {
       this.chain.push(newBlock);
       this._advanceTxLedger(newBlock);
       this.chainStore.saveBlock(newBlock);
-      console.log(`[PoH-Miner] Produced block #${newBlock.height} (nonce ${newBlock.nonce})`);
+      console.log(`[DAI-Miner] Produced block #${newBlock.height} (nonce ${newBlock.nonce})`);
 
       // Apply transactions from self-mined block — _applyBlockState is only called
       // for received blocks; we must do it here so balances/nonces update and the
       // mempool clears when this node is the block producer.
       const appliedTxHashes = [];
       for (const txData of (newBlock.transactions || [])) {
-        const tx = PoHTransaction.fromJSON(txData);
+        const tx = DAITransaction.fromJSON(txData);
         if (this.walletManager.applyTransaction(tx) === true) {
-          const txCur = tx.currency || 'POH';
+          const txCur = tx.currency || 'DAI';
           appliedTxHashes.push(tx.txHash);
           this.balanceJournal.record(newBlock.height, tx.from, -(tx.amount + tx.fee), 1, tx.txHash, txCur);
           this.balanceJournal.record(newBlock.height, tx.to, tx.amount, 0, tx.txHash, txCur);
@@ -8109,7 +8109,7 @@ export class PohMinerNode {
         if (this.rewardClaimStore.claimIfNotAlready(proposerKey)) {
           this.walletManager.credit(this.config.wallet, coinbase.proposerReward);
           this.balanceJournal.record(newBlock.height, this.config.wallet, coinbase.proposerReward, 0, proposerKey);
-          console.log(`[PoH-Miner] Credited ${(coinbase.proposerReward / POH_DECIMALS).toFixed(4)} POH (proposer) to ${this.config.wallet}`);
+          console.log(`[DAI-Miner] Credited ${(coinbase.proposerReward / DAI_DECIMALS).toFixed(4)} DAI (proposer) to ${this.config.wallet}`);
         }
       }
 
@@ -8159,7 +8159,7 @@ export class PohMinerNode {
         if (bootnodeHeight >= localHeight) {
           // Bootnode is ahead of us — our new block is orphaned. Trigger a catch-up sync.
           if (!this._syncInProgress) {
-            console.log(`[PoH-Miner] Bootnode ${bootnode} is ahead (${bootnodeHeight} vs ${localHeight}) — triggering sync`);
+            console.log(`[DAI-Miner] Bootnode ${bootnode} is ahead (${bootnodeHeight} vs ${localHeight}) — triggering sync`);
             this._syncInProgress = true;
             this._abortMining();
             this.syncFromBootnodes().catch(() => {}).finally(() => { this._syncInProgress = false; });
@@ -8174,7 +8174,7 @@ export class PohMinerNode {
             .filter(b => b.height > bootnodeHeight && b.height <= localHeight)
             .map(b => b.toJSON ? b.toJSON() : b);
           payload = JSON.stringify(missing);
-          console.log(`[PoH-Miner] Bootnode ${bootnode} is behind (${bootnodeHeight} vs ${localHeight}), sending ${missing.length} missing blocks`);
+          console.log(`[DAI-Miner] Bootnode ${bootnode} is behind (${bootnodeHeight} vs ${localHeight}), sending ${missing.length} missing blocks`);
         } else {
           payload = JSON.stringify(newBlockJson);
         }
@@ -8195,8 +8195,8 @@ export class PohMinerNode {
   getStatus() {
     const sig = this.methodsManager?.getStatus() || {};
     return {
-      wallet: this.config.pohWallet || this.config.wallet,
-      pohWallet: this.config.pohWallet || this.config.wallet,
+      wallet: this.config.daiWallet || this.config.wallet,
+      daiWallet: this.config.daiWallet || this.config.wallet,
       model: this.config.model || 'qwen2.5:1.5b',
       methodsHash: sig.hash,
       methodsCount: sig.count,
@@ -8233,7 +8233,7 @@ export class PohMinerNode {
 
       if (this.qualityStats.strikes >= 3) {
         this.isTemporarilyRestricted = true;
-        console.warn(`[PoH-Miner] ⚠️  TEMPORARILY RESTRICTED due to repeated low-quality submissions.`);
+        console.warn(`[DAI-Miner] ⚠️  TEMPORARILY RESTRICTED due to repeated low-quality submissions.`);
       }
 
       effectivePenalty = Math.max(effectivePenalty, 0.20 + (this.qualityStats.strikes * 0.05));
@@ -8243,9 +8243,9 @@ export class PohMinerNode {
     this.reputation = Math.max(0.05, this.reputation - effectivePenalty);
 
     if (newStrikes) {
-      console.warn(`[PoH-Miner] Strike #${this.qualityStats.strikes} recorded. Reputation: ${previous.toFixed(2)} → ${this.reputation.toFixed(2)}`);
+      console.warn(`[DAI-Miner] Strike #${this.qualityStats.strikes} recorded. Reputation: ${previous.toFixed(2)} → ${this.reputation.toFixed(2)}`);
     } else {
-      console.warn(`[PoH-Miner] Reputation slashed by ${effectivePenalty}. ${previous.toFixed(2)} → ${this.reputation.toFixed(2)}`);
+      console.warn(`[DAI-Miner] Reputation slashed by ${effectivePenalty}. ${previous.toFixed(2)} → ${this.reputation.toFixed(2)}`);
     }
 
     this._saveQualityState();
@@ -8284,7 +8284,7 @@ export class PohMinerNode {
     const flags = this.flaggedResults[targetMinerWallet].length;
 
     if (flags >= 3) {
-      console.warn(`[PoH-Miner] Multiple flags received for ${targetMinerWallet}. Applying defensive slash.`);
+      console.warn(`[DAI-Miner] Multiple flags received for ${targetMinerWallet}. Applying defensive slash.`);
       // Self-protective measure: if we're the one being flagged a lot, we can react (in real network this would be gossip-based)
       if (targetMinerWallet === this.config.wallet) {
         this.applySlashing(0.10);
@@ -8293,7 +8293,7 @@ export class PohMinerNode {
   }
 
   _getQualityStatePath() {
-    const dir = path.join(os.homedir(), '.poh-miner');
+    const dir = path.join(os.homedir(), '.dai-miner');
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
     return path.join(dir, 'quality.json');
   }
@@ -8308,7 +8308,7 @@ export class PohMinerNode {
         if (Array.isArray(data.submissionHistory)) this.submissionHistory = data.submissionHistory;
       }
     } catch (e) {
-      console.warn('[PoH-Miner] Could not load quality state:', e.message);
+      console.warn('[DAI-Miner] Could not load quality state:', e.message);
     }
   }
 
@@ -8323,7 +8323,7 @@ export class PohMinerNode {
       };
       fs.writeFileSync(file, JSON.stringify(data, null, 2));
     } catch (e) {
-      console.warn('[PoH-Miner] Could not save quality state:', e.message);
+      console.warn('[DAI-Miner] Could not save quality state:', e.message);
     }
   }
 
@@ -8334,7 +8334,7 @@ export class PohMinerNode {
       isValid,
       signalsEvaluated: validationData.signalsEvaluated || 0,
       liveCount: validationData.liveCount || 0,
-      realPohUsed: validationData.realPohUsed ?? false,
+      realDAIUsed: validationData.realDAIUsed ?? false,
     });
 
     // Trim history to last 500 entries in memory
@@ -8389,7 +8389,7 @@ export class PohMinerNode {
       if (this._appliedP2PIds.has(`order-${transition.id}`)) return;
       this.p2pOrderStore.ingestGossipOrder(transition);
       if (transition.side === 'sell' && transition.escrowLocked) {
-        this.p2pEscrow.lock(this.walletManager, transition.maker, transition.pohAmount, transition.baseAsset || 'POH');
+        this.p2pEscrow.lock(this.walletManager, transition.maker, transition.daiAmount, transition.baseAsset || 'DAI');
       }
       return;
     }
@@ -8399,7 +8399,7 @@ export class PohMinerNode {
       if (cancelOrder && cancelOrder.status !== 'cancelled') {
         this.p2pOrderStore.cancelOrder(transition.orderId);
         if (transition.side === 'sell' && transition.escrowLocked) {
-          this.p2pEscrow.release(this.walletManager, transition.maker, transition.pohAmount, transition.baseAsset || 'POH');
+          this.p2pEscrow.release(this.walletManager, transition.maker, transition.daiAmount, transition.baseAsset || 'DAI');
         }
       }
       return;
@@ -8408,7 +8408,7 @@ export class PohMinerNode {
       if (this._appliedP2PIds.has(`trade-${transition.id}`)) return;
       this.p2pOrderStore.ingestGossipTrade(transition);
       if (transition.orderSide === 'buy') {
-        this.p2pEscrow.lock(this.walletManager, transition.taker, transition.pohAmount, transition.baseAsset || 'POH');
+        this.p2pEscrow.lock(this.walletManager, transition.taker, transition.daiAmount, transition.baseAsset || 'DAI');
       }
       return;
     }
@@ -8421,8 +8421,8 @@ export class PohMinerNode {
       if (this._appliedP2PIds.has(`trade-${transition.tradeId}-release`)) return;
       const releaseTrade = this.p2pOrderStore.getTrade(transition.tradeId);
       if (releaseTrade) {
-        const relBase = transition.baseAsset || 'POH';
-        this.p2pEscrow.release(this.walletManager, transition.recipient, transition.pohAmount, relBase);
+        const relBase = transition.baseAsset || 'DAI';
+        this.p2pEscrow.release(this.walletManager, transition.recipient, transition.daiAmount, relBase);
         if (transition.referralFee > 0 && transition.referrer) {
           this.p2pEscrow.release(this.walletManager, transition.referrer, transition.referralFee, relBase);
           this.p2pReferral.recordFee(transition.referrer, transition.referralFee);
@@ -8436,7 +8436,7 @@ export class PohMinerNode {
       const cancelTrade = this.p2pOrderStore.getTrade(transition.tradeId);
       if (cancelTrade) {
         if (transition.escrowLocked) {
-          this.p2pEscrow.release(this.walletManager, transition.locker, transition.pohAmount, transition.baseAsset || 'POH');
+          this.p2pEscrow.release(this.walletManager, transition.locker, transition.daiAmount, transition.baseAsset || 'DAI');
         }
         this.p2pOrderStore.cancelTrade(transition.tradeId);
       }
@@ -8448,8 +8448,8 @@ export class PohMinerNode {
     if (transition.type === 'p2p-swap-filled') {
       if (this._appliedP2PIds.has(`swap-${transition.tradeId}`)) return;
       this._appliedP2PIds.add(`swap-${transition.tradeId}`);
-      const base  = transition.baseAsset  || 'POH';
-      const quote = transition.quoteAsset || 'POH';
+      const base  = transition.baseAsset  || 'DAI';
+      const quote = transition.quoteAsset || 'DAI';
       const refFee = transition.referralFee || 0;
       // Quote leg: taker -> maker
       this.walletManager.debit(transition.taker, transition.quoteAmount, quote);
@@ -8488,7 +8488,7 @@ export class PohMinerNode {
     if (transition.type === 'job-escrow') {
       if (!transition.paymentTxHash && !this._appliedEscrowJobIds.has(transition.jobId)) return;
       void this._applyEscrow(transition).catch(err =>
-        console.warn('[PoH-Miner] job-escrow apply failed:', err?.message || err));
+        console.warn('[DAI-Miner] job-escrow apply failed:', err?.message || err));
       return;
     }
     if (transition.type === 'job-settled' || transition.type === 'job-timeout') {
@@ -8519,7 +8519,7 @@ export class PohMinerNode {
       entry.stakers.set(staker, (entry.stakers.get(staker) || 0) + amount);
       entry.total = (entry.total || 0) + amount;
       if (txHash) this._appliedStakeTxs.add(txHash);
-      if (entry.total >= SKILL_GRADUATION_THRESHOLD_UPOH) {
+      if (entry.total >= SKILL_GRADUATION_THRESHOLD_UDAI) {
         const skill = skillsManager.getAllSkills().find(s => s.id === skillId);
         if (skill && skill.status !== 'active') {
           const grad = { type: 'skill-graduated', skillId };
@@ -8547,7 +8547,7 @@ export class PohMinerNode {
     if (!this.methodsManager) return;
 
     if (transition.type === 'methods-update' || transition.type === 'signals-update') {
-      console.log(`[PoH-Miner] Received on-chain signals update (hash=${transition.hash})`);
+      console.log(`[DAI-Miner] Received on-chain signals update (hash=${transition.hash})`);
 
       if (transition.methods && Array.isArray(transition.methods)) {
         const updated = await this.methodsManager.applyPublishedUpdate(transition.methods, {
@@ -8556,12 +8556,12 @@ export class PohMinerNode {
         });
 
         if (updated) {
-          console.log('[PoH-Miner] ✓ Applied on-chain methods update. New hash:', this.methodsManager.hash);
+          console.log('[DAI-Miner] ✓ Applied on-chain methods update. New hash:', this.methodsManager.hash);
         }
       } else if (transition.cid) {
         // Future: fetch full list from IPFS using the CID in the transition
         this.methodsManager.lastKnownCID = transition.cid;
-        console.log('[PoH-Miner] Saw on-chain CID for signals list:', transition.cid);
+        console.log('[DAI-Miner] Saw on-chain CID for signals list:', transition.cid);
         await this.methodsManager.sync(); // will try IPFS path if configured
       }
     }
@@ -8570,7 +8570,7 @@ export class PohMinerNode {
   // ── Skill staking helpers ───────────────────────────────────────────────────
 
   _getStakeDir() {
-    return getBrainDataDir() || path.join(os.homedir(), '.poh-miner', 'brain');
+    return getBrainDataDir() || path.join(os.homedir(), '.dai-miner', 'brain');
   }
 
   _initStakeVault() {
@@ -8588,16 +8588,16 @@ export class PohMinerNode {
           const vault = this.walletManager.createWallet();
           fs.writeFileSync(vaultRefPath, JSON.stringify({ address: vault.address }));
           this.SKILL_STAKE_VAULT = vault.address;
-          console.log(`[PoH-Miner] Skill stake vault recreated: ${vault.address}`);
+          console.log(`[DAI-Miner] Skill stake vault recreated: ${vault.address}`);
         }
       } else {
         const vault = this.walletManager.createWallet();
         fs.writeFileSync(vaultRefPath, JSON.stringify({ address: vault.address }));
         this.SKILL_STAKE_VAULT = vault.address;
-        console.log(`[PoH-Miner] Skill stake vault created: ${vault.address}`);
+        console.log(`[DAI-Miner] Skill stake vault created: ${vault.address}`);
       }
     } catch (e) {
-      console.warn('[PoH-Miner] Skill stake vault init failed:', e.message);
+      console.warn('[DAI-Miner] Skill stake vault init failed:', e.message);
     }
   }
 
@@ -8613,9 +8613,9 @@ export class PohMinerNode {
           stakers: new Map(Object.entries(entry.stakers || {})),
         });
       }
-      console.log(`[PoH-Miner] Loaded skill stakes: ${this._skillStakes.size} skills`);
+      console.log(`[DAI-Miner] Loaded skill stakes: ${this._skillStakes.size} skills`);
     } catch (e) {
-      console.warn('[PoH-Miner] Failed to load skill stakes:', e.message);
+      console.warn('[DAI-Miner] Failed to load skill stakes:', e.message);
     }
   }
 
@@ -8631,7 +8631,7 @@ export class PohMinerNode {
       }
       fs.writeFileSync(stakesPath, JSON.stringify(data, null, 2));
     } catch (e) {
-      console.warn('[PoH-Miner] Failed to save skill stakes:', e.message);
+      console.warn('[DAI-Miner] Failed to save skill stakes:', e.message);
     }
   }
 
@@ -8652,7 +8652,7 @@ export class PohMinerNode {
         // First run: start with all defaults enabled
         for (const id of DEFAULT_ENABLED_SKILLS) this._skillPrefs.add(id);
         this._saveSkillPrefs();
-        console.log(`[PoH-Miner] Initialized skill prefs with ${DEFAULT_ENABLED_SKILLS.size} default skills`);
+        console.log(`[DAI-Miner] Initialized skill prefs with ${DEFAULT_ENABLED_SKILLS.size} default skills`);
         return;
       }
       const data = JSON.parse(fs.readFileSync(prefsPath, 'utf8'));
@@ -8670,9 +8670,9 @@ export class PohMinerNode {
         }
       }
       if (changed) this._saveSkillPrefs();
-      console.log(`[PoH-Miner] Loaded skill prefs: ${this._skillPrefs.size} enabled, ${this._explicitDisabled.size} explicitly disabled`);
+      console.log(`[DAI-Miner] Loaded skill prefs: ${this._skillPrefs.size} enabled, ${this._explicitDisabled.size} explicitly disabled`);
     } catch (e) {
-      console.warn('[PoH-Miner] Failed to load skill prefs:', e.message);
+      console.warn('[DAI-Miner] Failed to load skill prefs:', e.message);
     }
   }
 
@@ -8685,15 +8685,15 @@ export class PohMinerNode {
         seenDefaults:  [...DEFAULT_ENABLED_SKILLS],
       }, null, 2));
     } catch (e) {
-      console.warn('[PoH-Miner] Failed to save skill prefs:', e.message);
+      console.warn('[DAI-Miner] Failed to save skill prefs:', e.message);
     }
   }
 }
 
 // Allow direct execution for testing
 if (import.meta.url === `file://${process.argv[1]}`) {
-  const node = new PohMinerNode({
-    wallet: process.env.POH_WALLET || 'test-miner-wallet',
+  const node = new DAIMinerNode({
+    wallet: process.env.DAI_WALLET || 'test-miner-wallet',
   });
   node.start().catch((e) => {
     console.error(e?.message || e);

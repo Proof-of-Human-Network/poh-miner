@@ -1,7 +1,7 @@
 #!/bin/bash
 # Patch the .desktop file to add --no-sandbox so Electron's Zygote
 # doesn't fail on Linux kernels that restrict user namespaces.
-DESKTOP_FILE="/usr/share/applications/poh-miner.desktop"
+DESKTOP_FILE="/usr/share/applications/dai-miner.desktop"
 if [ -f "$DESKTOP_FILE" ]; then
   # Only patch if not already patched
   if ! grep -q -- '--no-sandbox' "$DESKTOP_FILE"; then

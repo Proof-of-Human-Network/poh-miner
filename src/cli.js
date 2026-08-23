@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 /**
- * PoH Miner - Simple CLI for normal users
+ * DAI Miner - Simple CLI for normal users
  *
  * Goal: Make it feel like a normal app, not a dev project.
  * Especially friendly for Mac Mini users and non-miners.
  */
 
-import { PohMinerNode } from './miner-node.js';
+import { DAIMinerNode } from './miner-node.js';
 import {
   loadConfig as loadConfigFromResolver,
   getConfigLocationInfo,
@@ -28,7 +28,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 function loadConfig() {
   const info = getConfigLocationInfo();
   if (!info.exists) {
-    console.error('Config not found. Run "poh-miner init" or create a config file.');
+    console.error('Config not found. Run "dai-miner init" or create a config file.');
     console.error('Checked:', info.path);
     process.exit(1);
   }
@@ -44,7 +44,7 @@ async function main() {
   const args = process.argv.slice(2);
   const cmd = args[0] || 'start';
 
-  console.log('\n🚀 PoH Miner Network\n');
+  console.log('\n🚀 DAI Miner Network\n');
 
   if (cmd === 'start' || cmd === 'run') {
     const { config, path: configPath, source } = loadConfigFromResolver();
@@ -52,7 +52,7 @@ async function main() {
     if (config.wallet?.includes('YOUR_') || !config.wallet) {
       console.error('❌ Please set your real Solana wallet address in the config first:');
       console.error('   ' + configPath);
-      console.log('   Run: poh-miner init   (recommended)');
+      console.log('   Run: dai-miner init   (recommended)');
       console.log('   Or set "wallet" directly in that file.');
       process.exit(1);
     }
@@ -60,7 +60,7 @@ async function main() {
     const locationNote = source.includes('local') ? ' (local project)' : '';
     console.log(`Config: ${configPath}${locationNote}\n`);
 
-    const node = new PohMinerNode(config);
+    const node = new DAIMinerNode(config);
     try {
       await node.start();
     } catch (e) {
@@ -76,16 +76,16 @@ async function main() {
   } 
   else if (cmd === 'init') {
     // Use the same smart resolution as everything else.
-    // By default we create in the best location (local .poh-miner/ when inside source tree).
+    // By default we create in the best location (local .dai-miner/ when inside source tree).
     const { path: targetPath, source } = resolveConfigPath({ allowCreate: true });
 
-    // Allow forcing global even when in source tree: poh-miner init --global
+    // Allow forcing global even when in source tree: dai-miner init --global
     const forceGlobal = args.includes('--global') || args.includes('-g');
     let finalPath = targetPath;
 
     if (forceGlobal) {
       const home = os.homedir();
-      finalPath = path.join(home, '.poh-miner', 'config.json');
+      finalPath = path.join(home, '.dai-miner', 'config.json');
     }
 
     const dir = path.dirname(finalPath);
@@ -94,7 +94,7 @@ async function main() {
     // Only write if file does not already exist (init should be idempotent-ish)
     if (fs.existsSync(finalPath)) {
       console.log('Config already exists at:', finalPath);
-      console.log('Use "poh-miner set-mode ..." or edit it manually.');
+      console.log('Use "dai-miner set-mode ..." or edit it manually.');
       return;
     }
 
@@ -105,7 +105,7 @@ async function main() {
     saveConfig(defaultConfig, finalPath);
 
     const homeForMsg = os.homedir();
-    const locationType = finalPath.includes('.poh-miner') && !finalPath.startsWith(homeForMsg)
+    const locationType = finalPath.includes('.dai-miner') && !finalPath.startsWith(homeForMsg)
       ? 'local project config'
       : forceGlobal ? 'global user config (forced)' : 'config';
 
@@ -148,7 +148,7 @@ async function main() {
   else if (cmd === 'set-mode') {
     const newMode = args[1];
     if (!['auto', 'gpu', 'cpu'].includes(newMode)) {
-      console.error('Usage: poh-miner set-mode <auto|gpu|cpu>');
+      console.error('Usage: dai-miner set-mode <auto|gpu|cpu>');
       process.exit(1);
     }
 
@@ -204,7 +204,7 @@ async function main() {
       else if (sub === 'list') {
         const wallets = wm.listWallets();
         if (wallets.length === 0) {
-          console.log('No wallets found. Create one with: poh-miner wallet create');
+          console.log('No wallets found. Create one with: dai-miner wallet create');
         } else {
           console.log('Wallets:');
           wallets.forEach(w => {
@@ -216,16 +216,16 @@ async function main() {
       else if (sub === 'balance') {
         const addr = args[2];
         if (!addr) {
-          console.error('Usage: poh-miner wallet balance <address>');
+          console.error('Usage: dai-miner wallet balance <address>');
           return;
         }
         const bal = wm.getBalance(addr);
-        console.log(`Balance for ${addr}: ${bal} POH`);
+        console.log(`Balance for ${addr}: ${bal} DAI`);
       } 
       else if (sub === 'send') {
         const [from, to, amt] = args.slice(2);
         if (!from || !to || !amt) {
-          console.error('Usage: poh-miner wallet send <fromAddress> <toAddress> <amount>');
+          console.error('Usage: dai-miner wallet send <fromAddress> <toAddress> <amount>');
           return;
         }
         const success = wm.transfer(from, to, parseInt(amt));
@@ -237,12 +237,12 @@ async function main() {
     })();
   } 
   else if (cmd === 'bootnode') {
-    console.log('Starting as PoH Bootnode...\n');
+    console.log('Starting as DAI Bootnode...\n');
     (async () => {
       const { default: bootnode } = await import('./bootnode.js');
       // The bootnode.js has its own server when run directly
       // For CLI we can just exec it or import the server logic
-      console.log('Use: node src/bootnode.js --port 8080 --data-dir ~/.poh-bootnode');
+      console.log('Use: node src/bootnode.js --port 8080 --data-dir ~/.dai-bootnode');
       console.log('Or run directly for now.');
     })();
   } 
@@ -250,12 +250,12 @@ async function main() {
     console.log('Fetching miner protection & status...\n');
     (async () => {
       try {
-        const { PohMinerNode } = await import('./miner-node.js');
+        const { DAIMinerNode } = await import('./miner-node.js');
         // Minimal node just to read persisted state
-        const node = new PohMinerNode({ wallet: 'status-check' });
+        const node = new DAIMinerNode({ wallet: 'status-check' });
         const status = node.getStatus();
 
-        console.log('=== PoH Miner Protection Status ===');
+        console.log('=== DAI Miner Protection Status ===');
         console.log(`Reputation:            ${status.reputation?.toFixed(2) ?? '1.00'} (reward multiplier: ${status.rewardMultiplier ?? '1.00'})`);
         console.log(`Strikes:               ${status.quality?.strikes ?? 0}`);
         console.log(`Temporarily restricted: ${status.isTemporarilyRestricted ? 'YES' : 'no'}`);
@@ -282,20 +282,20 @@ async function main() {
   }
   else if (cmd === 'help' || cmd === '--help') {
     console.log(`Usage:
-  poh-miner start              Start the miner node
-  poh-miner bootnode           Start a dedicated bootnode (see src/bootnode.js)
-  poh-miner wallet <subcmd>    Wallet commands: create | list | balance <addr> | send <from> <to> <amt>
-  poh-miner init [--global]    Create default config (local by default when in source tree)
-  poh-miner status             Show protection stats, reputation, and submission history
-  poh-miner sync-methods       Force refresh of verified signals from poh.ge
-  poh-miner set-mode <mode>    Change inference mode (auto|gpu|cpu)
-  poh-miner demo               Run geographic job preference demo
-  poh-miner landing            Serve the promotional landing page
-  poh-miner config             Show resolved config location and source
+  dai-miner start              Start the miner node
+  dai-miner bootnode           Start a dedicated bootnode (see src/bootnode.js)
+  dai-miner wallet <subcmd>    Wallet commands: create | list | balance <addr> | send <from> <to> <amt>
+  dai-miner init [--global]    Create default config (local by default when in source tree)
+  dai-miner status             Show protection stats, reputation, and submission history
+  dai-miner sync-methods       Force refresh of verified signals from iamai.kg
+  dai-miner set-mode <mode>    Change inference mode (auto|gpu|cpu)
+  dai-miner demo               Run geographic job preference demo
+  dai-miner landing            Serve the promotional landing page
+  dai-miner config             Show resolved config location and source
 `);
   } 
   else {
-    console.log('Unknown command. Try: poh-miner help');
+    console.log('Unknown command. Try: dai-miner help');
   }
 }
 

@@ -1,6 +1,6 @@
 /**
  * Canonical block-hash serialization — the single source of truth for the bytes
- * a block's PoW hashes over. Shared by PohBlock.getHashSync() and the mining
+ * a block's PoW hashes over. Shared by DAIBlock.getHashSync() and the mining
  * worker thread so a nonce solved off-thread produces a hash that is byte-for-byte
  * identical to what the main thread verifies. Any divergence here would make the
  * worker "solve" blocks that fail verification, so both callers MUST use this.

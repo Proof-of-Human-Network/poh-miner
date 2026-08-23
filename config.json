@@ -1,14 +1,14 @@
 {
-  "_comment": "This is a local development config. The GUI (electron) will usually write to ~/.poh-miner/config.json instead.",
-  "wallet": "poh1a0c1926ac2141da307bee4b4c5144388d33b56e",
+  "_comment": "This is a local development config. The GUI (electron) will usually write to ~/.dai-miner/config.json instead.",
+  "wallet": "dai1a0c1926ac2141da307bee4b4c5144388d33b56e",
   "model": "qwen3-1.7b",
   "inferenceMode": "auto",
   "autoStart": true,
   "region": "auto",
   "bootnodes": [
-    "https://miner.proofofhuman.ge"
+    "https://miner.iamai.kg"
   ],
-  "pohWallet": "poh1a0c1926ac2141da307bee4b4c5144388d33b56e",
+  "daiWallet": "dai1a0c1926ac2141da307bee4b4c5144388d33b56e",
   "solanaAddress": "G8bFssuQsNxmMopW9bjYgA4iuUZ7z8uELiNL6UKvSjyy",
   "rpc": {
     "1": {

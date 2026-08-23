@@ -1,5 +1,5 @@
 /**
- * Proof of Work for the PoH Miner Network.
+ * Proof of Work for the DAI Miner Network.
  *
  * Real competitive PoW: all miners mine simultaneously; the first to find
  * a valid nonce wins the block. Mining aborts immediately when a new valid
@@ -72,7 +72,7 @@ export function mineBlockThreaded(block, difficulty, abortSignal) {
   if (abortSignal?.aborted) return Promise.resolve(null);
 
   return new Promise((resolve) => {
-    // Pass only the fields the hash covers (a PohBlock's methods can't be cloned).
+    // Pass only the fields the hash covers (a DAIBlock's methods can't be cloned).
     // blockHashInput's key order + the extra `difficulty` are harmless to include.
     const blockData = JSON.parse(blockHashInput(block));
     let worker;

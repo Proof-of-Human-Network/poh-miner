@@ -3,7 +3,7 @@ import { isLocalRequest, rejectNonLocalStateChange, isPublicPostPath } from '../
 import { normalizeSkillId } from '../src/security/skill-id.js';
 import { skillsManager } from '../src/skills/manager.js';
 import { validateCoinbase } from '../src/consensus/coinbase-validator.js';
-import { BLOCK_REWARD_UPOH, calculateBlockRewards } from '../src/rewards/reward.js';
+import { BLOCK_REWARD_UDAI, calculateBlockRewards } from '../src/rewards/reward.js';
 import {
   verifyBrainEvent,
   verifyIpfsUpdate,
@@ -14,7 +14,7 @@ import {
 import { Wallet } from '../src/wallet/wallet.js';
 import { sealWalletData, unsealWalletData } from '../src/security/wallet-crypto.js';
 import { validateBlockChain } from '../src/consensus/block-validator.js';
-import { PohBlock } from '../src/core/block.js';
+import { DAIBlock } from '../src/core/block.js';
 
 describe('API security', () => {
   it('treats loopback addresses as local', () => {
@@ -61,14 +61,14 @@ describe('Network skill execution guard', () => {
 
 describe('Coinbase validation', () => {
   it('rejects inflated proposer reward', () => {
-    const block = new PohBlock({
+    const block = new DAIBlock({
       height: 1,
       previousHash: '0'.repeat(64),
       timestamp: Date.now(),
-      minerWallet: 'pohabc',
+      minerWallet: 'daiabc',
       coinbaseReward: {
-        totalNewSupply: BLOCK_REWARD_UPOH,
-        proposerReward: BLOCK_REWARD_UPOH * 2,
+        totalNewSupply: BLOCK_REWARD_UDAI,
+        proposerReward: BLOCK_REWARD_UDAI * 2,
         workerRewards: [],
       },
     });
@@ -78,13 +78,13 @@ describe('Coinbase validation', () => {
 
   it('accepts valid empty-block coinbase', () => {
     // Under reward-v2 (active from height 1) an idle block is keepalive-only: it
-    // mints KEEPALIVE_UPOH to the proposer, not a full block reward. Build the
+    // mints KEEPALIVE_UDAI to the proposer, not a full block reward. Build the
     // canonical idle coinbase the same way the miner does, so it validates.
-    const block = new PohBlock({
+    const block = new DAIBlock({
       height: 1,
       previousHash: '0'.repeat(64),
       timestamp: Date.now(),
-      minerWallet: 'pohabc',
+      minerWallet: 'daiabc',
       coinbaseReward: calculateBlockRewards([], 1, []),
     });
     expect(validateCoinbase(block).valid).toBe(true);
@@ -93,7 +93,7 @@ describe('Coinbase validation', () => {
 
 describe('Bootnode auth', () => {
   it('rejects unsigned IPFS update', () => {
-    const result = verifyIpfsUpdate({ minerWallet: 'pohabc', chain: 'QmTest', ts: Date.now() });
+    const result = verifyIpfsUpdate({ minerWallet: 'daiabc', chain: 'QmTest', ts: Date.now() });
     expect(result.ok).toBe(false);
   });
 
@@ -113,7 +113,7 @@ describe('Bootnode auth', () => {
   it('rejects IPFS update when wallet does not match signing key', () => {
     const wallet = Wallet.generate();
     const ts = Date.now();
-    const payload = { chain: 'QmTest', minerWallet: 'pohdeadbeef', ts };
+    const payload = { chain: 'QmTest', minerWallet: 'daideadbeef', ts };
     const signature = wallet.sign(JSON.stringify(payload));
     const result = verifyIpfsUpdate({
       ...payload,
@@ -127,7 +127,7 @@ describe('Bootnode auth', () => {
     const wallet = Wallet.generate();
     const ts = Date.now();
     const peerInfo = {
-      wallet: 'pohnotreal',
+      wallet: 'dainotreal',
       host: 'miner.example.com',
       timestamp: ts,
       walletApiPort: 3456,
@@ -135,7 +135,7 @@ describe('Bootnode auth', () => {
       methodsHash: 'abc',
       signingPublicKey: wallet.signingPublicKey,
       signature: wallet.sign(buildPeerRegistrationMessage({
-        wallet: 'pohnotreal',
+        wallet: 'dainotreal',
         host: 'miner.example.com',
         timestamp: ts,
         walletApiPort: 3456,
@@ -192,7 +192,7 @@ describe('Bootnode auth', () => {
   it('rejects private hosts unless explicitly allowed', () => {
     expect(isPublicPeerHost('192.168.1.5')).toBe(false);
     expect(isPublicPeerHost('192.168.1.5', { allowLocal: true })).toBe(true);
-    expect(isPublicPeerHost('miner.poh.ge')).toBe(true);
+    expect(isPublicPeerHost('miner.iamai.kg')).toBe(true);
   });
 
   it('accepts a NAT follower registration (reachable:false) without a public host', () => {
@@ -268,7 +268,7 @@ describe('Wallet encryption', () => {
     const { default: fs } = await import('fs');
     const { default: os } = await import('os');
     const { default: path } = await import('path');
-    const keyPath = path.join(os.homedir(), '.poh-miner', '.wallet-key');
+    const keyPath = path.join(os.homedir(), '.dai-miner', '.wallet-key');
     const wallet = Wallet.generate();
     const { sealWalletData } = await import('../src/security/wallet-crypto.js');
     sealWalletData(wallet.toJSON());
@@ -295,7 +295,7 @@ describe('Wallet encryption', () => {
 
 describe('IPFS chain validation', () => {
   it('rejects chain segment without valid PoW', () => {
-    const genesis = new PohBlock({
+    const genesis = new DAIBlock({
       height: 0,
       previousHash: '0'.repeat(64),
       timestamp: Date.now(),
@@ -304,7 +304,7 @@ describe('IPFS chain validation', () => {
       chainWork: '20',
     });
     genesis.blockHash = genesis.getHashSync();
-    const fake = new PohBlock({
+    const fake = new DAIBlock({
       height: 1,
       previousHash: genesis.blockHash,
       timestamp: Date.now() + 1000,
@@ -312,8 +312,8 @@ describe('IPFS chain validation', () => {
       difficulty: 5,
       nonce: 0,
       coinbaseReward: {
-        totalNewSupply: BLOCK_REWARD_UPOH,
-        proposerReward: BLOCK_REWARD_UPOH,
+        totalNewSupply: BLOCK_REWARD_UDAI,
+        proposerReward: BLOCK_REWARD_UDAI,
         workerRewards: [],
       },
     });

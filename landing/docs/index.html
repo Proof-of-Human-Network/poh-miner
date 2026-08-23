@@ -3,10 +3,10 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>PoH Miner API Docs</title>
+  <title>DAI Miner API Docs</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://fonts.googleapis.com/css2?family=Iceland&display=swap" rel="stylesheet">
-  <link rel="icon" type="image/svg+xml" href="../poh-miner.svg">
+  <link rel="icon" type="image/svg+xml" href="../dai-miner.svg">
   <link rel="icon" type="image/png" sizes="32x32" href="../favicon-32.png">
   <link rel="shortcut icon" href="../favicon.ico">
   <script src="../i18n.js" defer></script>
@@ -32,7 +32,7 @@
       white-space: pre-wrap;
       word-break: break-word;
     }
-    /* Syntax highlighting — highlight.js token colors, tuned to the PoH palette */
+    /* Syntax highlighting — highlight.js token colors, tuned to the DAI palette */
     .code-block.hljs, .code-block .hljs { background: transparent; padding: 0; }
     .code-block .hljs-comment, .code-block .hljs-quote { color: #5c6370; font-style: italic; }
     .code-block .hljs-keyword, .code-block .hljs-selector-tag, .code-block .hljs-literal,
@@ -76,7 +76,7 @@
   <nav class="border-b border-white/10 bg-black/80 backdrop-blur-xl fixed w-full z-50">
     <div class="max-w-7xl mx-auto px-4 sm:px-8 h-16 sm:h-20 flex items-center justify-between">
       <a href="../" class="flex items-center gap-3 hover:opacity-80 transition">
-        <img src="../poh-miner.svg" alt="PoH" width="36" height="36" class="sm:w-12 sm:h-12" />
+        <img src="../dai-miner.svg" alt="DAI" width="36" height="36" class="sm:w-12 sm:h-12" />
         <span class="text-[28px] sm:text-[40px] leading-none">Miner API</span>
       </a>
       <div class="flex items-center gap-6 text-[18px] sm:text-[20px]">
@@ -114,16 +114,16 @@
         <section id="overview" class="mb-16">
           <h1 class="text-[40px] sm:text-[52px] mb-4" data-i18n="doc.overview.title">Wallet API Reference</h1>
           <p class="text-white/60 text-[20px] mb-6 max-w-3xl" data-i18n-html="doc.overview.intro">
-            Every PoH miner exposes an HTTP API on <span class="neon">walletApiPort</span> (default <strong>3456</strong>).
-            <strong>Balance responses</strong> are in <strong>μPOH</strong> (raw) — 1 POH = 1&nbsp;000&nbsp;000&nbsp;000 μPOH.
-            <strong>Input amounts</strong> for <code>/api/wallet/send</code> and staking endpoints are in <strong>POH</strong> (the server converts internally).
+            Every DAI miner exposes an HTTP API on <span class="neon">walletApiPort</span> (default <strong>3456</strong>).
+            <strong>Balance responses</strong> are in <strong>μDAI</strong> (raw) — 1 DAI = 1&nbsp;000&nbsp;000&nbsp;000 μDAI.
+            <strong>Input amounts</strong> for <code>/api/wallet/send</code> and staking endpoints are in <strong>DAI</strong> (the server converts internally).
           </p>
           <div class="glass rounded-md p-5 mb-6">
             <div class="text-white/40 text-sm mb-2" data-i18n="doc.overview.baseurl">Base URL</div>
             <div class="code-block" id="base-url">http://127.0.0.1:3456</div>
           </div>
           <p class="text-white/50 text-[18px]" data-i18n-html="doc.overview.public">
-            Public miners (e.g. <a href="https://miner.poh.ge" class="neon hover:underline">miner.poh.ge</a>)
+            Public miners (e.g. <a href="https://miner.iamai.kg" class="neon hover:underline">miner.iamai.kg</a>)
             expose the same routes over HTTPS. CORS is open for browser clients.
           </p>
         </section>
@@ -132,7 +132,7 @@
         <section id="generate-wallet" class="mb-16">
           <h2 class="text-[32px] mb-2 neon" data-i18n="doc.gen.title">Generate Wallet</h2>
           <p class="text-white/55 text-[18px] mb-8" data-i18n-html="doc.gen.intro">
-            A PoH wallet is an <strong>ed25519 keypair</strong>. The address is derived from the signing public key —
+            A DAI wallet is an <strong>ed25519 keypair</strong>. The address is derived from the signing public key —
             no seed phrases, no custodians. Follow these four steps to create a wallet and start submitting jobs.
           </p>
 
@@ -145,7 +145,7 @@
             <p class="text-white/50 text-[17px] mb-3" data-i18n-html="doc.gen.s1.desc">
               Run this Node.js script (requires <code>tweetnacl</code> — <code>npm i tweetnacl</code>).
               It deterministically derives an ed25519 signing keypair from 32 random bytes, then
-              computes the canonical PoH address as <code>'poh' + sha256(signingPublicKey).slice(0,40)</code>.
+              computes the canonical DAI address as <code>'dai' + sha256(signingPublicKey).slice(0,40)</code>.
             </p>
             <div class="code-block">// generate-wallet.js
 const crypto = require('crypto');
@@ -163,26 +163,26 @@ const sha256hex = (s) =&gt; crypto.createHash('sha256').update(s).digest('hex');
 const privateKeyHex = crypto.randomBytes(32).toString('hex');
 
 // 2. Deterministic ed25519 signing keypair
-//    (same derivation as poh/wallet/src/services/signing.js)
-const seedHex = sha256hex(privateKeyHex + ':poh-ed25519-signing-v1');
+//    (same derivation as dai/wallet/src/services/signing.js)
+const seedHex = sha256hex(privateKeyHex + ':dai-ed25519-signing-v1');
 const { publicKey, secretKey } = nacl.sign.keyPair.fromSeed(hexToUint8(seedHex));
 const signingPublicKey    = b64(publicKey);   // 32-byte raw ed25519 pubkey in base64
 const signingSecretKeyB64 = b64(secretKey);   // 64-byte secretKey — keep secret
 
 // 3. Canonical address
-const address = 'poh' + sha256hex(signingPublicKey).slice(0, 40);
+const address = 'dai' + sha256hex(signingPublicKey).slice(0, 40);
 
 // 4. Registration proof — ed25519 signature over the address string.
 //    Required by /api/wallet/register-key (Step 2).
 const proof = b64(nacl.sign.detached(new TextEncoder().encode(address), secretKey));
 
 const wallet = { address, privateKeyHex, signingPublicKey, signingSecretKeyB64, proof };
-require('fs').writeFileSync('poh-wallet.json', JSON.stringify(wallet, null, 2));
+require('fs').writeFileSync('dai-wallet.json', JSON.stringify(wallet, null, 2));
 console.log('Address:', address);</div>
             <div class="code-block mt-3">node generate-wallet.js
-# Address: pohaf4c36bfb8ee60d019251b613d1e5cd18a241d76</div>
+# Address: daiaf4c36bfb8ee60d019251b613d1e5cd18a241d76</div>
             <p class="text-white/40 text-[15px] mt-2" data-i18n-html="doc.gen.s1.note">
-              <strong class="text-white/60">Keep <code>poh-wallet.json</code> secret.</strong>
+              <strong class="text-white/60">Keep <code>dai-wallet.json</code> secret.</strong>
               The <code>signingSecretKeyB64</code> is the private signing key — never share or commit it.
             </p>
           </div>
@@ -198,12 +198,12 @@ console.log('Address:', address);</div>
               The proof is an ed25519 signature over your address — it proves you hold the private key.
               This binds your key to your address so the network can verify your job payment signatures.
             </p>
-            <div class="code-block">curl -X POST https://miner.poh.ge/api/wallet/register-key \
+            <div class="code-block">curl -X POST https://miner.iamai.kg/api/wallet/register-key \
   -H 'Content-Type: application/json' \
   -d '{
-    "address":          "poh...",
-    "signingPublicKey": "&lt;signingPublicKey from poh-wallet.json&gt;",
-    "proof":            "&lt;proof from poh-wallet.json&gt;"
+    "address":          "dai...",
+    "signingPublicKey": "&lt;signingPublicKey from dai-wallet.json&gt;",
+    "proof":            "&lt;proof from dai-wallet.json&gt;"
   }'
 
 # Response: { "ok": true }</div>
@@ -213,7 +213,7 @@ console.log('Address:', address);</div>
               include a <code>rotationProof</code> signed by your <em>existing</em> key.
             </p>
             <p class="text-white/40 text-[15px] mt-2" data-i18n="doc.gen.s2.free">
-              Registration is free and only needs to happen once per keypair. It does not require any POH balance.
+              Registration is free and only needs to happen once per keypair. It does not require any DAI balance.
             </p>
           </div>
 
@@ -228,10 +228,10 @@ console.log('Address:', address);</div>
               via the P2P exchange, a transfer from another wallet, or a faucet.
               Check your balance at any time:
             </p>
-            <div class="code-block">curl "https://miner.poh.ge/api/wallet/balance?address=poh..."
+            <div class="code-block">curl "https://miner.iamai.kg/api/wallet/balance?address=dai..."
 
 # Response: { "balance": 5000000000 }
-# 5 000 000 000 μPOH = 5 POH  (1 POH = 1 000 000 000 μPOH)</div>
+# 5 000 000 000 μDAI = 5 DAI  (1 DAI = 1 000 000 000 μDAI)</div>
           </div>
 
           <!-- Step 4 -->
@@ -246,10 +246,10 @@ console.log('Address:', address);</div>
             <div class="code-block">// submit-job.js  (requires tweetnacl)
 const crypto = require('crypto');
 const nacl   = require('tweetnacl');
-const wallet = JSON.parse(require('fs').readFileSync('poh-wallet.json'));
+const wallet = JSON.parse(require('fs').readFileSync('dai-wallet.json'));
 const secretKey = new Uint8Array(Buffer.from(wallet.signingSecretKeyB64, 'base64'));
 
-const MINER = 'https://miner.poh.ge';
+const MINER = 'https://miner.iamai.kg';
 const sha256hex = (s) =&gt; crypto.createHash('sha256').update(s).digest('hex');
 const sign = (data, sk) =&gt; {
   const msg = new TextEncoder().encode(typeof data === 'string' ? data : JSON.stringify(data));
@@ -266,9 +266,9 @@ async function run() {
 
   // 3. Build payment proof — a CLIENT-generated jobId, hashed with the miner,
   //    amount and nonce: sha256({ jobId, requesterAddress, minerAddress, amount, nonce }).
-  //    (Append a `currency` key when paying in a stablecoin instead of POH.)
+  //    (Append a `currency` key when paying in a stablecoin instead of DAI.)
   const jobId     = `job-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-  const maxBudget = 500_000_000; // 0.5 POH in μPOH
+  const maxBudget = 500_000_000; // 0.5 DAI in μDAI
   const txHash    = sha256hex(JSON.stringify({
     jobId, requesterAddress: wallet.address, minerAddress, amount: maxBudget, nonce
   }));
@@ -282,7 +282,7 @@ async function run() {
       id: jobId,
       type: 'compute',
       model,
-      payload: { prompt: 'Summarise the PoH network in one sentence.' },
+      payload: { prompt: 'Summarise the DAI network in one sentence.' },
       maxBudget,
       requesterAddress: wallet.address,
       paymentTx: { txHash, signature, nonce, timestamp: Date.now() }
@@ -328,9 +328,9 @@ run();</div>
 
           <div class="glass rounded-[4px] p-5 mb-6 text-[17px] text-white/70">
             <div class="neon mb-2 text-[20px]" data-i18n="doc.assets.title">Stablecoins &amp; multi-currency</div>
-            <p class="mb-2" data-i18n-html="doc.assets.p1">Four compute coins ride on the chain alongside POH: <strong>αιGEL, KGST, αιETB, αιBTN</strong> (wire tickers <code>aiGEL</code>, <code>KGST</code>, <code>aiETB</code>, <code>aiBTN</code>). They use <strong>2 decimals</strong> (1 unit = 100 raw); POH keeps 9 (1&nbsp;POH&nbsp;=&nbsp;1e9&nbsp;μPOH). Dollar on-ramp is off-chain <strong>USDT</strong> (<code>USDT-ERC20</code>, <code>USDT-TRC20</code>, <code>USDT-TON</code>, <code>USDT-SOL</code>, <code>USDT-BEP20</code>). Two forex meshes: <code>USDT / KGST / aiETB · aiGEL · aiBTN</code> and <code>GELt / aiGEL / aiETB · aiBTN · KGST</code>. <strong>GELt</strong> is external (Tether + Government of Georgia) — not an on-chain asset. Armenia is not listed.</p>
+            <p class="mb-2" data-i18n-html="doc.assets.p1">Four compute coins ride on the chain alongside DAI: <strong>αιGEL, KGST, αιETB, αιBTN</strong> (wire tickers <code>aiGEL</code>, <code>KGST</code>, <code>aiETB</code>, <code>aiBTN</code>). They use <strong>2 decimals</strong> (1 unit = 100 raw); DAI keeps 9 (1&nbsp;DAI&nbsp;=&nbsp;1e9&nbsp;μDAI). Dollar on-ramp is off-chain <strong>USDT</strong> (<code>USDT-ERC20</code>, <code>USDT-TRC20</code>, <code>USDT-TON</code>, <code>USDT-SOL</code>, <code>USDT-BEP20</code>). Two forex meshes: <code>USDT / KGST / aiETB · aiGEL · aiBTN</code> and <code>GELt / aiGEL / aiETB · aiBTN · KGST</code>. <strong>GELt</strong> is external (Tether + Government of Georgia) — not an on-chain asset. Armenia is not listed.</p>
             <p class="mb-2" data-i18n-html="doc.assets.p2"><code>GET /api/assets</code> lists every asset with decimals, display names and per-currency gas prices. <code>GET /api/wallet/balance</code> returns an additional <code>assets</code> map with each stablecoin's raw and display balance.</p>
-            <p data-i18n-html="doc.assets.p3">Transfers: <code>POST /api/wallet/send</code> (and <code>/api/tx/submit</code>) accept a <code>currency</code> field — omit it for POH. A transaction's signed hash includes <code>currency</code> ONLY when non-POH, so existing POH transactions and signatures remain valid unchanged.</p>
+            <p data-i18n-html="doc.assets.p3">Transfers: <code>POST /api/wallet/send</code> (and <code>/api/tx/submit</code>) accept a <code>currency</code> field — omit it for DAI. A transaction's signed hash includes <code>currency</code> ONLY when non-DAI, so existing DAI transactions and signatures remain valid unchanged.</p>
           </div>
 
           <div class="endpoint-card">
@@ -346,8 +346,8 @@ run();</div>
 
           <div class="endpoint-card">
             <div class="mb-2"><span class="method method-get">GET</span> <code class="text-white/90">/api/wallet/balance?address=&lt;addr&gt;</code></div>
-            <p class="text-white/55 text-[18px]" data-i18n="doc.chain.balance">Balance in μPOH for a PoH wallet address.</p>
-            <div class="code-block mt-3">curl "http://127.0.0.1:3456/api/wallet/balance?address=poh..."</div>
+            <p class="text-white/55 text-[18px]" data-i18n="doc.chain.balance">Balance in μDAI for a DAI wallet address.</p>
+            <div class="code-block mt-3">curl "http://127.0.0.1:3456/api/wallet/balance?address=dai..."</div>
           </div>
 
           <div class="endpoint-card">
@@ -357,7 +357,7 @@ run();</div>
 
           <div class="endpoint-card">
             <div class="mb-2"><span class="method method-get">GET</span> <code class="text-white/90">/api/wallet/transactions?address=&lt;addr&gt;</code></div>
-            <p class="text-white/55 text-[18px]" data-i18n="doc.chain.transactions">POH transfer history.</p>
+            <p class="text-white/55 text-[18px]" data-i18n="doc.chain.transactions">DAI transfer history.</p>
           </div>
 
           <div class="endpoint-card">
@@ -374,7 +374,7 @@ run();</div>
             <div class="mb-2"><span class="method method-post">POST</span> <code class="text-white/90">/api/wallet/register-key</code></div>
             <p class="text-white/55 text-[18px]" data-i18n-html="doc.chain.register">Register an ed25519 signing key for an address. Required before signed job payments. See <a href="#generate-wallet" class="neon hover:underline">Generate Wallet</a> for how to produce the proof. <code>proof</code> = ed25519 signature over the address string.</p>
             <div class="code-block mt-3">{
-  "address": "poh...",
+  "address": "dai...",
   "signingPublicKey": "base64...",
   "proof": "base64...",
   "rotationProof": "base64 (only when changing an existing key)"
@@ -383,10 +383,10 @@ run();</div>
 
           <div class="endpoint-card">
             <div class="mb-2"><span class="method method-post">POST</span> <code class="text-white/90">/api/wallet/send</code></div>
-            <p class="text-white/55 text-[18px]" data-i18n-html="doc.chain.send">Transfer POH between wallets. The sender wallet must be stored on this node (loaded via <code>walletManager</code>). Amount is in <strong>POH</strong> (not μPOH). Optional <code>fee</code> and <code>memo</code> fields.</p>
+            <p class="text-white/55 text-[18px]" data-i18n-html="doc.chain.send">Transfer DAI between wallets. The sender wallet must be stored on this node (loaded via <code>walletManager</code>). Amount is in <strong>DAI</strong> (not μDAI). Optional <code>fee</code> and <code>memo</code> fields.</p>
             <div class="code-block mt-3">{
-  "from": "poh...",
-  "to": "poh...",
+  "from": "dai...",
+  "to": "dai...",
   "amount": 1,
   "memo": "optional"
 }</div>
@@ -394,7 +394,7 @@ run();</div>
 
           <div class="endpoint-card">
             <div class="mb-2"><span class="method method-post">POST</span> <code class="text-white/90">/api/tx/submit</code></div>
-            <p class="text-white/55 text-[18px]" data-i18n-html="doc.chain.txsubmit">Submit a pre-signed <code>PoHTransaction</code> to the mempool.</p>
+            <p class="text-white/55 text-[18px]" data-i18n-html="doc.chain.txsubmit">Submit a pre-signed <code>DAITransaction</code> to the mempool.</p>
           </div>
 
           <div class="endpoint-card">
@@ -413,16 +413,16 @@ run();</div>
           <h2 class="text-[32px] mb-6 neon" data-i18n="doc.jobs.title">Jobs</h2>
           <p class="text-white/55 text-[18px] mb-6" data-i18n-html="doc.jobs.intro">
             Submit compute work to the network. Types: <code>verdict</code> (identity scan, free), <code>skill</code>, <code>compute</code>.
-            <code>skill</code> and <code>compute</code> jobs require a signed payment proof (<code>maxBudget</code> in μPOH).
+            <code>skill</code> and <code>compute</code> jobs require a signed payment proof (<code>maxBudget</code> in μDAI).
           </p>
 
           <div class="glass rounded-[4px] p-5 mb-6 text-[17px] text-white/70">
             <div class="neon mb-2 text-[20px]" data-i18n="doc.jobs.pricing.title">Pricing &amp; fees</div>
-            <p class="mb-2" data-i18n-html="doc.jobs.pricing.p1">Paid jobs are metered per AI compute token at <strong>1&nbsp;μPOH&nbsp;per&nbsp;token</strong> (the default <code>gasPrice</code>; μPOH is the smallest unit, so this is the floor). Since <strong>1&nbsp;POH&nbsp;=&nbsp;1&nbsp;000&nbsp;000&nbsp;000&nbsp;μPOH</strong>, one POH buys up to <strong>1&nbsp;billion&nbsp;tokens</strong>.</p>
-            <p class="mb-2" data-i18n-html="doc.jobs.pricing.p2">The fee is <code>tokensUsed × gasPrice</code> and is <strong>never less than the tokens actually used</strong> (1&nbsp;000 tokens ⇒ ≥ 1&nbsp;000&nbsp;μPOH). Unused budget is refunded. A <code>maxBudget</code> too small to cover the job's token cost is rejected with <code>402 FEE_TOO_LOW</code>.</p>
-            <p class="mb-2" data-i18n-html="doc.jobs.pricing.p3"><strong>Block reward.</strong> On top of the fee, each block's ~1&nbsp;POH subsidy is <strong>split among the workers who completed jobs, weighted by delivered compute</strong> (a deterministic token estimate — splitting into many nodes earns nothing extra), minus a small (~10%) proposer cut. Blocks with no real work mint only a small keepalive, so emission tracks demand.</p>
-            <p class="mb-2" data-i18n-html="doc.jobs.pricing.p4">POH has no fixed price — the market defines it via the best open P2P order (see <code>GET /api/p2p/price</code>).</p>
-            <p data-i18n-html="doc.jobs.pricing.currency">Job fees can be paid in POH or any stablecoin: set <code>currency</code> on the job payload. The fee floor is priced per currency, and <strong>the miner receives exactly the currency paid</strong> — no conversion.</p>
+            <p class="mb-2" data-i18n-html="doc.jobs.pricing.p1">Paid jobs are metered per AI compute token at <strong>1&nbsp;μDAI&nbsp;per&nbsp;token</strong> (the default <code>gasPrice</code>; μDAI is the smallest unit, so this is the floor). Since <strong>1&nbsp;DAI&nbsp;=&nbsp;1&nbsp;000&nbsp;000&nbsp;000&nbsp;μDAI</strong>, one DAI buys up to <strong>1&nbsp;billion&nbsp;tokens</strong>.</p>
+            <p class="mb-2" data-i18n-html="doc.jobs.pricing.p2">The fee is <code>tokensUsed × gasPrice</code> and is <strong>never less than the tokens actually used</strong> (1&nbsp;000 tokens ⇒ ≥ 1&nbsp;000&nbsp;μDAI). Unused budget is refunded. A <code>maxBudget</code> too small to cover the job's token cost is rejected with <code>402 FEE_TOO_LOW</code>.</p>
+            <p class="mb-2" data-i18n-html="doc.jobs.pricing.p3"><strong>Block reward.</strong> On top of the fee, each block's ~1&nbsp;DAI subsidy is <strong>split among the workers who completed jobs, weighted by delivered compute</strong> (a deterministic token estimate — splitting into many nodes earns nothing extra), minus a small (~10%) proposer cut. Blocks with no real work mint only a small keepalive, so emission tracks demand.</p>
+            <p class="mb-2" data-i18n-html="doc.jobs.pricing.p4">DAI has no fixed price — the market defines it via the best open P2P order (see <code>GET /api/p2p/price</code>).</p>
+            <p data-i18n-html="doc.jobs.pricing.currency">Job fees can be paid in DAI or any stablecoin: set <code>currency</code> on the job payload. The fee floor is priced per currency, and <strong>the miner receives exactly the currency paid</strong> — no conversion.</p>
           </div>
 
           <div class="endpoint-card">
@@ -434,7 +434,7 @@ run();</div>
   "model": "qwen3-0.6b",
   "payload": { "prompt": "Summarize the dataset" },
   "maxBudget": 500000000,
-  "requesterAddress": "poh...",
+  "requesterAddress": "dai...",
   "paymentTx": { "txHash": "&lt;computeJobPaymentHash&gt;", "signature": "base64..." }
 }</div>
           </div>
@@ -467,7 +467,7 @@ run();</div>
           <div class="endpoint-card">
             <div class="mb-2"><span class="method method-post">POST</span> <code class="text-white/90">/chat/route</code></div>
             <p class="text-white/55 text-[18px]" data-i18n="doc.chat.route">Route a message to the best matching skill.</p>
-            <div class="code-block mt-3">{ "message": "audit this skill code", "budget": 0, "wallet": "poh..." }</div>
+            <div class="code-block mt-3">{ "message": "audit this skill code", "budget": 0, "wallet": "dai..." }</div>
           </div>
 
           <div class="endpoint-card">
@@ -475,8 +475,8 @@ run();</div>
             <p class="text-white/55 text-[18px]" data-i18n-html="doc.chat.ask">Full AI reply — routes to a skill or free chat. Accepts optional <code>attachments</code> (text files or images, ≤1&nbsp;MB total). Images force a vision-capable model. May return <code>{ fromChainHistory: true }</code> for cached on-chain replies.</p>
             <div class="code-block mt-3">{
   "message": "What is my on-chain reputation?",
-  "wallet": "poh...",
-  "requesterAddress": "poh...",
+  "wallet": "dai...",
+  "requesterAddress": "dai...",
   "history": [],
   "attachments": [
     { "type": "image", "data": "&lt;base64-image&gt;", "filename": "screenshot.png" }
@@ -575,13 +575,13 @@ run();</div>
         <section id="skills" class="mb-16">
           <h2 class="text-[32px] mb-6 neon" data-i18n="doc.skills.title">Skills</h2>
           <p class="text-white/55 text-[18px] mb-6" data-i18n-html="doc.skills.intro">
-            On-demand agent modules. Deploy a public skill for <strong>1 POH</strong>; community staking reaches <strong>10 POH</strong> to graduate a skill network-wide.
+            On-demand agent modules. Deploy a public skill for <strong>1 DAI</strong>; community staking reaches <strong>10 DAI</strong> to graduate a skill network-wide.
           </p>
 
           <div class="endpoint-card">
             <div class="mb-2"><span class="method method-get">GET</span> <code class="text-white/90">/api/skills</code></div>
-            <p class="text-white/55 text-[18px]" data-i18n-html="doc.skills.list">List skills with staking totals and <code>economics: { proposeFeePoh, graduationThresholdPoh }</code>.</p>
-            <div class="code-block mt-3">curl https://miner.poh.ge/api/skills</div>
+            <p class="text-white/55 text-[18px]" data-i18n-html="doc.skills.list">List skills with staking totals and <code>economics: { proposeFeeDai, graduationThresholdDai }</code>.</p>
+            <div class="code-block mt-3">curl https://miner.iamai.kg/api/skills</div>
           </div>
 
           <div class="endpoint-card">
@@ -591,19 +591,19 @@ run();</div>
 
           <div class="endpoint-card">
             <div class="mb-2"><span class="method method-post">POST</span> <code class="text-white/90">/api/skills/propose</code></div>
-            <p class="text-white/55 text-[18px]" data-i18n-html="doc.skills.propose">Propose a new skill. Public proposals cost 1 POH (escrowed for <code>code_audit</code>).</p>
+            <p class="text-white/55 text-[18px]" data-i18n-html="doc.skills.propose">Propose a new skill. Public proposals cost 1 DAI (escrowed for <code>code_audit</code>).</p>
             <div class="code-block mt-3">{ "manifest": { ... }, "code": "...", "private": false }</div>
           </div>
 
           <div class="endpoint-card">
             <div class="mb-2"><span class="method method-post">POST</span> <code class="text-white/90">/api/skills/:id/stake</code></div>
-            <p class="text-white/55 text-[18px]" data-i18n-html="doc.skills.stake">Stake POH toward skill graduation. Amount is in <strong>POH</strong> (not μPOH). Uses the node's own wallet.</p>
+            <p class="text-white/55 text-[18px]" data-i18n-html="doc.skills.stake">Stake DAI toward skill graduation. Amount is in <strong>DAI</strong> (not μDAI). Uses the node's own wallet.</p>
             <div class="code-block mt-3">{ "amount": 1000 }</div>
           </div>
 
           <div class="endpoint-card">
             <div class="mb-2"><span class="method method-post">POST</span> <code class="text-white/90">/api/skills/:id/unstake</code></div>
-            <p class="text-white/55 text-[18px]" data-i18n="doc.skills.unstake">Withdraw staked POH from a proposed skill.</p>
+            <p class="text-white/55 text-[18px]" data-i18n="doc.skills.unstake">Withdraw staked DAI from a proposed skill.</p>
           </div>
 
           <div class="endpoint-card">
@@ -617,7 +617,7 @@ run();</div>
           <h2 class="text-[32px] mb-6 neon" data-i18n="doc.hf.title">HF Datasets</h2>
           <p class="text-white/55 text-[18px] mb-6" data-i18n-html="doc.hf.intro">
             Hugging Face datasets installed on this node. Compute jobs can reference them by ID. Chat will suggest installs when a dataset is missing.
-            Datasets are stored under <code>~/.poh-miner/brain-data/hf-datasets/</code>.
+            Datasets are stored under <code>~/.dai-miner/brain-data/hf-datasets/</code>.
           </p>
 
           <div class="endpoint-card">
@@ -676,7 +676,7 @@ run();</div>
             <div class="mb-2"><span class="method method-post">POST</span> <code class="text-white/90">/api/brain/feedback</code></div>
             <p class="text-white/55 text-[18px]" data-i18n="doc.llm.feedback">Submit a human correction to improve signal weights.</p>
             <div class="code-block mt-3">{
-  "address": "poh...",
+  "address": "dai...",
   "aiVerdict": "human",
   "correction": "bot",
   "comment": "obvious bot pattern",
@@ -695,9 +695,9 @@ run();</div>
           <h2 class="text-[32px] mb-6 neon" data-i18n="doc.p2p.title">P2P Exchange</h2>
 
           <div class="glass rounded-[4px] p-5 mb-6 text-[17px] text-white/70">
-            <p data-i18n-html="doc.p2p.swap">On-chain assets (<code>POH</code>, <code>KGST</code>, <code>aiGEL</code>, <code>aiETB</code>, <code>aiBTN</code>) trade as base. When both legs are on-chain (e.g. <code>KGST/aiGEL</code>, or POH for aiGEL) the trade settles <strong>atomically</strong> in one step — no payment-sent/confirm phase; the taker's own poh address receives the base. Off-chain legs (USDT, USDC, bank transfer) keep the manual escrow flow. Maker pay-to for off-chain quotes is <code>order.paymentMethods[].address</code>. Meshes: <code>USDT / KGST / aiETB · aiGEL · aiBTN</code> and <code>GELt / aiGEL / aiETB · aiBTN · KGST</code> (GELt external, not listed).</p>
+            <p data-i18n-html="doc.p2p.swap">On-chain assets (<code>DAI</code>, <code>KGST</code>, <code>aiGEL</code>, <code>aiETB</code>, <code>aiBTN</code>) trade as base. When both legs are on-chain (e.g. <code>KGST/aiGEL</code>, or DAI for aiGEL) the trade settles <strong>atomically</strong> in one step — no payment-sent/confirm phase; the taker's own dai address receives the base. Off-chain legs (USDT, USDC, bank transfer) keep the manual escrow flow. Maker pay-to for off-chain quotes is <code>order.paymentMethods[].address</code>. Meshes: <code>USDT / KGST / aiETB · aiGEL · aiBTN</code> and <code>GELt / aiGEL / aiETB · aiBTN · KGST</code> (GELt external, not listed).</p>
           </div>
-          <p class="text-white/55 text-[18px] mb-6" data-i18n="doc.p2p.intro">Peer-to-peer POH trading with on-chain escrow.</p>
+          <p class="text-white/55 text-[18px] mb-6" data-i18n="doc.p2p.intro">Peer-to-peer DAI trading with on-chain escrow.</p>
 
           <div class="endpoint-card">
             <div class="mb-2"><span class="method method-get">GET</span> <code class="text-white/90">/api/p2p/currencies</code></div>
@@ -711,7 +711,7 @@ run();</div>
 
           <div class="endpoint-card">
             <div class="mb-2"><span class="method method-get">GET</span> <code class="text-white/90">/api/p2p/price?quoteCurrency=&lt;cur&gt;</code></div>
-            <p class="text-white/55 text-[18px]" data-i18n-html="doc.p2p.price">Reference POH price — the market price derived <strong>only</strong> from the best open P2P order(s): <code>{ price (mid), bestBid, bestAsk, source }</code>. Omit <code>quoteCurrency</code> for a per-currency map. POH has no oracle/fixed price.</p>
+            <p class="text-white/55 text-[18px]" data-i18n-html="doc.p2p.price">Reference DAI price — the market price derived <strong>only</strong> from the best open P2P order(s): <code>{ price (mid), bestBid, bestAsk, source }</code>. Omit <code>quoteCurrency</code> for a per-currency map. DAI has no oracle/fixed price.</p>
           </div>
 
           <div class="endpoint-card">
@@ -757,7 +757,7 @@ run();</div>
           <div class="endpoint-card">
             <div class="mb-2"><span class="method method-post">POST</span> <code class="text-white/90">/api/push/register</code></div>
             <p class="text-white/55 text-[18px]" data-i18n="doc.push.register">Register an Expo push token for a wallet address.</p>
-            <div class="code-block mt-3">{ "address": "poh...", "token": "ExponentPushToken[...]" }</div>
+            <div class="code-block mt-3">{ "address": "dai...", "token": "ExponentPushToken[...]" }</div>
           </div>
 
           <div class="endpoint-card">
@@ -773,7 +773,7 @@ run();</div>
             <p data-i18n-html="doc.errors.json">Responses are JSON. Errors return <code>{ "error": "message" }</code> with an appropriate HTTP status (400, 401, 402, 404, 500).</p>
             <p data-i18n-html="doc.errors.payment"><strong class="text-white/80">Payment-required (402):</strong> skill/compute jobs without a valid signed <code>paymentTx</code> are rejected before execution.</p>
             <p data-i18n-html="doc.errors.signing"><strong class="text-white/80">Signing:</strong> register your ed25519 key via <code>/api/wallet/register-key</code>, then sign payment proofs binding <code>jobId + minerWallet + maxBudget + nonce</code>.</p>
-            <p data-i18n-html="doc.errors.sdks"><strong class="text-white/80">SDKs:</strong> use <code>runCompute()</code> / <code>submitJob()</code> in <a href="https://github.com/Proof-of-Human-Network/poh-miner" class="neon hover:underline">poh-miner SDK</a> to handle signing automatically.</p>
+            <p data-i18n-html="doc.errors.sdks"><strong class="text-white/80">SDKs:</strong> use <code>runCompute()</code> / <code>submitJob()</code> in <a href="https://github.com/Proof-of-Human-Network/poh-miner" class="neon hover:underline">dai-miner SDK</a> to handle signing automatically.</p>
           </div>
         </section>
 
@@ -783,10 +783,10 @@ run();</div>
 
   <footer class="border-t border-white/10 py-8 text-white/50" style="font-size: 1.25rem;">
     <div class="max-w-7xl mx-auto px-4 sm:px-8 flex flex-col sm:flex-row gap-2 sm:justify-between">
-      <div data-i18n="doc.foot.tag">PoH Miner Network API — port 3456 by default</div>
+      <div data-i18n="doc.foot.tag">DAI Miner Network API — port 3456 by default</div>
       <div class="flex gap-4">
         <a href="../" class="hover:text-white" data-i18n="doc.foot.landing">Landing</a>
-        <a href="https://poh.ge" class="hover:text-white">poh.ge</a>
+        <a href="https://iamai.kg" class="hover:text-white">iamai.kg</a>
         <a href="https://github.com/Proof-of-Human-Network/poh-miner" target="_blank" class="hover:text-white">GitHub</a>
       </div>
     </div>

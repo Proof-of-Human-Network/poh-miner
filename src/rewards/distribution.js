@@ -1,5 +1,5 @@
 /**
- * POH Reward Distribution for the Miner Network
+ * DAI Reward Distribution for the Miner Network
  *
  * Block rewards + scan fees are distributed to miners who:
  * - Produced the block
@@ -7,11 +7,11 @@
  * - (Future) Submitted hardware attestation / uptime proofs
  */
 
-import { BLOCK_REWARD_POH } from './reward.js';
+import { BLOCK_REWARD_DAI } from './reward.js';
 
 export function calculateBlockReward(height) {
-  // Fixed 1 POH per block (no halving for simplicity in this phase)
-  return BLOCK_REWARD_POH;
+  // Fixed 1 DAI per block (no halving for simplicity in this phase)
+  return BLOCK_REWARD_DAI;
 }
 
 export function distributeRewards(block, totalFees = 0) {

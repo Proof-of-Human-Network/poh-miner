@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Publish PoH Miner installer scripts (easy-start, download-latest, install.*), READMEs,
+# Publish DAI Miner installer scripts (easy-start, download-latest, install.*), READMEs,
 # landing page (with embedded CID links), and pre-built binaries/APKs to IPFS.
 #
 # Requirements: ipfs CLI installed and daemon running (or use --offline)
@@ -11,7 +11,7 @@
 
 set -e
 
-echo "🚀 Publishing PoH Miner assets to IPFS..."
+echo "🚀 Publishing DAI Miner assets to IPFS..."
 
 # Files and directories to publish (staged into a clean tree for IPFS)
 ASSETS=(
@@ -50,12 +50,12 @@ cp README*.md "$TMP_DIR/" 2>/dev/null || true
 cp QUICKSTART*.md "$TMP_DIR/" 2>/dev/null || true
 cp landing/index.html "$TMP_DIR/landing/"
 cp landing/favicon* "$TMP_DIR/landing/" 2>/dev/null || true
-cp landing/poh-miner.svg "$TMP_DIR/landing/" 2>/dev/null || true
+cp landing/dai-miner.svg "$TMP_DIR/landing/" 2>/dev/null || true
 
 # Stage icons/assets so that landing page's logo (../assets/icons/...) and favicons resolve correctly under the published CID root
-cp assets/icons/poh-miner.svg "$TMP_DIR/assets/icons/" 2>/dev/null || true
-cp assets/icons/poh-miner-*.png "$TMP_DIR/assets/icons/" 2>/dev/null || true
-cp assets/icons/poh-miner.ico "$TMP_DIR/assets/icons/" 2>/dev/null || true
+cp assets/icons/dai-miner.svg "$TMP_DIR/assets/icons/" 2>/dev/null || true
+cp assets/icons/dai-miner-*.png "$TMP_DIR/assets/icons/" 2>/dev/null || true
+cp assets/icons/dai-miner.ico "$TMP_DIR/assets/icons/" 2>/dev/null || true
 # Copy static assets from landing (e.g. the Android wallet APK for direct download)
 mkdir -p "$TMP_DIR/landing/binaries"
 cp landing/binaries/*.apk "$TMP_DIR/landing/binaries/" 2>/dev/null || true
@@ -64,24 +64,24 @@ cp landing/*.apk "$TMP_DIR/landing/" 2>/dev/null || true  # legacy location supp
 # Include pre-built binaries & packages (if present) so the landing's one-click
 # download buttons in "Ready to contribute real compute?" work via IPFS.
 if [ -d "dist/bin" ]; then
-  cp dist/bin/poh-miner-* "$TMP_DIR/binaries/" 2>/dev/null || true
+  cp dist/bin/dai-miner-* "$TMP_DIR/binaries/" 2>/dev/null || true
   echo "  + pkg binaries from dist/bin/"
 fi
 if [ -d "dist" ]; then
   # Normalize names for the landing download links
   if ls dist/*.deb >/dev/null 2>&1; then
-    cp dist/*.deb "$TMP_DIR/binaries/poh-miner-linux-x64.deb" 2>/dev/null || true
+    cp dist/*.deb "$TMP_DIR/binaries/dai-miner-linux-x64.deb" 2>/dev/null || true
   fi
   if ls dist/*.AppImage >/dev/null 2>&1; then
-    cp dist/*.AppImage "$TMP_DIR/binaries/poh-miner-linux-x64.AppImage" 2>/dev/null || true
+    cp dist/*.AppImage "$TMP_DIR/binaries/dai-miner-linux-x64.AppImage" 2>/dev/null || true
   fi
   echo "  + .deb / .AppImage (normalized names for landing)"
 fi
 # Windows NSIS or pkg exe
-if ls dist/*poh-miner*.exe dist/*setup*.exe dist/*installer*.exe 2>/dev/null | head -1 >/dev/null; then
-  cp $(ls dist/*poh-miner*.exe dist/*setup*.exe dist/*installer*.exe 2>/dev/null | head -1) "$TMP_DIR/binaries/poh-miner-windows-x64.exe" 2>/dev/null || true
+if ls dist/*dai-miner*.exe dist/*setup*.exe dist/*installer*.exe 2>/dev/null | head -1 >/dev/null; then
+  cp $(ls dist/*dai-miner*.exe dist/*setup*.exe dist/*installer*.exe 2>/dev/null | head -1) "$TMP_DIR/binaries/dai-miner-windows-x64.exe" 2>/dev/null || true
 fi
-find installers -type f -name "*poh-miner*.exe" -exec cp {} "$TMP_DIR/binaries/poh-miner-windows-x64.exe" \; 2>/dev/null || true
+find installers -type f -name "*dai-miner*.exe" -exec cp {} "$TMP_DIR/binaries/dai-miner-windows-x64.exe" \; 2>/dev/null || true
 
 # Add to IPFS (using files that still have placeholder — this is fine,
 # because we will update the *working tree* files after we have the CID)
@@ -107,7 +107,7 @@ echo "  Landing page:               https://ipfs.io/ipfs/$CID/landing/index.html
 echo ""
 echo "Pre-built binaries (for the one-click cards on landing):"
 ls -1 "$TMP_DIR/binaries/" 2>/dev/null | sed 's/^/  - /'
-echo "  (download e.g. https://ipfs.io/ipfs/$CID/binaries/poh-miner-linux-x64.deb )"
+echo "  (download e.g. https://ipfs.io/ipfs/$CID/binaries/dai-miner-linux-x64.deb )"
 echo ""
 
 # Update the *published* copy of the landing page with the real CID

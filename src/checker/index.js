@@ -1,7 +1,7 @@
 'use strict';
 
 /**
- * PoH Checker — embedded in the miner node.
+ * DAI Checker — embedded in the miner node.
  *
  * Exposes runFullCheck(address) and getMethods() with no Express, Redis,
  * or payment logic. Brain and profileEnrich are loaded from the miner's
@@ -26,9 +26,9 @@ const { recordMethodResult }                      = require('./utils/methodHealt
 const brain             = require('./utils/brain');
 const { enrichProfile } = require('./utils/profileEnrich');
 
-const _pohHome    = path.join(os.homedir(), '.poh-miner');
-const _brainDir   = process.env.BRAIN_DATA_DIR || path.join(_pohHome, 'brain');
-const METHODS_PATH = path.join(_pohHome, 'methods.json');
+const _daiHome    = path.join(os.homedir(), '.dai-miner');
+const _brainDir   = process.env.BRAIN_DATA_DIR || path.join(_daiHome, 'brain');
+const METHODS_PATH = path.join(_daiHome, 'methods.json');
 const DATASET_PATH = path.join(_brainDir, 'dataset.json');
 
 // ── Simple in-memory scan cache (30-min TTL) ──────────────────────────────────
@@ -396,7 +396,7 @@ async function runFullCheck(input, options = {}) {
     confidence: verdict.confidence || 0.5,
     reasoning:  verdict.reasoning  || '',
     profile,
-    realPoh: true,
+    realDai: true,
     vibeData,
     farcasterData,
     paragraphData,

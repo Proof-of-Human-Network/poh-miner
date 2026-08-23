@@ -1,6 +1,6 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
-contextBridge.exposeInMainWorld('pohMinerAPI', {
+contextBridge.exposeInMainWorld('daiMinerAPI', {
   onLog: (callback) => {
     ipcRenderer.on('log', (_event, message) => callback(message));
   },
@@ -75,7 +75,7 @@ contextBridge.exposeInMainWorld('pohMinerAPI', {
     getStatus: () => ipcRenderer.invoke('onboarding:get-status'),
     getModelOptions: () => ipcRenderer.invoke('onboarding:get-model-options'),
     setModel: (model) => ipcRenderer.invoke('onboarding:set-model', model),
-    createPohWallet: () => ipcRenderer.invoke('onboarding:create-poh-wallet'),
+    createDAIWallet: () => ipcRenderer.invoke('onboarding:create-dai-wallet'),
     generateWalletBackupKey: () => ipcRenderer.invoke('onboarding:generate-wallet-backup-key'),
     complete: (data) => ipcRenderer.invoke('onboarding:complete', data),
     reset: () => ipcRenderer.invoke('onboarding:reset'),

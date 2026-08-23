@@ -7,7 +7,7 @@ This folder contains files that are served **directly** from the landing page.
 Place the built Android APK here:
 
 ```
-landing/binaries/poh-miner-wallet.apk
+landing/binaries/dai-miner-wallet.apk
 ```
 
 Once the file is here:
@@ -18,12 +18,12 @@ Once the file is here:
   - Deployed via `./scripts/deploy-landing.sh`
   - Published to IPFS via `./scripts/publish-to-ipfs.sh`
 
-## How to build the APK (PoH Wallet with branding + full i18n + src/ structure)
+## How to build the APK (DAI Wallet with branding + full i18n + src/ structure)
 
-From the `poh-miner-wallet` directory:
+From the `dai-miner-wallet` directory:
 
 ```bash
-cd ../poh-miner-wallet
+cd ../dai-miner-wallet
 
 # Recommended (EAS Build - produces preview APK for sideloading):
 npm run build:android          # uses "preview" profile -> internal APK
@@ -32,10 +32,10 @@ npm run build:android          # uses "preview" profile -> internal APK
 
 # After build completes in EAS dashboard, download the .apk artifact
 # and place it here as:
-#   landing/binaries/poh-miner-wallet.apk
+#   landing/binaries/dai-miner-wallet.apk
 ```
 
-The `eas.json` defines the profiles; `app.json` + `assets/icon.png` etc. ensure "PoH Wallet" name and logo.
+The `eas.json` defines the profiles; `app.json` + `assets/icon.png` etc. ensure "DAI Wallet" name and logo.
 
 Local alternative (if you have Android SDK set up):
 ```bash
@@ -45,7 +45,7 @@ cd android
 # then find the .apk under app/build/outputs/...
 ```
 
-Then copy/rename the APK into `landing/binaries/poh-miner-wallet.apk` so that
+Then copy/rename the APK into `landing/binaries/dai-miner-wallet.apk` so that
 `publish-to-ipfs.sh` and `deploy-landing.sh` will include it.
 
 ## Other files

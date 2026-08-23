@@ -1,5 +1,5 @@
 /**
- * PoH Miner - RPC Providers Registry
+ * DAI Miner - RPC Providers Registry
  *
  * This is the source of truth for:
  * - Which providers exist

@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>What could your GPU earn? — POH</title>
+<title>What could your GPU earn? — DAI</title>
 <style>
   :root{
     --bg:#0a0c11; --panel:#12151d; --panel2:#171b25; --line:#232838;
@@ -122,7 +122,7 @@
 <body>
 <div class="langbar"><select id="lang" aria-label="Language"></select></div>
 <div class="wrap">
-  <div class="eyebrow" data-i18n="eyebrow">POH · Compute</div>
+  <div class="eyebrow" data-i18n="eyebrow">DAI · Compute</div>
   <h1 data-i18n="title">While you sit here, your GPU could be earning.</h1>
   <p class="sub" data-i18n="sub">Spin to measure this device and see what it would make on the network — right now, where you are.</p>
 
@@ -142,7 +142,7 @@
 
   <div class="earned" id="earned"></div>
 
-  <a class="start" id="startBtn" href="https://poh.ge" target="_blank" rel="noopener">
+  <a class="start" id="startBtn" href="https://iamai.kg" target="_blank" rel="noopener">
     <span data-i18n="start">Start Earning</span><span class="arw" aria-hidden="true">→</span></a>
 
   <div class="chips" id="chips">
@@ -167,7 +167,7 @@ const esc = s => (s==null?'':String(s)).replace(/[<>&]/g,c=>({'<':'&lt;','>':'&g
 /* ===== localization ===== */
 const I18N = {
   en:{ name:'English',
-    eyebrow:'POH · Compute', title:'While you sit here, your GPU could be earning.', sub:'Spin to measure this device and see what it would make on the network — right now, where you are.', cta:'Click to see',
+    eyebrow:'DAI · Compute', title:'While you sit here, your GPU could be earning.', sub:'Spin to measure this device and see what it would make on the network — right now, where you are.', cta:'Click to see',
     ctaSub:'What could I earn', measuring:'Measuring…', perHour:'per hour', earnedLabel:'Earned while watching:',
     start:'Start Earning', lblGpu:'GPU', lblLoc:'Location', lblKwh:'/kWh',
     lblEdit:'edit', hidden:'hidden by browser', unknown:'Unknown', how:'How this is worked out',
@@ -176,7 +176,7 @@ const I18N = {
     bkPerMonth:'Per month', foot:'Priced at $0.15 per million output tokens, the node keeping 85%, minus electricity. Throughput is estimated from an in-browser fp32 matrix-multiply — a conservative floor, not a spec sheet. Location and electricity are guessed from your IP; correct the price above and the numbers update live. Nothing is sent anywhere; this all runs in your browser.'
   },
   ru:{ name:'Русский',
-    eyebrow:'POH · Вычисления', title:'Пока вы здесь, ваш GPU мог бы зарабатывать.', sub:'Крутите, чтобы измерить это устройство и увидеть, сколько оно заработало бы в сети — прямо сейчас, там, где вы есть.', cta:'Нажмите, чтобы узнать',
+    eyebrow:'DAI · Вычисления', title:'Пока вы здесь, ваш GPU мог бы зарабатывать.', sub:'Крутите, чтобы измерить это устройство и увидеть, сколько оно заработало бы в сети — прямо сейчас, там, где вы есть.', cta:'Нажмите, чтобы узнать',
     ctaSub:'Сколько я мог бы заработать', measuring:'Измеряем…', perHour:'в час', earnedLabel:'Заработано за время просмотра:',
     start:'Начать зарабатывать', lblGpu:'GPU', lblLoc:'Местоположение', lblKwh:'/кВт·ч',
     lblEdit:'изм.', hidden:'скрыто браузером', unknown:'Неизвестно', how:'Как это рассчитано',
@@ -185,7 +185,7 @@ const I18N = {
     bkPerMonth:'В месяц', foot:'Цена — $0,15 за миллион выходных токенов, узел получает 85%, минус электроэнергия. Пропускная способность оценивается по fp32-матричному умножению в браузере — консервативная оценка, а не паспортные данные. Местоположение и цена электроэнергии определяются по IP; исправьте цену выше — и цифры обновятся сразу. Ничего никуда не отправляется, всё выполняется в вашем браузере.'
   },
   ky:{ name:'Кыргызча',
-    eyebrow:'POH · Эсептөө', title:'Сиз бул жерде отурганда, GPU’ңуз киреше таба алат.', sub:'Бул түзмөктү өлчөө жана тармакта канча тапканын көрүү үчүн айлантыңыз — азыр, сиз турган жерде.', cta:'Көрүү үчүн басыңыз',
+    eyebrow:'DAI · Эсептөө', title:'Сиз бул жерде отурганда, GPU’ңуз киреше таба алат.', sub:'Бул түзмөктү өлчөө жана тармакта канча тапканын көрүү үчүн айлантыңыз — азыр, сиз турган жерде.', cta:'Көрүү үчүн басыңыз',
     ctaSub:'Канча таба алмакмын', measuring:'Өлчөнүүдө…', perHour:'сааттык', earnedLabel:'Көрүп жатканда табылганы:',
     start:'Киреше табууну баштаңыз', lblGpu:'GPU', lblLoc:'Жайгашкан жери', lblKwh:'/кВт·с',
     lblEdit:'түзөтүү', hidden:'браузер жашырган', unknown:'Белгисиз', how:'Бул кантип эсептелет',
@@ -194,7 +194,7 @@ const I18N = {
     bkPerMonth:'Айына', foot:'Ар бир миллион чыгуу токени үчүн $0.15 баада, түйүн 85% алат, электр энергиясы алынып салынат. Өткөрүмдүүлүк браузерде fp32 матрица көбөйтүү аркылуу болжолдонот — консервативдик төмөнкү чек, техникалык документ эмес. Жайгашкан жериңиз жана электр баасы IP дарегиңизден болжолдонот; жогорудагы бааны оңдоңуз, сандар дароо жаңырат. Эч нерсе эч жакка жөнөтүлбөйт; баары браузериңизде иштейт.'
   },
   ka:{ name:'ქართული',
-    eyebrow:'POH · გამოთვლა', title:'სანამ აქ ხართ, თქვენს GPU-ს შეუძლია გამოიმუშაოს.', sub:'დაატრიალეთ, რომ გაზომოთ ეს მოწყობილობა და ნახოთ, რამდენს გამოიმუშავებდა ქსელში — ახლავე, იქ, სადაც ხართ.', cta:'დააჭირეთ სანახავად',
+    eyebrow:'DAI · გამოთვლა', title:'სანამ აქ ხართ, თქვენს GPU-ს შეუძლია გამოიმუშაოს.', sub:'დაატრიალეთ, რომ გაზომოთ ეს მოწყობილობა და ნახოთ, რამდენს გამოიმუშავებდა ქსელში — ახლავე, იქ, სადაც ხართ.', cta:'დააჭირეთ სანახავად',
     ctaSub:'რამდენს გამოვიმუშავებდი', measuring:'იზომება…', perHour:'საათში', earnedLabel:'გამომუშავებული ყურებისას:',
     start:'დაიწყე შემოსავალი', lblGpu:'GPU', lblLoc:'მდებარეობა', lblKwh:'/კვტ·სთ',
     lblEdit:'შეცვლა', hidden:'ბრაუზერმა დამალა', unknown:'უცნობი', how:'როგორ არის დათვლილი',
@@ -203,7 +203,7 @@ const I18N = {
     bkPerMonth:'თვეში', foot:'ფასი — $0.15 მილიონ გამომავალ ტოკენზე, კვანძი იტოვებს 85%-ს, გამოკლებული ელექტროენერგია. წარმადობა შეფასებულია ბრაუზერში fp32 მატრიცის გამრავლებით — კონსერვატიული შეფასება, არა ტექნიკური მონაცემები. მდებარეობა და ელექტროენერგიის ფასი განისაზღვრება თქვენი IP-ით; შეასწორეთ ფასი ზემოთ და ციფრები მაშინვე განახლდება. არაფერი იგზავნება; ყველაფერი თქვენს ბრაუზერში სრულდება.'
   },
   cn:{ name:'中文',
-    eyebrow:'POH · 算力', title:'你坐在这里时，GPU 本可以在赚钱。', sub:'转动以测量此设备，看看它此刻、在你所在之处能在网络上赚多少。', cta:'点击查看',
+    eyebrow:'DAI · 算力', title:'你坐在这里时，GPU 本可以在赚钱。', sub:'转动以测量此设备，看看它此刻、在你所在之处能在网络上赚多少。', cta:'点击查看',
     ctaSub:'我能赚多少', measuring:'测量中…', perHour:'每小时', earnedLabel:'观看期间已赚：',
     start:'开始赚钱', lblGpu:'GPU', lblLoc:'位置', lblKwh:'/千瓦时',
     lblEdit:'编辑', hidden:'被浏览器隐藏', unknown:'未知', how:'如何计算',
@@ -212,7 +212,7 @@ const I18N = {
     bkPerMonth:'每月', foot:'按每百万输出代币 0.15 美元计价，节点保留 85%，再减去电费。吞吐量由浏览器内 fp32 矩阵乘法估算——这是保守下限，不是规格表。位置和电价由 IP 猜测；改正上方价格后数字即时更新。什么都不会发送到别处；全部在你的浏览器中运行。'
   },
   hk:{ name:'廣東話',
-    eyebrow:'POH · 算力', title:'你坐喺呢度嘅時候，GPU 本可以喺度賺。', sub:'轉吓嚟量度呢部機，睇吓佢而家、喺你呢度可以喺網絡賺幾多。', cta:'撳嚟睇',
+    eyebrow:'DAI · 算力', title:'你坐喺呢度嘅時候，GPU 本可以喺度賺。', sub:'轉吓嚟量度呢部機，睇吓佢而家、喺你呢度可以喺網絡賺幾多。', cta:'撳嚟睇',
     ctaSub:'我可以賺幾多', measuring:'量緊…', perHour:'每個鐘', earnedLabel:'睇緊嗰陣已賺：',
     start:'開始賺錢', lblGpu:'GPU', lblLoc:'位置', lblKwh:'/千瓦時',
     lblEdit:'改', hidden:'被瀏覽器隱藏', unknown:'未知', how:'點計',
@@ -221,7 +221,7 @@ const I18N = {
     bkPerMonth:'每月', foot:'按每百萬輸出代幣 0.15 美元計價，節點保留 85%，再減電費。吞吐量由瀏覽器入面 fp32 矩陣乘法估算——呢個係保守下限，唔係規格表。位置同電價由 IP 估；改好上面價錢，數字即時更新。咩都唔會送到第度；全部喺你瀏覽器入面跑。'
   },
   es:{ name:'Español',
-    eyebrow:'POH · Cómputo', title:'Mientras estás aquí, tu GPU podría estar ganando.', sub:'Gira para medir este dispositivo y ver cuánto ganaría en la red — ahora mismo, donde estás.', cta:'Haz clic para ver',
+    eyebrow:'DAI · Cómputo', title:'Mientras estás aquí, tu GPU podría estar ganando.', sub:'Gira para medir este dispositivo y ver cuánto ganaría en la red — ahora mismo, donde estás.', cta:'Haz clic para ver',
     ctaSub:'Cuánto podría ganar', measuring:'Midiendo…', perHour:'por hora', earnedLabel:'Ganado mientras miras:',
     start:'Empezar a ganar', lblGpu:'GPU', lblLoc:'Ubicación', lblKwh:'/kWh',
     lblEdit:'editar', hidden:'oculto por el navegador', unknown:'Desconocido', how:'Cómo se calcula',
@@ -230,7 +230,7 @@ const I18N = {
     bkPerMonth:'Por mes', foot:'A $0,15 por millón de tokens de salida, el nodo se queda con el 85%, menos electricidad. El rendimiento se estima con una multiplicación de matrices fp32 en el navegador — un mínimo conservador, no una ficha técnica. La ubicación y la electricidad se deducen de tu IP; corrige el precio arriba y los números se actualizan al instante. Nada se envía a ningún sitio; todo se ejecuta en tu navegador.'
   },
   de:{ name:'Deutsch',
-    eyebrow:'POH · Rechenleistung', title:'Während du hier sitzt, könnte deine GPU verdienen.', sub:'Dreh, um dieses Gerät zu messen und zu sehen, was es im Netzwerk verdienen würde — jetzt gerade, wo du bist.', cta:'Klick, um zu sehen',
+    eyebrow:'DAI · Rechenleistung', title:'Während du hier sitzt, könnte deine GPU verdienen.', sub:'Dreh, um dieses Gerät zu messen und zu sehen, was es im Netzwerk verdienen würde — jetzt gerade, wo du bist.', cta:'Klick, um zu sehen',
     ctaSub:'Was könnte ich verdienen', measuring:'Wird gemessen…', perHour:'pro Stunde', earnedLabel:'Verdient beim Zuschauen:',
     start:'Verdienen starten', lblGpu:'GPU', lblLoc:'Standort', lblKwh:'/kWh',
     lblEdit:'ändern', hidden:'vom Browser verborgen', unknown:'Unbekannt', how:'Wie das berechnet wird',
@@ -239,7 +239,7 @@ const I18N = {
     bkPerMonth:'Pro Monat', foot:'Zu $0,15 pro Million Ausgabe-Token, wobei der Node 85% behält, abzüglich Strom. Der Durchsatz wird aus einer fp32-Matrixmultiplikation im Browser geschätzt — eine konservative Untergrenze, kein Datenblatt. Standort und Strompreis werden aus deiner IP geschätzt; korrigiere den Preis oben und die Zahlen aktualisieren sich sofort. Nichts wird irgendwohin gesendet; alles läuft in deinem Browser.'
   },
   arab:{ name:'العربية', rtl:true,
-    eyebrow:'POH · حوسبة', title:'بينما تجلس هنا، يمكن لبطاقتك الرسومية أن تربح.', sub:'أدِر العجلة لقياس هذا الجهاز ومعرفة ما يمكن أن يجنيه على الشبكة — الآن، حيث أنت.', cta:'انقر لترى',
+    eyebrow:'DAI · حوسبة', title:'بينما تجلس هنا، يمكن لبطاقتك الرسومية أن تربح.', sub:'أدِر العجلة لقياس هذا الجهاز ومعرفة ما يمكن أن يجنيه على الشبكة — الآن، حيث أنت.', cta:'انقر لترى',
     ctaSub:'كم يمكن أن أربح', measuring:'جارٍ القياس…', perHour:'في الساعة', earnedLabel:'المكتسب أثناء المشاهدة:',
     start:'ابدأ الربح', lblGpu:'GPU', lblLoc:'الموقع', lblKwh:'/ك.و.س',
     lblEdit:'تعديل', hidden:'مخفي بواسطة المتصفح', unknown:'غير معروف', how:'كيف يُحتسب هذا',
@@ -248,7 +248,7 @@ const I18N = {
     bkPerMonth:'شهريًا', foot:'بسعر $0.15 لكل مليون رمز مُخرَج، مع احتفاظ العقدة بنسبة 85%، ناقص الكهرباء. تُقدَّر الإنتاجية عبر ضرب مصفوفات fp32 داخل المتصفح — حد أدنى متحفظ وليس مواصفات رسمية. يُخمَّن الموقع وسعر الكهرباء من عنوان IP الخاص بك؛ صحِّح السعر أعلاه وتتحدث الأرقام فورًا. لا يُرسَل أي شيء إلى أي مكان؛ كل ذلك يعمل في متصفحك.'
   },
   farsi:{ name:'فارسی', rtl:true,
-    eyebrow:'POH · محاسبه', title:'تا وقتی اینجا هستید، کارت گرافیک شما می‌تواند درآمد کسب کند.', sub:'برای اندازه‌گیری این دستگاه و دیدن اینکه در شبکه چقدر درآمد دارد بچرخانید — همین حالا، همان‌جا که هستید.', cta:'برای دیدن کلیک کنید',
+    eyebrow:'DAI · محاسبه', title:'تا وقتی اینجا هستید، کارت گرافیک شما می‌تواند درآمد کسب کند.', sub:'برای اندازه‌گیری این دستگاه و دیدن اینکه در شبکه چقدر درآمد دارد بچرخانید — همین حالا، همان‌جا که هستید.', cta:'برای دیدن کلیک کنید',
     ctaSub:'چقدر می‌توانم درآمد داشته باشم', measuring:'در حال اندازه‌گیری…', perHour:'در ساعت', earnedLabel:'کسب‌شده هنگام تماشا:',
     start:'شروع کسب درآمد', lblGpu:'GPU', lblLoc:'موقعیت', lblKwh:'/کیلووات‌ساعت',
     lblEdit:'ویرایش', hidden:'توسط مرورگر پنهان شده', unknown:'نامعلوم', how:'این چگونه محاسبه می‌شود',
@@ -257,7 +257,7 @@ const I18N = {
     bkPerMonth:'ماهانه', foot:'با قیمت $0.15 به ازای هر میلیون توکن خروجی، گره 85% را نگه می‌دارد، منهای برق. توان عملیاتی از طریق ضرب ماتریسی fp32 در مرورگر تخمین زده می‌شود — یک کف محافظه‌کارانه، نه برگه مشخصات. موقعیت و قیمت برق از IP شما حدس زده می‌شود؛ قیمت بالا را اصلاح کنید و اعداد فوراً به‌روزرسانی می‌شوند. چیزی به جایی ارسال نمی‌شود؛ همه‌چیز در مرورگر شما اجرا می‌شود.'
   },
   it:{ name:'Italiano',
-    eyebrow:'POH · Calcolo', title:'Mentre sei qui, la tua GPU potrebbe guadagnare.', sub:'Fai girare per misurare questo dispositivo e vedere quanto guadagnerebbe sulla rete — proprio ora, dove sei.', cta:'Clicca per vedere',
+    eyebrow:'DAI · Calcolo', title:'Mentre sei qui, la tua GPU potrebbe guadagnare.', sub:'Fai girare per misurare questo dispositivo e vedere quanto guadagnerebbe sulla rete — proprio ora, dove sei.', cta:'Clicca per vedere',
     ctaSub:'Quanto potrei guadagnare', measuring:'Misurazione…', perHour:'all\'ora', earnedLabel:'Guadagnato mentre guardi:',
     start:'Inizia a guadagnare', lblGpu:'GPU', lblLoc:'Posizione', lblKwh:'/kWh',
     lblEdit:'modifica', hidden:'nascosto dal browser', unknown:'Sconosciuto', how:'Come viene calcolato',
@@ -266,7 +266,7 @@ const I18N = {
     bkPerMonth:'Al mese', foot:'A $0,15 per milione di token di output, con il nodo che trattiene l\'85%, meno l\'elettricità. Il throughput è stimato da una moltiplicazione di matrici fp32 nel browser — un minimo prudente, non una scheda tecnica. Posizione ed elettricità sono dedotte dal tuo IP; correggi il prezzo sopra e i numeri si aggiornano in tempo reale. Nulla viene inviato da nessuna parte; tutto gira nel tuo browser.'
   },
   fr:{ name:'Français',
-    eyebrow:'POH · Calcul', title:'Pendant que vous êtes là, votre GPU pourrait gagner.', sub:'Faites tourner pour mesurer cet appareil et voir ce qu\'il gagnerait sur le réseau — maintenant, là où vous êtes.', cta:'Cliquez pour voir',
+    eyebrow:'DAI · Calcul', title:'Pendant que vous êtes là, votre GPU pourrait gagner.', sub:'Faites tourner pour mesurer cet appareil et voir ce qu\'il gagnerait sur le réseau — maintenant, là où vous êtes.', cta:'Cliquez pour voir',
     ctaSub:'Combien je pourrais gagner', measuring:'Mesure en cours…', perHour:'par heure', earnedLabel:'Gagné pendant que vous regardez :',
     start:'Commencer à gagner', lblGpu:'GPU', lblLoc:'Emplacement', lblKwh:'/kWh',
     lblEdit:'modifier', hidden:'masqué par le navigateur', unknown:'Inconnu', how:'Comment c\'est calculé',
@@ -290,7 +290,7 @@ function resolveLang(tag){
   return null;
 }
 function pickLang(){
-  try { const s = localStorage.getItem('poh_lang'); const m = s && resolveLang(s); if(m) return m; } catch {}
+  try { const s = localStorage.getItem('dai_lang'); const m = s && resolveLang(s); if(m) return m; } catch {}
   const cands = navigator.languages || [navigator.language || 'en'];
   for(const l of cands){ const hit = resolveLang(l); if(hit) return hit; }
   return 'en';
@@ -309,7 +309,7 @@ function buildLangSwitcher(){
   sel.value = LANG;
   sel.addEventListener('change', () => {
     LANG = sel.value;
-    try { localStorage.setItem('poh_lang', LANG); } catch {}
+    try { localStorage.setItem('dai_lang', LANG); } catch {}
     applyI18n();
   });
 }

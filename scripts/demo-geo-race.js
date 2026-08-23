@@ -6,21 +6,21 @@
  * to a miner in Georgia than to one in Singapore.
  */
 
-import { PohMinerNode } from '../src/miner-node.js';
+import { DAIMinerNode } from '../src/miner-node.js';
 import { JobQueue } from '../src/jobs/job-queue.js';
 
 async function main() {
-  console.log('=== PoH Miner Network - Geographic Job Preference Demo ===\n');
+  console.log('=== DAI Miner Network - Geographic Job Preference Demo ===\n');
 
   // Miner in Georgia
-  const georgiaMiner = new PohMinerNode({
+  const georgiaMiner = new DAIMinerNode({
     wallet: 'georgia-miner-001',
     computeEnabled: true,
   });
   georgiaMiner.myLocation = { country: 'GE', countryName: 'Georgia' };
 
   // Miner in Singapore
-  const singaporeMiner = new PohMinerNode({
+  const singaporeMiner = new DAIMinerNode({
     wallet: 'singapore-miner-007',
     computeEnabled: true,
   });
@@ -36,12 +36,12 @@ async function main() {
     id: 'scan-georgia-user-123',
     type: 'verdict',
     payload: { address: 'bc1qgeorgiauser' },
-    fee: 25_000_000,           // 25 POH
+    fee: 25_000_000,           // 25 DAI
     originCountry: 'GE',
     maxLatencyMs: 800,
   };
 
-  console.log('\n>>> A user in Georgia just submitted a scan request (25 POH fee)\n');
+  console.log('\n>>> A user in Georgia just submitted a scan request (25 DAI fee)\n');
 
   jobQueue.addJob(georgiaJob);
 

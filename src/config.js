@@ -1,19 +1,19 @@
 /**
- * PoH Miner Network - Config Loader
+ * DAI Miner Network - Config Loader
  *
  * Supports multiple config locations with clear precedence.
  * This makes the developer experience much better after `git clone`.
  *
  * Resolution order (first match wins):
- *   1. POH_CONFIG env var (full path)
- *   2. ./ .poh-miner/config.json   (local dot directory)
+ *   1. DAI_CONFIG env var (full path)
+ *   2. ./ .dai-miner/config.json   (local dot directory)
  *   3. ./config.json               (project root - very convenient after clone)
- *   4. <script-dir>/.poh-miner/config.json
- *   5. ~/.poh-miner/config.json    (global user config)
+ *   4. <script-dir>/.dai-miner/config.json
+ *   5. ~/.dai-miner/config.json    (global user config)
  *
  * When no config exists, we intelligently decide where to create the default:
- * - Inside the source tree → prefer local .poh-miner/config.json
- * - Normal installed usage → global ~/.poh-miner/config.json
+ * - Inside the source tree → prefer local .dai-miner/config.json
+ * - Normal installed usage → global ~/.dai-miner/config.json
  */
 
 import fs from 'fs';
@@ -23,10 +23,10 @@ import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-const GLOBAL_CONFIG_PATH = path.join(os.homedir(), '.poh-miner', 'config.json');
+const GLOBAL_CONFIG_PATH = path.join(os.homedir(), '.dai-miner', 'config.json');
 
 /**
- * Detect whether we appear to be running inside the poh-miner-network source tree.
+ * Detect whether we appear to be running inside the dai-miner-network source tree.
  */
 function isRunningInSourceTree(cwd, scriptDir) {
   return (
@@ -42,9 +42,9 @@ function isRunningInSourceTree(cwd, scriptDir) {
  */
 export function resolveConfigPath({ allowCreate = true } = {}) {
   // 1. Explicit full path override (highest priority)
-  if (process.env.POH_CONFIG) {
+  if (process.env.DAI_CONFIG) {
     return {
-      path: process.env.POH_CONFIG,
+      path: process.env.DAI_CONFIG,
       source: 'env-override',
     };
   }
@@ -59,11 +59,11 @@ export function resolveConfigPath({ allowCreate = true } = {}) {
       source: 'local-root',
     },
     {
-      path: path.join(cwd, '.poh-miner', 'config.json'),
+      path: path.join(cwd, '.dai-miner', 'config.json'),
       source: 'local-dotdir',
     },
     {
-      path: path.join(scriptDir, '.poh-miner', 'config.json'),
+      path: path.join(scriptDir, '.dai-miner', 'config.json'),
       source: 'script-local',
     },
     {
@@ -94,7 +94,7 @@ export function resolveConfigPath({ allowCreate = true } = {}) {
 
   if (inSourceTree) {
     // Developer / "just cloned" experience: create local config
-    const localPath = path.join(cwd, '.poh-miner', 'config.json');
+    const localPath = path.join(cwd, '.dai-miner', 'config.json');
     return {
       path: localPath,
       source: 'local-dotdir',
@@ -205,16 +205,16 @@ export function getDefaultConfig() {
       bindHost: "127.0.0.1",
       host: "http://127.0.0.1:7700",
       apiKey: "",
-      indexJobs: "poh-chat-history",
+      indexJobs: "dai-chat-history",
       dataDir: "",
       startupTimeoutMs: 90000,
     },
 
     // Local IPFS (Kubo) — auto-starts with the node to back up chain + brain
     // state and let peers bootstrap from snapshots. Zero-config: the binary is
-    // downloaded on first run to ~/.poh-miner/bin and the repo lives in
-    // ~/.poh-miner/ipfs. Gateway is 8081 to avoid the bootnode's 8080.
-    // Set autoStart:false (or env POH_SKIP_IPFS=1) to disable.
+    // downloaded on first run to ~/.dai-miner/bin and the repo lives in
+    // ~/.dai-miner/ipfs. Gateway is 8081 to avoid the bootnode's 8080.
+    // Set autoStart:false (or env DAI_SKIP_IPFS=1) to disable.
     ipfs: {
       autoStart: true,
       apiPort: 5001,
@@ -224,7 +224,7 @@ export function getDefaultConfig() {
     },
 
     // Populated by the GUI onboarding flow
-    pohWallet: "",
+    daiWallet: "",
     solanaAddress: "",
     onboarded: false,
   };
@@ -242,7 +242,7 @@ export function saveConfig(config, targetPath) {
 }
 
 /**
- * Small helper used by CLI "poh-miner config" and status commands.
+ * Small helper used by CLI "dai-miner config" and status commands.
  */
 export function getConfigLocationInfo() {
   const resolved = resolveConfigPath({ allowCreate: false });

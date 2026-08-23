@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 /**
- * Integration test runner for PoH Miner (full system with real checker).
+ * Integration test runner for DAI Miner (full system with real checker).
  *
  * Extensive tests covering all requested areas:
- * 1. Assert on realPohUsed (after propagating the field)
+ * 1. Assert on realDAIUsed (after propagating the field)
  * 2. Multiple miners racing on jobs
  * 3. Reputation / slashing behavior on bad results
  * 4. Low-quality result rejection test
@@ -19,7 +19,7 @@ import fs from 'fs';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '../..');
 
-console.log('\n🧪 PoH Miner Integration Test Runner (Full)\n');
+console.log('\n🧪 DAI Miner Integration Test Runner (Full)\n');
 
 const RUN_INTEGRATION = process.env.RUN_INTEGRATION === '1';
 
@@ -30,15 +30,15 @@ if (!RUN_INTEGRATION) {
 
 const checkerPath = path.resolve(ROOT, '../../dev/src/routes/checker.js');
 if (!fs.existsSync(checkerPath)) {
-  console.log('⚠️  Real POH checker not found at ../dev/src/routes/checker.js');
+  console.log('⚠️  Real DAI checker not found at ../dev/src/routes/checker.js');
   console.log('   Skipping full integration tests.\n');
   process.exit(0);
 }
 
-console.log('✅ Real POH checker detected.');
+console.log('✅ Real DAI checker detected.');
 console.log('   Running extensive integration tests with real checker...\n');
 
-const { PohMinerNode } = await import('../../src/miner-node.js');
+const { DAIMinerNode } = await import('../../src/miner-node.js');
 const { JobQueue } = await import('../../src/jobs/job-queue.js');
 
 let passed = 0;
@@ -72,9 +72,9 @@ async function runTests() {
 
   // === Start 3 miners in different regions for racing + bad result tests ===
   const miners = [
-    new PohMinerNode({ wallet: 'int-miner-us',   computeEnabled: true, inferenceMode: 'cpu' }),
-    new PohMinerNode({ wallet: 'int-miner-eu',   computeEnabled: true, inferenceMode: 'cpu' }),
-    new PohMinerNode({ wallet: 'int-miner-asia', computeEnabled: true, inferenceMode: 'cpu' }),
+    new DAIMinerNode({ wallet: 'int-miner-us',   computeEnabled: true, inferenceMode: 'cpu' }),
+    new DAIMinerNode({ wallet: 'int-miner-eu',   computeEnabled: true, inferenceMode: 'cpu' }),
+    new DAIMinerNode({ wallet: 'int-miner-asia', computeEnabled: true, inferenceMode: 'cpu' }),
   ];
 
   miners[0].myLocation = { country: 'US' };
@@ -87,7 +87,7 @@ async function runTests() {
   }
   console.log('Started 3 test miners (US, EU, Asia).\n');
 
-  // === Test 1 & 2: Real computation (realPohUsed) + multiple miners racing ===
+  // === Test 1 & 2: Real computation (realDAIUsed) + multiple miners racing ===
   console.log('Test: Real computation + racing...');
   const raceJob = jobQueue.addJob({
     id: 'int-race-1',
@@ -101,16 +101,16 @@ async function runTests() {
   // of the multi-signal evaluation itself.
   const gotRealResult = await waitFor(() => {
     return miners.some(m => (m.submissionHistory || []).some(r =>
-      r.requestId === raceJob.id && r.realPohUsed === true
+      r.requestId === raceJob.id && r.realDAIUsed === true
     ));
   }, 120000);
 
-  assert(gotRealResult, 'At least one miner produced a result with realPohUsed === true');
+  assert(gotRealResult, 'At least one miner produced a result with realDAIUsed === true');
 
   const anyRealInHistory = miners.some(m =>
-    (m.submissionHistory || []).some(r => r.realPohUsed === true)
+    (m.submissionHistory || []).some(r => r.realDAIUsed === true)
   );
-  assert(anyRealInHistory, 'Real POH computation results appeared in submissionHistory');
+  assert(anyRealInHistory, 'Real DAI computation results appeared in submissionHistory');
 
   // === Test 3 & 4: Bad result rejection + reputation slashing ===
   console.log('\nTest: Low-quality result rejection and reputation impact...');
@@ -139,7 +139,7 @@ async function runTests() {
         signalsUsed: ['fake-signal-1'],
         methodsHash: 'wrong-hash-xxx',
         methodsCount: 1,
-        realPohUsed: true,
+        realDAIUsed: true,
       };
       await this.submitResult(job, fakeResult);
       this.jobQueue.markCompleted(job.id);
@@ -170,10 +170,10 @@ async function runTests() {
   const anyBlockWithValidRealWork = miners.some(m =>
     m.chain?.some(block =>
       Array.isArray(block.scanResults) &&
-      block.scanResults.some(r => r.isValidWork === true && r.realPohUsed === true)
+      block.scanResults.some(r => r.isValidWork === true && r.realDAIUsed === true)
     )
   );
-  assert(anyBlockWithValidRealWork, 'At least one block contains a realPohUsed + isValidWork result');
+  assert(anyBlockWithValidRealWork, 'At least one block contains a realDAIUsed + isValidWork result');
 
   // Cleanup
   for (const m of miners) {

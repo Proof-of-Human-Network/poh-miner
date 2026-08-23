@@ -19,17 +19,17 @@ import path from 'path';
 // ─────────────────────────────────────────────────────────────────────────────
 
 function tmpDir() {
-  const d = fs.mkdtempSync(path.join(os.tmpdir(), 'poh-test-'));
+  const d = fs.mkdtempSync(path.join(os.tmpdir(), 'dai-test-'));
   return d;
 }
 
 async function makeBlock(overrides = {}) {
-  const { PohBlock } = await import('../src/core/block.js');
-  return new PohBlock({
+  const { DAIBlock } = await import('../src/core/block.js');
+  return new DAIBlock({
     height: 1,
     previousHash: '0'.repeat(64),
     timestamp: Date.now(),
-    minerWallet: 'pohtest',
+    minerWallet: 'daitest',
     difficulty: 1,
     chainWork: '2',
     ...overrides,
@@ -165,7 +165,7 @@ describe('Fix 1 — P2P Gossip', () => {
 describe('Fix 2 — Signatures', () => {
   it('block signs and verifies correctly', async () => {
     const { Wallet } = await import('../src/wallet/wallet.js');
-    const { PohBlock } = await import('../src/core/block.js');
+    const { DAIBlock } = await import('../src/core/block.js');
     const wallet = Wallet.generate();
     const block = await makeBlock({ minerWallet: wallet.address });
     block.nonce = 0;
@@ -199,7 +199,7 @@ describe('Fix 2 — Signatures', () => {
       signalsUsed: [{ methodId: 'm1' }],
       minerWallet: wallet.address,
       methodsHash: 'abc123',
-      realPohUsed: true,
+      realDAIUsed: true,
     });
 
     result.sign(wallet);
@@ -211,7 +211,7 @@ describe('Fix 2 — Signatures', () => {
     const { Wallet } = await import('../src/wallet/wallet.js');
     const { ScanResult } = await import('../src/core/scanRequest.js');
     const wallet = Wallet.generate();
-    const result = new ScanResult({ requestId: 'r', address: '0x1', verdict: 'AI', confidence: 0.8, reasoning: 'x', signalsUsed: [], minerWallet: wallet.address, methodsHash: 'h', realPohUsed: false });
+    const result = new ScanResult({ requestId: 'r', address: '0x1', verdict: 'AI', confidence: 0.8, reasoning: 'x', signalsUsed: [], minerWallet: wallet.address, methodsHash: 'h', realDAIUsed: false });
     result.sign(wallet);
     result.verdict = 'HUMAN'; // tamper
     expect(result.verify(true)).toBe(false);
@@ -269,13 +269,13 @@ describe('Fix 3 — chainWork & Fork Resolution', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('Fix 4 — Transactions & Double-Spend Protection', () => {
-  let WalletManager, Wallet, PoHTransaction, TxMempool;
+  let WalletManager, Wallet, DAITransaction, TxMempool;
   let wm, alice, bob;
-  const INITIAL = 1_000_000_000; // 1 POH
+  const INITIAL = 1_000_000_000; // 1 DAI
 
   beforeEach(async () => {
     ({ WalletManager, Wallet } = await import('../src/wallet/wallet.js'));
-    ({ PoHTransaction, TxMempool } = await import('../src/core/transaction.js'));
+    ({ DAITransaction, TxMempool } = await import('../src/core/transaction.js'));
 
     const dir = tmpDir();
     wm = new WalletManager(dir);
@@ -288,7 +288,7 @@ describe('Fix 4 — Transactions & Double-Spend Protection', () => {
   });
 
   it('valid transaction is accepted and applied', () => {
-    const tx = new PoHTransaction({ from: alice.address, to: bob.address, amount: 100, fee: 1, nonce: 1, timestamp: Date.now() });
+    const tx = new DAITransaction({ from: alice.address, to: bob.address, amount: 100, fee: 1, nonce: 1, timestamp: Date.now() });
     tx.sign(alice);
     const result = wm.applyTransaction(tx);
     expect(result).toBe(true);
@@ -298,14 +298,14 @@ describe('Fix 4 — Transactions & Double-Spend Protection', () => {
   });
 
   it('rejects wrong nonce (replay attack)', () => {
-    const tx = new PoHTransaction({ from: alice.address, to: bob.address, amount: 1, fee: 0, nonce: 5, timestamp: Date.now() });
+    const tx = new DAITransaction({ from: alice.address, to: bob.address, amount: 1, fee: 0, nonce: 5, timestamp: Date.now() });
     tx.sign(alice);
     const result = wm.applyTransaction(tx);
     expect(result).toMatch(/nonce/);
   });
 
   it('rejects same nonce twice (exact replay)', () => {
-    const tx = new PoHTransaction({ from: alice.address, to: bob.address, amount: 1, fee: 0, nonce: 1, timestamp: Date.now() });
+    const tx = new DAITransaction({ from: alice.address, to: bob.address, amount: 1, fee: 0, nonce: 1, timestamp: Date.now() });
     tx.sign(alice);
     expect(wm.applyTransaction(tx)).toBe(true);
     // Replay exact same signed tx
@@ -314,20 +314,20 @@ describe('Fix 4 — Transactions & Double-Spend Protection', () => {
   });
 
   it('rejects insufficient balance', () => {
-    const tx = new PoHTransaction({ from: alice.address, to: bob.address, amount: INITIAL + 1, fee: 0, nonce: 1, timestamp: Date.now() });
+    const tx = new DAITransaction({ from: alice.address, to: bob.address, amount: INITIAL + 1, fee: 0, nonce: 1, timestamp: Date.now() });
     tx.sign(alice);
     expect(wm.applyTransaction(tx)).toMatch(/balance/);
   });
 
   it('rejects invalid signature', () => {
     const imposter = Wallet.generate();
-    const tx = new PoHTransaction({ from: alice.address, to: bob.address, amount: 1, fee: 0, nonce: 1, timestamp: Date.now() });
+    const tx = new DAITransaction({ from: alice.address, to: bob.address, amount: 1, fee: 0, nonce: 1, timestamp: Date.now() });
     tx.sign(imposter); // signed by wrong key
     expect(wm.applyTransaction(tx)).toMatch(/signature/);
   });
 
   it('rejects a forged amount reusing a validly-signed txHash+signature from a smaller tx', () => {
-    const legit = new PoHTransaction({ from: alice.address, to: bob.address, amount: 1, fee: 0, nonce: 1, timestamp: Date.now() });
+    const legit = new DAITransaction({ from: alice.address, to: bob.address, amount: 1, fee: 0, nonce: 1, timestamp: Date.now() });
     legit.sign(alice);
     const forged = { ...legit, amount: 500_000 }; // txHash/signature reused, amount inflated
     expect(wm.applyTransaction(forged)).toMatch(/txHash/);
@@ -336,28 +336,28 @@ describe('Fix 4 — Transactions & Double-Spend Protection', () => {
 
   it('rejects a forged recipient reusing a validly-signed txHash+signature', () => {
     const mallory = Wallet.generate();
-    const legit = new PoHTransaction({ from: alice.address, to: bob.address, amount: 1, fee: 0, nonce: 1, timestamp: Date.now() });
+    const legit = new DAITransaction({ from: alice.address, to: bob.address, amount: 1, fee: 0, nonce: 1, timestamp: Date.now() });
     legit.sign(alice);
     const forged = { ...legit, to: mallory.address };
     expect(wm.applyTransaction(forged)).toMatch(/txHash/);
   });
 
-  it('PoHTransaction.verify() rejects a forged amount at the mempool entry point', () => {
-    const legit = new PoHTransaction({ from: alice.address, to: bob.address, amount: 1, fee: 0, nonce: 1, timestamp: Date.now() });
+  it('DAITransaction.verify() rejects a forged amount at the mempool entry point', () => {
+    const legit = new DAITransaction({ from: alice.address, to: bob.address, amount: 1, fee: 0, nonce: 1, timestamp: Date.now() });
     legit.sign(alice);
-    const forged = PoHTransaction.fromJSON({ ...legit, amount: 999_000 });
+    const forged = DAITransaction.fromJSON({ ...legit, amount: 999_000 });
     expect(forged.verify()).toBe(false);
   });
 
   it('TxMempool prevents double-spend via pendingOut lock', () => {
     const mempool = new TxMempool(wm);
 
-    const tx1 = new PoHTransaction({ from: alice.address, to: bob.address, amount: INITIAL, fee: 0, nonce: 1, timestamp: Date.now() });
+    const tx1 = new DAITransaction({ from: alice.address, to: bob.address, amount: INITIAL, fee: 0, nonce: 1, timestamp: Date.now() });
     tx1.sign(alice);
     expect(mempool.submit(tx1)).toBe(true);
 
     // Second tx tries to spend the same balance — pendingOut is locked
-    const tx2 = new PoHTransaction({ from: alice.address, to: bob.address, amount: INITIAL, fee: 0, nonce: 2, timestamp: Date.now() });
+    const tx2 = new DAITransaction({ from: alice.address, to: bob.address, amount: INITIAL, fee: 0, nonce: 2, timestamp: Date.now() });
     tx2.sign(alice);
     const result = mempool.submit(tx2);
     expect(result).toMatchObject({ error: expect.stringMatching(/balance/) });
@@ -365,7 +365,7 @@ describe('Fix 4 — Transactions & Double-Spend Protection', () => {
 
   it('TxMempool rejects duplicate txHash', () => {
     const mempool = new TxMempool(wm);
-    const tx = new PoHTransaction({ from: alice.address, to: bob.address, amount: 1, fee: 0, nonce: 1, timestamp: Date.now() });
+    const tx = new DAITransaction({ from: alice.address, to: bob.address, amount: 1, fee: 0, nonce: 1, timestamp: Date.now() });
     tx.sign(alice);
     expect(mempool.submit(tx)).toBe(true);
     expect(mempool.submit(tx)).toMatchObject({ error: expect.stringMatching(/duplicate/) });
@@ -373,15 +373,15 @@ describe('Fix 4 — Transactions & Double-Spend Protection', () => {
 
   it('TxMempool releases lock after onBlockApplied', () => {
     const mempool = new TxMempool(wm);
-    const tx = new PoHTransaction({ from: alice.address, to: bob.address, amount: 100, fee: 0, nonce: 1, timestamp: Date.now() });
+    const tx = new DAITransaction({ from: alice.address, to: bob.address, amount: 100, fee: 0, nonce: 1, timestamp: Date.now() });
     tx.sign(alice);
     mempool.submit(tx);
     // pendingOut is keyed "address:currency" so a pending stablecoin send never
-    // locks the sender's POH (and vice versa).
-    expect(mempool.pendingOut.get(`${alice.address}:POH`) || 0).toBe(100);
+    // locks the sender's DAI (and vice versa).
+    expect(mempool.pendingOut.get(`${alice.address}:DAI`) || 0).toBe(100);
 
     mempool.onBlockApplied([tx.txHash]);
-    expect(mempool.pendingOut.get(`${alice.address}:POH`) || 0).toBe(0);
+    expect(mempool.pendingOut.get(`${alice.address}:DAI`) || 0).toBe(0);
   });
 
   it('sequential nonces queue correctly', () => {
@@ -389,9 +389,9 @@ describe('Fix 4 — Transactions & Double-Spend Protection', () => {
     alice.balance = INITIAL * 3;
     wm.saveWallet(alice);
 
-    const tx1 = new PoHTransaction({ from: alice.address, to: bob.address, amount: 1, fee: 0, nonce: 1, timestamp: Date.now() });
+    const tx1 = new DAITransaction({ from: alice.address, to: bob.address, amount: 1, fee: 0, nonce: 1, timestamp: Date.now() });
     tx1.sign(alice);
-    const tx2 = new PoHTransaction({ from: alice.address, to: bob.address, amount: 1, fee: 0, nonce: 2, timestamp: Date.now() });
+    const tx2 = new DAITransaction({ from: alice.address, to: bob.address, amount: 1, fee: 0, nonce: 2, timestamp: Date.now() });
     tx2.sign(alice);
 
     expect(mempool.submit(tx1)).toBe(true);
@@ -401,13 +401,13 @@ describe('Fix 4 — Transactions & Double-Spend Protection', () => {
 
   it('txHash is deterministic for same inputs', () => {
     const data = { from: alice.address, to: bob.address, amount: 42, fee: 1, nonce: 1, timestamp: 12345, memo: '' };
-    const tx1 = new PoHTransaction(data);
-    const tx2 = new PoHTransaction(data);
+    const tx1 = new DAITransaction(data);
+    const tx2 = new DAITransaction(data);
     expect(tx1.txHash).toBe(tx2.txHash);
   });
 
   it('revertTransaction undoes balance + nonce changes', () => {
-    const tx = new PoHTransaction({ from: alice.address, to: bob.address, amount: 100, fee: 1, nonce: 1, timestamp: Date.now() });
+    const tx = new DAITransaction({ from: alice.address, to: bob.address, amount: 100, fee: 1, nonce: 1, timestamp: Date.now() });
     tx.sign(alice);
     wm.applyTransaction(tx);
     expect(wm.getBalance(alice.address)).toBe(INITIAL - 101);
@@ -745,9 +745,9 @@ describe('Job deduplication — race between miners', () => {
 
 describe('Block integrity', () => {
   it('fromJSON round-trips without data loss', async () => {
-    const { PohBlock } = await import('../src/core/block.js');
+    const { DAIBlock } = await import('../src/core/block.js');
     const original = await makeBlock({ height: 7, nonce: 42, difficulty: 3, chainWork: 'ff' });
-    const restored = PohBlock.fromJSON(original.toJSON());
+    const restored = DAIBlock.fromJSON(original.toJSON());
     expect(restored.height).toBe(7);
     expect(restored.nonce).toBe(42);
     expect(restored.chainWork).toBe('ff');

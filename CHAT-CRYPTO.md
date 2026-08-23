@@ -20,7 +20,7 @@ Metadata (requester, miner, timing, tokens, fee, model) is public by design.
 
 Each wallet has an **X25519 encryption subkey** alongside its Ed25519 signing key.
 
-- **Derivation (deterministic):** `scalar = HKDF-SHA256(ikm = <wallet signing secret>, salt = "", info = "poh-x25519-v1", len = 32)`. The node derives `ikm` from the wallet's Ed25519 signing private key; a mnemonic-based wallet may derive it from its seed instead — interop depends only on the *published public key*, not on how it was derived.
+- **Derivation (deterministic):** `scalar = HKDF-SHA256(ikm = <wallet signing secret>, salt = "", info = "dai-x25519-v1", len = 32)`. The node derives `ikm` from the wallet's Ed25519 signing private key; a mnemonic-based wallet may derive it from its seed instead — interop depends only on the *published public key*, not on how it was derived.
 - **Public key:** the raw 32-byte X25519 point, base64. Published via `POST /api/wallet/register-key` as `encryptionPublicKey`.
 
 ## Envelope (ECIES: X25519 → HKDF-SHA256 → AES-256-GCM)
@@ -29,7 +29,7 @@ Each wallet has an **X25519 encryption subkey** alongside its Ed25519 signing ke
 
 1. Generate an ephemeral X25519 keypair `(esk, epk)`.
 2. `shared = X25519(esk, recipientPub)` (32 bytes).
-3. `key = HKDF-SHA256(ikm = shared, salt = recipientPub ‖ epk, info = "poh-chat-seal-v1", len = 32)`.
+3. `key = HKDF-SHA256(ikm = shared, salt = recipientPub ‖ epk, info = "dai-chat-seal-v1", len = 32)`.
 4. `iv = random(12)`.
 5. `ct ‖ tag = AES-256-GCM(key, iv, plaintext)` (tag is the trailing 16 bytes).
 6. Output:
@@ -62,7 +62,7 @@ own node passes its X25519 private scalar to decrypt its history for local searc
 |--------|---------|
 | **Node** | done — derives key, registers it, seals on-chain, decrypts owner history |
 | **SDK** | register `encryptionPublicKey`; set `visibility:'public'`; `open()` sealed replies from a remote node |
-| **Electron** | uses local node (server-side decrypt); `window.pohMinerAPI.crypto.{seal,open}` for remote nodes |
+| **Electron** | uses local node (server-side decrypt); `window.daiMinerAPI.crypto.{seal,open}` for remote nodes |
 | **Mobile wallet** | derive X25519 from seed, register key, `open()` sealed replies |
 
 Recommended libs for the raw-key form (skip the RFC 8410 DER wrapping the node uses):

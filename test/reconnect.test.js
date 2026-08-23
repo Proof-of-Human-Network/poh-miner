@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { PohMinerNode } from '../src/miner-node.js';
+import { DAIMinerNode } from '../src/miner-node.js';
 
 /**
  * Reconnect: after the internet drops and comes back, the node must rejoin the
@@ -13,7 +13,7 @@ describe('reconnect after connectivity loss', () => {
     realFetch = global.fetch;
     // Build a bare node object with just what the watcher touches (avoids the
     // heavy full start()/mining/meili path).
-    node = Object.create(PohMinerNode.prototype);
+    node = Object.create(DAIMinerNode.prototype);
     node.config = { bootnodes: ['https://bootnode.test'] };
     node.peers = [{ wallet: 'p1' }];
     node._syncInProgress = false;

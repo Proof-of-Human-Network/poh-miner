@@ -1,11 +1,11 @@
 /**
- * Basic Wallet for PoH Miner Network
+ * Basic Wallet for DAI Miner Network
  *
  * Simple account model for now (can evolve to UTXO later).
  * Supports:
  * - Wallet creation
  * - Balance tracking
- * - Sending / receiving POH
+ * - Sending / receiving DAI
  */
 
 import fs from 'fs';
@@ -15,14 +15,14 @@ import os from 'os';
 import { sealWalletData, unsealWalletData } from '../security/wallet-crypto.js';
 import { deriveEncryptionKeypair } from '../security/chat-crypto.js';
 
-const WALLETS_DIR = path.join(os.homedir(), '.poh-miner', 'wallets');
+const WALLETS_DIR = path.join(os.homedir(), '.dai-miner', 'wallets');
 
 function ensureDir(dir) {
   if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 }
 
 // Recompute a transaction's canonical hash from its own fields. Must exactly match
-// PoHTransaction._computeHash() (core/transaction.js) — not imported directly to avoid
+// DAITransaction._computeHash() (core/transaction.js) — not imported directly to avoid
 // a circular import (transaction.js already imports Wallet from this module).
 //
 // A transaction's txHash must NEVER be trusted as given: a signature only proves the
@@ -30,15 +30,15 @@ function ensureDir(dir) {
 // actually being applied. Without recomputing and comparing, an attacker could replay
 // any previously-seen valid (txHash, signature) pair from a sender — e.g. from a tiny,
 // publicly visible past transfer — with a forged `to`/`amount` and drain the account.
-// KEEP IN SYNC with PoHTransaction._computeHash (src/core/transaction.js), the
+// KEEP IN SYNC with DAITransaction._computeHash (src/core/transaction.js), the
 // mobile wallet signer (dev/wallet/src/services/signing.js) and sdk signers.
-// `currency` enters the preimage ONLY when set and !== 'POH' — every historical
-// POH tx keeps its exact hash and signature validity.
+// `currency` enters the preimage ONLY when set and !== 'DAI' — every historical
+// DAI tx keeps its exact hash and signature validity.
 export function computeTxFieldsHash(tx) {
   const payload = JSON.stringify({
     from: tx.from, to: tx.to, amount: tx.amount,
     fee: tx.fee, nonce: tx.nonce, timestamp: tx.timestamp, memo: tx.memo,
-    ...(tx.currency && tx.currency !== 'POH' ? { currency: tx.currency } : {}),
+    ...(tx.currency && tx.currency !== 'DAI' ? { currency: tx.currency } : {}),
   });
   return crypto.createHash('sha256').update(payload).digest('hex');
 }
@@ -63,12 +63,12 @@ export class Wallet {
     // ONE nonce sequence per address, shared across every asset.
     this.nonce = (typeof nonce === 'number') ? nonce : 0;
     // Per-asset balances in raw integer units (stablecoins, 2dp → ×100).
-    // POH stays in the legacy scalar `balance` (μPOH). Empty map ⇒ omitted from
-    // toJSON/state root so POH-only wallets keep their historical shape.
+    // DAI stays in the legacy scalar `balance` (μDAI). Empty map ⇒ omitted from
+    // toJSON/state root so DAI-only wallets keep their historical shape.
     this.assets = (assets && typeof assets === 'object') ? { ...assets } : {};
   }
 
-  /** True when this wallet holds any non-POH asset. */
+  /** True when this wallet holds any non-DAI asset. */
   hasAssets() {
     return Object.keys(this.assets).some(t => this.assets[t] > 0);
   }
@@ -83,7 +83,7 @@ export class Wallet {
   }
 
   static generate() {
-    // Legacy entropy fields kept for wallet file compatibility; the canonical poh
+    // Legacy entropy fields kept for wallet file compatibility; the canonical dai
     // address is always derived from the ed25519 signing public key.
     const privateKey = crypto.randomBytes(32).toString('hex');
     const publicKey = crypto.createHash('sha256').update(privateKey).digest('hex').slice(0, 64);
@@ -96,7 +96,7 @@ export class Wallet {
     // Store signingPublicKey as the RAW 32-byte ed25519 key in base64 (not PEM), so the
     // address derives identically on the desktop node and the mobile wallet (which uses
     // nacl raw keys). verifySignature() already accepts raw-base64 keys. This makes every
-    // new wallet cross-device: the same key/seed imports into the phone as the same poh… address.
+    // new wallet cross-device: the same key/seed imports into the phone as the same dai… address.
     const spk = Wallet.rawBase64FromPubKey(spkPem);
     const address = Wallet.deriveAddressFromSigningKey(spk);
 
@@ -132,7 +132,7 @@ export class Wallet {
       encryptionPublicKey: this.encryptionPublicKey,
       balance: this.balance,
       nonce: this.nonce,
-      // Omitted entirely when empty so legacy POH-only wallet files are unchanged.
+      // Omitted entirely when empty so legacy DAI-only wallet files are unchanged.
       ...(this.hasAssets() ? { assets: this.sortedAssets() } : {}),
     };
   }
@@ -190,14 +190,14 @@ export class Wallet {
    * Accepts a PEM string OR a raw 32-byte ed25519 public key in base64.
    */
   /**
-   * Derive the canonical poh address bound to an ed25519 signing public key.
+   * Derive the canonical dai address bound to an ed25519 signing public key.
    * A key may only control the address derived from itself.
    */
   static deriveAddressFromSigningKey(signingPublicKey) {
     if (!signingPublicKey || typeof signingPublicKey !== 'string') return null;
     const normalized = signingPublicKey.trim().replace(/\r\n/g, '\n');
     const hash = crypto.createHash('sha256').update(normalized).digest('hex');
-    return 'poh' + hash.slice(0, 40);
+    return 'dai' + hash.slice(0, 40);
   }
 
   static isAddressBoundToSigningKey(address, signingPublicKey) {
@@ -402,17 +402,17 @@ export class WalletManager {
   }
 
   // ── Asset routing helpers ──────────────────────────────────────────────────
-  // POH lives in the legacy scalar `balance` (μPOH); every other currency in
+  // DAI lives in the legacy scalar `balance` (μDAI); every other currency in
   // wallet.assets[ticker] (raw integer units). One nonce covers all assets.
-  static _isPoh(currency) { return !currency || currency === 'POH'; }
+  static _isDai(currency) { return !currency || currency === 'DAI'; }
 
   static _getBal(wallet, currency) {
-    if (WalletManager._isPoh(currency)) return wallet.balance || 0;
+    if (WalletManager._isDai(currency)) return wallet.balance || 0;
     return (wallet.assets && wallet.assets[currency]) || 0;
   }
 
   static _setBal(wallet, currency, value) {
-    if (WalletManager._isPoh(currency)) { wallet.balance = value; return; }
+    if (WalletManager._isDai(currency)) { wallet.balance = value; return; }
     if (!wallet.assets) wallet.assets = {};
     if (value > 0) wallet.assets[currency] = value;
     else delete wallet.assets[currency];   // drop zero balances → toJSON omits empty maps
@@ -420,8 +420,8 @@ export class WalletManager {
 
   // Credit balance (used when receiving rewards or transfers)
   // Auto-creates a stub wallet file for the address if none exists (so remote workerIds or
-  // alternate identity addresses like solana addrs used as pohWallet still get balances recorded).
-  credit(address, amount, currency = 'POH') {
+  // alternate identity addresses like solana addrs used as daiWallet still get balances recorded).
+  credit(address, amount, currency = 'DAI') {
     return this._withLock(address, () => {
       let wallet = this.loadWallet(address);
       if (!wallet) {
@@ -434,7 +434,7 @@ export class WalletManager {
   }
 
   // Debit balance (for sending)
-  debit(address, amount, currency = 'POH') {
+  debit(address, amount, currency = 'DAI') {
     return this._withLock(address, () => {
       const wallet = this.loadWallet(address);
       if (!wallet || WalletManager._getBal(wallet, currency) < amount) return false;
@@ -448,7 +448,7 @@ export class WalletManager {
   // Used for off-chain job fee payments authorized by a nonce-bound signature
   // (see miner-node.js job payment verification) — prevents the same signed
   // payment proof from being replayed against a second job.
-  debitWithNonce(address, amount, expectedNonce, currency = 'POH') {
+  debitWithNonce(address, amount, expectedNonce, currency = 'DAI') {
     return this._withLock(address, () => {
       const wallet = this.loadWallet(address);
       if (!wallet) return { error: 'wallet not found' };
@@ -464,7 +464,7 @@ export class WalletManager {
   }
 
   // Transfer between two local wallets (for testing / future full tx system)
-  transfer(fromAddress, toAddress, amount, currency = 'POH') {
+  transfer(fromAddress, toAddress, amount, currency = 'DAI') {
     if (!this.debit(fromAddress, amount, currency)) return false;
     if (!this.credit(toAddress, amount, currency)) {
       this.credit(fromAddress, amount, currency);
@@ -473,13 +473,13 @@ export class WalletManager {
     return true;
   }
 
-  /** Per-asset balance (currency='POH' → legacy μPOH scalar). */
-  getAssetBalance(address, currency = 'POH') {
+  /** Per-asset balance (currency='DAI' → legacy μDAI scalar). */
+  getAssetBalance(address, currency = 'DAI') {
     const w = this.loadWallet(address);
     return w ? WalletManager._getBal(w, currency) : 0;
   }
 
-  /** All non-POH holdings for an address: { ticker: rawInt } (empty when none). */
+  /** All non-DAI holdings for an address: { ticker: rawInt } (empty when none). */
   getAssetBalances(address) {
     const { assets } = this.rawBalanceNonce(address);
     return assets || {};
@@ -500,7 +500,7 @@ export class WalletManager {
     const entries = this.listWallets()
       .map(address => {
         const { balance, nonce, assets } = this.rawBalanceNonce(address);
-        // `assets` key included ONLY when non-empty (sorted keys) — POH-only
+        // `assets` key included ONLY when non-empty (sorted keys) — DAI-only
         // wallets serialize exactly as before, keeping historical roots stable.
         const held = assets && Object.keys(assets).filter(t => assets[t] > 0).sort();
         return (held && held.length)
@@ -522,7 +522,7 @@ export class WalletManager {
     if (!tx.txHash || tx.txHash !== computeTxFieldsHash(tx)) {
       return 'txHash does not match transaction fields';
     }
-    const txCur = (!tx.currency || tx.currency === 'POH') ? 'POH' : tx.currency;
+    const txCur = (!tx.currency || tx.currency === 'DAI') ? 'DAI' : tx.currency;
     const total = tx.amount + (tx.fee || 0);
     if (WalletManager._getBal(sender, txCur) < total) return 'insufficient balance';
     // Verify signature against the sender's STORED public key — not the key
@@ -566,7 +566,7 @@ export class WalletManager {
 
   // Reverse a previously applied transaction (used during reorg — Fix 6)
   revertTransaction(tx, proposerAddress) {
-    const txCur = (!tx.currency || tx.currency === 'POH') ? 'POH' : tx.currency;
+    const txCur = (!tx.currency || tx.currency === 'DAI') ? 'DAI' : tx.currency;
     // Undo debit on sender
     const sender = this.loadWallet(tx.from);
     if (sender) {

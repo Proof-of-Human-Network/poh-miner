@@ -17,7 +17,7 @@
  */
 
 // Job types whose compute must be paid for (parity with the miner's /job fee gate).
-// Free 'verdict' (proof-of-human) jobs are rewarded from coinbase instead.
+// Free 'verdict' (decentralized-artificial-intelligence) jobs are rewarded from coinbase instead.
 export const FEE_REQUIRED_BOARD_TYPES = new Set(['skill', 'compute']);
 
 export const CLAIM_LEASE_MS = 90_000;   // reclaim a job if no result within this

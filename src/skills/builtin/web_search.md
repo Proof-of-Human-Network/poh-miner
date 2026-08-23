@@ -134,7 +134,7 @@ exports.run = async function(input) {
   // ── Fallback: DDG Instant Answer API (great for facts, definitions, conversions) ─
   if (!summary) {
     try {
-      const apiUrl = `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1&skip_disambig=1&t=poh-miner`;
+      const apiUrl = `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1&skip_disambig=1&t=dai-miner`;
       const apiRes = await fetch(apiUrl, { signal: AbortSignal.timeout(8000) });
       if (apiRes.ok) {
         const data = await apiRes.json();

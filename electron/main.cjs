@@ -72,7 +72,7 @@ function createWindow() {
       contextIsolation: true,
       nodeIntegration: false,
     },
-    title: 'PoH Miner',
+    title: 'DAI Miner',
   });
 
   // Also remove the window menu on Windows/Linux
@@ -122,19 +122,19 @@ function createWindow() {
       const { WalletManager } = await import(pathToFileURL(path.join(__dirname, '../src/wallet/wallet.js')).href);
       const _wm = new WalletManager();
       const existingWallets = _wm.listWallets();
-      const hasPohWallet = !!(config.pohWallet || config.wallet || existingWallets.length > 0);
+      const hasDAIWallet = !!(config.daiWallet || config.wallet || existingWallets.length > 0);
 
       // Auto-persist the wallet into config so startMiner() can read it
-      if (!config.pohWallet && !config.wallet && existingWallets.length > 0) {
-        const poh = existingWallets.find(w => w.startsWith('poh')) || existingWallets[0];
-        saveConfig({ pohWallet: poh, wallet: poh });
-        config.pohWallet = poh;
-        config.wallet    = poh;
+      if (!config.daiWallet && !config.wallet && existingWallets.length > 0) {
+        const dai = existingWallets.find(w => w.startsWith('dai')) || existingWallets[0];
+        saveConfig({ daiWallet: dai, wallet: dai });
+        config.daiWallet = dai;
+        config.wallet    = dai;
       }
 
-      const isOnboarded = !!(config.onboarded && hasPohWallet) || hasPohWallet;
+      const isOnboarded = !!(config.onboarded && hasDAIWallet) || hasDAIWallet;
 
-      sendLog(`[Startup] onboarded=${!!config.onboarded}, hasPohWallet=${hasPohWallet} → isOnboarded=${isOnboarded}`);
+      sendLog(`[Startup] onboarded=${!!config.onboarded}, hasDAIWallet=${hasDAIWallet} → isOnboarded=${isOnboarded}`);
 
       if (isOnboarded) {
         // Warm up the QVAC model before starting the miner (best-effort; it also
@@ -177,27 +177,27 @@ async function startMiner() {
   isStartingMiner = true;
 
   try {
-    sendLog('Starting PoH Miner Node...');
+    sendLog('Starting DAI Miner Node...');
 
     const fs = require('fs');
-    const CONFIG_PATH = path.join(os.homedir(), '.poh-miner', 'config.json');
+    const CONFIG_PATH = path.join(os.homedir(), '.dai-miner', 'config.json');
 
     let config = {};
     if (fs.existsSync(CONFIG_PATH)) {
       config = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
     } else {
-      sendLog('No config found at ~/.poh-miner/config.json');
+      sendLog('No config found at ~/.dai-miner/config.json');
     }
 
     if (config.walletBackupKey) {
-      process.env.POH_WALLET_KEY = config.walletBackupKey;
+      process.env.DAI_WALLET_KEY = config.walletBackupKey;
     }
 
     // Dynamically import the ESM miner module
     const minerModule = await import(pathToFileURL(path.join(__dirname, '../src/miner-node.js')).href);
-    const { PohMinerNode } = minerModule;
+    const { DAIMinerNode } = minerModule;
 
-    minerNode = new PohMinerNode(config);
+    minerNode = new DAIMinerNode(config);
 
     // Forward skill rejection events to the renderer as a modal popup
     minerNode.onSkillRejectedHook = ({ skillId, reason, issues }) => {
@@ -263,21 +263,21 @@ function sendStatusUpdate() {
   if (!minerNode || !mainWindow || mainWindow.isDestroyed()) return;
 
   try {
-    const pohWallet = minerNode.config?.pohWallet || minerNode.config?.wallet;
-    let pohBalance = 0;
+    const daiWallet = minerNode.config?.daiWallet || minerNode.config?.wallet;
+    let daiBalance = 0;
 
-    if (pohWallet && minerNode.walletManager) {
-      pohBalance = minerNode.walletManager.getBalance(pohWallet);
+    if (daiWallet && minerNode.walletManager) {
+      daiBalance = minerNode.walletManager.getBalance(daiWallet);
     }
 
     const solanaAddress = minerNode.config?.solanaAddress || null;
 
     const status = {
-      wallet: pohWallet,
-      pohWallet: pohWallet,
-      pohBalance: pohBalance,
+      wallet: daiWallet,
+      daiWallet: daiWallet,
+      daiBalance: daiBalance,
       solanaAddress: solanaAddress,
-      balance: pohBalance,
+      balance: daiBalance,
       chainHeight: minerNode.chain ? minerNode.chain.length - 1 : 0,
       reputation: minerNode.reputation || 1.0,
       qualityStats: minerNode.qualityStats || {},
@@ -325,7 +325,7 @@ app.on('window-all-closed', () => {
   }
 });
 
-// Open external URLs in a popup browser window with an injected "← PoH Miner" back button
+// Open external URLs in a popup browser window with an injected "← DAI Miner" back button
 function openInAppBrowser(url) {
   const popup = new BrowserWindow({
     width: 1100,
@@ -343,10 +343,10 @@ function openInAppBrowser(url) {
   const injectBackButton = () => {
     popup.webContents.executeJavaScript(`
       (function() {
-        if (document.getElementById('__poh_back__')) return;
+        if (document.getElementById('__dai_back__')) return;
         const btn = document.createElement('div');
-        btn.id = '__poh_back__';
-        btn.textContent = '← PoH Miner';
+        btn.id = '__dai_back__';
+        btn.textContent = '← DAI Miner';
         btn.style.cssText = [
           'position:fixed', 'top:12px', 'left:12px', 'z-index:2147483647',
           'background:#0f172a', 'color:#e2e8f0', 'padding:6px 14px',
@@ -448,7 +448,7 @@ ipcMain.handle('rpc:preview-url', async (_event, { networkId, providerId, apiKey
 
 ipcMain.handle('rpc:get-current-config', async () => {
   const fs = require('fs');
-  const CONFIG_PATH = path.join(os.homedir(), '.poh-miner', 'config.json');
+  const CONFIG_PATH = path.join(os.homedir(), '.dai-miner', 'config.json');
   if (!fs.existsSync(CONFIG_PATH)) return { rpc: {}, rpcOverrides: {} };
   const fullConfig = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
   return {
@@ -459,7 +459,7 @@ ipcMain.handle('rpc:get-current-config', async () => {
 
 ipcMain.handle('rpc:save-network-config', async (_event, { networkId, provider, apiKey }) => {
   const fs = require('fs');
-  const CONFIG_PATH = path.join(os.homedir(), '.poh-miner', 'config.json');
+  const CONFIG_PATH = path.join(os.homedir(), '.dai-miner', 'config.json');
   
   let config = {};
   if (fs.existsSync(CONFIG_PATH)) {
@@ -476,7 +476,7 @@ ipcMain.handle('rpc:save-network-config', async (_event, { networkId, provider, 
 ipcMain.handle('rpc:bulk-apply-evm', async (_event, { provider, apiKey }) => {
   const fs = require('fs');
   const { pathToFileURL } = require('url');
-  const CONFIG_PATH = path.join(os.homedir(), '.poh-miner', 'config.json');
+  const CONFIG_PATH = path.join(os.homedir(), '.dai-miner', 'config.json');
 
   const rpcModule = await import(pathToFileURL(path.join(__dirname, '../src/rpc/index.js')).href);
   const { EVM_CHAIN_IDS, bulkApplyProvider } = rpcModule;
@@ -495,7 +495,7 @@ ipcMain.handle('rpc:bulk-apply-evm', async (_event, { provider, apiKey }) => {
 // --- Etherscan API Key ---
 ipcMain.handle('rpc:get-etherscan-key', async () => {
   const fs = require('fs');
-  const CONFIG_PATH = path.join(os.homedir(), '.poh-miner', 'config.json');
+  const CONFIG_PATH = path.join(os.homedir(), '.dai-miner', 'config.json');
   if (!fs.existsSync(CONFIG_PATH)) return '';
   const config = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
   return config.etherscanApiKey || '';
@@ -503,7 +503,7 @@ ipcMain.handle('rpc:get-etherscan-key', async () => {
 
 ipcMain.handle('rpc:save-etherscan-key', async (_event, apiKey) => {
   const fs = require('fs');
-  const CONFIG_PATH = path.join(os.homedir(), '.poh-miner', 'config.json');
+  const CONFIG_PATH = path.join(os.homedir(), '.dai-miner', 'config.json');
 
   let config = {};
   if (fs.existsSync(CONFIG_PATH)) {
@@ -522,7 +522,7 @@ ipcMain.handle('rpc:save-etherscan-key', async (_event, apiKey) => {
 
 ipcMain.handle('ai-providers:get', async () => {
   const fs = require('fs');
-  const CONFIG_PATH = path.join(os.homedir(), '.poh-miner', 'config.json');
+  const CONFIG_PATH = path.join(os.homedir(), '.dai-miner', 'config.json');
   if (!fs.existsSync(CONFIG_PATH)) return {};
   const config = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
   return config.aiProviders || {};
@@ -530,7 +530,7 @@ ipcMain.handle('ai-providers:get', async () => {
 
 ipcMain.handle('ai-providers:save', async (_event, { id, apiKey, model, baseUrl, enabled }) => {
   const fs = require('fs');
-  const CONFIG_PATH = path.join(os.homedir(), '.poh-miner', 'config.json');
+  const CONFIG_PATH = path.join(os.homedir(), '.dai-miner', 'config.json');
 
   let config = {};
   if (fs.existsSync(CONFIG_PATH)) {
@@ -551,7 +551,7 @@ ipcMain.handle('ai-providers:save', async (_event, { id, apiKey, model, baseUrl,
 
 ipcMain.handle('ai-providers:delete', async (_event, id) => {
   const fs = require('fs');
-  const CONFIG_PATH = path.join(os.homedir(), '.poh-miner', 'config.json');
+  const CONFIG_PATH = path.join(os.homedir(), '.dai-miner', 'config.json');
 
   let config = {};
   if (fs.existsSync(CONFIG_PATH)) {
@@ -602,7 +602,7 @@ function _mcpListFromConfig(config) {
 
 ipcMain.handle('mcp:get-servers', async () => {
   const fs = require('fs');
-  const CONFIG_PATH = path.join(os.homedir(), '.poh-miner', 'config.json');
+  const CONFIG_PATH = path.join(os.homedir(), '.dai-miner', 'config.json');
   if (!fs.existsSync(CONFIG_PATH)) return [];
   const config = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
   return _mcpListFromConfig(config);
@@ -610,7 +610,7 @@ ipcMain.handle('mcp:get-servers', async () => {
 
 ipcMain.handle('mcp:save-server', async (_event, { id, name, command, args, env, url, apiKey, enabled }) => {
   const fs = require('fs');
-  const CONFIG_PATH = path.join(os.homedir(), '.poh-miner', 'config.json');
+  const CONFIG_PATH = path.join(os.homedir(), '.dai-miner', 'config.json');
 
   let config = {};
   if (fs.existsSync(CONFIG_PATH)) {
@@ -636,7 +636,7 @@ ipcMain.handle('mcp:save-server', async (_event, { id, name, command, args, env,
 
 ipcMain.handle('mcp:import-json', async (_event, jsonText) => {
   const fs = require('fs');
-  const CONFIG_PATH = path.join(os.homedir(), '.poh-miner', 'config.json');
+  const CONFIG_PATH = path.join(os.homedir(), '.dai-miner', 'config.json');
   let parsed;
   try {
     parsed = JSON.parse(jsonText || '{}');
@@ -663,7 +663,7 @@ ipcMain.handle('mcp:import-json', async (_event, jsonText) => {
 
 ipcMain.handle('mcp:delete-server', async (_event, id) => {
   const fs = require('fs');
-  const CONFIG_PATH = path.join(os.homedir(), '.poh-miner', 'config.json');
+  const CONFIG_PATH = path.join(os.homedir(), '.dai-miner', 'config.json');
 
   let config = {};
   if (fs.existsSync(CONFIG_PATH)) {
@@ -681,7 +681,7 @@ ipcMain.handle('mcp:delete-server', async (_event, id) => {
 // Onboarding IPC
 // =====================================================
 
-const CONFIG_PATH = path.join(os.homedir(), '.poh-miner', 'config.json');
+const CONFIG_PATH = path.join(os.homedir(), '.dai-miner', 'config.json');
 
 function loadConfig() {
   try {
@@ -707,26 +707,26 @@ ipcMain.handle('onboarding:get-status', async () => {
   const wm = new WalletManager();
   const existingWallets = wm.listWallets();
 
-  const hasPohWalletOnDisk = existingWallets.length > 0;
-  const hasPohWalletInConfig = !!config.pohWallet;
+  const hasDAIWalletOnDisk = existingWallets.length > 0;
+  const hasDAIWalletInConfig = !!config.daiWallet;
 
-  const hasPohWallet = hasPohWalletOnDisk || hasPohWalletInConfig;
+  const hasDAIWallet = hasDAIWalletOnDisk || hasDAIWalletInConfig;
 
   // If we have wallets on disk but none recorded in config, pick the first one
   // and persist it so future runs remember it.
-  let pohWallet = config.pohWallet;
-  if (!pohWallet && hasPohWalletOnDisk) {
-    pohWallet = existingWallets[0];
-    saveConfig({ pohWallet });
+  let daiWallet = config.daiWallet;
+  if (!daiWallet && hasDAIWalletOnDisk) {
+    daiWallet = existingWallets[0];
+    saveConfig({ daiWallet });
   }
 
-  // Consider fully onboarded if config says so AND we have a poh wallet (in config or on disk)
-  const isFullyOnboarded = !!(config.onboarded && hasPohWallet);
+  // Consider fully onboarded if config says so AND we have a dai wallet (in config or on disk)
+  const isFullyOnboarded = !!(config.onboarded && hasDAIWallet);
 
   return {
     onboarded: isFullyOnboarded,
-    hasPohWallet,
-    pohWallet: pohWallet || null,
+    hasDAIWallet,
+    daiWallet: daiWallet || null,
     solanaAddress: config.solanaAddress || null,
   };
 });
@@ -753,7 +753,7 @@ ipcMain.handle('onboarding:set-model', async (_event, model) => {
   return { ok: true, model };
 });
 
-ipcMain.handle('onboarding:create-poh-wallet', async () => {
+ipcMain.handle('onboarding:create-dai-wallet', async () => {
   // Dynamic import because src/wallet/wallet.js is an ES Module
   const { WalletManager } = await import('../src/wallet/wallet.js');
   const wm = new WalletManager();
@@ -784,7 +784,7 @@ ipcMain.handle('onboarding:generate-wallet-backup-key', async () => {
   const walletBackupKey = crypto.randomBytes(32).toString('base64url');
 
   saveConfig({ walletBackupKey });
-  process.env.POH_WALLET_KEY = walletBackupKey;
+  process.env.DAI_WALLET_KEY = walletBackupKey;
 
   const { WalletManager } = await import(pathToFileURL(path.join(__dirname, '../src/wallet/wallet.js')).href);
   const { resetKeyCache } = await import(pathToFileURL(path.join(__dirname, '../src/security/wallet-crypto.js')).href);
@@ -800,13 +800,13 @@ ipcMain.handle('onboarding:generate-wallet-backup-key', async () => {
 });
 
 ipcMain.handle('onboarding:complete', async (_event, data) => {
-  const { pohWallet, solanaAddress, ...rest } = data || {};
+  const { daiWallet, solanaAddress, ...rest } = data || {};
 
   const updated = saveConfig({
-    pohWallet: pohWallet || null,
+    daiWallet: daiWallet || null,
     solanaAddress: solanaAddress || null,
     onboarded: true,
-    wallet: pohWallet || null, // solanaAddress is never the mining wallet
+    wallet: daiWallet || null, // solanaAddress is never the mining wallet
     ...rest,
   });
 
@@ -815,12 +815,12 @@ ipcMain.handle('onboarding:complete', async (_event, data) => {
 
 // Developer helper: reset onboarding
 ipcMain.handle('onboarding:reset', async () => {
-  const CONFIG_PATH = path.join(os.homedir(), '.poh-miner', 'config.json');
+  const CONFIG_PATH = path.join(os.homedir(), '.dai-miner', 'config.json');
   
   if (fs.existsSync(CONFIG_PATH)) {
     const config = JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
     delete config.onboarded;
-    delete config.pohWallet;
+    delete config.daiWallet;
     // Keep solanaAddress and rpc settings by default, but remove onboarded flag
     fs.writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2));
   }
@@ -907,8 +907,8 @@ async function warmUpQvacModel(model = 'qwen3-1.7b') {
   let progressPoll = null;
   try {
     process.env.QVAC_DEFAULT_MODEL = model;
-    const realPohUrl = pathToFileURL(path.join(__dirname, '../src/compute/adapters/real-poh.js')).href;
-    const { getQvacModels } = await import(realPohUrl);
+    const realDAIUrl = pathToFileURL(path.join(__dirname, '../src/compute/adapters/real-dai.js')).href;
+    const { getQvacModels } = await import(realDAIUrl);
     const qvac = await getQvacModels();
     if (!qvac || !qvac.ENABLED) {
       sendSetupProgress({ status: 'ready', message: 'Inference ready (QVAC).', model });
@@ -948,7 +948,7 @@ async function warmUpQvacModel(model = 'qwen3-1.7b') {
       if (process.platform === 'win32') {
         hint = ' [The inference worker did not start. Update the app to v0.4.22+ (fixes the packaged worker launch); if it persists, check that antivirus is not blocking bare.exe and that the Microsoft Visual C++ Redistributable is installed (https://aka.ms/vs/17/release/vc_redist.x64.exe).]';
       } else if (process.platform === 'darwin') {
-        hint = ' [The inference worker did not start. Update the app to v0.4.22+ (fixes the packaged worker on macOS); if it persists, clear the quarantine flag with:  xattr -cr /Applications/PoH-Miner.app  and reopen the app.]';
+        hint = ' [The inference worker did not start. Update the app to v0.4.22+ (fixes the packaged worker on macOS); if it persists, clear the quarantine flag with:  xattr -cr /Applications/DAI-Miner.app  and reopen the app.]';
       } else {
         hint = ' [The inference worker did not start. Update the app to v0.4.22+ (fixes the packaged worker on Linux).]';
       }
@@ -974,8 +974,8 @@ async function warmUpQvacModel(model = 'qwen3-1.7b') {
 ipcMain.handle('setup:check', async () => {
   try {
     const model = process.env.QVAC_DEFAULT_MODEL || 'qwen3-1.7b';
-    const realPohUrl = pathToFileURL(path.join(__dirname, '../src/compute/adapters/real-poh.js')).href;
-    const { getQvacModels } = await import(realPohUrl);
+    const realDAIUrl = pathToFileURL(path.join(__dirname, '../src/compute/adapters/real-dai.js')).href;
+    const { getQvacModels } = await import(realDAIUrl);
     const qvac = await getQvacModels();
     const st = qvac && typeof qvac.status === 'function' ? qvac.status() : { loaded: [] };
     return { running: true, inPath: true, ready: (st.loaded || []).length > 0, model, models: st.loaded || [] };

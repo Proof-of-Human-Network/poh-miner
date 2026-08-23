@@ -4,14 +4,14 @@
  * Persists which worker rewards this node has already claimed.
  * Prevents double-crediting on re-syncs or duplicate block deliveries.
  *
- * Stored at: ~/.poh-miner/rewards/claimed.json
+ * Stored at: ~/.dai-miner/rewards/claimed.json
  */
 
 import fs from 'fs';
 import path from 'path';
 import os from 'os';
 
-const DEFAULT_REWARD_DIR = path.join(os.homedir(), '.poh-miner', 'rewards');
+const DEFAULT_REWARD_DIR = path.join(os.homedir(), '.dai-miner', 'rewards');
 
 export class RewardClaimStore {
   constructor(dataDir = DEFAULT_REWARD_DIR) {
@@ -50,7 +50,7 @@ export class RewardClaimStore {
   _save() {
     try {
       // The rewards dir can be removed after construction — a fork reorg /
-      // genesis migration wipes `~/.poh-miner/rewards` (see _wipeStaleChainState),
+      // genesis migration wipes `~/.dai-miner/rewards` (see _wipeStaleChainState),
       // and reset()/markClaimedMany() then save into a now-missing dir. Recreate
       // it before every write so the save can't ENOENT.
       this._ensureDir();

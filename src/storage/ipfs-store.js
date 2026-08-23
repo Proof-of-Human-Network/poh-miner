@@ -15,7 +15,7 @@
  * No npm dependency required — all I/O via the built-in fetch API (Node 18+).
  */
 
-// Local Kubo gateway defaults to 8081 (NOT 8080 — the PoH bootnode owns 8080).
+// Local Kubo gateway defaults to 8081 (NOT 8080 — the DAI bootnode owns 8080).
 const DEFAULT_KUBO_API_BASE     = 'http://127.0.0.1:5001';
 const DEFAULT_KUBO_GATEWAY_BASE = 'http://127.0.0.1:8081';
 const REMOTE_GATEWAYS = [

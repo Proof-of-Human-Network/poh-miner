@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { PohBlock } from '../src/core/block.js';
+import { DAIBlock } from '../src/core/block.js';
 import { blockHashOf, blockHashInput } from '../src/consensus/block-hash.js';
 import { replayChainLedger } from '../src/consensus/tx-ledger.js';
 import { buildMigrationGenesis, buildAllocations } from '../src/consensus/genesis.js';
@@ -8,10 +8,10 @@ import { buildMigrationGenesis, buildAllocations } from '../src/consensus/genesi
 const snapshot = {
   snapshotHash: 'deadbeef',
   balances: {
-    poh0000000000000000000000000000000000000001: { balance: 450_000_000_000, nonce: 0 },
-    poh0000000000000000000000000000000000000002: { balance: 1_500_000_000, nonce: 3 },
-    poh0000000000000000000000000000000000000003: { balance: 999, nonce: 1 },
-    pohzerozerozerozerozerozerozerozerozerozero1: { balance: 0, nonce: 0 }, // dropped (no state)
+    dai0000000000000000000000000000000000000001: { balance: 450_000_000_000, nonce: 0 },
+    dai0000000000000000000000000000000000000002: { balance: 1_500_000_000, nonce: 3 },
+    dai0000000000000000000000000000000000000003: { balance: 999, nonce: 1 },
+    daizerozerozerozerozerozerozerozerozerozero1: { balance: 0, nonce: 0 }, // dropped (no state)
   },
 };
 const expectedTotal = 450_000_000_000 + 1_500_000_000 + 999;
@@ -30,10 +30,10 @@ describe('genesis migration', () => {
     expect(count).toBe(3);
 
     const ledger = replayChainLedger([genesis]);
-    expect(ledger.getBalance('poh0000000000000000000000000000000000000001')).toBe(450_000_000_000);
-    expect(ledger.getBalance('poh0000000000000000000000000000000000000002')).toBe(1_500_000_000);
-    expect(ledger.getNonce('poh0000000000000000000000000000000000000002')).toBe(3);
-    expect(ledger.getNonce('poh0000000000000000000000000000000000000003')).toBe(1);
+    expect(ledger.getBalance('dai0000000000000000000000000000000000000001')).toBe(450_000_000_000);
+    expect(ledger.getBalance('dai0000000000000000000000000000000000000002')).toBe(1_500_000_000);
+    expect(ledger.getNonce('dai0000000000000000000000000000000000000002')).toBe(3);
+    expect(ledger.getNonce('dai0000000000000000000000000000000000000003')).toBe(1);
 
     const inv = ledger.checkSupplyInvariant();
     expect(inv.ok).toBe(true);                 // sum(balances) + dust === totalMinted
@@ -45,20 +45,20 @@ describe('genesis migration', () => {
     const { genesis } = buildMigrationGenesis(snapshot, { difficulty: 4 });
 
     // Same genesis params, no allocations → the legacy identity.
-    const bare = new PohBlock({
+    const bare = new DAIBlock({
       height: 0, previousHash: '0'.repeat(64), timestamp: genesis.timestamp,
       minerWallet: genesis.minerWallet, difficulty: 4,
     });
     expect(blockHashOf(genesis)).not.toBe(blockHashOf(bare)); // fresh chain identity
 
     // A normal block must hash exactly as before — no genesisAllocations key leaks in.
-    const normal = new PohBlock({ height: 5, previousHash: 'ab'.repeat(32), timestamp: 1, minerWallet: 'm', difficulty: 4 });
+    const normal = new DAIBlock({ height: 5, previousHash: 'ab'.repeat(32), timestamp: 1, minerWallet: 'm', difficulty: 4 });
     expect(blockHashInput(normal)).not.toContain('genesisAllocations');
   });
 
   it('round-trips through toJSON/fromJSON preserving allocations and hash', () => {
     const { genesis } = buildMigrationGenesis(snapshot, { difficulty: 4 });
-    const revived = PohBlock.fromJSON(JSON.parse(JSON.stringify(genesis.toJSON())));
+    const revived = DAIBlock.fromJSON(JSON.parse(JSON.stringify(genesis.toJSON())));
     expect(revived.genesisAllocations).toHaveLength(3);
     expect(blockHashOf(revived)).toBe(blockHashOf(genesis)); // hash survives serialization
   });

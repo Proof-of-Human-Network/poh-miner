@@ -16,7 +16,7 @@
  *
  * Usage:
  *   node scripts/submit-signed-board-job.js
- *   BOARD=https://miner.poh.ge WALLET=poh4bc7... BUDGET=15000000 PROMPT='hi' \
+ *   BOARD=https://miner.iamai.kg WALLET=dai4bc7... BUDGET=15000000 PROMPT='hi' \
  *     node scripts/submit-signed-board-job.js
  *   node scripts/submit-signed-board-job.js --dry     # sign + verify, do NOT post
  *   node scripts/submit-signed-board-job.js --plain   # unencrypted (cleartext reply)
@@ -26,8 +26,8 @@ import { WalletManager, Wallet } from '../src/wallet/wallet.js';
 import { computeBoardJobPaymentHash } from '../src/jobs/board-payment.js';
 import { seal, open, isEnvelope } from '../src/security/chat-crypto.js';
 
-const BOARD   = process.env.BOARD  || 'https://miner.poh.ge';
-const BUDGET  = parseInt(process.env.BUDGET || '10', 10);   // μPOH (maxBudget)
+const BOARD   = process.env.BOARD  || 'https://miner.iamai.kg';
+const BUDGET  = parseInt(process.env.BUDGET || '10', 10);   // μDAI (maxBudget)
 const PROMPT  = process.env.PROMPT;
 const DRY     = process.argv.includes('--dry');
 const PLAIN   = process.argv.includes('--plain');   // opt out of encryption
@@ -39,7 +39,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 // 1. Load a local wallet (unseals the on-disk key). Pick WALLET=... or the first one.
 const wm = new WalletManager();
 const addr = process.env.WALLET || wm.listWallets()[0];
-if (!addr) { console.error('No wallet found in ~/.poh-miner/wallets'); process.exit(1); }
+if (!addr) { console.error('No wallet found in ~/.dai-miner/wallets'); process.exit(1); }
 const wallet = wm.loadWallet(addr);
 if (!wallet?.signingPrivateKey) {
   console.error(`Wallet ${addr} has no signing private key (externally registered?) — can't sign.`);
@@ -79,7 +79,7 @@ const job = {
 // 3. Self-check: the proof must verify against our own key before we send it.
 const ok = Wallet.verifySignature(wallet.signingPublicKey, txHash, signature);
 console.log(`Wallet        : ${wallet.address}`);
-console.log(`Job           : ${jobId} (type=${job.type}, budget=${amount} μPOH, nonce=${nonce})`);
+console.log(`Job           : ${jobId} (type=${job.type}, budget=${amount} μDAI, nonce=${nonce})`);
 console.log(`Encryption    : ${PLAIN ? 'OFF (--plain)' : 'ON'}${PLAIN ? '' : `  encPubKey=${encPub}`}`);
 console.log(`Prompt        : ${PROMPT}`);
 console.log(`Payment proof : ${ok ? 'verifies ✓' : 'FAILED ✗'}`);

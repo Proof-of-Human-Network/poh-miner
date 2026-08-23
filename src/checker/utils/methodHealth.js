@@ -4,10 +4,10 @@ const fs   = require('fs');
 const path = require('path');
 const os   = require('os');
 
-const _pohHome     = path.join(os.homedir(), '.poh-miner');
-const _brainDir    = process.env.BRAIN_DATA_DIR || path.join(_pohHome, 'brain');
+const _daiHome     = path.join(os.homedir(), '.dai-miner');
+const _brainDir    = process.env.BRAIN_DATA_DIR || path.join(_daiHome, 'brain');
 const HEALTH_PATH  = path.join(_brainDir, 'method_health.json');
-const METHODS_PATH = path.join(_pohHome, 'methods.json');
+const METHODS_PATH = path.join(_daiHome, 'methods.json');
 const DELIST_DAYS   = 30;
 const DELIST_MS     = DELIST_DAYS * 24 * 60 * 60 * 1000;
 

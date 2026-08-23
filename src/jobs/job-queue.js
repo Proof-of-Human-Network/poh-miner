@@ -1,5 +1,5 @@
 /**
- * PoH Miner Network - Job Queue / Mempool with Geographic Awareness
+ * DAI Miner Network - Job Queue / Mempool with Geographic Awareness
  *
  * This is the "mempool of jobs" the user asked for.
  *

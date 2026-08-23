@@ -1,4 +1,4 @@
-# PoH Miner Network - Windows Installer (PowerShell)
+# DAI Miner Network - Windows Installer (PowerShell)
 # Supports IPFS as primary source + GitHub fallback
 #
 # Usage (recommended):
@@ -15,7 +15,7 @@ $IPFSGateways = @(
 )
 $GITHUB_RAW = "https://raw.githubusercontent.com/poh/poh-miner-network/main"
 
-Write-Host "PoH Miner Network - Windows Setup" -ForegroundColor Cyan
+Write-Host "DAI Miner Network - Windows Setup" -ForegroundColor Cyan
 Write-Host ""
 
 function Download-File {
@@ -46,7 +46,7 @@ function Download-File {
     }
 }
 
-$InstallDir = "$env:USERPROFILE\.poh-miner"
+$InstallDir = "$env:USERPROFILE\.dai-miner"
 New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
 
 # 1. Inference engine — QVAC runs in-process via @qvac/sdk. No Ollama to install,
@@ -60,7 +60,7 @@ Download-File -Path "scripts/easy-start.sh" -Destination "$InstallDir\easy-start
 $Launcher = @"
 @echo off
 cd /d "%~dp0"
-echo Starting PoH Miner...
+echo Starting DAI Miner...
 node src\cli.js start
 pause
 "@

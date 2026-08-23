@@ -1,7 +1,7 @@
 /**
- * PoH Miner Network - Native Reward / Coinbase Model
+ * DAI Miner Network - Native Reward / Coinbase Model
  *
- * Goal: Make POH tokens feel "produced" in blocks, similar to Bitcoin coinbase.
+ * Goal: Make DAI tokens feel "produced" in blocks, similar to Bitcoin coinbase.
  * This is a simplified model for the current JS simulation.
  */
 
@@ -10,7 +10,7 @@ import { estimateTokens } from '../jobs/gas-estimator.js';
 export class RewardOutput {
   constructor({
     id,                    // Unique output id (e.g., `${blockHeight}:${index}`)
-    amount,                // Amount in smallest POH units
+    amount,                // Amount in smallest DAI units
     owner,                 // Wallet or work proof identifier that can claim this
     maturityHeight = 0,    // Block height after which this can be spent (like BTC coinbase)
     workProofHash = null,  // Hash of the useful work that earned this reward
@@ -68,24 +68,24 @@ export class CoinbaseReward {
 }
 
 /**
- * Fixed block reward: exactly 1 POH per block.
- * Internally represented as micro-POH (1 POH = 1_000_000_000 μPOH) so that
+ * Fixed block reward: exactly 1 DAI per block.
+ * Internally represented as micro-DAI (1 DAI = 1_000_000_000 μDAI) so that
  * integer splits don't floor to zero when dividing fractions of 1.
  *
  * Protection: Only high-quality work (validated via validateResultWork)
  * should be allowed to contribute to or benefit from block rewards.
  */
-export const POH_DECIMALS = 1_000_000_000; // 1 POH = 1e9 micro-POH
-export const BLOCK_REWARD_POH = 1; // human-readable display value
-export const BLOCK_REWARD_UPOH = BLOCK_REWARD_POH * POH_DECIMALS; // 1_000_000_000 μPOH
+export const DAI_DECIMALS = 1_000_000_000; // 1 DAI = 1e9 micro-DAI
+export const BLOCK_REWARD_DAI = 1; // human-readable display value
+export const BLOCK_REWARD_UDAI = BLOCK_REWARD_DAI * DAI_DECIMALS; // 1_000_000_000 μDAI
 
 /** Public skill deploy / proposal fee (escrowed for network code audit). */
-export const SKILL_PROPOSE_FEE_POH = 1;
-export const SKILL_PROPOSE_FEE_UPOH = SKILL_PROPOSE_FEE_POH * POH_DECIMALS;
+export const SKILL_PROPOSE_FEE_DAI = 1;
+export const SKILL_PROPOSE_FEE_UDAI = SKILL_PROPOSE_FEE_DAI * DAI_DECIMALS;
 
 /** Community stake required before a proposed skill graduates to active. */
-export const SKILL_GRADUATION_THRESHOLD_POH = 10;
-export const SKILL_GRADUATION_THRESHOLD_UPOH = SKILL_GRADUATION_THRESHOLD_POH * POH_DECIMALS;
+export const SKILL_GRADUATION_THRESHOLD_DAI = 10;
+export const SKILL_GRADUATION_THRESHOLD_UDAI = SKILL_GRADUATION_THRESHOLD_DAI * DAI_DECIMALS;
 
 // ── Reward model v2 ──────────────────────────────────────────────────────────
 // The network's product is AI compute, so the block subsidy should flow to the
@@ -98,9 +98,9 @@ export const SKILL_GRADUATION_THRESHOLD_UPOH = SKILL_GRADUATION_THRESHOLD_POH * 
  *  split among AI workers by delivered compute. */
 export const PROPOSER_CUT = 0.10;
 
-/** A block with no real AI work mints only this small keepalive (not a full POH),
+/** A block with no real AI work mints only this small keepalive (not a full DAI),
  *  so emission tracks demand. */
-export const KEEPALIVE_UPOH = Math.floor(0.05 * POH_DECIMALS);
+export const KEEPALIVE_UDAI = Math.floor(0.05 * DAI_DECIMALS);
 
 /**
  * Height at which reward model v2 activates. Blocks with height <= this validate
@@ -124,7 +124,7 @@ export function workTokens(result) {
 
 /** Legacy (pre-v2) coinbase: 60% proposer / 40% split evenly among workers/peers. */
 function legacyBlockRewards(validWorkSubmissions, blockHeight, activePeers) {
-  const totalNewSupply = BLOCK_REWARD_UPOH;
+  const totalNewSupply = BLOCK_REWARD_UDAI;
   let proposerReward;
   let workerRewards = [];
 
@@ -167,7 +167,7 @@ export function calculateBlockRewards(validWorkSubmissions = [], blockHeight = 0
 
   // ── v2: pay AI workers by delivered compute, tiny proposer cut ──
   if (validWorkSubmissions.length > 0) {
-    const totalNewSupply = BLOCK_REWARD_UPOH;
+    const totalNewSupply = BLOCK_REWARD_UDAI;
     let proposerReward   = Math.floor(totalNewSupply * PROPOSER_CUT);
     const workerPool     = totalNewSupply - proposerReward;
 
@@ -191,7 +191,7 @@ export function calculateBlockRewards(validWorkSubmissions = [], blockHeight = 0
   }
 
   // No real work → mint only a small keepalive (emission tracks demand).
-  const totalNewSupply = KEEPALIVE_UPOH;
+  const totalNewSupply = KEEPALIVE_UDAI;
   if (activePeers.length > 0) {
     let proposerReward = Math.floor(totalNewSupply * PROPOSER_CUT);
     const pool = totalNewSupply - proposerReward;

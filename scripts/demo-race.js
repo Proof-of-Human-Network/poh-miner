@@ -1,15 +1,15 @@
 #!/usr/bin/env node
 /**
- * Demo: Multiple PoH miners racing on the same scan request.
+ * Demo: Multiple DAI miners racing on the same scan request.
  *
  * Run several instances of this (or the real miner-node) to see
  * first-come-first-serve in action.
  */
 
-import { PohMinerNode } from '../src/miner-node.js';
+import { DAIMinerNode } from '../src/miner-node.js';
 
 async function runDemoMiner(name, delayMs) {
-  const node = new PohMinerNode({
+  const node = new DAIMinerNode({
     wallet: `miner-${name}`,
     computeEnabled: true,
   });
@@ -27,7 +27,7 @@ async function runDemoMiner(name, delayMs) {
 }
 
 async function main() {
-  console.log('=== PoH Miner Network - First Come First Serve Demo ===\n');
+  console.log('=== DAI Miner Network - First Come First Serve Demo ===\n');
 
   const minerA = await runDemoMiner('Fast', 600);
   const minerB = await runDemoMiner('Medium', 1400);
@@ -37,7 +37,7 @@ async function main() {
   const request = {
     address: 'bc1qtestminingaddress',
     requesterWallet: 'user-paying-for-scan',
-    fee: 10_000_000, // 10 POH
+    fee: 10_000_000, // 10 DAI
   };
 
   console.log('\n>>> Broadcasting scan request for bc1qtestminingaddress\n');

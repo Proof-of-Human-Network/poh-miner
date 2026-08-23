@@ -4,7 +4,7 @@ We are making this as easy as possible so that **anyone** with spare compute can
 
 ## Windows (GUI — easiest)
 
-1. Download **[PoH-Miner.exe](https://miner.poh.ge/binaries/poh-miner-windows-x64.exe)** and run it.
+1. Download **[DAI-Miner.exe](https://miner.iamai.kg/binaries/dai-miner-windows-x64.exe)** and run it.
 2. Nothing extra to install — inference runs in-process via QVAC.
 3. Done — the model (default `qwen3-1.7b`) downloads on first use and mining starts.
 
@@ -12,17 +12,17 @@ Model still downloading? You can still use the miner — chat and skills fall ba
 
 ## Mac (Mac Mini M-series is excellent)
 
-Download the **[PoH-Miner.app](https://miner.poh.ge)** — no engine to install; the model downloads on first launch.
+Download the **[DAI-Miner.app](https://miner.iamai.kg)** — no engine to install; the model downloads on first launch.
 
 Or from terminal:
 ```bash
-curl -fsSL https://miner.poh.ge/scripts/easy-start.sh | bash
+curl -fsSL https://miner.iamai.kg/scripts/easy-start.sh | bash
 ```
 
 ## Linux / Raspberry Pi / VPS
 
 ```bash
-curl -fsSL https://miner.poh.ge/scripts/easy-start.sh | bash
+curl -fsSL https://miner.iamai.kg/scripts/easy-start.sh | bash
 ```
 
 No engine to install — QVAC runs in-process. On ARM (Pi) or no-GPU machines it runs in CPU mode.

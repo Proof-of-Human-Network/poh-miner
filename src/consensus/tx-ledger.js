@@ -5,16 +5,16 @@
  * Fees are zero-sum (sender → miner) and do not change total supply.
  */
 
-import { PoHTransaction } from '../core/transaction.js';
+import { DAITransaction } from '../core/transaction.js';
 import { Wallet, computeTxFieldsHash } from '../wallet/wallet.js';
 import { ESCROW_ADDRESS } from '../p2p/escrow.js';
 import { normalizeCurrency, isKnownAsset, STABLE_TICKERS } from '../assets.js';
 
 export class TxLedgerState {
   constructor() {
-    /** @type {Map<string, number>} POH balances (μPOH) */
+    /** @type {Map<string, number>} DAI balances (μDAI) */
     this.balances = new Map();
-    /** @type {Map<string, Map<string, number>>} ticker → (address → raw units). Non-POH assets only. */
+    /** @type {Map<string, Map<string, number>>} ticker → (address → raw units). Non-DAI assets only. */
     this.assetBalances = new Map();
     /** @type {Map<string, number>} */
     this.nonces = new Map();
@@ -24,7 +24,7 @@ export class TxLedgerState {
     this.totalMinted = 0;
     /** @type {Map<string, number>} ticker → total raw units minted (genesis allocations only) */
     this.totalMintedAssets = new Map();
-    /** μPOH minted in coinbase but not credited due to historical floor-division splits */
+    /** μDAI minted in coinbase but not credited due to historical floor-division splits */
     this.coinbaseDust = 0;
   }
 
@@ -41,14 +41,14 @@ export class TxLedgerState {
     return copy;
   }
 
-  getBalance(address, currency = 'POH') {
+  getBalance(address, currency = 'DAI') {
     const cur = normalizeCurrency(currency);
-    if (cur === 'POH') return this.balances.get(address) || 0;
+    if (cur === 'DAI') return this.balances.get(address) || 0;
     const m = this.assetBalances.get(cur);
     return m ? (m.get(address) || 0) : 0;
   }
 
-  /** All non-POH holdings for an address: { ticker: rawInt } (only non-zero). */
+  /** All non-DAI holdings for an address: { ticker: rawInt } (only non-zero). */
   getAssetBalances(address) {
     const out = {};
     for (const [t, m] of this.assetBalances) {
@@ -62,10 +62,10 @@ export class TxLedgerState {
     return this.nonces.get(address) || 0;
   }
 
-  _credit(address, amount, currency = 'POH') {
+  _credit(address, amount, currency = 'DAI') {
     if (!address || amount <= 0) return;
     const cur = normalizeCurrency(currency);
-    if (cur === 'POH') {
+    if (cur === 'DAI') {
       this.balances.set(address, (this.balances.get(address) || 0) + amount);
       return;
     }
@@ -74,12 +74,12 @@ export class TxLedgerState {
     m.set(address, (m.get(address) || 0) + amount);
   }
 
-  _debit(address, amount, currency = 'POH') {
+  _debit(address, amount, currency = 'DAI') {
     if (!address || amount <= 0) return true;
     const bal = this.getBalance(address, currency);
     if (bal < amount) return false;
     const cur = normalizeCurrency(currency);
-    if (cur === 'POH') this.balances.set(address, bal - amount);
+    if (cur === 'DAI') this.balances.set(address, bal - amount);
     else this.assetBalances.get(cur).set(address, bal - amount);
     return true;
   }
@@ -112,7 +112,7 @@ export class TxLedgerState {
   validateAndApplyTransaction(txData) {
     let tx;
     try {
-      tx = txData instanceof PoHTransaction ? txData : PoHTransaction.fromJSON(txData);
+      tx = txData instanceof DAITransaction ? txData : DAITransaction.fromJSON(txData);
     } catch {
       return { valid: false, reason: 'malformed transaction' };
     }
@@ -131,7 +131,7 @@ export class TxLedgerState {
     }
 
     const txCur = normalizeCurrency(tx.currency);
-    if (txCur !== 'POH' && !isKnownAsset(txCur)) {
+    if (txCur !== 'DAI' && !isKnownAsset(txCur)) {
       return { valid: false, reason: `unknown currency ${txCur}` };
     }
 
@@ -201,7 +201,7 @@ export class TxLedgerState {
       const bal = Number(a.balance) || 0;
       if (bal > 0) { this._credit(a.address, bal); this.totalMinted += bal; }
       // Per-asset allocations (stablecoin genesis mint to the treasury).
-      // The ONLY place non-POH supply enters the ledger — no runtime mint.
+      // The ONLY place non-DAI supply enters the ledger — no runtime mint.
       if (a.assets && typeof a.assets === 'object') {
         for (const [ticker, rawV] of Object.entries(a.assets)) {
           const v = Number(rawV) || 0;
@@ -246,7 +246,7 @@ export class TxLedgerState {
   _applyTransactionTrusted(txData) {
     let tx;
     try {
-      tx = txData instanceof PoHTransaction ? txData : PoHTransaction.fromJSON(txData);
+      tx = txData instanceof DAITransaction ? txData : DAITransaction.fromJSON(txData);
     } catch {
       return { valid: false, reason: 'malformed transaction' };
     }
@@ -264,25 +264,25 @@ export class TxLedgerState {
   }
 
   applyP2PEscrowTransition(t) {
-    // Legacy transitions carry no baseAsset → POH. New ones set it when non-POH.
+    // Legacy transitions carry no baseAsset → DAI. New ones set it when non-DAI.
     const base = normalizeCurrency(t.baseAsset);
     if (t.type === 'p2p-order-created' && t.side === 'sell' && t.escrowLocked) {
-      if (!this._debit(t.maker, t.pohAmount, base)) return false;
-      this._credit(ESCROW_ADDRESS, t.pohAmount, base);
+      if (!this._debit(t.maker, t.daiAmount, base)) return false;
+      this._credit(ESCROW_ADDRESS, t.daiAmount, base);
     } else if (t.type === 'p2p-order-cancelled' && t.side === 'sell' && t.escrowLocked) {
-      if (!this._debit(ESCROW_ADDRESS, t.pohAmount, base)) return false;
-      this._credit(t.maker, t.pohAmount, base);
+      if (!this._debit(ESCROW_ADDRESS, t.daiAmount, base)) return false;
+      this._credit(t.maker, t.daiAmount, base);
     } else if (t.type === 'p2p-trade-created' && t.orderSide === 'buy') {
-      if (!this._debit(t.taker, t.pohAmount, base)) return false;
-      this._credit(ESCROW_ADDRESS, t.pohAmount, base);
+      if (!this._debit(t.taker, t.daiAmount, base)) return false;
+      this._credit(ESCROW_ADDRESS, t.daiAmount, base);
     } else if (t.type === 'p2p-trade-release') {
-      const totalFromEscrow = t.pohAmount + (t.referralFee || 0);
+      const totalFromEscrow = t.daiAmount + (t.referralFee || 0);
       if (!this._debit(ESCROW_ADDRESS, totalFromEscrow, base)) return false;
-      this._credit(t.recipient, t.pohAmount, base);
+      this._credit(t.recipient, t.daiAmount, base);
       if (t.referralFee > 0 && t.referrer) this._credit(t.referrer, t.referralFee, base);
     } else if (t.type === 'p2p-trade-cancel' && t.escrowLocked) {
-      if (!this._debit(ESCROW_ADDRESS, t.pohAmount, base)) return false;
-      this._credit(t.locker, t.pohAmount, base);
+      if (!this._debit(ESCROW_ADDRESS, t.daiAmount, base)) return false;
+      this._credit(t.locker, t.daiAmount, base);
     } else if (t.type === 'p2p-swap-filled') {
       // Atomic on-chain swap: base leg sits in escrow (locked at order create);
       // quote leg moves taker → maker in the same transition. ALL legs must
@@ -321,10 +321,10 @@ export class TxLedgerState {
    */
   checkSupplyInvariant() {
     const totalBalances = this.totalBalances();
-    const pohOk = totalBalances + this.coinbaseDust === this.totalMinted;
+    const daiOk = totalBalances + this.coinbaseDust === this.totalMinted;
     // Per-asset invariant: stablecoins are minted ONLY in genesis allocations and
     // never enter coinbase, so circulating raw units must equal exactly what was
-    // minted. They are deliberately NOT summed into the POH pot.
+    // minted. They are deliberately NOT summed into the DAI pot.
     const assets = {};
     let assetsOk = true;
     const tickers = new Set([...this.totalMintedAssets.keys(), ...this.assetBalances.keys()]);
@@ -338,7 +338,7 @@ export class TxLedgerState {
       assets[t] = { ok, totalMinted: minted, totalBalances: sum, delta: sum - minted };
     }
     return {
-      ok: pohOk && assetsOk,
+      ok: daiOk && assetsOk,
       totalMinted: this.totalMinted,
       totalBalances,
       coinbaseDust: this.coinbaseDust,

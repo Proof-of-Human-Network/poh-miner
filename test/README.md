@@ -30,7 +30,7 @@ npm run test:integration   # integration tests (requires dev/ checker)
 | Job deduplication | 6 | minedRequestIds, pendingValidResults filter, post-compute drop, proposeBlock guard, populate from block, queue-time dedup |
 | Block integrity | 3 | JSON round-trip, field change changes hash, async == sync hash |
 
-Each test uses isolated temp directories — no interference with `~/.poh-miner`.
+Each test uses isolated temp directories — no interference with `~/.dai-miner`.
 
 ## Integration Tests (`test/integration/`)
 
@@ -53,7 +53,7 @@ import fs from 'fs';
 
 describe('My feature', () => {
   let dir;
-  beforeEach(() => { dir = fs.mkdtempSync(os.tmpdir() + '/poh-test-'); });
+  beforeEach(() => { dir = fs.mkdtempSync(os.tmpdir() + '/dai-test-'); });
   afterEach(() => { fs.rmSync(dir, { recursive: true, force: true }); });
 
   it('does something', async () => {

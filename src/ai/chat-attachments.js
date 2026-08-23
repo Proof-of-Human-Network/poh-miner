@@ -54,7 +54,7 @@ export function classifyAttachment(name, mime) {
 
 /** Directory for staged attachment files (images need real paths for QVAC). */
 export function attachmentsDir() {
-  const dir = path.join(os.homedir(), '.poh-miner', 'chat-attachments');
+  const dir = path.join(os.homedir(), '.dai-miner', 'chat-attachments');
   fs.mkdirSync(dir, { recursive: true });
   return dir;
 }

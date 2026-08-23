@@ -2,10 +2,10 @@ import { describe, it, expect } from 'vitest';
 import { Wallet } from '../src/wallet/wallet.js';
 
 describe('Wallet', () => {
-  it('should generate a valid wallet with poh address', () => {
+  it('should generate a valid wallet with dai address', () => {
     const wallet = Wallet.generate();
     
-    expect(wallet.address).toMatch(/^poh[a-f0-9]{40}$/);
+    expect(wallet.address).toMatch(/^dai[a-f0-9]{40}$/);
     expect(wallet.privateKey).toHaveLength(64);
     expect(wallet.publicKey).toHaveLength(64);
     expect(wallet.balance).toBe(0);
@@ -24,7 +24,7 @@ describe('Wallet', () => {
   it('derives a canonical address from a signing public key', () => {
     const wallet = Wallet.generate();
     const derived = Wallet.deriveAddressFromSigningKey(wallet.signingPublicKey);
-    expect(derived).toMatch(/^poh[a-f0-9]{40}$/);
+    expect(derived).toMatch(/^dai[a-f0-9]{40}$/);
     expect(wallet.address).toBe(derived);
     expect(Wallet.isAddressBoundToSigningKey(wallet.address, wallet.signingPublicKey)).toBe(true);
   });

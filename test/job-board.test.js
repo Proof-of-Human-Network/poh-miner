@@ -21,7 +21,7 @@ describe('JobBoard', () => {
 
   it('claim transitions open → claimed and removes from open list', () => {
     const { jobId } = board.submit({ id: 'j1', type: 'verdict' });
-    const r = board.claim(jobId, 'pohworker1');
+    const r = board.claim(jobId, 'daiworker1');
     expect(r.job.id).toBe(jobId);
     expect(board.listOpen()).toHaveLength(0);
     expect(board.stats()).toMatchObject({ open: 0, claimed: 1 });
@@ -85,12 +85,12 @@ describe('JobBoard', () => {
 
   it('accepts a fee job with payment + budget and carries it to pending-results', () => {
     const r = board.submit({ id: 'f1', type: 'skill', skillId: 'x',
-      requesterAddress: 'pohreq', maxBudget: 1000, paymentTx: { txHash: 'h', signature: 's', nonce: 3 } });
+      requesterAddress: 'daireq', maxBudget: 1000, paymentTx: { txHash: 'h', signature: 's', nonce: 3 } });
     expect(r.jobId).toBe('f1');
     board.claim('f1', 'wkr');
     board.postResult('f1', 'wkr', { type: 'skill', output: 42 });
     const [p] = board.takePendingResults();
-    expect(p).toMatchObject({ jobId: 'f1', worker: 'wkr', jobType: 'skill', requesterAddress: 'pohreq', maxBudget: 1000 });
+    expect(p).toMatchObject({ jobId: 'f1', worker: 'wkr', jobType: 'skill', requesterAddress: 'daireq', maxBudget: 1000 });
     expect(p.paymentTx.nonce).toBe(3);
   });
 

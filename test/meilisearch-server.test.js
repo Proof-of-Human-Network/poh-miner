@@ -33,7 +33,7 @@ describe('meilisearch-server', () => {
   });
 
   it('reads master key from config apiKey', () => {
-    // Isolate from any real ~/.poh-miner/meilisearch-master-key on this machine
+    // Isolate from any real ~/.dai-miner/meilisearch-master-key on this machine
     // (getMeilisearchMasterKey falls back to the persisted file via os.homedir()).
     const fakeHome = fs.mkdtempSync(path.join(os.tmpdir(), 'meili-key-test-'));
     vi.spyOn(os, 'homedir').mockReturnValue(fakeHome);

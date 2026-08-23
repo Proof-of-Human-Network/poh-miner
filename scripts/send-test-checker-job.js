@@ -2,7 +2,7 @@
 /**
  * Send a test "verdict" job (checker request) to ANY running miner.
  *
- * This exercises the real POH checker (runFullCheck + brain + network signals)
+ * This exercises the real DAI checker (runFullCheck + brain + network signals)
  * on a miner that is already running (Electron app, `node start.js`, etc.).
  *
  * Usage:
@@ -18,7 +18,7 @@
 
 import http from 'http';
 
-const targetAddress = process.argv[2] || 'bc1qtestcheckeraddressforpoh';
+const targetAddress = process.argv[2] || 'bc1qtestcheckeraddressfordai';
 let targetArg = process.argv.find(a => a.startsWith('--target='));
 if (!targetArg) {
   const idx = process.argv.indexOf('--target');
@@ -26,7 +26,7 @@ if (!targetArg) {
 }
 const TARGET = targetArg ? targetArg.split('=')[1] : (process.env.TARGET || 'http://localhost:3456');
 
-console.log('\n🧪 PoH Miner - Test Checker Job Sender (Any Miner)\n');
+console.log('\n🧪 DAI Miner - Test Checker Job Sender (Any Miner)\n');
 console.log(`Target address : ${targetAddress}`);
 console.log(`Target miner   : ${TARGET}\n`);
 
@@ -42,7 +42,7 @@ console.log(`# And:  curl ${TARGET.replace(/\/$/, '')}/job/<jobId>/result  (verd
 console.log('');
 
 console.log('Note: If you get {"error":"Not found"}, your running miner is an old version.');
-console.log('      Quit + restart the PoH Miner (Electron or CLI) to load the /test/job handler.\n');
+console.log('      Quit + restart the DAI Miner (Electron or CLI) to load the /test/job handler.\n');
 
 function postJson(url, data) {
   return new Promise((resolve, reject) => {
@@ -107,7 +107,7 @@ async function main() {
     } else if (result.status === 404 && result.data && result.data.error === 'Not found') {
       console.error('\n⚠️  Target miner returned "Not found" for /test/job.');
       console.error('   This usually means the running miner is an older version that doesn\'t have the test endpoint yet.');
-      console.error('   (You need to restart the PoH Miner / Electron app so it loads the updated src/miner-node.js)');
+      console.error('   (You need to restart the DAI Miner / Electron app so it loads the updated src/miner-node.js)');
       throw new Error('endpoint not available');
     } else {
       console.error(`\n❌ Miner returned status ${result.status}`);
@@ -122,9 +122,9 @@ async function main() {
 
       try {
         // Dynamic import so we don't require the module if HTTP succeeded
-        const { PohMinerNode } = await import('../src/miner-node.js');
+        const { DAIMinerNode } = await import('../src/miner-node.js');
 
-        const miner = new PohMinerNode({
+        const miner = new DAIMinerNode({
           wallet: `test-checker-sender-${Date.now().toString(36)}`,
           computeEnabled: true,
           inferenceMode: 'cpu',
@@ -157,7 +157,7 @@ async function main() {
             address: ourResult.address,
             verdict: ourResult.verdict,
             confidence: ourResult.confidence,
-            realPohUsed: ourResult.realPohUsed,
+            realDAIUsed: ourResult.realDAIUsed,
             signalsUsed: ourResult.signalsUsed,
             methodsHash: ourResult.methodsHash,
             computationTimeMs: ourResult.computationTimeMs,

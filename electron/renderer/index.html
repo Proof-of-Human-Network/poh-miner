@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>PoH Miner</title>
+  <title>DAI Miner</title>
   <!-- Tailwind via CDN is used for the onboarding wizard only.
        It produces console warnings + a security notice in dev.
        We can replace this with a proper build or scoped styles later. -->
@@ -222,7 +222,7 @@
     }
     #send-to:focus, #send-amount:focus { border-color: #22c55e; }
     .amount-row { display: flex; align-items: center; gap: 8px; }
-    .poh-unit { font-family: monospace; font-size: 11px; color: #22c55e; }
+    .dai-unit { font-family: monospace; font-size: 11px; color: #22c55e; }
     .quick-btns { display: flex; gap: 6px; margin-top: 8px; }
     .quick-btn {
       padding: 4px 12px; background: #1a1a1a; border: 1px solid #222; border-radius: 3px;
@@ -566,7 +566,7 @@
     .home-balance-label { font-family: monospace; font-size: 9px; letter-spacing: 2px; color: #22c55e; margin-bottom: 12px; }
     .home-balance-row { display: flex; align-items: baseline; gap: 10px; margin-bottom: 4px; }
     .home-balance-num { font-size: 44px; font-weight: 200; color: #fff; font-family: sans-serif; letter-spacing: -1px; }
-    .home-balance-poh { font-family: monospace; font-size: 18px; color: #22c55e; }
+    .home-balance-dai { font-family: monospace; font-size: 18px; color: #22c55e; }
     .home-balance-usd { font-family: monospace; font-size: 11px; color: #4b5563; margin-bottom: 8px; }
     .home-balance-addr { font-family: monospace; font-size: 10px; color: #374151; }
     .home-actions { display: flex; gap: 10px; margin-bottom: 20px; }
@@ -910,7 +910,7 @@
             <div class="w-9 h-9 rounded-full bg-[#22c55e] flex items-center justify-center">
               <span class="text-black font-bold text-2xl">P</span>
             </div>
-            <span class="font-display text-4xl tracking-tight">PoH Miner</span>
+            <span class="font-display text-4xl tracking-tight">DAI Miner</span>
           </div>
           <h1 class="font-display text-5xl leading-none tracking-tighter mb-2">AI Engine Setup</h1>
         </div>
@@ -980,10 +980,10 @@
             <div class="w-9 h-9 rounded-full bg-[#22c55e] flex items-center justify-center">
               <span class="text-black font-bold text-2xl">P</span>
             </div>
-            <span class="font-display text-5xl tracking-tight">PoH Miner</span>
+            <span class="font-display text-5xl tracking-tight">DAI Miner</span>
           </div>
           <h1 class="font-display text-6xl leading-none tracking-tighter mb-3">
-            Welcome to the<br>PoH Miner Network
+            Welcome to the<br>DAI Miner Network
           </h1>
           <p class="text-xl text-zinc-400 max-w-md mx-auto">
             You’re about to run a node that powers decentralized identity.
@@ -998,26 +998,26 @@
         </div>
       </div>
 
-      <!-- Step 1: Create PoH Wallet -->
+      <!-- Step 1: Create DAI Wallet -->
       <div id="step-wallet" class="onboarding-step hidden">
         <div class="max-w-lg mx-auto">
           <div class="mb-8">
-            <h2 class="font-display text-4xl tracking-tight">Create your PoH Wallet</h2>
-            <p class="text-zinc-400 mt-2">This is your identity and reward wallet on the PoH blockchain.</p>
+            <h2 class="font-display text-4xl tracking-tight">Create your DAI Wallet</h2>
+            <p class="text-zinc-400 mt-2">This is your identity and reward wallet on the DAI blockchain.</p>
           </div>
 
           <div id="wallet-creation-ui">
-            <button onclick="createPohWallet()"
+            <button onclick="createDAIWallet()"
                     class="w-full py-4 bg-zinc-900 hover:bg-zinc-800 border border-white/20 rounded-2xl text-lg font-medium transition">
-              Generate New PoH Wallet
+              Generate New DAI Wallet
             </button>
           </div>
 
           <div id="wallet-display" class="hidden">
             <div class="glass rounded-3xl p-6 space-y-5">
               <div>
-                <div class="text-xs uppercase tracking-widest text-zinc-500 mb-1">Your PoH Address</div>
-                <div id="poh-address" class="font-mono text-lg break-all text-[#22c55e]"></div>
+                <div class="text-xs uppercase tracking-widest text-zinc-500 mb-1">Your DAI Address</div>
+                <div id="dai-address" class="font-mono text-lg break-all text-[#22c55e]"></div>
               </div>
 
               <div class="warning-box rounded-2xl p-4">
@@ -1026,7 +1026,7 @@
                   <div class="text-sm">
                     <div class="font-semibold text-red-400 mb-1">Back up your Private Key now.</div>
                     <div class="text-red-300/90 leading-snug">
-                      This key controls your PoH funds and identity. 
+                      This key controls your DAI funds and identity. 
                       It will <span class="font-semibold">never</span> be shown again.
                     </div>
                   </div>
@@ -1035,7 +1035,7 @@
 
               <div>
                 <div class="text-xs uppercase tracking-widest text-zinc-500 mb-1">Private Key</div>
-                <div class="bg-black/60 p-4 rounded-xl font-mono text-sm break-all border border-white/10" id="poh-private-key"></div>
+                <div class="bg-black/60 p-4 rounded-xl font-mono text-sm break-all border border-white/10" id="dai-private-key"></div>
                 <button onclick="copyPrivateKey()" 
                         class="mt-2 text-xs px-3 py-1 bg-white/5 hover:bg-white/10 rounded-lg text-zinc-400 hover:text-white transition">
                   Copy Private Key
@@ -1074,8 +1074,8 @@
           <div class="glass rounded-3xl p-6 space-y-5">
             <div class="text-sm text-zinc-300 leading-relaxed space-y-3">
               <p>
-                <span class="text-white font-medium">POH_WALLET_KEY</span> encrypts your wallet file at
-                <span class="font-mono text-zinc-400">~/.poh-miner/wallets/</span>.
+                <span class="text-white font-medium">DAI_WALLET_KEY</span> encrypts your wallet file at
+                <span class="font-mono text-zinc-400">~/.dai-miner/wallets/</span>.
                 It is <span class="text-white">not</span> the same as your private key.
               </p>
               <ul class="list-disc pl-5 text-zinc-400 space-y-1">
@@ -1095,8 +1095,8 @@
             </div>
 
             <div>
-              <div class="text-xs uppercase tracking-widest text-zinc-500 mb-1">POH_WALLET_KEY</div>
-              <div class="bg-black/60 p-4 rounded-xl font-mono text-sm break-all border border-white/10" id="poh-wallet-key">Generating…</div>
+              <div class="text-xs uppercase tracking-widest text-zinc-500 mb-1">DAI_WALLET_KEY</div>
+              <div class="bg-black/60 p-4 rounded-xl font-mono text-sm break-all border border-white/10" id="dai-wallet-key">Generating…</div>
               <button onclick="copyWalletBackupKey()"
                       class="mt-2 text-xs px-3 py-1 bg-white/5 hover:bg-white/10 rounded-lg text-zinc-400 hover:text-white transition">
                 Copy Wallet Encryption Key
@@ -1376,13 +1376,13 @@
       <div class="sidebar-section-label" data-i18n="sidebar.node_status">NODE STATUS</div>
 
       <div class="sb-field">
-        <div class="sb-label" data-i18n="sidebar.poh_wallet">POH WALLET</div>
-        <div class="sb-val" id="poh-wallet-address">Loading...</div>
+        <div class="sb-label" data-i18n="sidebar.dai_wallet">DAI WALLET</div>
+        <div class="sb-val" id="dai-wallet-address">Loading...</div>
       </div>
 
       <div class="sb-field">
         <div class="sb-label" data-i18n="sidebar.balance">BALANCE</div>
-        <div class="sb-val lg grn" id="poh-wallet-balance">0 POH</div>
+        <div class="sb-val lg grn" id="dai-wallet-balance">0 DAI</div>
       </div>
 
       <div class="sb-field">
@@ -1444,7 +1444,7 @@
             <div class="home-balance-label" data-i18n="home.balance">AVAILABLE BALANCE</div>
             <div class="home-balance-row">
               <span class="home-balance-num" id="home-balance-num">—</span>
-              <span class="home-balance-poh">POH</span>
+              <span class="home-balance-dai">DAI</span>
             </div>
             <div class="home-balance-usd" id="home-balance-usd">≈ — USD</div>
             <!-- Stablecoin holdings — one row per non-zero asset (αιGEL ₾, αιKGS…) -->
@@ -1502,7 +1502,7 @@
         </div>
         <div class="budget-row" id="chat-budget-row" style="padding:0 4px 4px;flex-direction:column;align-items:stretch;gap:6px;">
           <div class="budget-label" style="display:flex;align-items:center;gap:8px;">
-            <span data-i18n="chat.budget">Request budget:</span> <span id="chat-budget-display">1 kPOH</span>
+            <span data-i18n="chat.budget">Request budget:</span> <span id="chat-budget-display">1 kDAI</span>
             <select id="chat-fee-currency" onchange="onFeeCurrencyChange(this.value)"
                     title="Currency the job fee is paid in — the miner receives exactly this currency"
                     style="margin-left:auto;max-width:110px;"></select>
@@ -1554,11 +1554,11 @@
             <div class="send-field">
               <label data-i18n="send.from">FROM</label>
               <div class="send-from-box" id="send-from-addr">Loading…</div>
-              <div class="send-balance-hint"><span data-i18n="send.balance">Balance:</span> <span id="send-balance">0 POH</span></div>
+              <div class="send-balance-hint"><span data-i18n="send.balance">Balance:</span> <span id="send-balance">0 DAI</span></div>
             </div>
             <div class="send-field">
               <label data-i18n="send.to">TO</label>
-              <input id="send-to" type="text" placeholder="Recipient PoH address (poh…)" data-i18n-placeholder="send.placeholder_to" oninput="updateSendSummary()" />
+              <input id="send-to" type="text" placeholder="Recipient DAI address (dai…)" data-i18n-placeholder="send.placeholder_to" oninput="updateSendSummary()" />
             </div>
             <div class="send-field">
               <label data-i18n="send.asset">ASSET</label>
@@ -1569,7 +1569,7 @@
               <label data-i18n="send.amount">AMOUNT</label>
               <div class="amount-display-box">
                 <div class="amount-display-num" id="amount-display">0.00</div>
-                <div class="amount-display-unit" id="amount-display-unit">POH</div>
+                <div class="amount-display-unit" id="amount-display-unit">DAI</div>
               </div>
               <input id="send-amount" type="number" placeholder="0.00" min="0" step="0.01"
                      style="width:100%;background:#111;border:1px solid #252525;border-radius:4px;color:#e5e7eb;font-size:12px;font-family:monospace;padding:9px 12px;outline:none;box-sizing:border-box;margin-bottom:8px;"
@@ -1670,7 +1670,7 @@
               </div>
               <div id="skill-detail-stake-info" style="font-size:11px;color:#555;"></div>
               <div style="display:flex;gap:6px;align-items:center;">
-                <input id="skill-stake-amount" type="number" min="1" step="1" placeholder="POH amount"
+                <input id="skill-stake-amount" type="number" min="1" step="1" placeholder="DAI amount"
                        style="flex:1;background:#111;border:1px solid #252525;border-radius:4px;color:#e5e7eb;font-size:12px;padding:6px 8px;outline:none;min-width:0;" />
                 <button onclick="stakeSkill()" style="background:#22c55e;color:#000;border:none;padding:6px 14px;border-radius:4px;font-weight:600;cursor:pointer;font-size:12px;white-space:nowrap;" data-i18n="skills.stake_btn">Stake</button>
                 <button onclick="unstakeSkill()" style="background:#111;color:#888;border:1px solid #252525;padding:6px 10px;border-radius:4px;cursor:pointer;font-size:12px;white-space:nowrap;" data-i18n="skills.unstake_btn">Unstake</button>
@@ -1681,7 +1681,7 @@
 
           <!-- Submit view -->
           <div id="skills-submit-view" style="display:none;flex-direction:column;gap:0.75rem;">
-            <div style="font-size:11px;color:#d97706;background:#1a1206;border:1px solid #3a2a0a;border-radius:4px;padding:8px 10px;" data-i18n="skills.cost_warn">Proposing a public skill costs 1 POH deducted from your wallet.</div>
+            <div style="font-size:11px;color:#d97706;background:#1a1206;border:1px solid #3a2a0a;border-radius:4px;padding:8px 10px;" data-i18n="skills.cost_warn">Proposing a public skill costs 1 DAI deducted from your wallet.</div>
             <div style="font-size:10px;color:#444;letter-spacing:0.1em;" data-i18n="skills.id_lbl">SKILL ID</div>
             <input id="skill-id-input" type="text" placeholder="e.g. arena_social_activity"
                    style="background:#111;border:1px solid #252525;border-radius:4px;color:#e5e7eb;font-size:12px;padding:8px 10px;outline:none;width:100%;box-sizing:border-box;" />
@@ -1694,7 +1694,7 @@
             <div style="font-size:10px;color:#444;letter-spacing:0.1em;" data-i18n="skills.ctx_lbl">SKILL.md CONTEXT</div>
             <textarea id="skill-context-input" placeholder="# Skill context for the brain..." rows="5"
                       style="background:#111;border:1px solid #252525;border-radius:4px;color:#e5e7eb;font-size:11px;font-family:monospace;padding:8px 10px;outline:none;width:100%;box-sizing:border-box;resize:vertical;"></textarea>
-            <button onclick="submitSkill()" style="background:#22c55e;color:#000;border:none;padding:10px;border-radius:4px;font-weight:600;cursor:pointer;font-size:12px;" data-i18n="skills.submit_cost">Submit (1 POH)</button>
+            <button onclick="submitSkill()" style="background:#22c55e;color:#000;border:none;padding:10px;border-radius:4px;font-weight:600;cursor:pointer;font-size:12px;" data-i18n="skills.submit_cost">Submit (1 DAI)</button>
             <div id="skill-submit-result" style="font-size:11px;color:#22c55e;display:none;"></div>
           </div>
         </div>
@@ -1714,7 +1714,7 @@
           </div>
 
           <!-- Order book label -->
-          <div style="margin:0 12px 6px;padding:7px;font-size:11px;font-family:monospace;background:#166534;color:#22c55e;font-weight:600;border-radius:6px;text-align:center;">BUY POH — Select a seller below</div>
+          <div style="margin:0 12px 6px;padding:7px;font-size:11px;font-family:monospace;background:#166534;color:#22c55e;font-weight:600;border-radius:6px;text-align:center;">BUY DAI — Select a seller below</div>
 
           <!-- Currency filter -->
           <div id="p2p-currency-pills" style="display:flex;gap:4px;padding:0 12px 6px;flex-wrap:wrap;"></div>
@@ -1743,7 +1743,7 @@
           <div style="padding:0 12px 12px;display:flex;flex-direction:column;gap:10px;">
             <!-- Side: sell only -->
             <div style="padding:7px 10px;font-size:11px;font-family:monospace;background:#7f1d1d22;color:#fca5a5;border-radius:6px;border:1px solid #7f1d1d44;" id="p2p-create-hint">
-              You offer an asset for sale — it is locked in escrow. Off-chain payment: buyer pays, you release. On-chain payment (POH/stablecoin): the swap settles atomically, no confirmation step.
+              You offer an asset for sale — it is locked in escrow. Off-chain payment: buyer pays, you release. On-chain payment (DAI/stablecoin): the swap settles atomically, no confirmation step.
             </div>
             <!-- Asset being sold -->
             <div>
@@ -1755,7 +1755,7 @@
             </div>
             <!-- Base Amount -->
             <div>
-              <div style="font-size:10px;color:#444;margin-bottom:4px;letter-spacing:0.1em;" id="p2p-form-amount-label">POH AMOUNT</div>
+              <div style="font-size:10px;color:#444;margin-bottom:4px;letter-spacing:0.1em;" id="p2p-form-amount-label">DAI AMOUNT</div>
               <input id="p2p-form-amount" type="number" min="0.001" step="0.001" placeholder="e.g. 10"
                      style="width:100%;background:#111;border:1px solid #252525;border-radius:4px;color:#e5e7eb;font-size:12px;font-family:monospace;padding:8px 10px;outline:none;box-sizing:border-box;" />
             </div>
@@ -1766,9 +1766,9 @@
                       style="width:100%;background:#111;border:1px solid #252525;border-radius:4px;color:#e5e7eb;font-size:12px;font-family:monospace;padding:8px 10px;outline:none;box-sizing:border-box;">
               </select>
             </div>
-            <!-- Price per POH -->
+            <!-- Price per DAI -->
             <div>
-              <div style="font-size:10px;color:#444;margin-bottom:4px;letter-spacing:0.1em;">PRICE PER POH</div>
+              <div style="font-size:10px;color:#444;margin-bottom:4px;letter-spacing:0.1em;">PRICE PER DAI</div>
               <input id="p2p-form-price" type="number" min="0" step="any" placeholder="e.g. 0.01"
                      style="width:100%;background:#111;border:1px solid #252525;border-radius:4px;color:#e5e7eb;font-size:12px;font-family:monospace;padding:8px 10px;outline:none;box-sizing:border-box;" />
             </div>
@@ -1882,10 +1882,10 @@
 
           <!-- GENERAL -->
           <div class="settings-subpage active" id="settings-sub-general">
-            <!-- PoH Address -->
+            <!-- DAI Address -->
             <div>
-              <div style="font-size:10px;color:#666;letter-spacing:0.1em;margin-bottom:4px;text-transform:uppercase;" data-i18n="settings.poh_addr">PoH Address</div>
-              <div id="settings-poh-address" style="font-family:monospace;font-size:11px;word-break:break-all;background:#0a0a0a;border:1px solid #1a1a1a;border-radius:6px;padding:10px;color:#9ca3af;min-height:32px;"></div>
+              <div style="font-size:10px;color:#666;letter-spacing:0.1em;margin-bottom:4px;text-transform:uppercase;" data-i18n="settings.dai_addr">DAI Address</div>
+              <div id="settings-dai-address" style="font-family:monospace;font-size:11px;word-break:break-all;background:#0a0a0a;border:1px solid #1a1a1a;border-radius:6px;padding:10px;color:#9ca3af;min-height:32px;"></div>
             </div>
 
             <!-- Solana Identity -->

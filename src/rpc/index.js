@@ -1,5 +1,5 @@
 /**
- * PoH Miner - RPC Module Public API
+ * DAI Miner - RPC Module Public API
  *
  * This is the main entry point for both the miner and the Electron GUI.
  */

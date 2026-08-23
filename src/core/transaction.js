@@ -1,5 +1,5 @@
 /**
- * PoH Formal Transaction — account-model with nonces.
+ * DAI Formal Transaction — account-model with nonces.
  *
  * Double-spend protection in an account model requires:
  *   1. Nonces  — each account has a monotonically increasing tx counter.
@@ -19,19 +19,19 @@
 import crypto from 'crypto';
 import { Wallet } from '../wallet/wallet.js';
 
-export class PoHTransaction {
+export class DAITransaction {
   constructor({ from, to, amount, fee = 0, nonce, timestamp, memo = '', currency, txHash, signature, signingPublicKey }) {
     this.from      = from;
     this.to        = to;
-    this.amount    = amount;   // raw units of `currency` (μPOH when POH)
+    this.amount    = amount;   // raw units of `currency` (μDAI when DAI)
     this.fee       = fee;      // raw units of `currency`, paid to block proposer
     this.nonce     = nonce;    // sender's account nonce at submission time
     this.timestamp = timestamp || Date.now();
     this.memo      = memo;
-    // Asset ticker. POH (or absent) means the native asset; normalized so the
-    // field NEVER appears as 'POH' explicitly — it is simply omitted, keeping
+    // Asset ticker. DAI (or absent) means the native asset; normalized so the
+    // field NEVER appears as 'DAI' explicitly — it is simply omitted, keeping
     // every historical tx hash and signature byte-identical.
-    this.currency  = (currency && currency !== 'POH') ? currency : undefined;
+    this.currency  = (currency && currency !== 'DAI') ? currency : undefined;
     this.signature        = signature || null;
     this.signingPublicKey = signingPublicKey || null;
     this.txHash = txHash || this._computeHash();
@@ -40,7 +40,7 @@ export class PoHTransaction {
   _computeHash() {
     // KEEP IN SYNC with computeTxFieldsHash (src/wallet/wallet.js), the mobile
     // wallet signer and SDK signers. `currency` enters the preimage ONLY when
-    // non-POH (appended after memo) — legacy POH txs hash exactly as before.
+    // non-DAI (appended after memo) — legacy DAI txs hash exactly as before.
     const payload = JSON.stringify({
       from: this.from,
       to: this.to,
@@ -74,7 +74,7 @@ export class PoHTransaction {
   toJSON() { return { ...this }; }
 
   static fromJSON(data) {
-    return new PoHTransaction(data);
+    return new DAITransaction(data);
   }
 }
 
@@ -93,26 +93,26 @@ export class TxMempool {
     // per-wallet cache files, keeping submit validation consistent with what
     // /api/wallet/balance and /nonce report.
     this.getLedger = getLedger;
-    this.txs = new Map();            // txHash → PoHTransaction
+    this.txs = new Map();            // txHash → DAITransaction
     // "address:currency" → total raw units locked in mempool. Per-asset keying so
-    // a pending aiGEL send never locks the sender's POH (and vice versa).
+    // a pending aiGEL send never locks the sender's DAI (and vice versa).
     this.pendingOut = new Map();
     this.accountPendingNonce = new Map(); // address → highest pending nonce
     this.spentTxHashes = new Set();  // txHashes already mined on canonical chain
   }
 
-  static _cur(tx) { return tx.currency || 'POH'; }
-  static _lockKey(address, currency) { return `${address}:${currency || 'POH'}`; }
+  static _cur(tx) { return tx.currency || 'DAI'; }
+  static _lockKey(address, currency) { return `${address}:${currency || 'DAI'}`; }
 
   _confirmedNonce(address) {
     const ledger = this.getLedger?.();
     return ledger ? ledger.getNonce(address) : this.walletManager.getNonce(address);
   }
 
-  _confirmedBalance(address, currency = 'POH') {
+  _confirmedBalance(address, currency = 'DAI') {
     const ledger = this.getLedger?.();
     if (ledger) return ledger.getBalance(address, currency);
-    return currency === 'POH'
+    return currency === 'DAI'
       ? this.walletManager.getBalance(address)
       : this.walletManager.getAssetBalance(address, currency);
   }
@@ -150,7 +150,7 @@ export class TxMempool {
 
   // Returns true and adds to pool, or returns { error } string on rejection.
   submit(tx) {
-    if (!(tx instanceof PoHTransaction)) tx = PoHTransaction.fromJSON(tx);
+    if (!(tx instanceof DAITransaction)) tx = DAITransaction.fromJSON(tx);
 
     if (this.spentTxHashes.has(tx.txHash)) return { error: 'tx already mined' };
     if (this.txs.has(tx.txHash)) return { error: 'duplicate tx' };

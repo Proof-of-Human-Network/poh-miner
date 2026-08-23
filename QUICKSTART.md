@@ -1,9 +1,9 @@
-# PoH Miner Network - Quick Start for Bitcoin Miners
+# DAI Miner Network - Quick Start for Bitcoin Miners
 
-This is the **base layer** software you run to participate in the decentralized Proof-of-Work network that powers POH.
+This is the **base layer** software you run to participate in the decentralized Proof-of-Work network that powers DAI.
 
 ## What You Earn
-- POH for the AI work your node completes — each block's reward is split among workers **weighted by the compute they delivered** (plus a small cut to the block proposer)
+- DAI for the AI work your node completes — each block's reward is split among workers **weighted by the compute they delivered** (plus a small cut to the block proposer)
 - The per-job **fee** (paid by the requester) on every `skill`/`compute` job your node answers
 - Idle blocks (no jobs) mint only a small keepalive, so rewards follow real demand
 
@@ -15,8 +15,8 @@ This is the **base layer** software you run to participate in the decentralized 
 ## Run It
 
 ```bash
-git clone <repo> poh-miner-network
-cd poh-miner-network
+git clone <repo> dai-miner-network
+cd dai-miner-network
 
 # Easiest for developers / after fresh clone:
 cp config.example.json config.json
@@ -28,17 +28,17 @@ npm start
 
 Alternative (global config, same as installed users):
 ```bash
-poh-miner init
-# Then edit ~/.poh-miner/config.json (or the local one created)
+dai-miner init
+# Then edit ~/.dai-miner/config.json (or the local one created)
 ```
 
 The node will:
-1. Sync the PoH chain
-2. Advertise that it can compute verdicts using the real POH brain
+1. Sync the DAI chain
+2. Advertise that it can compute verdicts using the real DAI brain
 3. Compete on incoming scan requests
 4. Attempt to produce blocks
 
-## Integration with Existing POH App
+## Integration with Existing DAI App
 
 The old `dev/` folder becomes the **workload**.
 When this miner node receives a scan request, it will (in the near future) directly call the existing `checker` and `brain` code instead of simulating it.

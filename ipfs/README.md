@@ -1,6 +1,6 @@
 # IPFS Distribution
 
-This directory contains the latest CIDs for the PoH Miner Network distribution.
+This directory contains the latest CIDs for the DAI Miner Network distribution.
 
 ## Files
 
@@ -35,10 +35,10 @@ Use the helper script:
 
 See the "Ready to contribute real compute?" section on the landing page (published to your server or via IPFS landing/index.html). Direct links:
 
-- https://ipfs.io/ipfs/$(cat ipfs/binaries.txt)/binaries/poh-miner-linux-x64.deb
-- .../poh-miner-linux-x64.AppImage
-- .../poh-miner-macos-arm64
-- .../poh-miner-windows-x64.exe
+- https://ipfs.io/ipfs/$(cat ipfs/binaries.txt)/binaries/dai-miner-linux-x64.deb
+- .../dai-miner-linux-x64.AppImage
+- .../dai-miner-macos-arm64
+- .../dai-miner-windows-x64.exe
 
 ### Manual
 

@@ -11,8 +11,8 @@
 import {
   calculateBlockRewards,
   workTokens,
-  BLOCK_REWARD_UPOH,
-  KEEPALIVE_UPOH,
+  BLOCK_REWARD_UDAI,
+  KEEPALIVE_UDAI,
   PROPOSER_CUT,
   REWARD_V2_HEIGHT,
 } from '../rewards/reward.js';
@@ -62,10 +62,10 @@ function compareWorkers(actual, expected) {
 
 // ── Legacy (pre-v2) rule — kept verbatim so historical blocks stay valid ──
 function validateLegacy(block, coinbase, workSubmissions, proposer, sum) {
-  if (coinbase.totalNewSupply !== BLOCK_REWARD_UPOH) {
+  if (coinbase.totalNewSupply !== BLOCK_REWARD_UDAI) {
     return { valid: false, reason: `invalid totalNewSupply (${coinbase.totalNewSupply})` };
   }
-  if (sum > BLOCK_REWARD_UPOH) {
+  if (sum > BLOCK_REWARD_UDAI) {
     return { valid: false, reason: 'coinbase exceeds block reward' };
   }
 
@@ -93,14 +93,14 @@ function validateLegacy(block, coinbase, workSubmissions, proposer, sum) {
 
   const workers = coinbase.workerRewards || [];
   if (workers.length === 0) {
-    if (proposer > BLOCK_REWARD_UPOH) {
+    if (proposer > BLOCK_REWARD_UDAI) {
       return { valid: false, reason: 'empty block proposer reward exceeds block reward' };
     }
     return { valid: true };
   }
 
-  const expectedProposer = Math.floor(BLOCK_REWARD_UPOH * 0.6);
-  const perWorker = Math.floor((BLOCK_REWARD_UPOH * 0.4) / workers.length);
+  const expectedProposer = Math.floor(BLOCK_REWARD_UDAI * 0.6);
+  const perWorker = Math.floor((BLOCK_REWARD_UDAI * 0.4) / workers.length);
   if (proposer !== expectedProposer) {
     return { valid: false, reason: 'keepalive proposer share invalid' };
   }
@@ -122,10 +122,10 @@ function validateLegacy(block, coinbase, workSubmissions, proposer, sum) {
 function validateV2(block, coinbase, workSubmissions, proposer, sum) {
   // Real AI work present → full block reward, split by delivered compute.
   if (workSubmissions.length > 0) {
-    if (coinbase.totalNewSupply !== BLOCK_REWARD_UPOH) {
-      return { valid: false, reason: `v2 work-block totalNewSupply must be ${BLOCK_REWARD_UPOH}` };
+    if (coinbase.totalNewSupply !== BLOCK_REWARD_UDAI) {
+      return { valid: false, reason: `v2 work-block totalNewSupply must be ${BLOCK_REWARD_UDAI}` };
     }
-    if (sum > BLOCK_REWARD_UPOH) {
+    if (sum > BLOCK_REWARD_UDAI) {
       return { valid: false, reason: 'coinbase exceeds block reward' };
     }
     const expected = calculateBlockRewards(workSubmissions, block.height, []);
@@ -138,21 +138,21 @@ function validateV2(block, coinbase, workSubmissions, proposer, sum) {
   }
 
   // No real work → only a small keepalive is minted (emission tracks demand).
-  if (coinbase.totalNewSupply !== KEEPALIVE_UPOH) {
-    return { valid: false, reason: `v2 idle-block totalNewSupply must be ${KEEPALIVE_UPOH}` };
+  if (coinbase.totalNewSupply !== KEEPALIVE_UDAI) {
+    return { valid: false, reason: `v2 idle-block totalNewSupply must be ${KEEPALIVE_UDAI}` };
   }
-  if (sum > KEEPALIVE_UPOH) {
+  if (sum > KEEPALIVE_UDAI) {
     return { valid: false, reason: 'keepalive exceeds cap' };
   }
   const workers = coinbase.workerRewards || [];
   if (workers.length === 0) {
-    if (proposer > KEEPALIVE_UPOH) {
+    if (proposer > KEEPALIVE_UDAI) {
       return { valid: false, reason: 'idle proposer reward exceeds keepalive' };
     }
     return { valid: true };
   }
-  const expectedProposer = Math.floor(KEEPALIVE_UPOH * PROPOSER_CUT);
-  const pool = KEEPALIVE_UPOH - expectedProposer;
+  const expectedProposer = Math.floor(KEEPALIVE_UDAI * PROPOSER_CUT);
+  const pool = KEEPALIVE_UDAI - expectedProposer;
   const perWorker = Math.floor(pool / workers.length);
   if (proposer > expectedProposer) {
     return { valid: false, reason: 'keepalive proposer share invalid' };

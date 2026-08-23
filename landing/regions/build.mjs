@@ -31,6 +31,9 @@ for (const c of COUNTRIES) {
     const l = L(lang, c);
     const sfx = lang === 'en' ? '' : `.${lang}`;
     out(`${c.cc}/memorandum${sfx}.html`, buildDoc(c, l));
+    if (lang === 'en' && c.cc === 'kg') {
+      out(`${c.cc}/memorandum.en.html`, buildDoc(c, l));
+    }
     for (const [key, fn] of Object.entries(DECKS)) {
       out(`${c.cc}/deck-${key}${sfx}.html`, fn(c, l));
     }

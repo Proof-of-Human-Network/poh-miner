@@ -1,7 +1,7 @@
 {
-  "name": "poh-miner",
+  "name": "dai-miner",
   "version": "0.4.22",
-  "description": "Run the PoH Miner Network. Earn POH by contributing compute (great on Mac Mini, PCs, servers).",
+  "description": "Run the DAI Miner Network. Earn DAI by contributing compute (great on Mac Mini, PCs, servers).",
   "author": {
     "name": "Bogdan Sizov",
     "email": "sizov.workingbox@gmail.com"
@@ -9,7 +9,7 @@
   "type": "module",
   "main": "electron/main.cjs",
   "bin": {
-    "poh-miner": "src/cli.js"
+    "dai-miner": "src/cli.js"
   },
   "pkg": {
     "assets": [
@@ -37,8 +37,8 @@
     "serve:landing": "node scripts/serve-landing.js",
     "start:landing-chat": "node scripts/landing-chat-proxy.js",
     "start:node": "node src/miner-node.js",
-    "start:bootnode": "node src/bootnode.js --port 8080 --bind=127.0.0.1 --data-dir ~/.poh-bootnode --peer=http://localhost:3456",
-    "start:bootnode:local": "node src/bootnode.js --port 8080 --bind=127.0.0.1 --data-dir ~/.poh-bootnode --peer=http://localhost:3456 --allow-local-hosts",
+    "start:bootnode": "node src/bootnode.js --port 8080 --bind=127.0.0.1 --data-dir ~/.dai-bootnode --peer=http://localhost:3456",
+    "start:bootnode:local": "node src/bootnode.js --port 8080 --bind=127.0.0.1 --data-dir ~/.dai-bootnode --peer=http://localhost:3456 --allow-local-hosts",
     "test:job": "node scripts/submit-test-job.js",
     "build:bin": "pkg . --compress GZip",
     "build:deb": "bash scripts/build-deb.sh",
@@ -57,8 +57,8 @@
   "keywords": [
     "proof-of-work",
     "decentralized-ai",
-    "poh",
-    "proof-of-human",
+    "dai",
+    "decentralized-artificial-intelligence",
     "mac-mini",
     "apple-silicon",
     "useful-compute"
@@ -89,8 +89,8 @@
     "@qvac/sdk": "^0.16.0"
   },
   "build": {
-    "appId": "ge.proofofhuman.pohminer",
-    "productName": "PoH-Miner",
+    "appId": "kg.iamai.daiminer",
+    "productName": "DAI-Miner",
     "directories": {
       "output": "dist/electron"
     },
@@ -103,7 +103,7 @@
       "!qvac/**/*",
       "!config.json",
       "!landing/binaries/**/*",
-      "!.poh-miner/**/*",
+      "!.dai-miner/**/*",
       "!dist/**/*",
       "!node_modules/@qvac/bci-whispercpp/prebuilds/**/*",
       "!node_modules/@qvac/classification-ggml/prebuilds/**/*",
@@ -125,7 +125,7 @@
     ],
     "mac": {
       "category": "public.app-category.utilities",
-      "icon": "assets/icons/poh-miner-1024.png",
+      "icon": "assets/icons/dai-miner-1024.png",
       "identity": null,
       "target": [
         {
@@ -144,7 +144,7 @@
       ]
     },
     "win": {
-      "icon": "assets/icons/poh-miner.ico",
+      "icon": "assets/icons/dai-miner.ico",
       "target": [
         {
           "target": "nsis",

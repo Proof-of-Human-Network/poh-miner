@@ -2,7 +2,7 @@
 #
 # deploy-bootnode.sh
 #
-# Deploys the PoH Bootnode to the production server (miner.poh.ge)
+# Deploys the DAI Bootnode to the production server (miner.iamai.kg)
 #
 # SSH alias: hk (217.60.38.159)
 #
@@ -19,9 +19,9 @@ set -e
 
 REMOTE_HOST="exchange"
 REMOTE_HOST_IP="95.182.101.171"
-REMOTE_DIR="/opt/poh-bootnode"
-DATA_DIR="/var/lib/poh-bootnode"
-SERVICE_NAME="poh-bootnode"
+REMOTE_DIR="/opt/dai-bootnode"
+DATA_DIR="/var/lib/dai-bootnode"
+SERVICE_NAME="dai-bootnode"
 
 LOCAL_SRC_DIR="."
 
@@ -61,7 +61,7 @@ else
     RSYNC_SSH_CMD="ssh"
 fi
 
-echo "🚀 Deploying PoH Bootnode to $REMOTE_HOST ($REMOTE_HOST_IP)"
+echo "🚀 Deploying DAI Bootnode to $REMOTE_HOST ($REMOTE_HOST_IP)"
 echo "   Target directory: $REMOTE_DIR"
 echo ""
 
@@ -92,8 +92,8 @@ echo "📦 Syncing bootnode source files..."
 # Safety check: make sure we are in the correct local directory
 if [ ! -f "src/bootnode.js" ]; then
     echo "❌ Error: src/bootnode.js not found in current directory."
-    echo "   You must run this script from the 'poh-miner-network' folder on your laptop."
-    echo "   Example: cd ~/Desktop/poh/miner/poh-miner-network && ./scripts/deploy-bootnode.sh"
+    echo "   You must run this script from the 'dai-miner-network' folder on your laptop."
+    echo "   Example: cd ~/Desktop/dai/miner/dai-miner-network && ./scripts/deploy-bootnode.sh"
     exit 1
 fi
 
@@ -139,8 +139,8 @@ $SSH_CMD "$REMOTE_HOST" bash << 'REMOTE_EOF'
 set -e
 
 # Create data directory
-sudo mkdir -p /var/lib/poh-bootnode
-sudo chown -R $USER:$USER /var/lib/poh-bootnode
+sudo mkdir -p /var/lib/dai-bootnode
+sudo chown -R $USER:$USER /var/lib/dai-bootnode
 
 # Install Node.js if not present (Ubuntu/Debian)
 if ! command -v node >/dev/null 2>&1; then
@@ -152,21 +152,21 @@ fi
 echo "Node version: $(node --version)"
 
 # Create systemd service
-sudo tee /etc/systemd/system/poh-bootnode.service > /dev/null << 'SERVICE_EOF'
+sudo tee /etc/systemd/system/dai-bootnode.service > /dev/null << 'SERVICE_EOF'
 [Unit]
-Description=PoH Miner Network Bootnode
+Description=DAI Miner Network Bootnode
 After=network.target
 
 [Service]
 Type=simple
 User=root
-WorkingDirectory=/opt/poh-bootnode
-ExecStart=/usr/bin/node src/bootnode.js --port 8080 --bind=127.0.0.1 --data-dir /var/lib/poh-bootnode
+WorkingDirectory=/opt/dai-bootnode
+ExecStart=/usr/bin/node src/bootnode.js --port 8080 --bind=127.0.0.1 --data-dir /var/lib/dai-bootnode
 Restart=always
 RestartSec=10
 StandardOutput=journal
 StandardError=journal
-SyslogIdentifier=poh-bootnode
+SyslogIdentifier=dai-bootnode
 
 # Security
 NoNewPrivileges=true
@@ -178,20 +178,20 @@ SERVICE_EOF
 
 # Reload systemd and enable service
 sudo systemctl daemon-reload
-sudo systemctl enable poh-bootnode.service
+sudo systemctl enable dai-bootnode.service
 
 echo "✅ Systemd service installed and enabled"
 REMOTE_EOF
 
 echo ""
 echo "🔄 Restarting bootnode service on remote..."
-$SSH_CMD "$REMOTE_HOST" "sudo systemctl daemon-reload && sudo systemctl restart poh-bootnode.service && sleep 2 && sudo systemctl status poh-bootnode.service --no-pager"
+$SSH_CMD "$REMOTE_HOST" "sudo systemctl daemon-reload && sudo systemctl restart dai-bootnode.service && sleep 2 && sudo systemctl status dai-bootnode.service --no-pager"
 
 echo ""
 echo "🔧 Deploying Nginx config for bootnode..."
 
 # Copy nginx config + snippets to the server
-if [ -f "nginx/sites-available/miner.poh.ge.conf" ]; then
+if [ -f "nginx/sites-available/miner.iamai.kg.conf" ]; then
     echo "   Copying nginx config and snippets..."
 
     # Copy snippets
@@ -205,29 +205,29 @@ if [ -f "nginx/sites-available/miner.poh.ge.conf" ]; then
 
     # Copy main config
     $RSYNC_SSH_CMD -o StrictHostKeyChecking=accept-new \
-        nginx/sites-available/miner.poh.ge.conf \
-        "$REMOTE_HOST:/tmp/miner.poh.ge.conf"
+        nginx/sites-available/miner.iamai.kg.conf \
+        "$REMOTE_HOST:/tmp/miner.iamai.kg.conf"
 
-    $SSH_CMD "$REMOTE_HOST" 'sudo mv /tmp/miner.poh.ge.conf /etc/nginx/sites-available/ && \
-        sudo ln -sf /etc/nginx/sites-available/miner.poh.ge.conf /etc/nginx/sites-enabled/ && \
+    $SSH_CMD "$REMOTE_HOST" 'sudo mv /tmp/miner.iamai.kg.conf /etc/nginx/sites-available/ && \
+        sudo ln -sf /etc/nginx/sites-available/miner.iamai.kg.conf /etc/nginx/sites-enabled/ && \
         nginx -t && sudo systemctl reload nginx'
 
-    echo "✅ Nginx config + snippets deployed and enabled for miner.poh.ge"
+    echo "✅ Nginx config + snippets deployed and enabled for miner.iamai.kg"
 else
-    echo "⚠️  nginx/sites-available/miner.poh.ge.conf not found locally. Skipping nginx deployment."
+    echo "⚠️  nginx/sites-available/miner.iamai.kg.conf not found locally. Skipping nginx deployment."
 fi
 
 echo ""
 echo "✅ Bootnode + Nginx config deployed successfully!"
 echo ""
 echo "Next steps:"
-echo "  1. Check bootnode logs:   ssh hk 'sudo journalctl -u poh-bootnode -f'"
+echo "  1. Check bootnode logs:   ssh hk 'sudo journalctl -u dai-bootnode -f'"
 echo "  2. Check nginx status:    ssh hk 'sudo nginx -t && sudo systemctl reload nginx'"
-echo "  3. Test the endpoint:     curl -I https://miner.poh.ge/chain/tip"
+echo "  3. Test the endpoint:     curl -I https://miner.iamai.kg/chain/tip"
 echo "  4. Nodes register (protected): miners now POST /register with signature proof; GET /peers shows verified nodes + ports for direct /job verdict queries"
 echo ""
 echo "If you haven't obtained the SSL certificate yet, run on the server:"
-echo "  ssh hk 'sudo certbot --nginx -d miner.poh.ge'"
+echo "  ssh hk 'sudo certbot --nginx -d miner.iamai.kg'"
 
 # Security: clear password from environment
 unset SSH_PASSWORD SSHPASS 2>/dev/null || true

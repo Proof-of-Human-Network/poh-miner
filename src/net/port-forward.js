@@ -151,7 +151,7 @@ async function findIgdService() {
   return null;
 }
 
-async function upnpMap(port, { ttlSeconds = 3600, description = 'PoH Miner' } = {}) {
+async function upnpMap(port, { ttlSeconds = 3600, description = 'DAI Miner' } = {}) {
   const svc = await findIgdService();
   if (!svc) return { ok: false, method: 'upnp', reason: 'no IGD found' };
   const internal = localIPv4();

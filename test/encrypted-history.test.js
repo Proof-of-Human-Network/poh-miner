@@ -6,7 +6,7 @@ import {
 
 // Simulate an encrypted public job as it would sit on-chain: the job-submitted
 // transition carries promptCipher (no cleartext), the result carries replyCipher.
-const REQ = 'pohreq1111111111111111111111111111111111';
+const REQ = 'daireq1111111111111111111111111111111111';
 const kp = deriveEncryptionKeypair('requester-signing-key');
 
 function encryptedChain() {
@@ -20,7 +20,7 @@ function encryptedChain() {
       model: 'qwen3-1.7b', timestamp: 1000,
     }],
     scanResults: [{
-      requestId: 'j1', verdict: 'COMPUTE_RESULT', minerWallet: 'pohminer',
+      requestId: 'j1', verdict: 'COMPUTE_RESULT', minerWallet: 'daiminer',
       profile: { computeOutput: null, encrypted: true, replyCipher: seal(kp.publicKeyB64, 'the secret answer'), model: 'qwen3-1.7b' },
     }],
   }];

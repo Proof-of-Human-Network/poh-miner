@@ -68,7 +68,7 @@ patchFile('bare-runtime/lib/spawn.js', {
   applied: (src) => src.includes('app.asar.unpacked'),
   anchor: '  const bin = runtime(referrer, opts)',
   replacement:
-    '  // PoH patch: Electron cannot spawn a binary at an app.asar virtual path\n' +
+    '  // DAI patch: Electron cannot spawn a binary at an app.asar virtual path\n' +
     "  // (only execFile is asar-aware); asarUnpack ships the real file under\n" +
     '  // app.asar.unpacked, so point the spawn there.\n' +
     "  const bin = runtime(referrer, opts).replace(/\\bapp\\.asar(?=[\\\\/])/, 'app.asar.unpacked')",
@@ -80,7 +80,7 @@ patchFile('@qvac/sdk/dist/client/rpc/node-rpc-client.js', {
   anchor: '            if (bareWorkerProc) {\n',
   replacement:
     '            if (bareWorkerProc) {\n' +
-    '                // PoH patch: a failed spawn (e.g. ENOENT) is reported via the\n' +
+    '                // DAI patch: a failed spawn (e.g. ENOENT) is reported via the\n' +
     '                // async "error" event; without a listener it becomes an\n' +
     '                // uncaught exception that kills the Electron main process.\n' +
     '                bareWorkerProc.on("error", (error) => {\n' +

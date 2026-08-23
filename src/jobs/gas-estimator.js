@@ -1,6 +1,6 @@
-// Per-currency price per AI token, in RAW units of that currency. POH: 1 μPOH
-// per token (unchanged, μPOH is the floor unit — a separate economy from the
-// stables). Stablecoin rates are FIXED per currency, never derived from POH.
+// Per-currency price per AI token, in RAW units of that currency. DAI: 1 μDAI
+// per token (unchanged, μDAI is the floor unit — a separate economy from the
+// stables). Stablecoin rates are FIXED per currency, never derived from DAI.
 //
 // Anchor: USD_PER_1M_TOKENS ($0.05 per million AI tokens paid to miners),
 // converted at each currency's fx rate:
@@ -13,7 +13,7 @@
 // whatever was escrowed in exactly the currency paid.
 export const USD_PER_1M_TOKENS = 0.05;
 export const GAS_PRICES = {
-  POH:   1,          // μPOH / token
+  DAI:   1,          // μDAI / token
   aiGEL: 1.35e-5,    // ₾0.135 / 1M tokens (fx 2.7)
   KGST:  4.35e-4,    // 4.35 som / 1M tokens (fx 87)
   aiETB: 6.4e-4,     // Br 6.40 / 1M tokens (fx 128)
@@ -21,15 +21,15 @@ export const GAS_PRICES = {
 };
 
 /** Effective per-token gas price for a currency, honouring config.gasPrices overrides. */
-export function gasPriceFor(currency = 'POH', config = {}) {
-  const cur = (!currency || currency === 'POH') ? 'POH' : currency;
+export function gasPriceFor(currency = 'DAI', config = {}) {
+  const cur = (!currency || currency === 'DAI') ? 'DAI' : currency;
   const o = config && config.gasPrices;
   if (o && typeof o[cur] === 'number' && o[cur] > 0) return o[cur];
-  return GAS_PRICES[cur] ?? GAS_PRICES.POH;
+  return GAS_PRICES[cur] ?? GAS_PRICES.DAI;
 }
 
 /** Minimum acceptable fee for a token count in a currency (floors at 1 raw unit). */
-export function feeFor(tokens, currency = 'POH', config = {}) {
+export function feeFor(tokens, currency = 'DAI', config = {}) {
   return Math.max(1, Math.ceil(Math.max(0, tokens) * gasPriceFor(currency, config)));
 }
 
@@ -39,12 +39,12 @@ export const GAS = {
   TOKENS_PER_CHAIN:    120,
   OUTPUT_TOKENS:       350,
   OUTPUT_CAP:         2048,       // default ceiling on reserved output tokens for a chat estimate
-  DEFAULT_GAS_PRICE:   1,          // μPOH per AI compute token (1 POH = 1e9 tokens).
-                                   // μPOH is the smallest unit, so this is the price floor.
+  DEFAULT_GAS_PRICE:   1,          // μDAI per AI compute token (1 DAI = 1e9 tokens).
+                                   // μDAI is the smallest unit, so this is the price floor.
   TIMEOUT_RESERVE_PCT: 0.05,      // 5% of maxBudget kept on timeout
 
   // Hard ceilings on how far a big budget can stretch the OUTPUT length. Spare
-  // uPOH buys more output tokens (see outputTokenCap) — but only up to here.
+  // uDAI buys more output tokens (see outputTokenCap) — but only up to here.
   // Two reasons it must be bounded, not "budget ÷ price" unbounded:
   //   1. Context window: total tokens (prompt + output) can't exceed the model's
   //      ctx (QVAC_CTX_SIZE, default 8192). Overshooting truncates or corrupts.
@@ -94,7 +94,7 @@ export function estimateChatTokens(promptTokens, maxOutputTokens, cap = GAS.OUTP
 // Generation must stop at this count (see qvac hardTokenCap) — there is no refund
 // path and no over-charge path, so a job can never consume more than it paid for.
 //
-// Spare uPOH stretches this cap, but it is bounded by the context window and a
+// Spare uDAI stretches this cap, but it is bounded by the context window and a
 // quality ceiling (GAS.OUTPUT_HARD_MAX): beyond that a longer cap only degrades
 // the reply, so extra budget buys queue priority, not more tokens. The requester
 // still pays the full bid (no refund) — this only bounds generation length.

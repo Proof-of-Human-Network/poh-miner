@@ -1,10 +1,10 @@
 /**
- * Integration test helpers for PoH Miner Network.
+ * Integration test helpers for DAI Miner Network.
  * These helpers are designed to spin up real miner instances
- * that use the actual POH checker/brain.
+ * that use the actual DAI checker/brain.
  */
 
-import { PohMinerNode } from '../../src/miner-node.js';
+import { DAIMinerNode } from '../../src/miner-node.js';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs';
@@ -12,12 +12,12 @@ import fs from 'fs';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 /**
- * Checks if the real POH dev environment is available.
+ * Checks if the real DAI dev environment is available.
  * This is required for "full miner with checker" tests.
  */
-export function hasRealPohChecker() {
+export function hasRealDAIChecker() {
   try {
-    // The real-poh adapter tries to load from here
+    // The real-dai adapter tries to load from here
     const devPath = path.resolve(__dirname, '../../../../dev/src/routes/checker.js');
     return fs.existsSync(devPath);
   } catch {
@@ -41,11 +41,11 @@ export async function startTestMiner(options = {}) {
     ...extraConfig
   } = options;
 
-  const miner = new PohMinerNode({
+  const miner = new DAIMinerNode({
     wallet,
     computeEnabled,
     inferenceMode,
-    // Force use of real POH path when possible
+    // Force use of real DAI path when possible
     ...extraConfig,
   });
 
@@ -111,9 +111,9 @@ export function waitForRealResult(miner, timeoutMs = 45000) {
   return new Promise((resolve, reject) => {
     const start = Date.now();
     const interval = setInterval(() => {
-      // Look in submissionHistory or recent activity for realPohUsed === true
+      // Look in submissionHistory or recent activity for realDAIUsed === true
       const history = miner.submissionHistory || [];
-      const realResult = history.find(r => r.realPohUsed === true);
+      const realResult = history.find(r => r.realDAIUsed === true);
 
       if (realResult) {
         clearInterval(interval);
@@ -122,7 +122,7 @@ export function waitForRealResult(miner, timeoutMs = 45000) {
 
       if (Date.now() - start > timeoutMs) {
         clearInterval(interval);
-        reject(new Error('Timed out waiting for real POH computation result'));
+        reject(new Error('Timed out waiting for real DAI computation result'));
       }
     }, 300);
   });

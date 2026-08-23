@@ -19,7 +19,7 @@ function h(m){
 }
 `;
 
-const serverPath = path.join(os.tmpdir(), `poh-mcp-mock-${Date.now()}.mjs`);
+const serverPath = path.join(os.tmpdir(), `dai-mcp-mock-${Date.now()}.mjs`);
 fs.writeFileSync(serverPath, SERVER_SRC);
 
 describe('McpManager', () => {

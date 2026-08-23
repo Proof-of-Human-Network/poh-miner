@@ -7,7 +7,7 @@ const REFERRAL_FEE_BPS = 30; // 0.3% per completed trade
 
 export class ReferralStore {
   constructor(dataDir) {
-    const dir = dataDir || path.join(os.homedir(), '.poh-miner', 'p2p');
+    const dir = dataDir || path.join(os.homedir(), '.dai-miner', 'p2p');
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
     this.file = path.join(dir, 'referrals.json');
     this.data = this._load();
@@ -55,9 +55,9 @@ export class ReferralStore {
     return this.data.referred[address] || null;
   }
 
-  // Compute and record referral fee; returns µPOH credited (0 if no referrer or below min)
-  creditFee(referrer, pohAmount) {
-    const fee = Math.floor((pohAmount * REFERRAL_FEE_BPS) / 10000);
+  // Compute and record referral fee; returns µDAI credited (0 if no referrer or below min)
+  creditFee(referrer, daiAmount) {
+    const fee = Math.floor((daiAmount * REFERRAL_FEE_BPS) / 10000);
     if (fee <= 0) return 0;
     this._recordFeeStats(referrer, fee);
     return fee;

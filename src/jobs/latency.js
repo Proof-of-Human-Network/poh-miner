@@ -1,5 +1,5 @@
 /**
- * Latency & Geographic utilities for the PoH Miner Network
+ * Latency & Geographic utilities for the DAI Miner Network
  *
  * Miners use this to understand their position in the world
  * relative to incoming jobs.

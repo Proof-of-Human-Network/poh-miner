@@ -1,4 +1,4 @@
-# PoH Miner Network
+# DAI Miner Network
 
 Decentralized compute layer for Artificial Intelligence, AI-agents, automations and robotics. Decentralized, encrypted, anonymous AI. 
 
@@ -8,7 +8,7 @@ Decentralized compute layer for Artificial Intelligence, AI-agents, automations 
 
 ### GUI (recommended for non-technical users)
 
-Download the latest `.deb` / `.AppImage` / Windows installer from [miner.poh.ge](https://miner.poh.ge).
+Download the latest `.deb` / `.AppImage` / Windows installer from [miner.iamai.kg](https://miner.iamai.kg).
 
 Inference runs in-process via **QVAC** (the `@qvac/sdk` dependency) — there's no
 separate engine to install. On first launch the model (default `qwen3-1.7b`) is
@@ -35,7 +35,7 @@ npm start
 ### Docker
 
 ```bash
-docker run -v ~/.poh-miner:/root/.poh-miner ghcr.io/poh/miner:latest
+docker run -v ~/.dai-miner:/root/.dai-miner ghcr.io/dai/miner:latest
 ```
 
 ---
@@ -44,28 +44,28 @@ docker run -v ~/.poh-miner:/root/.poh-miner ghcr.io/poh/miner:latest
 
 Config file is loaded from the first location that exists (in order):
 
-1. `POH_CONFIG` env var (full path)
+1. `DAI_CONFIG` env var (full path)
 2. `./config.json` (project root — convenient after `git clone`)
-3. `./.poh-miner/config.json`
-4. `<script-dir>/.poh-miner/config.json`
-5. `~/.poh-miner/config.json`
+3. `./.dai-miner/config.json`
+4. `<script-dir>/.dai-miner/config.json`
+5. `~/.dai-miner/config.json`
 
 Minimal example:
 
 ```json
 {
-  "bootnodes": ["https://miner.poh.ge"],
+  "bootnodes": ["https://miner.iamai.kg"],
   "inferenceMode": "auto",
   "model": "qwen3-1.7b",
   "walletApiPort": 3456
 }
 ```
 
-The miner creates a PoH wallet automatically on first run and stores it in `~/.poh-miner/wallets/`. To use an existing wallet, set `pohWallet` to its PoH address.
+The miner creates a DAI wallet automatically on first run and stores it in `~/.dai-miner/wallets/`. To use an existing wallet, set `daiWallet` to its DAI address.
 
 | Field | Default | Description |
 |---|---|---|
-| `pohWallet` | auto-created | PoH address that earns rewards (created on first run if not set) |
+| `daiWallet` | auto-created | DAI address that earns rewards (created on first run if not set) |
 | `bootnodes` | production bootnode | Peer discovery + chain sync entry points |
 | `inferenceMode` | `auto` | `cpu` / `gpu` / `auto` |
 | `model` | `qwen3-1.7b` | QVAC model id/alias (`qwen3-0.6b`…`qwen3-8b`) or a GGUF URL |
@@ -82,12 +82,12 @@ RPC endpoints can be configured per-chain under the `rpc` key — see `config.ex
 
 ```
 ┌──────────────────────────────────────────────────────────────────┐
-│                   App Layer  (poh.ge)                   │
+│                   App Layer  (iamai.kg)                   │
 │   Frontend  ·  Profiles  ·  Voting  ·  Feedback        │
 └───────────────────────────┬──────────────────────────────────────┘
                             │  submits scan jobs  ▼  reads results
 ┌───────────────────────────▼──────────────────────────────────────┐
-│                    PoH Miner Network  (this repo)                │
+│                    DAI Miner Network  (this repo)                │
 │                                                                  │
 │   ┌──────────────┐  P2P gossip (blocks, txs, status)            │
 │   │  Miner Node  │◄────────────────────────────►  Miner Node   │
@@ -95,7 +95,7 @@ RPC endpoints can be configured per-chain under the `rpc` key — see `config.ex
 │   │ • PoW mining │  ← race to compute first valid verdict →    │
 │   │ • LLM brain  │                                              │
 │   │ • Skills     │  ← publish/run on-demand agent logic →      │
-│   │ • P2P market │  ← peer-to-peer POH/fiat exchange →         │
+│   │ • P2P market │  ← peer-to-peer DAI/fiat exchange →         │
 │   │ • Chain sync │  ← bootnode for peer discovery / catch-up → │
 │   │ • Wallet API │                                              │
 │   └──────────────┘                                              │
@@ -111,8 +111,8 @@ Each block contains:
 - `height`, `previousHash`, `timestamp`, `minerWallet`
 - `scanResults[]` — mined job results (verdict scans, skill outputs, compute replies): `requestId`, `verdict`, `profile`, `reasoning`, `minerWallet`, signature
 - `stateTransitions[]` — on-chain state deltas applied by this block: `job-submitted` (public job queue metadata + `promptPreview`), escrow, brain updates, `brain-state-root`
-- `transactions[]` — signed POH token transfers with nonces
-- `coinbaseReward` — up to 1 POH per block, paid to the nodes that did the AI work. **Reward model v2** (active above `REWARD_V2_HEIGHT` in `src/rewards/reward.js`): if compute work exists, the proposer keeps a small `PROPOSER_CUT` (~10%) and the rest is split among workers **weighted by delivered compute** (a deterministic token estimate, so splitting into many identities earns nothing extra); a block with no real work mints only a small keepalive (`KEEPALIVE_UPOH`), not a full POH, so emission tracks demand. Blocks at/below the flag-day boundary keep the legacy 60/40 split (history stays valid). Amounts are consensus-recomputed by every node in `src/consensus/coinbase-validator.js` — gossiped amounts are never trusted.
+- `transactions[]` — signed DAI token transfers with nonces
+- `coinbaseReward` — up to 1 DAI per block, paid to the nodes that did the AI work. **Reward model v2** (active above `REWARD_V2_HEIGHT` in `src/rewards/reward.js`): if compute work exists, the proposer keeps a small `PROPOSER_CUT` (~10%) and the rest is split among workers **weighted by delivered compute** (a deterministic token estimate, so splitting into many identities earns nothing extra); a block with no real work mints only a small keepalive (`KEEPALIVE_UDAI`), not a full DAI, so emission tracks demand. Blocks at/below the flag-day boundary keep the legacy 60/40 split (history stays valid). Amounts are consensus-recomputed by every node in `src/consensus/coinbase-validator.js` — gossiped amounts are never trusted.
 - `nonce`, `difficulty`, `chainWork` — PoW fields (chainWork is cumulative hex bigint)
 - `stateRoot` — SHA-256 of sorted `{address, balance, nonce}` at this height
 - `brainStateRoot` — SHA-256 of `weights.json` + `pools.json` at this height
@@ -128,7 +128,7 @@ Each block contains:
 | Pending transactions | P2P gossip `new-tx` |
 | Node status (methodsHash, region, load) | P2P gossip `node-status` |
 | Chain history (cold start) | HTTP pull from bootnode `/chain/blocks` + IPFS snapshot fallback |
-| Verified signals (canonical set + hash) | HTTP from poh.ge + IPFS fallback |
+| Verified signals (canonical set + hash) | HTTP from iamai.kg + IPFS fallback |
 | Brain feedback events | Peer-to-peer push + bootnode `/brain/events` |
 | Signal weight updates | Same as brain feedback |
 | Peer records (host:port) | Bootnode `/peers` + IPFS peer directory |
@@ -152,7 +152,7 @@ Each block contains:
 
 ## Wallet API (port 3456 by default)
 
-Every miner exposes an HTTP API for the mobile wallet and external tools. Amounts are in **μPOH** (1 POH = 1 000 000 000 μPOH).
+Every miner exposes an HTTP API for the mobile wallet and external tools. Amounts are in **μDAI** (1 DAI = 1 000 000 000 μDAI).
 
 ### Chain & Wallet
 
@@ -160,15 +160,15 @@ Every miner exposes an HTTP API for the mobile wallet and external tools. Amount
 |---|---|
 | `GET /status` | Node status, chain height, reputation |
 | `GET /api/miner/info` | Detailed miner info (version, uptime, peers) |
-| `GET /api/wallet/balance?address=<addr>` | Balance in μPOH + `assets` map of stablecoin holdings (`{ aiGEL: { raw, display } }`) |
-| `GET /api/assets` | On-chain asset registry: POH + the 5 stablecoins (tickers, decimals, display names, per-currency gas prices) |
+| `GET /api/wallet/balance?address=<addr>` | Balance in μDAI + `assets` map of stablecoin holdings (`{ aiGEL: { raw, display } }`) |
+| `GET /api/assets` | On-chain asset registry: DAI + the 5 stablecoins (tickers, decimals, display names, per-currency gas prices) |
 | `GET /api/wallet/nonce?address=<addr>` | Current nonce for transaction signing |
 | `GET /api/wallet/transactions?address=<addr>` | Transaction history |
 | `GET /api/wallet/history?address=<addr>` | Full history with block confirmations |
 | `GET /api/wallet/jobs?address=<addr>&limit=20` | Public job history for a wallet — joins `job-submitted` transitions with mined `scanResults`; returns `{jobs, latestSkillMemory, chatTurns}` |
-| `POST /api/wallet/send` | Transfer POH (`{from, to, amount, privateKey}`) |
+| `POST /api/wallet/send` | Transfer DAI (`{from, to, amount, privateKey}`) |
 | `POST /api/wallet/register-key` | Register an ed25519 signing key for an address |
-| `POST /api/tx/submit` | Submit a pre-signed `PoHTransaction` |
+| `POST /api/tx/submit` | Submit a pre-signed `DAITransaction` |
 | `GET /api/tx/pending` | Inspect mempool |
 
 
@@ -191,11 +191,11 @@ Browse the local chain from the Electron **Explorer** tab or via HTTP:
 | `GET /api/explorer/block/:height` | Full block JSON (`scanResults`, `stateTransitions`, `transactions`, hash, miner, reward) |
 | `GET /api/explorer/search?q=<query>` | Lookup by block height, tx/block hash, or wallet address |
 
-Address search returns balance, recent POH transfers, and **completed jobs** for that wallet. Block detail shows **completed jobs in block** (from `scanResults`) and any **job submissions** (`job-submitted` transitions not yet mined in the same block).
+Address search returns balance, recent DAI transfers, and **completed jobs** for that wallet. Block detail shows **completed jobs in block** (from `scanResults`) and any **job submissions** (`job-submitted` transitions not yet mined in the same block).
 
 ### Chat history search (Meilisearch — bundled, auto-starts)
 
-**Meilisearch is mandatory** and starts automatically with every miner node (like the model download). On first run the binary is downloaded to `~/.poh-miner/bin/meilisearch`; data lives in `~/.poh-miner/meilisearch-data`. If port 7700 is already in use (e.g. your own Docker container), the node reuses that instance.
+**Meilisearch is mandatory** and starts automatically with every miner node (like the model download). On first run the binary is downloaded to `~/.dai-miner/bin/meilisearch`; data lives in `~/.dai-miner/meilisearch-data`. If port 7700 is already in use (e.g. your own Docker container), the node reuses that instance.
 
 As you type in **Chat**, the miner searches indexed blockchain job history (`promptPreview`, replies, skill outputs) and suggests past questions. Repetitive prompts can return a cached on-chain reply without re-running compute.
 
@@ -208,7 +208,7 @@ As you type in **Chat**, the miner searches indexed blockchain job history (`pro
 
 `POST /chat/ask` also checks history automatically (similarity ≥ 0.86) and may return `{ fromChainHistory: true }`.
 
-**Indexing:** On startup, each new block, and when jobs complete. NDJSON mirror: `~/.poh-miner/search/chat-history.ndjson`.
+**Indexing:** On startup, each new block, and when jobs complete. NDJSON mirror: `~/.dai-miner/search/chat-history.ndjson`.
 
 ```json
 "meilisearch": {
@@ -216,36 +216,36 @@ As you type in **Chat**, the miner searches indexed blockchain job history (`pro
   "autoStart": true,
   "port": 7700,
   "bindHost": "127.0.0.1",
-  "indexJobs": "poh-chat-history"
+  "indexJobs": "dai-chat-history"
 }
 ```
 
 Meilisearch listens on **localhost only**; expose search to the network via `walletApiPort` (default 3456) with `localOnly: false`.
 
-The mobile **PoH Wallet** app uses the same APIs on any connected miner (`Ask AI` tab).
+The mobile **DAI Wallet** app uses the same APIs on any connected miner (`Ask AI` tab).
 
 ### Stablecoins (multi-currency)
 
-The chain carries four regional stablecoins alongside POH — `aiGEL`, `KGST`,
-`aiETB`, `aiBTN`. They use **2 decimals** (1 aiGEL = 100 raw units); POH keeps 9
-(1 POH = 1e9 μPOH). Supply is minted once in the genesis allocation to the
+The chain carries four regional stablecoins alongside DAI — `aiGEL`, `KGST`,
+`aiETB`, `aiBTN`. They use **2 decimals** (1 aiGEL = 100 raw units); DAI keeps 9
+(1 DAI = 1e9 μDAI). Supply is minted once in the genesis allocation to the
 treasury address — there is no runtime mint; future supply changes are network
 upgrades.
 
-On-chain currencies: **POH**, **aiGEL**, **KGST**, **aiETB**, **aiBTN**.
+On-chain currencies: **DAI**, **aiGEL**, **KGST**, **aiETB**, **aiBTN**.
 P2P market also supports: **USDT**, **USDC**, **GELT** (off-chain).
 
 - **Transfers**: `POST /api/wallet/send` and `/api/tx/submit` accept a
-  `currency` field (omit for POH). A transaction's hash includes `currency`
-  ONLY when non-POH, so every historical POH tx/signature stays valid.
+  `currency` field (omit for DAI). A transaction's hash includes `currency`
+  ONLY when non-DAI, so every historical DAI tx/signature stays valid.
 - **Job fees**: any job payload may set `currency` — the fee floor is priced
   per currency (`config.gasPrices` overridable) and **the miner receives
   exactly the currency paid** (no conversion). The signed payment proof binds
-  the currency (6th key of the payment hash when non-POH).
+  the currency (6th key of the payment hash when non-DAI).
 - **P2P**: on-chain stablecoins are tradable base assets. When both legs are
   on-chain (e.g. KGST/aiGEL) the trade settles **atomically** in one
   `p2p-swap-filled` transition — no payment-sent step, proceeds go directly to
-  the taker's own poh address (no receival-wallet input). Off-chain legs (bank
+  the taker's own dai address (no receival-wallet input). Off-chain legs (bank
   transfer, USDT…) keep the manual escrow/release flow.
 
 ### Jobs (scan requests, skills, compute)
@@ -259,26 +259,26 @@ P2P market also supports: **USDT**, **USDC**, **GELT** (off-chain).
 | `POST /gossip` | Receive P2P gossip envelopes from peers |
 
 `skill` and `compute` jobs always require a fee (`maxBudget > 0`, in raw units
-of the job's `currency` — μPOH for POH, the default) and a
+of the job's `currency` — μDAI for DAI, the default) and a
 signed payment proof — the node rejects the request outright (the job never
 runs) unless it includes a valid Ed25519 signature, from a key already
 registered via `POST /api/wallet/register-key`, over a hash binding the
 payment to that exact `jobId` + this node's wallet + `maxBudget` + the
 requester's current nonce (`GET /api/wallet/nonce`). This debits the
-requester's POH balance and pays the miner network; there is no unverified
+requester's DAI balance and pays the miner network; there is no unverified
 fallback for these job types. `verdict` jobs may optionally carry the same
 `maxBudget`/`paymentTx` fields, but a fee isn't required for them (the
 default identity scan / LLM chat is free).
 
 **Pricing (gas).** Paid jobs are metered per AI compute token at
-`gasPrice` **μPOH per token** — default **1 μPOH/token** (μPOH is the smallest
-unit, so this is the price floor). Since `1 POH = 1e9 μPOH`, **1 POH buys up to
+`gasPrice` **μDAI per token** — default **1 μDAI/token** (μDAI is the smallest
+unit, so this is the price floor). Since `1 DAI = 1e9 μDAI`, **1 DAI buys up to
 1,000,000,000 tokens**. The fee is `tokensUsed × gasPrice` and **can never be
-less than the tokens the job actually used** (e.g. 1,000 tokens ⇒ ≥ 1,000 μPOH);
+less than the tokens the job actually used** (e.g. 1,000 tokens ⇒ ≥ 1,000 μDAI);
 unused budget is refunded. A job whose `maxBudget` can't cover its token cost is
 rejected up front with `402 FEE_TOO_LOW`.
 
-**POH price.** POH has no fixed or oracle price — the only reference is the best
+**DAI price.** DAI has no fixed or oracle price — the only reference is the best
 open P2P order. `GET /api/p2p/price[?quoteCurrency=USDT-TRC20]` returns the
 market price (best bid/ask/mid) derived solely from live P2P orders.
 
@@ -291,7 +291,7 @@ A `compute` job looks like:
   "dataset": "some-org/some-dataset",
   "payload": { "prompt": "Summarize the top 5 rows" },
   "maxBudget": 500000000,
-  "requesterAddress": "poh...",
+  "requesterAddress": "dai...",
   "paymentTx": { "txHash": "...", "signature": "..." }
 }
 ```
@@ -301,16 +301,16 @@ The SDKs build and sign `paymentTx` for you — see `runCompute()` /
 
 ### Skills
 
-Skills are on-demand agent modules that extend what miners can compute. Builtin skills include `poh_identity`, `read_farcaster`, `read_zora`, `read_paragraph`, `code_audit`, and `web_search`.
+Skills are on-demand agent modules that extend what miners can compute. Builtin skills include `dai_identity`, `read_farcaster`, `read_zora`, `read_paragraph`, `code_audit`, and `web_search`.
 
-**Economics:** deploy a public skill for **1 POH** (escrowed for network `code_audit`); the community stakes toward a **10 POH** graduation threshold before the skill goes live on all nodes.
+**Economics:** deploy a public skill for **1 DAI** (escrowed for network `code_audit`); the community stakes toward a **10 DAI** graduation threshold before the skill goes live on all nodes.
 
 | Endpoint | Description |
 |---|---|
-| `GET /api/skills` | List available skills with context summaries and `economics` (`proposeFeePoh`, `graduationThresholdPoh`) |
+| `GET /api/skills` | List available skills with context summaries and `economics` (`proposeFeeDai`, `graduationThresholdDai`) |
 | `GET /api/skills/prefs` | Skill staking preferences for an address |
-| `POST /api/skills/propose` | Propose a new skill `{manifest, code, private}` — **1 POH** for public proposals |
-| `POST /api/skills/:id/stake` | Stake POH toward graduation (**10 POH** total activates the skill) |
+| `POST /api/skills/propose` | Propose a new skill `{manifest, code, private}` — **1 DAI** for public proposals |
+| `POST /api/skills/:id/stake` | Stake DAI toward graduation (**10 DAI** total activates the skill) |
 
 ### Chat & Skill Routing
 
@@ -334,7 +334,7 @@ Skills are on-demand agent modules that extend what miners can compute. Builtin 
 
 ### P2P Exchange
 
-Peer-to-peer POH trading with on-chain escrow. Orders are matched locally; escrow is settled on the PoH chain.
+Peer-to-peer DAI trading with on-chain escrow. Orders are matched locally; escrow is settled on the DAI chain.
 
 | Endpoint | Description |
 |---|---|
@@ -371,7 +371,7 @@ Miners automatically pin data to IPFS and share CIDs via the bootnode.
 | Own peer record (host:port signed) | After every bootnode registration | `selfPeer` |
 | Peer directory (all known peers) | Bootnode pins every 60 s after changes | `peers` |
 
-CIDs are cached locally in `~/.poh-miner/ipfs_cid_cache.json`. If every bootnode is unreachable at startup, the node uses cached CIDs to discover peers from IPFS and to pull chain snapshots for catch-up — not just for peer discovery.
+CIDs are cached locally in `~/.dai-miner/ipfs_cid_cache.json`. If every bootnode is unreachable at startup, the node uses cached CIDs to discover peers from IPFS and to pull chain snapshots for catch-up — not just for peer discovery.
 
 Configure a pinning service via env vars:
 
@@ -402,7 +402,7 @@ POST /ipfs/update       (miners push new CIDs)
 Running your own bootnode:
 
 ```bash
-node src/bootnode.js --port 8080 --data-dir ~/.poh-bootnode
+node src/bootnode.js --port 8080 --data-dir ~/.dai-bootnode
 ```
 
 ---
@@ -445,7 +445,7 @@ binary is missing.
 **Model download fails at startup**
 QVAC downloads the model in-process on first run and retries automatically. If it
 can't finish (slow/unstable connection), just restart the miner — the download
-resumes. You can also pick a smaller model in `~/.poh-miner/config.json`:
+resumes. You can also pick a smaller model in `~/.dai-miner/config.json`:
 
 ```json
 { "model": "qwen3-0.6b" }
@@ -482,12 +482,12 @@ src/
   consensus/      pow.js, chain-selection.js
   network/        p2p-gossip.js
   signals/        methods-manager.js (canonical signal set sync)
-  compute/        poh-adapter.js → delegates to dev/src checker + brain
+  compute/        dai-adapter.js → delegates to dev/src checker + brain
   brain/          brain-sync.js (network-wide brain state sync)
   storage/        chain-store.js, balance-journal.js, ipfs-store.js,
                   ipfs-sync.js, dataset-sync.js
   wallet/         wallet.js (ed25519 keys, nonces, balances)
-  rewards/        reward.js (1 POH/block, 60/40 split)
+  rewards/        reward.js (1 DAI/block, 60/40 split)
   jobs/           job-queue.js, geo.js, gas-estimator.js
   validation/     result-validator.js
   rpc/            resolver.js, networks.js
@@ -496,7 +496,7 @@ src/
     manager.js       skill lifecycle (install, stake, run)
     loader.js        load builtin + user skills at startup
     sandbox/         skill-runner.js (sandboxed execution)
-    builtin/         poh_identity.md, read_farcaster.md, read_zora.md,
+    builtin/         dai_identity.md, read_farcaster.md, read_zora.md,
                      read_paragraph.md, code_audit.md
   miner-node.js   main orchestrator
   bootnode.js     peer discovery + chain relay + IPFS registry
@@ -511,7 +511,7 @@ electron/         GUI desktop app (Electron 31)
   preload.js      context bridge
 
 landing/          Promotional landing page + binary downloads
-  binaries/       poh-miner-linux-x64.deb / .AppImage / windows-x64.exe
+  binaries/       dai-miner-linux-x64.deb / .AppImage / windows-x64.exe
 
 test/             vitest unit tests
 scripts/          build and dev helper scripts

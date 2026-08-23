@@ -1,5 +1,5 @@
 /**
- * PoH Miner - RPC Config Resolver
+ * DAI Miner - RPC Config Resolver
  *
  * Converts the new friendly "rpc" config format into the legacy
  * `solanaRpc` + `rpcEndpoints` format that the checker/brain expects.

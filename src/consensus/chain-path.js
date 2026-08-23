@@ -24,14 +24,14 @@ export function blocksOnTipPath(chain, from, to) {
  * When a peer returns >1 block at the same height (stale fork entries in their array),
  * prefer the parent of block height+1 on the peer's tip branch.
  */
-export function selectPeerBlockOnTip(rawBlocks, height, PohBlockCtor) {
+export function selectPeerBlockOnTip(rawBlocks, height, DAIBlockCtor) {
   if (!rawBlocks?.length) return null;
   const atHeight = rawBlocks.filter(b => b.height === height);
   if (atHeight.length <= 1) return atHeight[0] ?? rawBlocks[0];
   const child = rawBlocks.find(b => b.height === height + 1);
   if (child?.previousHash) {
     for (const b of atHeight) {
-      const parsed = b instanceof PohBlockCtor ? b : (PohBlockCtor.fromJSON ? PohBlockCtor.fromJSON(b) : new PohBlockCtor(b));
+      const parsed = b instanceof DAIBlockCtor ? b : (DAIBlockCtor.fromJSON ? DAIBlockCtor.fromJSON(b) : new DAIBlockCtor(b));
       if (blockId(parsed) === child.previousHash) return b;
     }
   }

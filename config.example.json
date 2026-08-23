@@ -1,5 +1,5 @@
 {
-  "_comment": "Copy this file to config.json (or ~/.poh-miner/config.json). This is the current recommended format used by both CLI and the Electron GUI (onboarding + RPC settings).",
+  "_comment": "Copy this file to config.json (or ~/.dai-miner/config.json). This is the current recommended format used by both CLI and the Electron GUI (onboarding + RPC settings).",
 
   "_model_comment": "Inference runs in-process via QVAC. `model` is a QVAC model id/alias (qwen3-0.6b, qwen3-1.7b, qwen3-4b, qwen3-8b) or a GGUF URL. No Ollama.",
   "model": "qwen3-1.7b",
@@ -10,7 +10,7 @@
   "region": "auto",
 
   "bootnodes": [
-    "https://miner.poh.ge"
+    "https://miner.iamai.kg"
   ],
 
   "rpc": {
@@ -43,12 +43,12 @@
 
   "etherscanApiKey": "YOUR_ETHERSCAN_KEY_HERE",
 
-  "pohWallet": "",
+  "daiWallet": "",
   "solanaAddress": "",
 
   "onboarded": false,
 
-  "_comment_skills": "Public skill deploy fee: 100 POH (escrowed for code_audit). Graduation staking threshold: 1,000 POH total.",
+  "_comment_skills": "Public skill deploy fee: 100 DAI (escrowed for code_audit). Graduation staking threshold: 1,000 DAI total.",
   "meilisearch": {
     "mandatory": true,
     "autoStart": true,
@@ -56,10 +56,10 @@
     "bindHost": "127.0.0.1",
     "host": "http://127.0.0.1:7700",
     "apiKey": "",
-    "indexJobs": "poh-chat-history"
+    "indexJobs": "dai-chat-history"
   },
 
-  "_comment_ipfs": "Local IPFS (Kubo) auto-starts to back up chain + brain state. Binary auto-downloads to ~/.poh-miner/bin on first run; repo in ~/.poh-miner/ipfs. Gateway is 8081 to avoid the bootnode's 8080. Set autoStart:false or env POH_SKIP_IPFS=1 to disable.",
+  "_comment_ipfs": "Local IPFS (Kubo) auto-starts to back up chain + brain state. Binary auto-downloads to ~/.dai-miner/bin on first run; repo in ~/.dai-miner/ipfs. Gateway is 8081 to avoid the bootnode's 8080. Set autoStart:false or env DAI_SKIP_IPFS=1 to disable.",
   "ipfs": {
     "autoStart": true,
     "apiPort": 5001,
@@ -68,8 +68,8 @@
     "startupTimeoutMs": 60000
   },
 
-  "_comment_genesisAlloc": "Optional: pre-fund addresses at block 0 on a clean network start. Amounts in raw POH (1 POH = 1000000000 raw). Only applied once when chain is empty.",
+  "_comment_genesisAlloc": "Optional: pre-fund addresses at block 0 on a clean network start. Amounts in raw DAI (1 DAI = 1000000000 raw). Only applied once when chain is empty.",
   "genesisAlloc": {
-    "poh_YOUR_WALLET_HERE": 1000000000000
+    "dai_YOUR_WALLET_HERE": 1000000000000
   }
 }

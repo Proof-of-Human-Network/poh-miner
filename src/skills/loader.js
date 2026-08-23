@@ -3,7 +3,7 @@
  *
  * File format: frontmatter (---) + ## Context section + optional ## Code section.
  * Built-in skills live in src/skills/builtin/.
- * Published/user skills live in ~/.poh-miner/brain/skills/.
+ * Published/user skills live in ~/.dai-miner/brain/skills/.
  */
 
 import fs   from 'fs';

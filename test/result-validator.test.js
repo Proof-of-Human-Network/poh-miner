@@ -24,7 +24,7 @@ describe('Result Validator', () => {
 
   it('tolerates a plausible-but-rotated methodsHash (set can update mid-job)', async () => {
     // A hash that was current at job start but rotated mid-job is still honest
-    // work — but the full POH output is required for peers to re-verify it.
+    // work — but the full DAI output is required for peers to re-verify it.
     const result = {
       methodsHash: 'old-hash',
       signalsUsed: ['m1', 'm2', 'm3'],

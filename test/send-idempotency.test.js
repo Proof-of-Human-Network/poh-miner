@@ -3,7 +3,7 @@ import fs from 'fs';
 import os from 'os';
 import path from 'path';
 import { WalletManager, Wallet } from '../src/wallet/wallet.js';
-import { PoHTransaction, TxMempool } from '../src/core/transaction.js';
+import { DAITransaction, TxMempool } from '../src/core/transaction.js';
 
 /**
  * Send idempotency: a retried /api/wallet/send (client timed out but the tx was
@@ -19,12 +19,12 @@ describe('send idempotency', () => {
     wm = new WalletManager(dir);
     mempool = new TxMempool(wm);
     alice = Wallet.generate(); bob = Wallet.generate();
-    alice.balance = 10_000_000_000; bob.balance = 0;   // 10 POH
+    alice.balance = 10_000_000_000; bob.balance = 0;   // 10 DAI
     wm.saveWallet(alice); wm.saveWallet(bob);
   });
 
   const send = (nonce) => {
-    const tx = new PoHTransaction({ from: alice.address, to: bob.address, amount: 1_000_000, fee: 0, nonce, timestamp: Date.now() });
+    const tx = new DAITransaction({ from: alice.address, to: bob.address, amount: 1_000_000, fee: 0, nonce, timestamp: Date.now() });
     tx.sign(alice);
     return tx;
   };

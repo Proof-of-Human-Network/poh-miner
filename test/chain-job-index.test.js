@@ -11,7 +11,7 @@ import {
   PROMPT_PREVIEW_MAX,
 } from '../src/chain/chain-job-index.js';
 
-const WALLET = 'pohabc123';
+const WALLET = 'daiabc123';
 
 function makeChain() {
   return [
@@ -32,7 +32,7 @@ function makeChain() {
           type: 'job-submitted',
           jobId: 'job-2',
           jobType: 'compute',
-          requesterAddress: 'pohother',
+          requesterAddress: 'daiother',
           promptPreview: 'hello',
           timestamp: 2000,
         },

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Serve the PoH Miner landing page + allow direct downloads of installers.
+ * Serve the DAI Miner landing page + allow direct downloads of installers.
  * Run with: npm run serve:landing
  */
 
@@ -77,7 +77,7 @@ const server = http.createServer((req, res) => {
 });
 
 server.listen(PORT, () => {
-  console.log(`\n🌍 PoH Miner Landing + Direct Downloads`);
+  console.log(`\n🌍 DAI Miner Landing + Direct Downloads`);
   console.log(`   → http://localhost:${PORT}\n`);
   console.log(`   Installation files + Android wallet APK are served directly when you click the download buttons.\n`);
 });

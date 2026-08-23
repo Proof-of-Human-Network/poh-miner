@@ -1,29 +1,29 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { TxLedgerState, replayChainLedger, validateBlockLedger } from '../src/consensus/tx-ledger.js';
 
-import { BLOCK_REWARD_UPOH } from '../src/rewards/reward.js';
-import { PohBlock } from '../src/core/block.js';
-import { PoHTransaction, TxMempool } from '../src/core/transaction.js';
+import { BLOCK_REWARD_UDAI } from '../src/rewards/reward.js';
+import { DAIBlock } from '../src/core/block.js';
+import { DAITransaction, TxMempool } from '../src/core/transaction.js';
 import { Wallet, WalletManager } from '../src/wallet/wallet.js';
 import os from 'os';
 import fs from 'fs';
 import path from 'path';
 
 function tmpDir() {
-  return fs.mkdtempSync(path.join(os.tmpdir(), 'poh-ledger-'));
+  return fs.mkdtempSync(path.join(os.tmpdir(), 'dai-ledger-'));
 }
 
 function coinbaseBlock(height, minerWallet, prevHash = '0'.repeat(64)) {
-  return new PohBlock({
+  return new DAIBlock({
     height,
     previousHash: prevHash,
     timestamp: Date.now() + height,
     minerWallet,
     coinbaseReward: {
       blockHeight: height,
-      proposerReward: BLOCK_REWARD_UPOH,
+      proposerReward: BLOCK_REWARD_UDAI,
       workerRewards: [],
-      totalNewSupply: BLOCK_REWARD_UPOH,
+      totalNewSupply: BLOCK_REWARD_UDAI,
     },
     transactions: [],
     difficulty: 4,
@@ -45,7 +45,7 @@ describe('TxLedgerState — spent-tx dedup', () => {
   });
 
   it('rejects replaying the same txHash in strict mode', () => {
-    const tx = new PoHTransaction({
+    const tx = new DAITransaction({
       from: alice.address, to: bob.address, amount: 1_000_000_000, fee: 0, nonce: 1, timestamp: Date.now(),
     });
     tx.sign(alice);
@@ -69,7 +69,7 @@ describe('TxLedgerState — spent-tx dedup', () => {
   });
 
   it('lenient mode skips replayed txs (first inclusion wins)', () => {
-    const tx = new PoHTransaction({
+    const tx = new DAITransaction({
       from: alice.address, to: bob.address, amount: 2_000_000_000, fee: 0, nonce: 1, timestamp: Date.now(),
     });
     tx.sign(alice);
@@ -95,8 +95,8 @@ describe('TxLedgerState — spent-tx dedup', () => {
     const ledger = replayChainLedger(chain);
     const inv = ledger.checkSupplyInvariant();
     expect(inv.ok).toBe(true);
-    expect(inv.totalMinted).toBe(BLOCK_REWARD_UPOH * 3);
-    expect(inv.totalBalances).toBe(BLOCK_REWARD_UPOH * 3);
+    expect(inv.totalMinted).toBe(BLOCK_REWARD_UDAI * 3);
+    expect(inv.totalBalances).toBe(BLOCK_REWARD_UDAI * 3);
     expect(inv.coinbaseDust).toBe(0);
   });
 
@@ -105,9 +105,9 @@ describe('TxLedgerState — spent-tx dedup', () => {
     const dusty = coinbaseBlock(1, miner);
     dusty.coinbaseReward = {
       blockHeight: 1,
-      proposerReward: Math.floor(BLOCK_REWARD_UPOH * 0.6),
-      workerRewards: [{ workerId: Wallet.generate().address, amount: Math.floor((BLOCK_REWARD_UPOH * 0.4) / 2), workProofHash: 'w0' }],
-      totalNewSupply: BLOCK_REWARD_UPOH,
+      proposerReward: Math.floor(BLOCK_REWARD_UDAI * 0.6),
+      workerRewards: [{ workerId: Wallet.generate().address, amount: Math.floor((BLOCK_REWARD_UDAI * 0.4) / 2), workProofHash: 'w0' }],
+      totalNewSupply: BLOCK_REWARD_UDAI,
     };
     const ledger = replayChainLedger([dusty]);
     const inv = ledger.checkSupplyInvariant();
@@ -117,7 +117,7 @@ describe('TxLedgerState — spent-tx dedup', () => {
   });
 
   it('validateBlockLedger rejects blocks with replayed txs at tip', () => {
-    const tx = new PoHTransaction({
+    const tx = new DAITransaction({
       from: alice.address, to: bob.address, amount: 500_000_000, fee: 0, nonce: 1, timestamp: Date.now(),
     });
     tx.sign(alice);
@@ -136,7 +136,7 @@ describe('TxLedgerState — spent-tx dedup', () => {
 
   it('TxMempool rejects and purges already-spent txHashes', () => {
     const mempool = new TxMempool(wm);
-    const tx = new PoHTransaction({
+    const tx = new DAITransaction({
       from: alice.address, to: bob.address, amount: 100, fee: 0, nonce: 1, timestamp: Date.now(),
     });
     tx.sign(alice);

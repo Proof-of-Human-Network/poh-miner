@@ -5,7 +5,7 @@ import os from 'os';
 import { STABLE_TICKERS } from '../assets.js';
 
 // Off-chain quote legs — external crypto/fiat the counterparty pays outside the
-// PoH chain (settled manually with payment proof + release).
+// DAI chain (settled manually with payment proof + release).
 export const QUOTE_CURRENCIES = [
   'USDT-ERC20', 'USDT-TRC20', 'USDT-TON', 'USDT-SOL', 'USDT-BEP20',
   'USDC-ERC20', 'BTC', 'ETH', 'SOL',
@@ -15,7 +15,7 @@ export const QUOTE_CURRENCIES = [
 // On-chain assets — usable as the order's BASE asset (what the maker sells) and
 // as a quote leg. When BOTH legs are on-chain the trade settles atomically
 // (p2p-swap-filled), with no payment-sent/confirm step.
-export const ONCHAIN_ASSETS = ['POH', ...STABLE_TICKERS];
+export const ONCHAIN_ASSETS = ['DAI', ...STABLE_TICKERS];
 
 export function isOnChainAsset(c) { return ONCHAIN_ASSETS.includes(c); }
 export function isValidQuote(c)   { return QUOTE_CURRENCIES.includes(c) || ONCHAIN_ASSETS.includes(c); }
@@ -44,7 +44,7 @@ const PAYMENT_TIMEOUT_MS = 15 * 60 * 1000;        // 15 min
 
 export class OrderStore {
   constructor(dataDir) {
-    const dir = dataDir || path.join(os.homedir(), '.poh-miner', 'p2p');
+    const dir = dataDir || path.join(os.homedir(), '.dai-miner', 'p2p');
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
     this.ordersFile = path.join(dir, 'orders.json');
     this.tradesFile  = path.join(dir, 'trades.json');
@@ -75,13 +75,13 @@ export class OrderStore {
 
   // ─── Orders ──────────────────────────────────────────────────────────────
 
-  createOrder({ maker, side, pohAmount, baseAsset = 'POH', quoteCurrency, pricePerPOH, minTrade = 0, maxTrade, paymentMethods = [], baseDecimals }) {
+  createOrder({ maker, side, daiAmount, baseAsset = 'DAI', quoteCurrency, pricePerDAI, minTrade = 0, maxTrade, paymentMethods = [], baseDecimals }) {
     if (!['buy', 'sell'].includes(side))            return { error: 'side must be buy or sell' };
     if (!isOnChainAsset(baseAsset))                 return { error: `unsupported base asset: ${baseAsset}` };
     if (!isValidQuote(quoteCurrency))               return { error: `unsupported currency: ${quoteCurrency}` };
     if (baseAsset === quoteCurrency)                return { error: 'base and quote must differ' };
-    if (!(pohAmount > 0))                           return { error: 'pohAmount must be positive' };
-    if (!(pricePerPOH > 0))                         return { error: 'pricePerPOH must be positive' };
+    if (!(daiAmount > 0))                           return { error: 'daiAmount must be positive' };
+    if (!(pricePerDAI > 0))                         return { error: 'pricePerDAI must be positive' };
     // Atomic on-chain/on-chain swaps settle automatically — no external payment
     // rail is involved, so payment methods are waived for them.
     const atomic = isOnChainAsset(quoteCurrency);
@@ -90,17 +90,17 @@ export class OrderStore {
     }
 
     const now = Date.now();
-    const divisor = baseDecimals != null ? 10 ** baseDecimals : (baseAsset === 'POH' ? 1e9 : 100);
+    const divisor = baseDecimals != null ? 10 ** baseDecimals : (baseAsset === 'DAI' ? 1e9 : 100);
     const order = {
       id: crypto.randomUUID(),
       maker,
       side,
-      pohAmount,        // BASE amount in raw units of baseAsset (μPOH for POH; ×100 for stables). Field name kept for wire compat.
-      ...(baseAsset !== 'POH' ? { baseAsset } : {}),   // omitted for POH — legacy orders unchanged
+      daiAmount,        // BASE amount in raw units of baseAsset (μDAI for DAI; ×100 for stables). Field name kept for wire compat.
+      ...(baseAsset !== 'DAI' ? { baseAsset } : {}),   // omitted for DAI — legacy orders unchanged
       quoteCurrency,
-      pricePerPOH,      // quote units per 1 DISPLAY unit of baseAsset
+      pricePerDAI,      // quote units per 1 DISPLAY unit of baseAsset
       minTrade,         // min quote amount per trade
-      maxTrade: maxTrade ?? ((pohAmount / divisor) * pricePerPOH),
+      maxTrade: maxTrade ?? ((daiAmount / divisor) * pricePerDAI),
       paymentMethods: atomic ? [] : paymentMethods,   // [{ network, address, details }]
       status: 'open',
       escrowLocked: false,
@@ -124,7 +124,7 @@ export class OrderStore {
       if (o.status !== effectiveStatus) return false;
       if (side && o.side !== side) return false;
       if (quoteCurrency && o.quoteCurrency !== quoteCurrency) return false;
-      if (baseAsset && (o.baseAsset || 'POH') !== baseAsset) return false;
+      if (baseAsset && (o.baseAsset || 'DAI') !== baseAsset) return false;
       if (maker && o.maker !== maker) return false;
       return true;
     }).sort((a, b) => b.createdAt - a.createdAt);
@@ -136,24 +136,24 @@ export class OrderStore {
       .sort((a, b) => b.createdAt - a.createdAt);
   }
 
-  // POH has no fixed/oracle price — the ONLY reference is the best open P2P order.
+  // DAI has no fixed/oracle price — the ONLY reference is the best open P2P order.
   // For one currency: best bid = highest a buyer will pay, best ask = lowest a seller
   // will take; `price` is the mid when both sides exist, else the single best order.
-  _priceFor(quoteCurrency, baseAsset = 'POH') {
+  _priceFor(quoteCurrency, baseAsset = 'DAI') {
     const open = this.listOrders({ quoteCurrency, baseAsset, status: 'open' });
-    const buys  = open.filter(o => o.side === 'buy').sort((a, b) => b.pricePerPOH - a.pricePerPOH);
-    const sells = open.filter(o => o.side === 'sell').sort((a, b) => a.pricePerPOH - b.pricePerPOH);
+    const buys  = open.filter(o => o.side === 'buy').sort((a, b) => b.pricePerDAI - a.pricePerDAI);
+    const sells = open.filter(o => o.side === 'sell').sort((a, b) => a.pricePerDAI - b.pricePerDAI);
     const bestBid = buys[0] || null;
     const bestAsk = sells[0] || null;
     if (!bestBid && !bestAsk) return { price: null, quoteCurrency, baseAsset, source: 'none' };
-    const price = (bestBid && bestAsk) ? (bestBid.pricePerPOH + bestAsk.pricePerPOH) / 2
-                : bestAsk ? bestAsk.pricePerPOH : bestBid.pricePerPOH;
+    const price = (bestBid && bestAsk) ? (bestBid.pricePerDAI + bestAsk.pricePerDAI) / 2
+                : bestAsk ? bestAsk.pricePerDAI : bestBid.pricePerDAI;
     return {
       price,
       quoteCurrency,
       baseAsset,
-      bestBid: bestBid && { price: bestBid.pricePerPOH, orderId: bestBid.id, pohAmount: bestBid.pohAmount },
-      bestAsk: bestAsk && { price: bestAsk.pricePerPOH, orderId: bestAsk.id, pohAmount: bestAsk.pohAmount },
+      bestBid: bestBid && { price: bestBid.pricePerDAI, orderId: bestBid.id, daiAmount: bestBid.daiAmount },
+      bestAsk: bestAsk && { price: bestAsk.pricePerDAI, orderId: bestAsk.id, daiAmount: bestAsk.daiAmount },
       source: 'p2p-best-order',
       asOf: Date.now(),
     };
@@ -161,8 +161,8 @@ export class OrderStore {
 
   // Reference price for a (baseAsset, quoteCurrency) pair, derived only from the
   // best open P2P order(s). Pass a currency for a single quote (base defaults to
-  // POH), or omit for a per-currency map of everything quoted against the base.
-  getReferencePrice(quoteCurrency = null, baseAsset = 'POH') {
+  // DAI), or omit for a per-currency map of everything quoted against the base.
+  getReferencePrice(quoteCurrency = null, baseAsset = 'DAI') {
     if (quoteCurrency) return this._priceFor(quoteCurrency, baseAsset);
     const out = {};
     for (const c of [...QUOTE_CURRENCIES, ...ONCHAIN_ASSETS]) {
@@ -224,14 +224,14 @@ export class OrderStore {
 
   // ─── Trades ──────────────────────────────────────────────────────────────
 
-  selectOrder(orderId, { taker, pohAmount, quoteAmount, takerPayoutAddress }) {
+  selectOrder(orderId, { taker, daiAmount, quoteAmount, takerPayoutAddress }) {
     const order = this.orders[orderId];
     if (!order)                       return { error: 'order not found' };
     if (order.status !== 'open')      return { error: `order is ${order.status}` };
     if (taker === order.maker)        return { error: 'cannot trade with yourself' };
-    if (!(pohAmount > 0))             return { error: 'pohAmount must be positive' };
+    if (!(daiAmount > 0))             return { error: 'daiAmount must be positive' };
     if (!(quoteAmount > 0))           return { error: 'quoteAmount must be positive' };
-    if (pohAmount > order.pohAmount)  return { error: 'pohAmount exceeds order size' };
+    if (daiAmount > order.daiAmount)  return { error: 'daiAmount exceeds order size' };
 
     const now = Date.now();
     const payout = typeof takerPayoutAddress === 'string' ? takerPayoutAddress.trim() : '';
@@ -239,7 +239,7 @@ export class OrderStore {
       id: crypto.randomUUID(),
       orderId,
       taker,
-      pohAmount,
+      daiAmount,
       quoteAmount,
       status: 'selected',
       // Off-chain quote receive address when the taker is selling the base

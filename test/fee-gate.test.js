@@ -5,7 +5,7 @@ import { Wallet } from '../src/wallet/wallet.js';
 
 /**
  * Fee gate: fee-required compute jobs (skill/compute) must carry a signed
- * payment proof. Free 'verdict' proof-of-human jobs need none. The same gate
+ * payment proof. Free 'verdict' decentralized-artificial-intelligence jobs need none. The same gate
  * runs on the miner's /job endpoint (verified live: unpaid → HTTP 402
  * FEE_REQUIRED) and on the bootnode job board (tested here).
  */
@@ -21,7 +21,7 @@ describe('fee gate — paid vs unpaid compute jobs', () => {
 
     // a payment shape but no budget is still rejected
     const noBudget = board.submit({
-      type: 'compute', model: 'qwen3', requesterAddress: 'pohreq',
+      type: 'compute', model: 'qwen3', requesterAddress: 'daireq',
       paymentTx: { txHash: 'h', signature: 's', nonce: 0 }, maxBudget: 0,
     });
     expect(noBudget.error).toMatch(/maxBudget > 0/);
@@ -34,7 +34,7 @@ describe('fee gate — paid vs unpaid compute jobs', () => {
   it('accepts a PAID skill/compute job whose payment proof verifies', async () => {
     const requester = Wallet.generate();
     const jobId = 'paid-skill-1';
-    const amount = 5_000_000;     // μPOH budget
+    const amount = 5_000_000;     // μDAI budget
     const nonce = 0;
 
     // Client builds the exact proof the proposer will later verify + settle.

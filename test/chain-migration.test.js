@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import { PohMinerNode } from '../src/miner-node.js';
+import { DAIMinerNode } from '../src/miner-node.js';
 import { ChainStore } from '../src/storage/chain-store.js';
 import { createGenesisBlock, buildMigrationGenesis, loadSnapshot, EXPECTED_GENESIS_HASH } from '../src/consensus/genesis.js';
 
@@ -10,7 +10,7 @@ const BUNDLED = path.join(process.cwd(), 'src/consensus/genesis-snapshot.json');
 
 // Minimal node harness exercising only the migration methods (no heavy start()).
 function makeNode(minerBase, chain) {
-  const n = Object.create(PohMinerNode.prototype);
+  const n = Object.create(DAIMinerNode.prototype);
   n.config = {};
   n.currentDifficulty = 5;
   n.chainStore = new ChainStore(path.join(minerBase, 'chain'));
@@ -21,7 +21,7 @@ function makeNode(minerBase, chain) {
 describe('chain auto-migration', () => {
   let base;
   beforeEach(() => {
-    base = fs.mkdtempSync(path.join(os.tmpdir(), 'poh-mig-'));
+    base = fs.mkdtempSync(path.join(os.tmpdir(), 'dai-mig-'));
     // Seed chain-derived caches + a wallets dir that must be preserved.
     fs.mkdirSync(path.join(base, 'chain'), { recursive: true });
     for (const d of ['meilisearch-data', 'rewards', 'p2p', 'data', 'wallets']) fs.mkdirSync(path.join(base, d), { recursive: true });
@@ -72,7 +72,7 @@ describe('chain auto-migration', () => {
     fs.writeFileSync(path.join(base, 'chain', 'chain.ndjson'), JSON.stringify(legacy.toJSON()) + '\n');
     // A valid-but-WRONG snapshot (builds a genesis != EXPECTED_GENESIS_HASH).
     const wrong = path.join(base, 'wrong-snap.json');
-    fs.writeFileSync(wrong, JSON.stringify({ balances: { pohdeadbeef: { balance: 1, nonce: 0 } } }));
+    fs.writeFileSync(wrong, JSON.stringify({ balances: { daideadbeef: { balance: 1, nonce: 0 } } }));
     n.config.genesisSnapshot = wrong; // overrides bundled; target won't match the pin
 
     n._migrateChainIfStale();

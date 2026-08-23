@@ -11,7 +11,7 @@
  *   - a serialized completion queue (llama.cpp is single-threaded)
  *   - a circuit breaker so repeated failures don't stall every caller
  *
- * Both the CommonJS brain (require) and the ESM miner node (via real-poh's
+ * Both the CommonJS brain (require) and the ESM miner node (via real-dai's
  * createRequire bridge) resolve to THIS cached module, so they share one
  * SDK instance and one set of loaded weights.
  */

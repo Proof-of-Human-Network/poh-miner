@@ -1,15 +1,15 @@
 #!/usr/bin/env node
 /**
- * PoH Miner Network - One file to start everything
+ * DAI Miner Network - One file to start everything
  *
  * Usage:
  *   node start.js
- *   or after npm link / global install: poh-miner start
+ *   or after npm link / global install: dai-miner start
  */
 
 console.log('\n====================================');
-console.log('   PoH Miner Network');
-console.log('   Serve compute → Earn POH');
+console.log('   DAI Miner Network');
+console.log('   Serve compute → Earn DAI');
 console.log('====================================\n');
 
 // Inference runs in-process via the QVAC SDK — no Ollama, no external server.
@@ -38,7 +38,7 @@ async function warmUpQvac(model, apiPort = 3456) {
   try {
     await ensureVulkanRuntime();
     process.env.QVAC_DEFAULT_MODEL = model;
-    const { getQvacModels } = await import('./src/compute/adapters/real-poh.js');
+    const { getQvacModels } = await import('./src/compute/adapters/real-dai.js');
     const qvac = await getQvacModels();
     if (!qvac || !qvac.ENABLED) {
       console.log('   QVAC disabled (QVAC_DISABLED=1) — skipping warm-up.');
@@ -102,7 +102,7 @@ async function chooseModelFirstRun(config, configPath) {
 }
 
 async function startProject() {
-  const { PohMinerNode } = await import('./src/miner-node.js');
+  const { DAIMinerNode } = await import('./src/miner-node.js');
   const { loadConfig }   = await import('./src/config.js');
 
   const { config, path: configPath, source } = loadConfig();
@@ -121,12 +121,12 @@ async function startProject() {
   await warmUpQvac(chosenModel || config.model || 'qwen3-1.7b', config.walletApiPort || 3456);
 
   // Persist runtime-resolved fields (e.g. an auto-created wallet) back to the SAME
-  // file we loaded — not a hardcoded ~/.poh-miner/config.json, which may be a
+  // file we loaded — not a hardcoded ~/.dai-miner/config.json, which may be a
   // different file when running from a source tree (cwd/config.json wins). Writing
   // to the wrong file was silently re-minting a new mining wallet on every restart.
   config._configPath = configPath;
 
-  const node = new PohMinerNode(config);
+  const node = new DAIMinerNode(config);
   await node.start();
 
   process.stdin.resume();

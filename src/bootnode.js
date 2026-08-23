@@ -1,19 +1,19 @@
 #!/usr/bin/env node
 /**
- * PoH Miner Network - Bootnode
+ * DAI Miner Network - Bootnode
  *
  * Production-ready bootnode that:
  * - Accepts incoming blocks from miners
  * - Serves the chain to other nodes for syncing
  * - Acts as a stable peer for discovery
  *
- * Run with: node src/bootnode.js --port 8080 --data-dir ~/.poh-bootnode
+ * Run with: node src/bootnode.js --port 8080 --data-dir ~/.dai-bootnode
  */
 
 import http from 'http';
 import fs from 'fs';
 import path from 'path';
-import { PohBlock } from './core/block.js';
+import { DAIBlock } from './core/block.js';
 import { ChainStore } from './storage/chain-store.js';
 import { validateBlockExtended } from './consensus/block-validator.js';
 import { replayChainLedger } from './consensus/tx-ledger.js';
@@ -43,21 +43,21 @@ const ipfsStore = new IPFSStore();
 const argv = process.argv.slice(2);
 const PORT = parseInt(argv.find(a => a.startsWith('--port='))?.split('=')[1] || '8080');
 const BIND_HOST = argv.find(a => a.startsWith('--bind='))?.split('=')[1]
-  || process.env.POH_BOOTNODE_BIND
+  || process.env.DAI_BOOTNODE_BIND
   || '127.0.0.1';
-const DATA_DIR = argv.find(a => a.startsWith('--data-dir='))?.split('=')[1] || path.join(process.env.HOME || '.', '.poh-bootnode');
+const DATA_DIR = argv.find(a => a.startsWith('--data-dir='))?.split('=')[1] || path.join(process.env.HOME || '.', '.dai-bootnode');
 const PEER_SYNC_URL = argv.find(a => a.startsWith('--peer='))?.split('=').slice(1).join('=') || null;
 const ALLOW_LOCAL_HOSTS = argv.includes('--allow-local-hosts')
-  || process.env.POH_BOOTNODE_ALLOW_LOCAL === '1';
+  || process.env.DAI_BOOTNODE_ALLOW_LOCAL === '1';
 // Genesis migration: path to a balance/nonce snapshot. When set AND the chain is
 // empty, height-0 is built as a migration genesis that mints the snapshot. Absent
 // → legacy empty genesis (unchanged). See scripts/genesis/README.md.
 const GENESIS_SNAPSHOT = argv.find(a => a.startsWith('--genesis-snapshot='))?.split('=').slice(1).join('=')
-  || process.env.POH_GENESIS_SNAPSHOT
+  || process.env.DAI_GENESIS_SNAPSHOT
   || null;
 
 const chainStore = new ChainStore(DATA_DIR);
-let chain = chainStore.loadChain().map(b => PohBlock.fromJSON ? PohBlock.fromJSON(b) : new PohBlock(b));
+let chain = chainStore.loadChain().map(b => DAIBlock.fromJSON ? DAIBlock.fromJSON(b) : new DAIBlock(b));
 
 // ── Finality checkpoint signer ──────────────────────────────────────────────
 // A stable ed25519 identity the bootnode uses to sign its finalized tip. Miners
@@ -400,7 +400,7 @@ if (chain.length === 0) {
   chainStore.saveChain(chain);
   if (g.migration) {
     console.log(`[Bootnode] Migration genesis created — ${g.count} allocations, ` +
-      `${(g.total / 1e9).toFixed(4)} POH minted, snapshotHash=${g.snapshotHash || 'n/a'}`);
+      `${(g.total / 1e9).toFixed(4)} DAI minted, snapshotHash=${g.snapshotHash || 'n/a'}`);
     console.log(`[Bootnode] New genesis hash: ${g.genesis.getHashSync()}`);
   }
 }
@@ -436,7 +436,7 @@ async function syncFromPeer(peerUrl) {
       if (!Array.isArray(blocks) || blocks.length === 0) break;
       let rejected = false;
       for (const b of blocks) {
-        const block = PohBlock.fromJSON ? PohBlock.fromJSON(b) : new PohBlock(b);
+        const block = DAIBlock.fromJSON ? DAIBlock.fromJSON(b) : new DAIBlock(b);
         const parent = chain[chain.length - 1];
         const check = validateBlockExtended(block, {
           parent, chainPrefix: chain, ledger: txLedger, strictTx: false,
@@ -483,7 +483,7 @@ const server = http.createServer(async (req, res) => {
 
   try {
     if (url.pathname === '/health' || url.pathname === '/healthz') {
-      res.end(JSON.stringify({ status: 'ok', service: 'poh-bootnode', height: chain[chain.length - 1]?.height ?? chain.length - 1 }));
+      res.end(JSON.stringify({ status: 'ok', service: 'dai-bootnode', height: chain[chain.length - 1]?.height ?? chain.length - 1 }));
       return;
     }
 
@@ -637,7 +637,7 @@ const server = http.createServer(async (req, res) => {
         let accepted = 0;
 
         for (const blockData of blocks) {
-          const block = PohBlock.fromJSON ? PohBlock.fromJSON(blockData) : new PohBlock(blockData);
+          const block = DAIBlock.fromJSON ? DAIBlock.fromJSON(blockData) : new DAIBlock(blockData);
 
           const tip = chain[chain.length - 1];
           const tipHash = tip.blockHash || await tip.getHash();
@@ -963,7 +963,7 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(PORT, BIND_HOST, () => {
-  console.log(`\n🚀 PoH Bootnode running on ${BIND_HOST}:${PORT}`);
+  console.log(`\n🚀 DAI Bootnode running on ${BIND_HOST}:${PORT}`);
   console.log(`   Data dir: ${DATA_DIR}`);
   console.log(`   Local hosts: ${ALLOW_LOCAL_HOSTS ? 'allowed' : 'rejected'}`);
   console.log(`   Current chain height: ${chain[chain.length - 1]?.height ?? chain.length - 1}`);

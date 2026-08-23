@@ -1,6 +1,6 @@
 name: Build Desktop (Electron)
 
-# Builds PoH-Miner for Linux, macOS, and Windows on GitHub runners, renames the
+# Builds DAI-Miner for Linux, macOS, and Windows on GitHub runners, renames the
 # outputs to STABLE (version-less) asset names, and attaches them to the GitHub
 # Release for the pushed tag. The landing page links to
 #   https://github.com/Proof-of-Human-Network/poh-miner/releases/latest/download/<stable-name>
@@ -10,7 +10,7 @@ name: Build Desktop (Electron)
 # macOS builds are AD-HOC signed via afterPack.cjs hook (no Apple cert needed;
 # required for arm64 to avoid "malware" hard-block). NOT notarized.
 # Windows/Linux are unsigned. macOS first launch:
-#   right-click → Open, or  xattr -cr /Applications/PoH-Miner.app
+#   right-click → Open, or  xattr -cr /Applications/DAI-Miner.app
 
 on:
   workflow_dispatch: {}
@@ -67,20 +67,20 @@ jobs:
             linux)
               for f in dist/electron/*.AppImage; do
                 case "$f" in
-                  *arm64*) cp "$f" out/poh-miner-linux-arm64.AppImage ;;
-                  *)       cp "$f" out/poh-miner-linux-x64.AppImage ;;
+                  *arm64*) cp "$f" out/dai-miner-linux-arm64.AppImage ;;
+                  *)       cp "$f" out/dai-miner-linux-x64.AppImage ;;
                 esac
               done ;;
             win)
               # NSIS installer is the "... Setup ....exe"; portable is the plain one.
-              for f in dist/electron/*Setup*.exe;                do cp "$f" out/poh-miner-windows-x64.exe ; done
-              for f in dist/electron/*.exe; do case "$f" in *Setup*) ;; *) cp "$f" out/poh-miner-windows-x64-portable.exe ;; esac; done ;;
+              for f in dist/electron/*Setup*.exe;                do cp "$f" out/dai-miner-windows-x64.exe ; done
+              for f in dist/electron/*.exe; do case "$f" in *Setup*) ;; *) cp "$f" out/dai-miner-windows-x64-portable.exe ;; esac; done ;;
             mac)
               # Landing naming: Apple Silicon (arm64) = "amd", Intel (x64) = "intel".
               for f in dist/electron/*.dmg; do
                 case "$f" in
-                  *arm64*) cp "$f" out/poh-miner-macos-amd.dmg ;;
-                  *)       cp "$f" out/poh-miner-macos-intel.dmg ;;
+                  *arm64*) cp "$f" out/dai-miner-macos-amd.dmg ;;
+                  *)       cp "$f" out/dai-miner-macos-intel.dmg ;;
                 esac
               done ;;
           esac
@@ -89,7 +89,7 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: poh-miner-${{ matrix.platform }}
+          name: dai-miner-${{ matrix.platform }}
           path: out/*
           if-no-files-found: error
           retention-days: 14

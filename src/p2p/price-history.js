@@ -14,7 +14,7 @@ function pairKey(baseAsset, quoteCurrency) {
 
 export class PriceHistory {
   constructor(dataDir) {
-    const dir = dataDir || path.join(os.homedir(), '.poh-miner', 'p2p');
+    const dir = dataDir || path.join(os.homedir(), '.dai-miner', 'p2p');
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
     this.file = path.join(dir, 'price-history.json');
     this.pairs = this._load();

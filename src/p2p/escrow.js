@@ -1,14 +1,14 @@
 // System wallet address that holds escrowed assets during active P2P trades.
 // Funds flow: maker/taker → ESCROW_ADDRESS on lock, ESCROW_ADDRESS → recipient on release.
-// The pooled pseudo-address holds per-asset balances (POH + stablecoins) — the
+// The pooled pseudo-address holds per-asset balances (DAI + stablecoins) — the
 // multi-asset WalletManager routes each currency independently.
-export const ESCROW_ADDRESS = 'poh_p2p_escrow';
+export const ESCROW_ADDRESS = 'dai_p2p_escrow';
 
 export class EscrowManager {
   // Lock `amount` raw units of `currency` from `fromAddress` into escrow.
   // Returns true on success, or { error } string on failure.
-  lock(walletManager, fromAddress, amount, currency = 'POH') {
-    const balance = currency === 'POH'
+  lock(walletManager, fromAddress, amount, currency = 'DAI') {
+    const balance = currency === 'DAI'
       ? walletManager.getBalance(fromAddress)
       : walletManager.getAssetBalance(fromAddress, currency);
     if (balance < amount) {
@@ -20,8 +20,8 @@ export class EscrowManager {
   }
 
   // Release `amount` raw units of `currency` from escrow to `toAddress`.
-  release(walletManager, toAddress, amount, currency = 'POH') {
-    const escrowBal = currency === 'POH'
+  release(walletManager, toAddress, amount, currency = 'DAI') {
+    const escrowBal = currency === 'DAI'
       ? walletManager.getBalance(ESCROW_ADDRESS)
       : walletManager.getAssetBalance(ESCROW_ADDRESS, currency);
     if (escrowBal < amount) {

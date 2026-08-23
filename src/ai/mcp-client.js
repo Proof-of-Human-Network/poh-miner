@@ -18,7 +18,7 @@
 import { spawn } from 'child_process';
 
 const PROTOCOL_VERSION = '2024-11-05';
-const CLIENT_INFO = { name: 'poh-miner', version: '1.0' };
+const CLIENT_INFO = { name: 'dai-miner', version: '1.0' };
 const REQUEST_TIMEOUT_MS = 30_000;
 
 /** One connection to a single MCP server. */

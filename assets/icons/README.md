@@ -1,27 +1,28 @@
 # Icons
 
-This folder contains icons generated from the official PoH logo in brand kit (svg/logo no bg.svg and variants), copied to assets/logos/ and assets/icons/poh-miner.svg as canonical.
+This folder contains icons generated from the AIHub logo (`dai-miner-source.png`).
 
 ## Files
 
-- `poh-miner.svg` — Source vector (edit this for design changes)
-- `poh-miner-*.png` — Raster versions in various sizes
-- `poh-miner.ico` — Windows icon
-- `poh-miner.iconset/` — macOS iconset (convert to .icns on macOS)
+- `dai-miner-source.png` — Canonical logo (edit / replace this for design changes)
+- `dai-miner.svg` — PNG-backed SVG for landing / in-app use
+- `dai-miner-*.png` — Raster versions in various sizes
+- `dai-miner.ico` — Windows icon
+- `dai-miner.iconset/` — macOS iconset (convert to .icns on macOS)
 
 ## How to generate .icns (macOS only)
 
 On a Mac, run:
 
 ```bash
-iconutil -c icns assets/icons/poh-miner.iconset -o assets/icons/poh-miner.icns
+iconutil -c icns assets/icons/dai-miner.iconset -o assets/icons/dai-miner.icns
 ```
 
 Then delete the .iconset folder if desired.
 
 ## Regenerating icons
 
-After editing the SVG, run:
+After replacing `dai-miner-source.png`, run:
 
 ```bash
 node scripts/generate-icons.js

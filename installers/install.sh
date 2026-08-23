@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
-# Universal installer for PoH Miner Network
+# Universal installer for DAI Miner Network
 # Works on macOS, Linux, Raspberry Pi, etc.
 # Designed to be as easy as possible for non-miners (Mac Mini users, etc.)
 
 set -e
 
 echo "=========================================="
-echo "  PoH Miner Network - Easy Installer"
+echo "  DAI Miner Network - Easy Installer"
 echo "=========================================="
 echo ""
-echo "This will set up the PoH miner so you can earn POH"
+echo "This will set up the DAI miner so you can earn DAI"
 echo "by contributing compute (especially good on Apple Silicon Macs)."
 echo ""
 
@@ -29,7 +29,7 @@ echo "→ Inference: QVAC (in-process, no Ollama). Model downloads on first run.
 bash "$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/scripts/ensure-vulkan.sh" || true
 
 # 3. Create working directory
-INSTALL_DIR="$HOME/.poh-miner"
+INSTALL_DIR="$HOME/.dai-miner"
 mkdir -p "$INSTALL_DIR"
 
 echo ""
@@ -38,9 +38,9 @@ echo ""
 echo "Next steps:"
 echo "  1. cd $INSTALL_DIR"
 echo "  2. Download the latest release binary for your platform"
-echo "  3. Run ./poh-miner (or the installer for your OS)"
+echo "  3. Run ./dai-miner (or the installer for your OS)"
 echo ""
 echo "For the absolute easiest experience on Mac:"
-echo "  brew tap poh/tap && brew install poh-miner"
+echo "  brew tap dai/tap && brew install dai-miner"
 echo ""
 echo "Full instructions: https://github.com/poh/poh-miner-network"

@@ -9,7 +9,7 @@
 #   reset-node.sh --role miner    --home /root [--apply] [--backup-dir /root/genesis-backup]
 #
 # After a successful --apply, the operator: (1) places the snapshot file, (2) sets
-# the genesis source (bootnode: --genesis-snapshot / POH_GENESIS_SNAPSHOT;
+# the genesis source (bootnode: --genesis-snapshot / DAI_GENESIS_SNAPSHOT;
 # miner: config.json "genesisSnapshot": "<path>"), (3) starts the service.
 # See README.md for the full multi-node sequence.
 set -euo pipefail
@@ -32,11 +32,11 @@ BACKUP_DIR="${BACKUP_DIR:-$HOME_DIR/genesis-backup-$TS}"
 # checkpoint-signer.json (finality key), brain/, bin/, ipfs/ (the repo binary).
 case "$ROLE" in
   bootnode)
-    BASE="$HOME_DIR/.poh-bootnode"
+    BASE="$HOME_DIR/.dai-bootnode"
     TARGETS=( "$BASE/chain.ndjson" "$BASE/chain.json" )
     ;;
   miner)
-    BASE="$HOME_DIR/.poh-miner"
+    BASE="$HOME_DIR/.dai-miner"
     # chain + all state derived from it. ipfs_cid_cache.json is critical: a stale
     # cached CID can re-bootstrap the OLD chain after the reset.
     TARGETS=( "$BASE/chain" "$BASE/ipfs_cid_cache.json" "$BASE/meilisearch-data" \

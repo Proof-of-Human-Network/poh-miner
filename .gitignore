@@ -28,8 +28,8 @@ Thumbs.db
 # Project specific for miner-network
 node_modules/
 data/
-.poh-miner/
-.poh-bootnode/
+.dai-miner/
+.dai-bootnode/
 dist/
 npm_recovery_codes.txt
 pip_token

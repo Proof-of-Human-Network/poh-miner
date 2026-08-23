@@ -1,18 +1,18 @@
 #!/usr/bin/env bash
-# PoH Miner Network - "One Command" Easy Starter
+# DAI Miner Network - "One Command" Easy Starter
 # Designed for normal people (Mac Mini users, Windows users with spare PCs, etc.)
 #
 # Usage:
-#   curl -fsSL https://miner.poh.ge/scripts/easy-start.sh | bash
+#   curl -fsSL https://miner.iamai.kg/scripts/easy-start.sh | bash
 #   or run locally after cloning
 
 set -e
 
-BASE_URL="https://miner.poh.ge"
+BASE_URL="https://miner.iamai.kg"
 
 echo "============================================"
-echo "  PoH Miner Network - Easy Start"
-echo "  Run the decentralized AI brain. Earn POH."
+echo "  DAI Miner Network - Easy Start"
+echo "  Run the decentralized AI brain. Earn DAI."
 echo "============================================"
 echo ""
 
@@ -32,7 +32,7 @@ if ! command -v node >/dev/null 2>&1; then
     nvm use --lts
 fi
 
-INSTALL_DIR="${HOME}/.poh-miner"
+INSTALL_DIR="${HOME}/.dai-miner"
 mkdir -p "$INSTALL_DIR"
 cd "$INSTALL_DIR"
 
@@ -91,14 +91,14 @@ if [ ! -f "$CONFIG_FILE" ]; then
     "xlm": "https://horizon.stellar.org"
   },
   "etherscanApiKey": "",
-  "pohWallet": "",
+  "daiWallet": "",
   "solanaAddress": "",
   "onboarded": false
 }
 EOF
     echo ""
     echo "⚠️  IMPORTANT: Edit $CONFIG_FILE and set your real Solana wallet address."
-    echo "   (this is where you receive POH rewards)"
+    echo "   (this is where you receive DAI rewards)"
     echo ""
     echo "   Optionally add API keys for rpc.solana (Helius) and rpc.1 (Alchemy)"
     echo "   to enable more earning signals."
@@ -107,7 +107,7 @@ fi
 
 # 5. Download miner code if not present
 echo ""
-echo "→ Setting up PoH Miner..."
+echo "→ Setting up DAI Miner..."
 
 if [ ! -d "$INSTALL_DIR/src" ]; then
     echo "   Downloading miner from $BASE_URL ..."
@@ -115,8 +115,8 @@ if [ ! -d "$INSTALL_DIR/src" ]; then
 
     # Try to download the Linux binary appropriate for this arch
     if [[ "$OS" == "linux" && "$ARCH" == "x86_64" ]]; then
-        BINARY_URL="$BASE_URL/binaries/poh-miner-linux-x64.AppImage"
-        BINARY_DEST="$INSTALL_DIR/poh-miner.AppImage"
+        BINARY_URL="$BASE_URL/binaries/dai-miner-linux-x64.AppImage"
+        BINARY_DEST="$INSTALL_DIR/dai-miner.AppImage"
         echo "   Downloading AppImage for linux/x64..."
         if curl -fsSL "$BINARY_URL" -o "$BINARY_DEST"; then
             chmod +x "$BINARY_DEST"
@@ -124,8 +124,8 @@ if [ ! -d "$INSTALL_DIR/src" ]; then
             INSTALLED_AS="appimage"
         fi
     elif [[ "$OS" == "linux" && "$ARCH" == "aarch64" ]]; then
-        BINARY_URL="$BASE_URL/binaries/poh-miner-linux-arm64.AppImage"
-        BINARY_DEST="$INSTALL_DIR/poh-miner.AppImage"
+        BINARY_URL="$BASE_URL/binaries/dai-miner-linux-arm64.AppImage"
+        BINARY_DEST="$INSTALL_DIR/dai-miner.AppImage"
         echo "   Downloading AppImage for linux/arm64..."
         if curl -fsSL "$BINARY_URL" -o "$BINARY_DEST"; then
             chmod +x "$BINARY_DEST"
@@ -161,8 +161,8 @@ if grep -q "YOUR_SOLANA_ADDRESS_HERE" config.json 2>/dev/null; then
     echo "ERROR: Edit config.json and set your Solana wallet address first."
     exit 1
 fi
-echo "Starting PoH Miner..."
-./poh-miner.AppImage --no-sandbox
+echo "Starting DAI Miner..."
+./dai-miner.AppImage --no-sandbox
 LAUNCHER
 else
     cat > "$INSTALL_DIR/start.sh" << LAUNCHER
@@ -172,7 +172,7 @@ if grep -q "YOUR_SOLANA_ADDRESS_HERE" config.json 2>/dev/null; then
     echo "ERROR: Edit config.json and set your Solana wallet address first."
     exit 1
 fi
-echo "Starting PoH Miner Node (headless)..."
+echo "Starting DAI Miner Node (headless)..."
 echo "Press Ctrl+C to stop."
 node src/cli.js start
 LAUNCHER
@@ -195,4 +195,4 @@ else
 fi
 
 echo ""
-echo "Dashboard & downloads: https://miner.poh.ge"
+echo "Dashboard & downloads: https://miner.iamai.kg"

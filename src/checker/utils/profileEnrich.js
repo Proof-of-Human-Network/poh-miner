@@ -122,7 +122,7 @@ async function fetchNomisScore(address) {
   } catch { return null; }
 }
 
-// ── Humanity Protocol — biometric / zkTLS proof of humanity ──────────────────
+// ── Humanity Protocol — biometric / zkTLS decentralized artificial intelligence ──────────────────
 async function fetchHumanityProtocol(address) {
   try {
     const res = await axios.get(

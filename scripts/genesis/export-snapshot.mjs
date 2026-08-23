@@ -8,10 +8,10 @@
  * --out file; never touches chain data.
  *
  * Usage:
- *   node scripts/genesis/export-snapshot.mjs --data-dir ~/.poh-bootnode \
+ *   node scripts/genesis/export-snapshot.mjs --data-dir ~/.dai-bootnode \
  *        [--height H] [--out snap.json] [--exclude addr1,addr2] [--include-system] \
  *        [--genesis-timestamp <ms>] \
- *        [--mint-stables] [--treasury <pohAddr>]
+ *        [--mint-stables] [--treasury <daiAddr>]
  *
  * --mint-stables adds the initial stablecoin supply (INITIAL_STABLE_SUPPLY_RAW
  * from src/assets.js) to the treasury row (--treasury overrides the address).
@@ -27,19 +27,19 @@ import os from 'os';
 import { fileURLToPath } from 'url';
 const NODE = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const { ChainStore }             = await import(path.join(NODE, 'src/storage/chain-store.js'));
-const { PohBlock }               = await import(path.join(NODE, 'src/core/block.js'));
+const { DAIBlock }               = await import(path.join(NODE, 'src/core/block.js'));
 const { replayChainLedgerAsync } = await import(path.join(NODE, 'src/consensus/tx-ledger.js'));
 const { FINALITY_DEPTH }         = await import(path.join(NODE, 'src/consensus/finality.js'));
 const { TREASURY_ADDRESS, INITIAL_STABLE_SUPPLY_RAW } = await import(path.join(NODE, 'src/assets.js'));
 
 // System / non-user addresses excluded by default (kept with --include-system).
 const SYSTEM_ADDRESSES = new Set([
-  'pohaudit000000000000000000000000000000000001', // audit vault
+  'daiaudit000000000000000000000000000000000001', // audit vault
 ]);
 
 const argv = process.argv.slice(2);
 const arg = (k, d) => { const i = argv.indexOf(k); return i >= 0 ? argv[i + 1] : d; };
-const dataDir = arg('--data-dir', path.join(os.homedir(), '.poh-bootnode')).replace(/^~/, os.homedir());
+const dataDir = arg('--data-dir', path.join(os.homedir(), '.dai-bootnode')).replace(/^~/, os.homedir());
 const outFile = arg('--out', null);
 const heightArg = arg('--height', null);
 const genesisTs = arg('--genesis-timestamp', null);
@@ -49,15 +49,15 @@ const exclude = new Set([
   ...String(arg('--exclude', '')).split(',').map(s => s.trim()).filter(Boolean),
 ]);
 
-const POH = 1e9;
-const fmt = raw => `${raw} (${(raw / POH).toFixed(4)} POH)`;
+const DAI = 1e9;
+const fmt = raw => `${raw} (${(raw / DAI).toFixed(4)} DAI)`;
 
 async function main() {
   console.log(`[snapshot] Loading chain from ${dataDir} …`);
   const raw = new ChainStore(dataDir).loadChain();
   if (!raw.length) { console.error('[snapshot] empty chain — nothing to export'); process.exit(2); }
 
-  let chain = raw.map(b => PohBlock.fromJSON(b));
+  let chain = raw.map(b => DAIBlock.fromJSON(b));
   const tipHeight = chain[chain.length - 1].height;
   const finalizedHeight = tipHeight - FINALITY_DEPTH;
   const H = heightArg != null ? Number(heightArg) : finalizedHeight;
@@ -101,7 +101,7 @@ async function main() {
   const balancesObj = Object.fromEntries(entries);
 
   // Canonical hash: [addr, balance, nonce] tuples, with assets appended ONLY for
-  // rows that hold any — a POH-only snapshot hashes exactly as it always did.
+  // rows that hold any — a DAI-only snapshot hashes exactly as it always did.
   const canonical = JSON.stringify(entries.map(([a, v]) =>
     v.assets ? [a, v.balance, v.nonce, v.assets] : [a, v.balance, v.nonce]));
   const snapshotHash = crypto.createHash('sha256').update(canonical).digest('hex');

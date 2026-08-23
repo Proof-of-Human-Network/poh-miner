@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# reset-chain.sh — wipe the PoH chain on hk (bootnode+miner) + local, and relaunch
+# reset-chain.sh — wipe the DAI chain on hk (bootnode+miner) + local, and relaunch
 # from block 0. Optionally mints a BRAND-NEW genesis (new timestamp → new hash →
 # re-pin) so every node still on the old genesis is genesis-mismatch-rejected.
 #
@@ -10,11 +10,11 @@
 #   ./scripts/reset-chain.sh --new-genesis <epoch_ms>   # new genesis at a specific ms
 #   ./scripts/reset-chain.sh --yes           # skip the confirmation prompt
 #
-# Run from the node dir:  cd ~/Desktop/poh/dev/miner/node && ./scripts/reset-chain.sh --new-genesis
+# Run from the node dir:  cd ~/Desktop/dai/dev/miner/node && ./scripts/reset-chain.sh --new-genesis
 #
 # Assumptions (see memory project_genesis_reset_0721):
-#   - hk bootnode = pm2 'poh-bootnode', args include --genesis-snapshot=/root/genesis-snapshot.json
-#   - hk miner    = pm2 'poh-miner', cwd /root/poh-miner, reads /root/poh-miner/config.json
+#   - hk bootnode = pm2 'dai-bootnode', args include --genesis-snapshot=/root/genesis-snapshot.json
+#   - hk miner    = pm2 'dai-miner', cwd /root/dai-miner, reads /root/dai-miner/config.json
 #   - miner must sync via localhost:8080 (public URL hairpins on hk)
 
 set -euo pipefail
@@ -49,7 +49,7 @@ if [ -n "$NEW_GENESIS" ]; then
     const fs=require('fs');
     const s=JSON.parse(fs.readFileSync('$SNAP','utf8'));
     s.balances={}; s.genesisTimestamp=$TS; s.snapshotHash=null;
-    s.note='Fresh chain '+'$ISO'.slice(0,10)+' — new genesis, all balances 0, POH earned by mining from block 1.';
+    s.note='Fresh chain '+'$ISO'.slice(0,10)+' — new genesis, all balances 0, DAI earned by mining from block 1.';
     s.generatedAt='$ISO';
     fs.writeFileSync('$SNAP', JSON.stringify(s,null,2)+'\n');
   "
@@ -78,47 +78,47 @@ fi
 
 # ── 3. Stop services + back up + wipe ────────────────────────────────────────
 echo "⏹  Stopping hk services…"
-ssh "$HK" 'pm2 stop poh-bootnode poh-miner >/dev/null 2>&1 || true'
+ssh "$HK" 'pm2 stop dai-bootnode dai-miner >/dev/null 2>&1 || true'
 
 echo "💾 Backing up + wiping hk data dirs…"
-ssh "$HK" 'TS=$(date +%s); mkdir -p /root/poh-reset-bak-$TS;
-  tar czf /root/poh-reset-bak-$TS/keys.tar.gz -C /root .poh-miner/.wallet-key .poh-miner/wallets .poh-bootnode/checkpoint-signer.json 2>/dev/null || true;
-  rm -rf /root/.poh-bootnode /root/.poh-miner; echo "  hk wiped (backup: /root/poh-reset-bak-$TS)"'
+ssh "$HK" 'TS=$(date +%s); mkdir -p /root/dai-reset-bak-$TS;
+  tar czf /root/dai-reset-bak-$TS/keys.tar.gz -C /root .dai-miner/.wallet-key .dai-miner/wallets .dai-bootnode/checkpoint-signer.json 2>/dev/null || true;
+  rm -rf /root/.dai-bootnode /root/.dai-miner; echo "  hk wiped (backup: /root/dai-reset-bak-$TS)"'
 
 echo "💾 Backing up + wiping local data dirs…"
-TS=$(date +%s); mkdir -p "$HOME/poh-reset-bak-$TS"
-tar czf "$HOME/poh-reset-bak-$TS/keys.tar.gz" -C "$HOME" .poh-miner/.wallet-key .poh-miner/wallets 2>/dev/null || true
-rm -rf "$HOME/.poh-miner" "$HOME/.poh-bootnode"
-echo "  local wiped (backup: $HOME/poh-reset-bak-$TS)"
+TS=$(date +%s); mkdir -p "$HOME/dai-reset-bak-$TS"
+tar czf "$HOME/dai-reset-bak-$TS/keys.tar.gz" -C "$HOME" .dai-miner/.wallet-key .dai-miner/wallets 2>/dev/null || true
+rm -rf "$HOME/.dai-miner" "$HOME/.dai-bootnode"
+echo "  local wiped (backup: $HOME/dai-reset-bak-$TS)"
 
 # ── 4. Deploy genesis files to hk ────────────────────────────────────────────
 echo "📤 Deploying genesis snapshot + genesis.js to hk…"
-scp -q "$SNAP"  "$HK:/root/poh-miner/src/consensus/genesis-snapshot.json"
+scp -q "$SNAP"  "$HK:/root/dai-miner/src/consensus/genesis-snapshot.json"
 scp -q "$SNAP"  "$HK:/root/genesis-snapshot.json"
-scp -q "$GENJS" "$HK:/root/poh-miner/src/consensus/genesis.js"
+scp -q "$GENJS" "$HK:/root/dai-miner/src/consensus/genesis.js"
 
 # ── 5. Start bootnode → genesis at height 0 ──────────────────────────────────
 echo "🚀 Starting bootnode…"
-ssh "$HK" 'pm2 restart poh-bootnode --update-env >/dev/null 2>&1; sleep 6
+ssh "$HK" 'pm2 restart dai-bootnode --update-env >/dev/null 2>&1; sleep 6
   echo -n "  bootnode tip: "; curl -s localhost:8080/chain/tip
-  echo; pm2 logs poh-bootnode --lines 20 --nostream 2>/dev/null | grep -i "New genesis hash" | tail -1 || true'
+  echo; pm2 logs dai-bootnode --lines 20 --nostream 2>/dev/null | grep -i "New genesis hash" | tail -1 || true'
 
 # ── 6. Fix miner config + start ──────────────────────────────────────────────
 echo "🔧 Patching miner config (localhost bootnode, no stale snapshot)…"
 ssh "$HK" 'node -e "
-  const fs=require(\"fs\"),p=\"/root/poh-miner/config.json\";
+  const fs=require(\"fs\"),p=\"/root/dai-miner/config.json\";
   const c=JSON.parse(fs.readFileSync(p,\"utf8\"));
-  c.bootnodes=[\"http://127.0.0.1:8080\"]; c.publicHost=\"miner.poh.ge\";
+  c.bootnodes=[\"http://127.0.0.1:8080\"]; c.publicHost=\"miner.iamai.kg\";
   delete c.genesisSnapshot;
   fs.writeFileSync(p, JSON.stringify(c,null,2));
 "'
 echo "🚀 Starting miner…"
-ssh "$HK" 'pm2 restart poh-miner --update-env >/dev/null 2>&1; sleep 18
-  pm2 logs poh-miner --lines 60 --nostream 2>/dev/null | grep -E "Genesis hash verified|Synced to height|Ignoring IPFS" | tail -4 || true'
+ssh "$HK" 'pm2 restart dai-miner --update-env >/dev/null 2>&1; sleep 18
+  pm2 logs dai-miner --lines 60 --nostream 2>/dev/null | grep -E "Genesis hash verified|Synced to height|Ignoring IPFS" | tail -4 || true'
 
 # ── 7. Verify ────────────────────────────────────────────────────────────────
 echo "🔎 Final state:"
 ssh "$HK" 'echo -n "  bootnode height: "; curl -s localhost:8080/chain/tip | node -e "console.log(JSON.parse(require(\"fs\").readFileSync(0,\"utf8\")).height)";
-  echo -n "  miner height:    "; tail -1 /root/.poh-miner/chain/chain.ndjson | node -e "console.log(JSON.parse(require(\"fs\").readFileSync(0,\"utf8\")).height)"'
+  echo -n "  miner height:    "; tail -1 /root/.dai-miner/chain/chain.ndjson | node -e "console.log(JSON.parse(require(\"fs\").readFileSync(0,\"utf8\")).height)"'
 echo "✅ Done. New chain live on genesis $PIN"
 echo "   NOTE: commit src/consensus/genesis.js + genesis-snapshot.json; rebuild the Electron app so downloaded miners ship the new pin."

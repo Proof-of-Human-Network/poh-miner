@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
- * Landing page chat proxy — signs 0.01 POH compute jobs with the local miner wallet
- * and submits them to the public miner API. Web visitors have no POH; this server pays.
+ * Landing page chat proxy — signs 0.01 DAI compute jobs with the local miner wallet
+ * and submits them to the public miner API. Web visitors have no DAI; this server pays.
  *
  * Run on hk:  node scripts/landing-chat-proxy.js
  * Nginx:     location /landing-api/ { proxy_pass http://127.0.0.1:3457/; }
@@ -18,8 +18,8 @@ import { Wallet, WalletManager } from '../src/wallet/wallet.js';
 const PORT = parseInt(process.env.LANDING_CHAT_PORT || '3457', 10);
 const MINER_URL = (process.env.LANDING_CHAT_MINER_URL || 'http://127.0.0.1:3456').replace(/\/$/, '');
 const MAX_MESSAGES = parseInt(process.env.LANDING_CHAT_MAX_PER_IP || '10', 10);
-const FEE_UPOH = parseInt(process.env.LANDING_CHAT_FEE_UPOH || String(10_000_000), 10); // 0.01 POH
-const RATE_FILE = path.join(os.homedir(), '.poh-miner', 'landing-chat-ratelimit.json');
+const FEE_UDAI = parseInt(process.env.LANDING_CHAT_FEE_UDAI || String(10_000_000), 10); // 0.01 DAI
+const RATE_FILE = path.join(os.homedir(), '.dai-miner', 'landing-chat-ratelimit.json');
 const POLL_MS = 2000;
 const POLL_MAX = 45;
 
@@ -83,10 +83,10 @@ function releaseRateSlot(ip) {
 
 function corsHeaders(origin) {
   const allowed = [
-    'https://miner.poh.ge',
-    'http://miner.poh.ge',
-    'https://poh.ge',
-    'http://poh.ge',
+    'https://miner.iamai.kg',
+    'http://miner.iamai.kg',
+    'https://iamai.kg',
+    'http://iamai.kg',
     'http://localhost:4321',
     'http://127.0.0.1:4321',
     'http://localhost:5173',
@@ -100,7 +100,7 @@ function corsHeaders(origin) {
   if (origin && (allowed.includes(origin) || origin.includes('localhost'))) {
     h['Access-Control-Allow-Origin'] = origin;
   } else {
-    h['Access-Control-Allow-Origin'] = 'https://miner.poh.ge';
+    h['Access-Control-Allow-Origin'] = 'https://miner.iamai.kg';
   }
   return h;
 }
@@ -185,14 +185,14 @@ async function handleChat(body, sponsorWallet, minerAddress, model) {
   } catch { /* continue to paid job */ }
 
   const jobId = `web-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`;
-  const { txHash, signature } = await signJobPayment(sponsorWallet, minerAddress, jobId, FEE_UPOH);
+  const { txHash, signature } = await signJobPayment(sponsorWallet, minerAddress, jobId, FEE_UDAI);
 
   const jobBody = {
     id: jobId,
     type: 'compute',
     model: body.model || model,
     payload: { prompt: message, history },
-    maxBudget: FEE_UPOH,
+    maxBudget: FEE_UDAI,
     requesterAddress,
     paymentTx: { txHash, signature },
     source: 'landing-web',
@@ -205,7 +205,7 @@ async function handleChat(body, sponsorWallet, minerAddress, model) {
 
   const submittedId = submit.json?.jobId || jobId;
   const result = await pollJobResult(submittedId);
-  return { type: 'chat', ...result, feeUpoh: FEE_UPOH };
+  return { type: 'chat', ...result, feeUdai: FEE_UDAI };
 }
 
 function createServer(ctx) {
@@ -296,7 +296,7 @@ function createServer(ctx) {
 }
 
 function loadSponsorConfig() {
-  const globalPath = path.join(os.homedir(), '.poh-miner', 'config.json');
+  const globalPath = path.join(os.homedir(), '.dai-miner', 'config.json');
   if (fs.existsSync(globalPath)) {
     try { return JSON.parse(fs.readFileSync(globalPath, 'utf8')); } catch { /* */ }
   }
@@ -310,7 +310,7 @@ async function main() {
     || config.landingChat?.sponsor
     || config.sponsorWallet;
   if (!sponsorAddress) {
-    console.error('[LandingChat] Set landingChat.sponsorWallet in ~/.poh-miner/config.json or LANDING_CHAT_SPONSOR');
+    console.error('[LandingChat] Set landingChat.sponsorWallet in ~/.dai-miner/config.json or LANDING_CHAT_SPONSOR');
     process.exit(1);
   }
 
@@ -341,7 +341,7 @@ async function main() {
   server.listen(PORT, '127.0.0.1', () => {
     console.log(`[LandingChat] Proxy listening on http://127.0.0.1:${PORT}`);
     console.log(`[LandingChat] Miner: ${MINER_URL} (${ctx.minerAddress.slice(0, 16)}…) · sponsor: ${ctx.sponsorAddress.slice(0, 16)}…`);
-    console.log(`[LandingChat] Fee: ${FEE_UPOH / 1e9} POH/msg · max ${MAX_MESSAGES}/IP`);
+    console.log(`[LandingChat] Fee: ${FEE_UDAI / 1e9} DAI/msg · max ${MAX_MESSAGES}/IP`);
   });
 }
 
