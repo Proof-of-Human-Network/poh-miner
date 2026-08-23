@@ -4,73 +4,79 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>DAI (Decentralized Artificial Intelligence) • Modular AI Network, Owned by Its Community</title>
-  <meta name="description" content="DAI — Decentralized Artificial Intelligence. A network where every node is independent. Host your skills, models, and data. Contribute to a global network where each user controls their own infrastructure.">
+  <meta name="description" content="DAI — Decentralized Artificial Intelligence. A sovereign network you govern. Influence what AI does at the protocol — not through a corporation.">
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://fonts.googleapis.com/css2?family=Iceland&display=swap" rel="stylesheet">
-  <link rel="icon" type="image/svg+xml" href="dai-miner.svg">
+  <link rel="icon" type="image/svg+xml" href="dai-miner-on-light.svg">
   <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
   <link rel="shortcut icon" href="favicon.ico">
   <script src="i18n.js" defer></script>
   <style>
-    :root { --bg: #000000; --accent: #22c55e; }
+    :root { --bg: #f5f6f2; --ink: #171717; --muted: #525252; --accent: #16a34a; --card: #ffffff; --line: #e4e6e0; }
 
-    body { font-family: 'Iceland', sans-serif; background: #000; color: #fff; line-height: 1.4; }
+    body { font-family: 'Iceland', sans-serif; background: var(--bg); color: var(--ink); line-height: 1.4; }
     h1, h2, h3, .font-display { font-family: 'Iceland', sans-serif; font-weight: 400; }
 
-    .glass { background: rgba(10,10,10,0.85); border: 1px solid #1f1f1f; backdrop-filter: blur(20px); }
-    .neon { color: #22c55e; }
-    .hero-bg { background: radial-gradient(circle at 50% 25%, rgba(34,197,94,0.10) 0%, transparent 65%); }
+    .glass { background: rgba(255,255,255,0.86); border: 1px solid var(--line); backdrop-filter: blur(20px); }
+    .neon { color: #16a34a; }
+    .hero-bg { background: radial-gradient(circle at 50% 25%, rgba(22,163,74,0.10) 0%, transparent 65%); }
+    .muted { color: var(--muted); }
+    .section-alt { background: #eceee8; }
 
-    /* === GLOBAL +50% FONT SIZE SCALING (same as dai.html) === */
     html { font-size: 150%; }
     @media (max-width: 639px)  { html { font-size: 100%; } }
     @media (max-width: 767px)  { html { font-size: 110%; } }
     .text-xs, .text-\[10px\], .text-\[15px\] { font-size: 0.92rem !important; }
     .footer-text { font-size: 1.25rem !important; }
 
-    /* ── Mobile nav ── */
     .nav-links { display: none; }
     @media (min-width: 1024px) { .nav-links { display: flex; } }
     .hamburger { display: flex; flex-direction: column; gap: 5px; cursor: pointer; padding: 4px; }
-    .hamburger span { display: block; width: 22px; height: 2px; background: #fff; border-radius: 2px; transition: 0.25s; }
+    .hamburger span { display: block; width: 22px; height: 2px; background: #171717; border-radius: 2px; transition: 0.25s; }
     .hamburger.open span:nth-child(1) { transform: translateY(7px) rotate(45deg); }
     .hamburger.open span:nth-child(2) { opacity: 0; }
     .hamburger.open span:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
     @media (min-width: 1024px) { .hamburger { display: none; } }
     .mobile-drawer {
       display: none; position: fixed; top: 64px; left: 0; right: 0; z-index: 49;
-      background: #0a0a0a; border-bottom: 1px solid #1f1f1f;
+      background: #f5f6f2; border-bottom: 1px solid var(--line);
       flex-direction: column; padding: 16px 24px 24px; gap: 0;
     }
     @media (min-width: 640px) { .mobile-drawer { top: 80px; } }
     .mobile-drawer.open { display: flex; }
-    .mobile-drawer a { padding: 14px 0; font-size: 22px; color: #fff; border-bottom: 1px solid #1a1a1a; text-decoration: none; }
+    .mobile-drawer a { padding: 14px 0; font-size: 22px; color: #171717; border-bottom: 1px solid var(--line); text-decoration: none; }
     .mobile-drawer a:last-child { border-bottom: none; }
     @media (min-width: 1024px) { .mobile-drawer { display: none !important; } }
 
-    .chip { border: 1px solid #1f1f1f; background: rgba(10,10,10,0.6); border-radius: 999px; }
-    .ico { width: 40px; height: 40px; stroke: #22c55e; stroke-width: 1.6; fill: none; }
+    .chip { border: 1px solid var(--line); background: rgba(255,255,255,0.7); border-radius: 999px; }
+    .ico { width: 40px; height: 40px; stroke: #16a34a; stroke-width: 1.6; fill: none; }
     .card-hover { transition: transform .25s, border-color .25s; }
-    .card-hover:hover { transform: translateY(-4px); border-color: rgba(34,197,94,0.5); }
+    .card-hover:hover { transform: translateY(-4px); border-color: rgba(22,163,74,0.55); }
     .reveal { opacity: 0; transform: translateY(24px); transition: opacity .7s ease, transform .7s ease; }
     .reveal.in { opacity: 1; transform: none; }
 
-    /* Full-height sections with vertically-centred content */
     .section-full { min-height: 100dvh; display: flex; flex-direction: column; justify-content: center; }
+
+    .dai-lang-select {
+      background: #fff !important;
+      color: #171717 !important;
+      border: 1px solid #d4d6d0 !important;
+    }
   </style>
 </head>
-<body class="bg-black text-white overflow-x-hidden">
+<body class="overflow-x-hidden">
   <!-- Nav -->
-  <nav class="border-b border-white/10 bg-black/80 backdrop-blur-xl fixed w-full z-50">
+  <nav class="border-b border-black/10 bg-[#f5f6f2]/85 backdrop-blur-xl fixed w-full z-50">
     <div class="max-w-7xl mx-auto px-4 sm:px-8 h-16 sm:h-20 flex items-center justify-between">
       <a href="index.html" class="flex items-center gap-x-2 sm:gap-x-3">
-        <img src="dai-miner.svg" alt="DAI Logo" width="36" height="36" class="sm:w-[48px] sm:h-[48px]" style="vertical-align: middle;" />
+        <img src="dai-miner-on-light.svg" alt="DAI Logo" width="36" height="36" class="sm:w-[48px] sm:h-[48px]" style="vertical-align: middle;" />
       </a>
       <div class="nav-links items-center gap-x-6 xl:gap-x-9 text-[17px] xl:text-[20px]">
-        <a href="dai.html" class="hover:text-[#22c55e] transition whitespace-nowrap" data-i18n="nav.dai">DAI</a>
-        <a href="framework.html" class="hover:text-[#22c55e] transition whitespace-nowrap" data-i18n="nav.framework">Framework</a>
-        <a href="wallet/" class="hover:text-[#22c55e] transition whitespace-nowrap" data-i18n="nav.wallet">Wallet</a>
-        <a href="miner.html#start" class="px-3 lg:px-5 py-2 rounded-[4px] bg-[#22c55e] text-black hover:bg-white transition whitespace-nowrap" data-i18n="nav.runminer">Run a miner</a>
+        <a href="dai.html" class="hover:text-[#16a34a] transition whitespace-nowrap" data-i18n="nav.dai">DAI</a>
+        <a href="framework.html" class="hover:text-[#16a34a] transition whitespace-nowrap" data-i18n="nav.framework">Framework</a>
+        <a href="wallet/" class="hover:text-[#16a34a] transition whitespace-nowrap" data-i18n="nav.wallet">Wallet</a>
+        <a href="https://assetux.com" target="_blank" rel="noopener" class="px-3 lg:px-5 py-2 rounded-[4px] border border-[#16a34a] text-[#16a34a] hover:bg-[#16a34a] hover:text-white transition whitespace-nowrap" data-i18n="nav.p2p">P2P</a>
+        <a href="miner.html#start" class="px-3 lg:px-5 py-2 rounded-[4px] bg-[#16a34a] text-white hover:bg-black transition whitespace-nowrap" data-i18n="nav.runminer">Run a miner</a>
         <div data-i18n-switch></div>
       </div>
       <button class="hamburger" id="hamburger" aria-label="Open menu">
@@ -84,6 +90,7 @@
     <a href="dai.html" data-i18n="nav.dai">DAI</a>
     <a href="framework.html" data-i18n="nav.framework">Framework</a>
     <a href="wallet/" data-i18n="nav.wallet">Wallet</a>
+    <a href="https://assetux.com" target="_blank" rel="noopener" data-i18n="nav.p2p">P2P</a>
     <a href="miner.html#start" data-i18n="nav.runminer">Run a miner</a>
     <div data-i18n-switch style="padding:14px 0"></div>
   </div>
@@ -91,21 +98,21 @@
   <!-- Hero -->
   <div class="relative min-h-[100dvh] flex items-center justify-center pt-16 sm:pt-20 hero-bg">
     <div class="relative z-10 max-w-5xl px-6 text-center">
-      <div class="uppercase tracking-[3px] text-xs text-[#22c55e] mb-6" data-i18n="b2b.hero.eyebrow">DECENTRALIZED AI NETWORK</div>
+      <div class="uppercase tracking-[3px] text-xs text-[#16a34a] mb-6" data-i18n="b2b.hero.eyebrow">DECENTRALIZED &amp; SOVEREIGN</div>
       <h1 class="font-display text-[48px] sm:text-[76px] md:text-[130px] leading-[0.9]" data-i18n-html="b2b.hero">
-        Your AI.<br>
-        Your <span class="neon">network.</span>
+        <span class="neon">Decentralized.</span><br>
+        Sovereign.
       </h1>
-      <p class="mt-8 max-w-3xl mx-auto text-[18px] sm:text-[22px] md:text-[26px] text-white/60" data-i18n="b2b.hero.sub">
-        Each node runs what it chooses. Each contribution strengthens the network. No single controller.
+      <p class="mt-8 max-w-3xl mx-auto text-[18px] sm:text-[22px] md:text-[26px] muted" data-i18n="b2b.hero.sub">
+        You govern the AI you use. Vote on what it does. Influence decisions at the protocol — not through a corporation.
       </p>
       <div class="mt-10 flex flex-col sm:flex-row gap-4 justify-center">
-        <a target="_blank" href="https://calendly.com/dai_network"
-           class="inline-flex items-center justify-center px-8 py-3 bg-[#22c55e] text-black text-[18px] sm:text-[24px] md:text-[30px] rounded-[4px] hover:bg-white transition" data-i18n="b2b.hero.cta1">
-          Get a fixed quote →
+        <a href="miner.html#start"
+           class="inline-flex items-center justify-center px-8 py-3 bg-[#16a34a] text-white text-[18px] sm:text-[24px] md:text-[30px] rounded-[4px] hover:bg-black transition" data-i18n="b2b.hero.cta1">
+          Run a miner →
         </a>
         <a href="#how"
-           class="inline-flex items-center justify-center px-8 py-3 border border-white/30 hover:bg-white/5 text-[18px] sm:text-[24px] md:text-[30px] rounded-[4px] transition" data-i18n="b2b.hero.cta2">
+           class="inline-flex items-center justify-center px-8 py-3 border border-black/20 hover:bg-black hover:text-white text-[18px] sm:text-[24px] md:text-[30px] rounded-[4px] transition" data-i18n="b2b.hero.cta2">
           How it works
         </a>
       </div>
@@ -113,33 +120,33 @@
   </div>
 
   <!-- Why decentralized -->
-  <div class="section-full border-t border-white/10 bg-[#050505]">
+  <div class="section-full border-t border-black/10 section-alt">
     <div class="w-full max-w-6xl mx-auto px-4 sm:px-8 py-16 md:py-32">
       <div class="text-center mb-16 md:mb-24 reveal">
-        <div class="uppercase tracking-[3px] text-xs text-[#22c55e] mb-6" data-i18n="b2b.trust.eyebrow">MODULAR, INDEPENDENT NODES</div>
-        <h2 class="font-display text-[40px] sm:text-[60px] md:text-[80px] leading-none" data-i18n="b2b.trust.title">You control your infrastructure.</h2>
+        <div class="uppercase tracking-[3px] text-xs text-[#16a34a] mb-6" data-i18n="b2b.trust.eyebrow">GOVERNANCE, NOT GATEKEEPERS</div>
+        <h2 class="font-display text-[40px] sm:text-[60px] md:text-[80px] leading-none" data-i18n="b2b.trust.title">You steer what AI does.</h2>
       </div>
 
       <div class="grid grid-cols-2 lg:grid-cols-4 gap-8 md:gap-10">
         <div class="glass card-hover p-6 md:p-8 rounded-[6px] reveal">
-          <svg class="ico mb-4" viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="2"/><path d="M12 3v4M12 17v4M3 12h4M17 12h4"/></svg>
-          <h3 class="text-[26px] md:text-[34px] tracking-tight mb-2" data-i18n="b2b.trust.1t">Choose your models</h3>
-          <p class="text-white/60 text-[15px] md:text-[17px]" data-i18n="b2b.trust.1d">Run Llama, Qwen, or any open model. Host private datasets. Every node picks what powers it.</p>
+          <svg class="ico mb-4" viewBox="0 0 24 24"><path d="M12 2 4 6v6c0 5 3.5 8 8 10 4.5-2 8-5 8-10V6z"/><path d="M9 12l2 2 4-4"/></svg>
+          <h3 class="text-[26px] md:text-[34px] tracking-tight mb-2" data-i18n="b2b.trust.1t">Influence decisions</h3>
+          <p class="muted text-[15px] md:text-[17px]" data-i18n="b2b.trust.1d">Every node has a voice. Shape what the network runs — models, skills, and rules — through the protocol, not a boardroom.</p>
         </div>
         <div class="glass card-hover p-6 md:p-8 rounded-[6px] reveal">
           <svg class="ico mb-4" viewBox="0 0 24 24"><circle cx="12" cy="12" r="2.4"/><circle cx="5" cy="6" r="2"/><circle cx="19" cy="6" r="2"/><circle cx="5" cy="18" r="2"/><circle cx="19" cy="18" r="2"/><path d="M6.6 7.2 10 10.4M17.4 7.2 14 10.4M6.6 16.8 10 13.6M17.4 16.8 14 13.6"/></svg>
-          <h3 class="text-[26px] md:text-[34px] tracking-tight mb-2" data-i18n="b2b.trust.2t">Contribute your skills</h3>
-          <p class="text-white/60 text-[15px] md:text-[17px]" data-i18n="b2b.trust.2d">Deploy agents, tools, and specialized models. Let the network find you when you're the best fit for a job.</p>
+          <h3 class="text-[26px] md:text-[34px] tracking-tight mb-2" data-i18n="b2b.trust.2t">Decentralized by design</h3>
+          <p class="muted text-[15px] md:text-[17px]" data-i18n="b2b.trust.2d">Independent nodes, peer-to-peer. No corporation owns the mesh. No central switch to flip.</p>
         </div>
         <div class="glass card-hover p-6 md:p-8 rounded-[6px] reveal">
-          <svg class="ico mb-4" viewBox="0 0 24 24"><path d="M12 2 4 6v6c0 5 3.5 8 8 10 4.5-2 8-5 8-10V6z"/><path d="M9 12l2 2 4-4"/></svg>
-          <h3 class="text-[26px] md:text-[34px] tracking-tight mb-2" data-i18n="b2b.trust.3t">Stay in control</h3>
-          <p class="text-white/60 text-[15px] md:text-[17px]" data-i18n="b2b.trust.3d">No corporation controls the network. No central authority deciding who runs what. Pure peer-to-peer.</p>
+          <svg class="ico mb-4" viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="2"/><path d="M12 3v4M12 17v4M3 12h4M17 12h4"/></svg>
+          <h3 class="text-[26px] md:text-[34px] tracking-tight mb-2" data-i18n="b2b.trust.3t">Sovereign control</h3>
+          <p class="muted text-[15px] md:text-[17px]" data-i18n="b2b.trust.3d">You choose the models, the skills, and the data. You keep the keys. You set the terms.</p>
         </div>
         <div class="glass card-hover p-6 md:p-8 rounded-[6px] reveal">
           <svg class="ico mb-4" viewBox="0 0 24 24"><path d="M3 10h18M7 15h4"/><rect x="2" y="5" width="20" height="14" rx="2"/></svg>
           <h3 class="text-[26px] md:text-[34px] tracking-tight mb-2" data-i18n="b2b.trust.4t">Earn from your contribution</h3>
-          <p class="text-white/60 text-[15px] md:text-[17px]" data-i18n="b2b.trust.4d">Every completed job pays the nodes that made it happen. Your infrastructure becomes an asset.</p>
+          <p class="muted text-[15px] md:text-[17px]" data-i18n="b2b.trust.4d">Every completed job pays the nodes that made it happen. Your infrastructure becomes an asset.</p>
         </div>
       </div>
     </div>
@@ -148,7 +155,7 @@
   <!-- What you can build -->
   <div class="section-full max-w-6xl mx-auto px-4 sm:px-8 py-16 md:py-32">
     <div class="text-center mb-16 md:mb-24 reveal">
-      <div class="uppercase tracking-[3px] text-xs text-[#22c55e] mb-6" data-i18n="b2b.build.eyebrow">BUILD AND CONTRIBUTE</div>
+      <div class="uppercase tracking-[3px] text-xs text-[#16a34a] mb-6" data-i18n="b2b.build.eyebrow">BUILD AND CONTRIBUTE</div>
       <h2 class="font-display text-[40px] sm:text-[56px] md:text-[76px] leading-none" data-i18n="b2b.build.title">Modular from the ground up.</h2>
     </div>
 
@@ -156,98 +163,76 @@
       <div class="glass card-hover p-8 md:p-10 rounded-[6px] reveal">
         <svg class="ico mb-5" viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="2"/><path d="M12 3v4M12 17v4M3 12h4M17 12h4"/></svg>
         <h3 class="text-[34px] md:text-[50px] tracking-tight mb-3" data-i18n="b2b.build.1t">Compose from modules</h3>
-        <p class="text-white/70 text-[17px] md:text-[20px]" data-i18n="b2b.build.1d">Each node is independent. Combine models, tools, agents, and data from peers. No assembly line—pure composition.</p>
+        <p class="muted text-[17px] md:text-[20px]" data-i18n="b2b.build.1d">Each node is independent. Combine models, tools, agents, and data from peers. No assembly line—pure composition.</p>
       </div>
       <div class="glass card-hover p-8 md:p-10 rounded-[6px] reveal">
         <svg class="ico mb-5" viewBox="0 0 24 24"><path d="M13 2 3 14h7l-1 8 10-12h-7z"/></svg>
         <h3 class="text-[34px] md:text-[50px] tracking-tight mb-3" data-i18n="b2b.build.2t">Plug in your context</h3>
-        <p class="text-white/70 text-[17px] md:text-[20px]" data-i18n="b2b.build.2d">Host your private data, datasets, and knowledge. Wire tools via MCP. Only your instances see your context.</p>
+        <p class="muted text-[17px] md:text-[20px]" data-i18n="b2b.build.2d">Host your data, datasets, and knowledge. Wire tools via MCP. You decide what your instances see.</p>
       </div>
       <div class="glass card-hover p-8 md:p-10 rounded-[6px] reveal">
         <svg class="ico mb-5" viewBox="0 0 24 24"><path d="M4 17V7a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v10"/><path d="M2 17h20v2a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2z"/></svg>
         <h3 class="text-[34px] md:text-[50px] tracking-tight mb-3" data-i18n="b2b.build.3t">One open API</h3>
-        <p class="text-white/70 text-[17px] md:text-[20px]" data-i18n="b2b.build.3d">Jobs, chat, search, P2P queries—all HTTP. Route to any node or skill. Zero vendor lock-in.</p>
+        <p class="muted text-[17px] md:text-[20px]" data-i18n="b2b.build.3d">Jobs, chat, search, P2P queries—all HTTP. Route to any node or skill. Zero vendor lock-in.</p>
         <a href="docs/" class="inline-block mt-6 neon text-[18px] md:text-[22px] hover:underline" data-i18n="b2b.build.3cta">Read the API docs →</a>
       </div>
       <div class="glass card-hover p-8 md:p-10 rounded-[6px] reveal">
         <svg class="ico mb-5" viewBox="0 0 24 24"><path d="M12 2v20M2 12h20"/><circle cx="12" cy="12" r="9"/></svg>
         <h3 class="text-[34px] md:text-[50px] tracking-tight mb-3" data-i18n="b2b.build.4t">Earn &amp; be paid</h3>
-        <p class="text-white/70 text-[17px] md:text-[20px]" data-i18n="b2b.build.4d">Your contribution is directly compensated. Per-token rewards for compute, per-job for skills. No intermediary takes a cut.</p>
+        <p class="muted text-[17px] md:text-[20px]" data-i18n="b2b.build.4d">Your contribution is directly compensated. Per-token rewards for compute, per-job for skills. No intermediary takes a cut.</p>
       </div>
     </div>
   </div>
 
   <!-- How it works -->
-  <div id="how" class="section-full border-t border-white/10 bg-[#050505]">
+  <div id="how" class="section-full border-t border-black/10 section-alt">
     <div class="w-full max-w-5xl mx-auto px-4 sm:px-8 py-16 md:py-32">
       <div class="text-center mb-16 md:mb-24 reveal">
-        <div class="uppercase tracking-[3px] text-xs text-[#22c55e] mb-6" data-i18n="b2b.how.eyebrow">HOW IT WORKS</div>
+        <div class="uppercase tracking-[3px] text-xs text-[#16a34a] mb-6" data-i18n="b2b.how.eyebrow">HOW IT WORKS</div>
         <h2 class="font-display text-[40px] sm:text-[56px] md:text-[76px] leading-none" data-i18n="b2b.how.title">Peer-to-peer, bottom-up.</h2>
       </div>
 
       <div class="grid md:grid-cols-3 gap-8 md:gap-10 text-center">
         <div class="glass card-hover p-8 rounded-[6px] reveal">
-          <div class="text-[#22c55e] text-[40px] md:text-[56px] font-display leading-none mb-3">01</div>
+          <div class="text-[#16a34a] text-[40px] md:text-[56px] font-display leading-none mb-3">01</div>
           <h3 class="text-[28px] md:text-[38px] tracking-tight mb-2" data-i18n="b2b.how.1t">Request work</h3>
-          <p class="text-white/60 text-[16px] md:text-[19px]" data-i18n="b2b.how.1d">Post a job to the network with your budget and what you need: a model, skill, or combination.</p>
+          <p class="muted text-[16px] md:text-[19px]" data-i18n="b2b.how.1d">Post a job to the network with your budget and what you need: a model, skill, or combination.</p>
         </div>
         <div class="glass card-hover p-8 rounded-[6px] reveal">
-          <div class="text-[#22c55e] text-[40px] md:text-[56px] font-display leading-none mb-3">02</div>
+          <div class="text-[#16a34a] text-[40px] md:text-[56px] font-display leading-none mb-3">02</div>
           <h3 class="text-[28px] md:text-[38px] tracking-tight mb-2" data-i18n="b2b.how.2t">Nodes compete</h3>
-          <p class="text-white/60 text-[16px] md:text-[19px]" data-i18n="b2b.how.2d">Independent nodes with matching skills bid and execute. The fastest one wins; you pay only what's used.</p>
+          <p class="muted text-[16px] md:text-[19px]" data-i18n="b2b.how.2d">Independent nodes with matching skills bid and execute. The fastest one wins; you pay only what's used.</p>
         </div>
         <div class="glass card-hover p-8 rounded-[6px] reveal">
-          <div class="text-[#22c55e] text-[40px] md:text-[56px] font-display leading-none mb-3">03</div>
+          <div class="text-[#16a34a] text-[40px] md:text-[56px] font-display leading-none mb-3">03</div>
           <h3 class="text-[28px] md:text-[38px] tracking-tight mb-2" data-i18n="b2b.how.3t">Settle on-chain</h3>
-          <p class="text-white/60 text-[16px] md:text-[19px]" data-i18n="b2b.how.3d">Work is verified on-chain. Nodes get paid directly. No middleman, full transparency.</p>
+          <p class="muted text-[16px] md:text-[19px]" data-i18n="b2b.how.3d">Work is verified on-chain. Nodes get paid directly. No middleman, full transparency.</p>
         </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Enterprise CTA -->
-  <div class="section-full max-w-5xl mx-auto px-4 sm:px-8 py-16 md:py-32 text-center">
-    <div class="reveal">
-      <div class="uppercase tracking-[3px] text-xs text-[#22c55e] mb-6" data-i18n="b2b.ent.eyebrow">SCALE ON YOUR TERMS</div>
-      <h2 class="font-display text-[44px] sm:text-[64px] md:text-[96px] leading-[0.95]" data-i18n-html="b2b.ent.title">Run your own<br><span class="neon">infrastructure.</span></h2>
-      <p class="mt-8 max-w-3xl mx-auto text-[17px] sm:text-[21px] md:text-[24px] text-white/60" data-i18n="b2b.ent.desc">
-        Host your models, data, and services on your own nodes. Earn rewards for every contribution. Build the infrastructure you control, and share in a global network that rewards participation.
-      </p>
-      <div class="mt-10 flex flex-col sm:flex-row gap-4 justify-center">
-        <a target="_blank" href="https://calendly.com/dai_network"
-           class="inline-flex items-center justify-center px-8 py-3 bg-[#22c55e] text-black text-[18px] sm:text-[24px] md:text-[28px] rounded-[4px] hover:bg-white transition" data-i18n="b2b.ent.cta">
-          Talk to us — get a fixed quote →
-        </a>
-        <a href="framework.html"
-           class="inline-flex items-center justify-center px-8 py-3 border border-white/30 hover:bg-white/5 text-[18px] sm:text-[24px] md:text-[28px] rounded-[4px] transition" data-i18n="b2b.ent.cta2">
-          Explore the network →
-        </a>
       </div>
     </div>
   </div>
 
   <!-- Footer -->
-  <footer class="border-t border-white/10 py-10">
-    <div class="max-w-6xl mx-auto px-4 sm:px-8 flex flex-col md:flex-row items-center justify-between gap-4 text-white/40 footer-text">
+  <footer class="border-t border-black/10 py-10">
+    <div class="max-w-6xl mx-auto px-4 sm:px-8 flex flex-col md:flex-row items-center justify-between gap-4 muted footer-text">
       <span data-i18n="idx.foot.tag">DAI — Modular AI network. Each node. Each skill. Each contribution.</span>
       <div class="flex items-center gap-6">
-        <a href="miner.html" class="hover:text-[#22c55e] transition" data-i18n="idx.foot.miner">DAI Miner</a>
-        <a href="wallet/" class="hover:text-[#22c55e] transition" data-i18n="nav.wallet">Wallet</a>
-        <a href="docs/" class="hover:text-[#22c55e] transition" data-i18n="idx.foot.docs">Docs</a>
-        <a href="https://t.me/iamaihub" target="_blank" rel="noopener" class="hover:text-[#22c55e] transition">Telegram</a>
-        <a href="https://x.com/iamaihub" target="_blank" rel="noopener" class="hover:text-[#22c55e] transition">X</a>
+        <a href="miner.html" class="hover:text-[#16a34a] transition" data-i18n="idx.foot.miner">DAI Miner</a>
+        <a href="wallet/" class="hover:text-[#16a34a] transition" data-i18n="nav.wallet">Wallet</a>
+        <a href="https://assetux.com" target="_blank" rel="noopener" class="hover:text-[#16a34a] transition" data-i18n="nav.p2p">P2P</a>
+        <a href="docs/" class="hover:text-[#16a34a] transition" data-i18n="idx.foot.docs">Docs</a>
+        <a href="https://t.me/iamaihub" target="_blank" rel="noopener" class="hover:text-[#16a34a] transition">Telegram</a>
+        <a href="https://x.com/iamaihub" target="_blank" rel="noopener" class="hover:text-[#16a34a] transition">X</a>
       </div>
     </div>
   </footer>
 
   <script>
-    // Scroll reveal
     const obs = new IntersectionObserver(entries => {
       entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('in'); obs.unobserve(e.target); } });
     }, { threshold: 0.15 });
     document.querySelectorAll('.reveal').forEach(el => obs.observe(el));
 
-    // Mobile hamburger nav
     const hamburger = document.getElementById('hamburger');
     const drawer = document.getElementById('mobile-drawer');
     if (hamburger && drawer) {

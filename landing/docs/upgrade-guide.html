@@ -8,48 +8,55 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/marked@12/marked.min.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=Iceland&display=swap" rel="stylesheet">
-  <link rel="icon" type="image/svg+xml" href="../dai-miner.svg">
+  <link rel="icon" type="image/svg+xml" href="../dai-miner-on-light.svg">
   <link rel="icon" type="image/png" sizes="32x32" href="../favicon-32.png">
   <link rel="shortcut icon" href="../favicon.ico">
   <style>
-    body { font-family: 'Iceland', sans-serif; background: #000; color: #fff; line-height: 1.55; }
-    .neon { color: #22c55e; }
+    :root { --bg: #f5f6f2; --ink: #171717; --muted: #525252; --accent: #16a34a; --line: #e4e6e0; }
+    body { font-family: 'Iceland', sans-serif; background: var(--bg); color: var(--ink); line-height: 1.55; }
+    .neon { color: #16a34a; }
+    .dai-lang-select {
+      background: #fff !important;
+      color: #171717 !important;
+      border: 1px solid #d4d6d0 !important;
+    }
     /* Rendered markdown */
-    #content h1 { font-size: 2.6rem; margin: 1.2rem 0 1rem; color: #22c55e; }
-    #content h2 { font-size: 2rem;  margin: 2.2rem 0 0.8rem; border-bottom: 1px solid #1f1f1f; padding-bottom: 0.3rem; }
-    #content h3 { font-size: 1.5rem; margin: 1.6rem 0 0.6rem; color: #22c55e; }
-    #content p, #content li { font-size: 1.15rem; color: #d4d4d4; }
+    #content h1 { font-size: 2.6rem; margin: 1.2rem 0 1rem; color: #16a34a; }
+    #content h2 { font-size: 2rem;  margin: 2.2rem 0 0.8rem; border-bottom: 1px solid var(--line); padding-bottom: 0.3rem; }
+    #content h3 { font-size: 1.5rem; margin: 1.6rem 0 0.6rem; color: #16a34a; }
+    #content p, #content li { font-size: 1.15rem; color: #404040; }
     #content ul, #content ol { margin: 0.6rem 0 1rem 1.4rem; list-style: disc; }
-    #content a { color: #22c55e; text-decoration: underline; }
+    #content a { color: #16a34a; text-decoration: underline; }
     #content code {
-      background: #0a0a0a; border: 1px solid #1f1f1f; border-radius: 4px;
+      background: #eceee8; border: 1px solid var(--line); border-radius: 4px;
       padding: 0.08rem 0.35rem; font-family: ui-monospace, Menlo, Consolas, monospace;
-      font-size: 0.85rem; color: #a3e635;
+      font-size: 0.85rem; color: #166534;
     }
     #content pre {
-      background: #0a0a0a; border: 1px solid #1f1f1f; border-radius: 6px;
+      background: #0d1117; border: 1px solid #1f2428; border-radius: 6px;
       padding: 1rem 1.25rem; overflow-x: auto; margin: 0.8rem 0 1.2rem;
     }
     #content pre code { border: none; background: transparent; padding: 0; color: #a3a3a3; font-size: 0.85rem; }
     #content table { width: 100%; border-collapse: collapse; margin: 0.8rem 0 1.4rem; font-size: 1.02rem; }
-    #content th, #content td { border: 1px solid #1f1f1f; padding: 0.5rem 0.8rem; text-align: left; color: #d4d4d4; }
-    #content th { background: #0a0a0a; color: #22c55e; }
-    #content hr { border-color: #1f1f1f; margin: 2rem 0; }
-    #content blockquote { border-left: 3px solid #22c55e; padding-left: 1rem; color: #a3a3a3; margin: 0.8rem 0; }
+    #content th, #content td { border: 1px solid var(--line); padding: 0.5rem 0.8rem; text-align: left; color: #404040; }
+    #content th { background: #eceee8; color: #166534; }
+    #content hr { border-color: var(--line); margin: 2rem 0; }
+    #content blockquote { border-left: 3px solid #16a34a; padding-left: 1rem; color: #525252; margin: 0.8rem 0; }
   </style>
 </head>
-<body class="bg-black text-white">
+<body>
 
-  <nav class="border-b border-white/10 bg-black/80 backdrop-blur-xl fixed w-full z-50">
+  <nav class="border-b border-black/10 bg-[#f5f6f2]/85 backdrop-blur-xl fixed w-full z-50">
     <div class="max-w-7xl mx-auto px-4 sm:px-8 h-16 sm:h-20 flex items-center justify-between">
       <a href="../" class="flex items-center gap-3 hover:opacity-80 transition">
-        <img src="../dai-miner.svg" alt="DAI" width="36" height="36" class="sm:w-12 sm:h-12" />
+        <img src="../dai-miner-on-light.svg" alt="DAI" width="36" height="36" class="sm:w-12 sm:h-12" />
         <span class="text-[28px] sm:text-[40px] leading-none">Upgrade Guide</span>
       </a>
       <div class="flex items-center gap-6 text-[18px] sm:text-[20px]">
-        <a href="./" class="text-white/60 hover:text-white transition">API Docs</a>
-        <a href="../" class="text-white/60 hover:text-white transition">← Landing</a>
-        <a href="https://github.com/Proof-of-Human-Network/poh-miner" target="_blank" class="text-white/60 hover:text-white transition">GitHub</a>
+        <a href="https://assetux.com" target="_blank" rel="noopener" class="text-[#525252] hover:text-[#171717] transition">P2P</a>
+        <a href="./" class="text-[#525252] hover:text-[#171717] transition">API Docs</a>
+        <a href="../" class="text-[#525252] hover:text-[#171717] transition">← Landing</a>
+        <a href="https://github.com/Proof-of-Human-Network/poh-miner" target="_blank" class="text-[#525252] hover:text-[#171717] transition">GitHub</a>
       </div>
     </div>
   </nav>

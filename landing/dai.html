@@ -7,24 +7,26 @@
   <meta name="description" content="DAI is the native token of Decentralized Artificial Intelligence. Earn it by running a node, spend it on real AI compute.">
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://fonts.googleapis.com/css2?family=Iceland&display=swap" rel="stylesheet">
-  <link rel="icon" type="image/svg+xml" href="dai-miner.svg">
+  <link rel="icon" type="image/svg+xml" href="dai-miner-on-light.svg">
   <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
   <link rel="shortcut icon" href="favicon.ico">
   <script src="i18n.js" defer></script>
   <style>
-    :root { --bg: #000000; --accent: #22c55e; }
+    :root { --bg: #f5f6f2; --ink: #171717; --muted: #525252; --accent: #16a34a; --card: #ffffff; --line: #e4e6e0; }
 
-    body { font-family: 'Iceland', sans-serif; background: #000; color: #fff; line-height: 1.4; }
+    body { font-family: 'Iceland', sans-serif; background: var(--bg); color: var(--ink); line-height: 1.4; }
     h1, h2, h3, .font-display { font-family: 'Iceland', sans-serif; font-weight: 400; }
 
-    .glass { background: rgba(10,10,10,0.85); border: 1px solid #1f1f1f; backdrop-filter: blur(20px); }
-    .neon { color: #22c55e; }
+    .glass { background: rgba(255,255,255,0.86); border: 1px solid var(--line); backdrop-filter: blur(20px); }
+    .neon { color: #16a34a; }
+    .muted { color: var(--muted); }
+    .section-alt { background: #eceee8; }
 
     #coin-mesh {
       position: absolute; top: 0; left: 0; width: 100%; height: 100%;
       opacity: 0.9; z-index: 1; pointer-events: none;
     }
-    .hero-bg { background: radial-gradient(circle at 50% 25%, rgba(34,197,94,0.10) 0%, transparent 65%); }
+    .hero-bg { background: radial-gradient(circle at 50% 25%, rgba(22,163,74,0.10) 0%, transparent 65%); }
 
     /* === GLOBAL +50% FONT SIZE SCALING === */
     html { font-size: 150%; }
@@ -37,19 +39,19 @@
     .nav-links { display: none; }
     @media (min-width: 1024px) { .nav-links { display: flex; } }
     .hamburger { display: flex; flex-direction: column; gap: 5px; cursor: pointer; padding: 4px; }
-    .hamburger span { display: block; width: 22px; height: 2px; background: #fff; border-radius: 2px; transition: 0.25s; }
+    .hamburger span { display: block; width: 22px; height: 2px; background: #171717; border-radius: 2px; transition: 0.25s; }
     .hamburger.open span:nth-child(1) { transform: translateY(7px) rotate(45deg); }
     .hamburger.open span:nth-child(2) { opacity: 0; }
     .hamburger.open span:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
     @media (min-width: 1024px) { .hamburger { display: none; } }
     .mobile-drawer {
       display: none; position: fixed; top: 64px; left: 0; right: 0; z-index: 49;
-      background: #0a0a0a; border-bottom: 1px solid #1f1f1f;
+      background: #f5f6f2; border-bottom: 1px solid var(--line);
       flex-direction: column; padding: 16px 24px 24px; gap: 0;
     }
     @media (min-width: 640px) { .mobile-drawer { top: 80px; } }
     .mobile-drawer.open { display: flex; }
-    .mobile-drawer a { padding: 14px 0; font-size: 22px; color: #fff; border-bottom: 1px solid #1a1a1a; text-decoration: none; }
+    .mobile-drawer a { padding: 14px 0; font-size: 22px; color: #171717; border-bottom: 1px solid var(--line); text-decoration: none; }
     .mobile-drawer a:last-child { border-bottom: none; }
     @media (min-width: 1024px) { .mobile-drawer { display: none !important; } }
 
@@ -58,39 +60,46 @@
       width: 190px; height: 190px; border-radius: 9999px;
       display: flex; align-items: center; justify-content: center;
       background: radial-gradient(circle at 35% 28%, #1c5636, #041108 72%);
-      border: 2px solid rgba(34,197,94,0.55);
-      box-shadow: 0 0 80px rgba(34,197,94,0.30), inset 0 0 34px rgba(34,197,94,0.18);
-      color: #22c55e; animation: coin-float 4s ease-in-out infinite; position: relative;
+      border: 2px solid rgba(22,163,74,0.45);
+      box-shadow: 0 0 60px rgba(22,163,74,0.22), inset 0 0 34px rgba(22,163,74,0.16);
+      color: #16a34a; animation: coin-float 4s ease-in-out infinite; position: relative;
     }
     .coin::after {
       content: ''; position: absolute; inset: 14px; border-radius: 9999px;
-      border: 1px solid rgba(34,197,94,0.25);
+      border: 1px solid rgba(22,163,74,0.25);
     }
     @keyframes coin-float { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-16px); } }
 
-    .chip { border: 1px solid #1f1f1f; background: rgba(10,10,10,0.6); border-radius: 999px; }
-    .ico { width: 40px; height: 40px; stroke: #22c55e; stroke-width: 1.6; fill: none; }
+    .chip { border: 1px solid var(--line); background: rgba(255,255,255,0.7); border-radius: 999px; }
+    .ico { width: 40px; height: 40px; stroke: #16a34a; stroke-width: 1.6; fill: none; }
     .card-hover { transition: transform .25s, border-color .25s; }
-    .card-hover:hover { transform: translateY(-4px); border-color: rgba(34,197,94,0.5); }
+    .card-hover:hover { transform: translateY(-4px); border-color: rgba(22,163,74,0.55); }
     .reveal { opacity: 0; transform: translateY(24px); transition: opacity .7s ease, transform .7s ease; }
     .reveal.in { opacity: 1; transform: none; }
 
     /* Full-height sections with vertically-centred content */
     .section-full { min-height: 100dvh; display: flex; flex-direction: column; justify-content: center; }
+
+    .dai-lang-select {
+      background: #fff !important;
+      color: #171717 !important;
+      border: 1px solid #d4d6d0 !important;
+    }
   </style>
 </head>
-<body class="bg-black text-white overflow-x-hidden">
+<body class="overflow-x-hidden">
   <!-- Nav -->
-  <nav class="border-b border-white/10 bg-black/80 backdrop-blur-xl fixed w-full z-50">
+  <nav class="border-b border-black/10 bg-[#f5f6f2]/85 backdrop-blur-xl fixed w-full z-50">
     <div class="max-w-7xl mx-auto px-4 sm:px-8 h-16 sm:h-20 flex items-center justify-between">
       <a href="index.html" class="flex items-center gap-x-2 sm:gap-x-3">
-        <img src="dai-miner.svg" alt="DAI Logo" width="36" height="36" class="sm:w-[48px] sm:h-[48px]" style="vertical-align: middle;" />
+        <img src="dai-miner-on-light.svg" alt="DAI Logo" width="36" height="36" class="sm:w-[48px] sm:h-[48px]" style="vertical-align: middle;" />
       </a>
       <div class="nav-links items-center gap-x-6 xl:gap-x-9 text-[17px] xl:text-[20px]">
-        <a href="dai.html" class="text-[#22c55e] transition whitespace-nowrap" data-i18n="nav.dai">DAI</a>
-        <a href="framework.html" class="hover:text-[#22c55e] transition whitespace-nowrap" data-i18n="nav.framework">Framework</a>
-        <a href="wallet/" class="hover:text-[#22c55e] transition whitespace-nowrap" data-i18n="nav.wallet">Wallet</a>
-        <a href="miner.html#start" class="px-3 lg:px-5 py-2 rounded-[4px] bg-[#22c55e] text-black hover:bg-white transition whitespace-nowrap" data-i18n="nav.runminer">Run a miner</a>
+        <a href="dai.html" class="text-[#16a34a] transition whitespace-nowrap" data-i18n="nav.dai">DAI</a>
+        <a href="framework.html" class="hover:text-[#16a34a] transition whitespace-nowrap" data-i18n="nav.framework">Framework</a>
+        <a href="wallet/" class="hover:text-[#16a34a] transition whitespace-nowrap" data-i18n="nav.wallet">Wallet</a>
+        <a href="https://assetux.com" target="_blank" rel="noopener" class="px-3 lg:px-5 py-2 rounded-[4px] border border-[#16a34a] text-[#16a34a] hover:bg-[#16a34a] hover:text-white transition whitespace-nowrap" data-i18n="nav.p2p">P2P</a>
+        <a href="miner.html#start" class="px-3 lg:px-5 py-2 rounded-[4px] bg-[#16a34a] text-white hover:bg-black transition whitespace-nowrap" data-i18n="nav.runminer">Run a miner</a>
         <div data-i18n-switch></div>
       </div>
       <button class="hamburger" id="hamburger" aria-label="Open menu">
@@ -104,6 +113,7 @@
     <a href="dai.html" data-i18n="nav.dai">DAI</a>
     <a href="framework.html" data-i18n="nav.framework">Framework</a>
     <a href="wallet/" data-i18n="nav.wallet">Wallet</a>
+    <a href="https://assetux.com" target="_blank" rel="noopener" data-i18n="nav.p2p">P2P</a>
     <a href="miner.html#start" data-i18n="nav.runminer">Run a miner</a>
     <div data-i18n-switch style="padding:14px 0"></div>
   </div>
@@ -121,11 +131,11 @@
 
       <div class="mt-10 flex flex-col sm:flex-row gap-4 justify-center">
         <a href="miner.html#start"
-           class="inline-flex items-center justify-center px-8 py-3 bg-[#22c55e] text-black text-[18px] sm:text-[24px] md:text-[30px] rounded-[4px] hover:bg-white transition" data-i18n="idx.hero.cta1">
+           class="inline-flex items-center justify-center px-8 py-3 bg-[#16a34a] text-white text-[18px] sm:text-[24px] md:text-[30px] rounded-[4px] hover:bg-black transition" data-i18n="idx.hero.cta1">
           Start mining DAI
         </a>
         <a href="#earn-spend"
-           class="inline-flex items-center justify-center px-8 py-3 border border-white/30 hover:bg-white/5 text-[18px] sm:text-[24px] md:text-[30px] rounded-[4px] transition" data-i18n="idx.hero.cta2">
+           class="inline-flex items-center justify-center px-8 py-3 border border-black/20 hover:bg-black/5 text-[18px] sm:text-[24px] md:text-[30px] rounded-[4px] transition" data-i18n="idx.hero.cta2">
           How it pays
         </a>
       </div>
@@ -133,46 +143,35 @@
   </div>
 
   <!-- Value band -->
-  <div class="section-full border-y border-white/10 py-12 md:py-16 bg-[#050505]">
+  <div class="section-full border-y border-black/10 py-12 md:py-16 section-alt">
     <div class="max-w-6xl mx-auto px-6">
-      <div class="uppercase tracking-[3px] text-xs text-[#22c55e] mb-10 text-center reveal" data-i18n="idx.val.eyebrow">WHAT ONE DAI IS WORTH</div>
-      <div class="grid md:grid-cols-2 gap-8 md:gap-10 items-stretch">
-        <!-- Left: what DAI is worth -->
-        <div class="glass card-hover p-8 md:p-10 rounded-[6px] reveal flex flex-col justify-center text-center md:text-left">
+      <div class="uppercase tracking-[3px] text-xs text-[#16a34a] mb-10 text-center reveal" data-i18n="idx.val.eyebrow">WHAT ONE DAI IS WORTH</div>
+      <div class="max-w-3xl mx-auto">
+        <div class="glass card-hover p-8 md:p-10 rounded-[6px] reveal flex flex-col justify-center text-center">
           <div class="font-display text-[44px] sm:text-[62px] md:text-[88px] leading-none">1 DAI ≈ <span class="neon">&#?%</span></div>
-          <p class="mt-8 text-[16px] sm:text-[20px] md:text-[23px] text-white/60" data-i18n="idx.val.desc">DAI is priced by the open market via P2P. Today, 1,000,000,000 AI compute tokens worth $200–500 at ChatGPT, Gemini or Grok.</p>
-        </div>
-        <!-- Right: enterprise -->
-        <div class="glass card-hover p-8 md:p-10 rounded-[6px] reveal flex flex-col justify-center text-center md:text-left">
-          <div class="uppercase tracking-[3px] text-xs text-[#22c55e] mb-5" data-i18n="idx.val.ent.eyebrow">ENTERPRISE</div>
-          <h3 class="font-display text-[34px] sm:text-[46px] md:text-[62px] leading-[0.95] mb-5" data-i18n="idx.val.ent.title">Need compute at scale?</h3>
-          <p class="text-[16px] sm:text-[20px] md:text-[23px] text-white/60 mb-9" data-i18n-html="idx.val.ent.desc">Skip the volatility. Talk to us and lock a <span class="text-white/85">fixed quote</span> for enterprise AI compute.</p>
-          <a href="framework.html"
-             class="inline-flex items-center justify-center px-8 py-3 bg-[#22c55e] text-black text-[17px] sm:text-[21px] md:text-[25px] rounded-[4px] hover:bg-white transition self-center md:self-start" data-i18n="idx.val.ent.cta">
-            Get a fixed quote →
-          </a>
+          <p class="mt-8 text-[16px] sm:text-[20px] md:text-[23px] text-[#525252]" data-i18n="idx.val.desc">DAI is priced by the open market via P2P. Today, 1,000,000,000 AI compute tokens worth $200–500 at ChatGPT, Gemini or Grok.</p>
         </div>
       </div>
     </div>
   </div>
 
   <!-- Live Network Chart -->
-  <div class="border-t border-white/10 py-16 md:py-24">
+  <div class="border-t border-black/10 py-16 md:py-24">
     <div class="max-w-5xl mx-auto px-4 sm:px-8">
       <div class="flex items-end justify-between mb-6 gap-4 flex-wrap">
         <div>
-          <div class="uppercase tracking-[3px] text-xs text-[#22c55e] mb-2" data-i18n="idx.chart.eyebrow">LIVE NETWORK</div>
+          <div class="uppercase tracking-[3px] text-xs text-[#16a34a] mb-2" data-i18n="idx.chart.eyebrow">LIVE NETWORK</div>
           <h2 class="font-display text-[32px] sm:text-[42px] leading-none" data-i18n="idx.chart.title">Compute &amp; nodes over time</h2>
         </div>
         <div class="flex items-center gap-6 text-sm">
-          <span class="flex items-center gap-2"><span class="inline-block w-3 h-3 rounded-full bg-[#22c55e]"></span><span class="text-white/60">TFLOPS</span></span>
-          <span class="flex items-center gap-2"><span class="inline-block w-3 h-3 rounded-full bg-[#f97316]"></span><span class="text-white/60" data-i18n="idx.chart.nodes">Nodes</span></span>
-          <span id="chart-last-updated" class="text-white/30 tabular-nums text-xs"></span>
+          <span class="flex items-center gap-2"><span class="inline-block w-3 h-3 rounded-full bg-[#16a34a]"></span><span class="text-[#525252]">TFLOPS</span></span>
+          <span class="flex items-center gap-2"><span class="inline-block w-3 h-3 rounded-full bg-[#ea580c]"></span><span class="text-[#525252]" data-i18n="idx.chart.nodes">Nodes</span></span>
+          <span id="chart-last-updated" class="text-[#737373] tabular-nums text-xs"></span>
         </div>
       </div>
       <div id="net-chart-wrap" class="relative" style="height:450px">
         <canvas id="net-chart" class="absolute inset-0 w-full h-full cursor-crosshair"></canvas>
-        <div id="chart-tooltip" class="pointer-events-none absolute z-20 hidden rounded-md border border-white/10 bg-[#141414]/95 px-3 py-2 text-xs shadow-lg backdrop-blur-sm tabular-nums"></div>
+        <div id="chart-tooltip" class="pointer-events-none absolute z-20 hidden rounded-md border border-black/10 bg-white/95 text-[#171717] px-3 py-2 text-xs shadow-lg backdrop-blur-sm tabular-nums"></div>
       </div>
     </div>
   </div>
@@ -180,7 +179,7 @@
   <!-- Earn vs Spend -->
   <div id="earn-spend" class="section-full max-w-6xl mx-auto px-4 sm:px-8 py-16 md:py-32">
     <div class="text-center mb-16 md:mb-24 reveal">
-      <div class="uppercase tracking-[3px] text-xs text-[#22c55e] mb-6" data-i18n="idx.es.eyebrow">TWO SIDES OF ONE ECONOMY</div>
+      <div class="uppercase tracking-[3px] text-xs text-[#16a34a] mb-6" data-i18n="idx.es.eyebrow">TWO SIDES OF ONE ECONOMY</div>
       <h2 class="font-display text-[40px] sm:text-[60px] md:text-[84px] leading-none" data-i18n="idx.es.title">Earn it. Spend it.</h2>
     </div>
 
@@ -188,23 +187,23 @@
       <div class="glass card-hover p-8 md:p-10 rounded-[6px] reveal">
         <svg class="ico mb-5" viewBox="0 0 24 24"><path d="M12 2v20M2 12h20"/><circle cx="12" cy="12" r="9"/></svg>
         <h3 class="text-[34px] md:text-[50px] tracking-tight mb-3" data-i18n="idx.es.earn.title">Run a node, earn DAI</h3>
-        <p class="text-white/70 text-[17px] md:text-[20px]" data-i18n="idx.es.earn.desc">Your machine solves incoming AI tasks. Every block you win mints fresh DAI straight to your wallet — no cloud, no boss, no cap on how much you run.</p>
+        <p class="text-[#525252] text-[17px] md:text-[20px]" data-i18n="idx.es.earn.desc">Your machine solves incoming AI tasks. Every block you win mints fresh DAI straight to your wallet — no cloud, no boss, no cap on how much you run.</p>
         <a href="miner.html#start" class="inline-block mt-6 neon text-[18px] md:text-[22px] hover:underline" data-i18n="idx.es.earn.cta">Download the miner →</a>
       </div>
       <div class="glass card-hover p-8 md:p-10 rounded-[6px] reveal">
         <svg class="ico mb-5" viewBox="0 0 24 24"><path d="M3 10h18M7 15h4"/><rect x="2" y="5" width="20" height="14" rx="2"/></svg>
         <h3 class="text-[34px] md:text-[50px] tracking-tight mb-3" data-i18n="idx.es.spend.title">Spend DAI, get compute</h3>
-        <p class="text-white/70 text-[17px] md:text-[20px]" data-i18n="idx.es.spend.desc">Post an AI job with a DAI budget and the fastest node answers it. Deploy skills, stake to secure them, or settle peer-to-peer in seconds.</p>
+        <p class="text-[#525252] text-[17px] md:text-[20px]" data-i18n="idx.es.spend.desc">Post an AI job with a DAI budget and the fastest node answers it. Deploy skills, stake to secure them, or settle peer-to-peer in seconds.</p>
         <a href="wallet/" class="inline-block mt-6 neon text-[18px] md:text-[22px] hover:underline" data-i18n="idx.es.spend.cta">Open your wallet →</a>
       </div>
     </div>
   </div>
 
   <!-- Why DAI -->
-  <div class="section-full border-t border-white/10 bg-[#050505]">
+  <div class="section-full border-t border-black/10 section-alt">
     <div class="w-full max-w-6xl mx-auto px-4 sm:px-8 py-16 md:py-32">
       <div class="text-center mb-16 md:mb-24 reveal">
-        <div class="uppercase tracking-[3px] text-xs text-[#22c55e] mb-6" data-i18n="idx.why.eyebrow">WHY DAI</div>
+        <div class="uppercase tracking-[3px] text-xs text-[#16a34a] mb-6" data-i18n="idx.why.eyebrow">WHY DAI</div>
         <h2 class="font-display text-[40px] sm:text-[60px] md:text-[80px] leading-none" data-i18n="idx.why.title">Money that means work.</h2>
       </div>
 
@@ -212,22 +211,22 @@
         <div class="glass card-hover p-6 md:p-8 rounded-[6px] reveal">
           <svg class="ico mb-4" viewBox="0 0 24 24"><path d="M20 7 9 18l-5-5"/></svg>
           <h3 class="text-[26px] md:text-[34px] tracking-tight mb-2" data-i18n="idx.why.1t">Real backing</h3>
-          <p class="text-white/60 text-[15px] md:text-[17px]" data-i18n="idx.why.1d">Every coin is a receipt for a solved AI task.</p>
+          <p class="text-[#525252] text-[15px] md:text-[17px]" data-i18n="idx.why.1d">Every coin is a receipt for a solved AI task.</p>
         </div>
         <div class="glass card-hover p-6 md:p-8 rounded-[6px] reveal">
           <svg class="ico mb-4" viewBox="0 0 24 24"><path d="M12 2 4 6v6c0 5 3.5 8 8 10 4.5-2 8-5 8-10V6z"/></svg>
           <h3 class="text-[26px] md:text-[34px] tracking-tight mb-2" data-i18n="idx.why.2t">Fair launch</h3>
-          <p class="text-white/60 text-[15px] md:text-[17px]" data-i18n="idx.why.2d">No pre-sale. Mine to earn.</p>
+          <p class="text-[#525252] text-[15px] md:text-[17px]" data-i18n="idx.why.2d">No pre-sale. Mine to earn.</p>
         </div>
         <div class="glass card-hover p-6 md:p-8 rounded-[6px] reveal">
           <svg class="ico mb-4" viewBox="0 0 24 24"><path d="M13 2 3 14h7l-1 8 10-12h-7z"/></svg>
           <h3 class="text-[26px] md:text-[34px] tracking-tight mb-2" data-i18n="idx.why.3t">Instant p2p</h3>
-          <p class="text-white/60 text-[15px] md:text-[17px]" data-i18n="idx.why.3d">Signed transfers settle in seconds.</p>
+          <p class="text-[#525252] text-[15px] md:text-[17px]" data-i18n="idx.why.3d">Signed transfers settle in seconds.</p>
         </div>
         <div class="glass card-hover p-6 md:p-8 rounded-[6px] reveal">
           <svg class="ico mb-4" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
           <h3 class="text-[26px] md:text-[34px] tracking-tight mb-2" data-i18n="idx.why.4t">Encrypted</h3>
-          <p class="text-white/60 text-[15px] md:text-[17px]" data-i18n="idx.why.4d">Chat messages are end-to-end encrypted.</p>
+          <p class="text-[#525252] text-[15px] md:text-[17px]" data-i18n="idx.why.4d">Chat messages are end-to-end encrypted.</p>
         </div>
       </div>
     </div>
@@ -236,49 +235,49 @@
   <!-- Utility strip -->
   <div class="section-full max-w-6xl mx-auto px-4 sm:px-8 py-16 md:py-32">
     <div class="text-center mb-16 md:mb-24 reveal">
-      <div class="uppercase tracking-[3px] text-xs text-[#22c55e] mb-6" data-i18n="idx.util.eyebrow">UTILITY</div>
+      <div class="uppercase tracking-[3px] text-xs text-[#16a34a] mb-6" data-i18n="idx.util.eyebrow">UTILITY</div>
       <h2 class="font-display text-[40px] sm:text-[56px] md:text-[76px] leading-none" data-i18n="idx.util.title">One token, the whole network.</h2>
     </div>
 
     <div class="grid grid-cols-2 md:grid-cols-3 gap-8 md:gap-10 text-center">
       <div class="glass card-hover p-6 rounded-[6px] reveal">
-        <div class="text-[30px] md:text-[45px] text-[#22c55e] mb-1">DAI</div>
-        <div class="text-[15px] md:text-[18px] text-white/60" data-i18n="idx.util.1">Earn 1 DAI per block</div>
+        <div class="text-[30px] md:text-[45px] text-[#16a34a] mb-1">DAI</div>
+        <div class="text-[15px] md:text-[18px] text-[#525252]" data-i18n="idx.util.1">Earn 1 DAI per block</div>
       </div>
       <div class="glass card-hover p-6 rounded-[6px] reveal">
-        <div class="text-[30px] md:text-[45px] text-[#22c55e] mb-1">Stablecoins</div>
-        <div class="text-[15px] md:text-[18px] text-white/60" data-i18n="idx.util.2">Redeemable 1:1 for local sovereign currencies</div>
+        <div class="text-[30px] md:text-[45px] text-[#16a34a] mb-1">Stablecoins</div>
+        <div class="text-[15px] md:text-[18px] text-[#525252]" data-i18n="idx.util.2">Redeemable 1:1 for local sovereign currencies</div>
       </div>
       <div class="glass card-hover p-6 rounded-[6px] reveal">
-        <div class="text-[30px] md:text-[45px] text-[#22c55e] mb-1">20%</div>
-        <div class="text-[15px] md:text-[18px] text-white/60" data-i18n="idx.util.3">When your skills are used</div>
+        <div class="text-[30px] md:text-[45px] text-[#16a34a] mb-1">20%</div>
+        <div class="text-[15px] md:text-[18px] text-[#525252]" data-i18n="idx.util.3">When your skills are used</div>
       </div>
     </div>
   </div>
 
   <!-- How to get DAI (3 steps) -->
-  <div class="section-full border-t border-white/10 bg-[#050505]">
+  <div class="section-full border-t border-black/10 section-alt">
     <div class="w-full max-w-5xl mx-auto px-4 sm:px-8 py-16 md:py-32">
       <div class="text-center mb-16 md:mb-24 reveal">
-        <div class="uppercase tracking-[3px] text-xs text-[#22c55e] mb-6" data-i18n="idx.steps.eyebrow">GET STARTED IN MINUTES</div>
+        <div class="uppercase tracking-[3px] text-xs text-[#16a34a] mb-6" data-i18n="idx.steps.eyebrow">GET STARTED IN MINUTES</div>
         <h2 class="font-display text-[40px] sm:text-[56px] md:text-[76px] leading-none" data-i18n="idx.steps.title">Three steps to your first DAI.</h2>
       </div>
 
       <div class="grid md:grid-cols-3 gap-8 md:gap-10">
         <div class="glass card-hover p-6 md:p-8 rounded-[6px] reveal">
-          <div class="text-[#22c55e] text-[40px] md:text-[56px] font-display leading-none mb-3">01</div>
+          <div class="text-[#16a34a] text-[40px] md:text-[56px] font-display leading-none mb-3">01</div>
           <h3 class="text-[26px] md:text-[36px] tracking-tight mb-2" data-i18n="idx.steps.1t">Install</h3>
-          <p class="text-white/60 text-[16px] md:text-[19px]" data-i18n="idx.steps.1d">Download the app. Double-click. No terminal.</p>
+          <p class="text-[#525252] text-[16px] md:text-[19px]" data-i18n="idx.steps.1d">Download the app. Double-click. No terminal.</p>
         </div>
         <div class="glass card-hover p-6 md:p-8 rounded-[6px] reveal">
-          <div class="text-[#22c55e] text-[40px] md:text-[56px] font-display leading-none mb-3">02</div>
+          <div class="text-[#16a34a] text-[40px] md:text-[56px] font-display leading-none mb-3">02</div>
           <h3 class="text-[26px] md:text-[36px] tracking-tight mb-2" data-i18n="idx.steps.2t">Run</h3>
-          <p class="text-white/60 text-[16px] md:text-[19px]" data-i18n="idx.steps.2d">Your node joins the mesh and starts solving tasks.</p>
+          <p class="text-[#525252] text-[16px] md:text-[19px]" data-i18n="idx.steps.2d">Your node joins the mesh and starts solving tasks.</p>
         </div>
         <div class="glass card-hover p-6 md:p-8 rounded-[6px] reveal">
-          <div class="text-[#22c55e] text-[40px] md:text-[56px] font-display leading-none mb-3">03</div>
+          <div class="text-[#16a34a] text-[40px] md:text-[56px] font-display leading-none mb-3">03</div>
           <h3 class="text-[26px] md:text-[36px] tracking-tight mb-2" data-i18n="idx.steps.3t">Earn</h3>
-          <p class="text-white/60 text-[16px] md:text-[19px]" data-i18n="idx.steps.3d">DAI lands in your wallet, block after block.</p>
+          <p class="text-[#525252] text-[16px] md:text-[19px]" data-i18n="idx.steps.3d">DAI lands in your wallet, block after block.</p>
         </div>
       </div>
     </div>
@@ -289,27 +288,27 @@
     <h2 class="font-display text-[48px] sm:text-[72px] md:text-[110px] leading-[0.9] reveal" data-i18n-html="idx.final">Put your machine<br><span class="neon">to work tonight.</span></h2>
     <div class="mt-14 flex flex-col sm:flex-row gap-4 justify-center reveal">
       <a href="miner.html#start"
-         class="inline-flex items-center justify-center px-10 py-4 bg-[#22c55e] text-black text-[20px] sm:text-[26px] md:text-[32px] rounded-[4px] hover:bg-white transition" data-i18n="idx.final.cta1">
+         class="inline-flex items-center justify-center px-10 py-4 bg-[#16a34a] text-white text-[20px] sm:text-[26px] md:text-[32px] rounded-[4px] hover:bg-black transition" data-i18n="idx.final.cta1">
         Download &amp; start mining
       </a>
       <a href="docs/"
-         class="inline-flex items-center justify-center px-10 py-4 border border-white/30 hover:bg-white/5 text-[20px] sm:text-[26px] md:text-[32px] rounded-[4px] transition" data-i18n="idx.final.cta2">
+         class="inline-flex items-center justify-center px-10 py-4 border border-black/20 hover:bg-black/5 text-[20px] sm:text-[26px] md:text-[32px] rounded-[4px] transition" data-i18n="idx.final.cta2">
         Read the docs
       </a>
     </div>
   </div>
 
   <!-- Footer -->
-  <footer class="border-t border-white/10 py-8 footer-text text-white/50">
+  <footer class="border-t border-black/10 py-8 footer-text text-[#525252]">
     <div class="max-w-7xl mx-auto px-4 sm:px-8 flex flex-col sm:flex-row gap-2 sm:justify-between">
       <div data-i18n="idx.foot.tag">DAI — Decentralized AI compute, powered by local LLMs</div>
       <div class="flex gap-x-4 gap-y-2 flex-wrap">
-        <a href="miner.html" class="hover:text-white" data-i18n="idx.foot.miner">DAI Miner</a>
-        <a href="wallet/" class="hover:text-white" data-i18n="nav.wallet">Wallet</a>
-        <a href="docs/" class="hover:text-white" data-i18n="idx.foot.docs">Docs</a>
-        <a href="https://iamai.kg" class="hover:text-white" data-i18n="idx.foot.scanner">Scanner</a>
-        <a href="https://t.me/iamaihub" target="_blank" rel="noopener" class="hover:text-white">Telegram</a>
-        <a href="https://x.com/iamaihub" target="_blank" rel="noopener" class="hover:text-white">X</a>
+        <a href="miner.html" class="hover:text-[#171717]" data-i18n="idx.foot.miner">DAI Miner</a>
+        <a href="wallet/" class="hover:text-[#171717]" data-i18n="nav.wallet">Wallet</a>
+        <a href="docs/" class="hover:text-[#171717]" data-i18n="idx.foot.docs">Docs</a>
+        <a href="https://iamai.kg" class="hover:text-[#171717]" data-i18n="idx.foot.scanner">Scanner</a>
+        <a href="https://t.me/iamaihub" target="_blank" rel="noopener" class="hover:text-[#171717]">Telegram</a>
+        <a href="https://x.com/iamaihub" target="_blank" rel="noopener" class="hover:text-[#171717]">X</a>
       </div>
     </div>
   </footer>
@@ -327,12 +326,12 @@
       function draw() {
         ctx.clearRect(0,0,width,height);
         nodes.forEach(n => { n.x+=n.vx; n.y+=n.vy; if(n.x<0||n.x>width)n.vx*=-1; if(n.y<0||n.y>height)n.vy*=-1; });
-        ctx.strokeStyle = 'rgba(34,197,94,0.12)'; ctx.lineWidth = 1;
+        ctx.strokeStyle = 'rgba(22,163,74,0.18)'; ctx.lineWidth = 1;
         for (let i=0;i<nodes.length;i++) for (let j=i+1;j<nodes.length;j++){
           const dx=nodes[i].x-nodes[j].x, dy=nodes[i].y-nodes[j].y, d=Math.hypot(dx,dy);
           if(d<140){ ctx.globalAlpha=1-d/140; ctx.beginPath(); ctx.moveTo(nodes[i].x,nodes[i].y); ctx.lineTo(nodes[j].x,nodes[j].y); ctx.stroke(); }
         }
-        ctx.globalAlpha=1; ctx.fillStyle='rgba(34,197,94,0.55)';
+        ctx.globalAlpha=1; ctx.fillStyle='rgba(22,163,74,0.50)';
         nodes.forEach(n=>{ ctx.beginPath(); ctx.arc(n.x,n.y,n.r,0,Math.PI*2); ctx.fill(); });
         requestAnimationFrame(draw);
       }
@@ -452,9 +451,9 @@
 
       const spanMs = chartLayout.tMax - chartLayout.tMin;
       tip.innerHTML =
-        '<div class="text-white/45 mb-1">' + fmtChartTime(p.t, spanMs) + '</div>' +
-        '<div class="text-[#f97316]">' + fmtV(p.nodes) + ' nodes</div>' +
-        '<div class="text-[#22c55e]">' + fmtV(p.tflops) + ' TFLOPS</div>';
+        '<div class="text-[#737373] mb-1">' + fmtChartTime(p.t, spanMs) + '</div>' +
+        '<div class="text-[#ea580c]">' + fmtV(p.nodes) + ' nodes</div>' +
+        '<div class="text-[#16a34a]">' + fmtV(p.tflops) + ' TFLOPS</div>';
 
       const rect = wrap.getBoundingClientRect();
       const tipW = 132, tipH = 68;
@@ -477,7 +476,7 @@
       const ctx = canvas.getContext('2d');
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-      ctx.fillStyle = '#0b0b0b';
+      ctx.fillStyle = '#ffffff';
       ctx.fillRect(0, 0, W, H);
 
       const PAD = { top: 18, right: 52, bottom: 30, left: 52 };
@@ -487,14 +486,14 @@
 
       for (let i = 0; i <= 4; i++) {
         const y = PAD.top + (cH / 4) * i;
-        ctx.strokeStyle = 'rgba(255,255,255,0.04)';
+        ctx.strokeStyle = 'rgba(0,0,0,0.06)';
         ctx.lineWidth = 1;
         ctx.beginPath(); ctx.moveTo(PAD.left, y); ctx.lineTo(PAD.left + cW, y); ctx.stroke();
       }
 
       if (points.length < 2) {
         chartLayout = null;
-        ctx.fillStyle = 'rgba(255,255,255,0.15)';
+        ctx.fillStyle = 'rgba(0,0,0,0.28)';
         ctx.font = '13px system-ui,sans-serif';
         ctx.textAlign = 'center';
         ctx.fillText('Collecting data…', PAD.left + cW / 2, PAD.top + cH / 2 + 5);
@@ -507,7 +506,7 @@
       const toX = i => PAD.left + ((points[i].t - tMin) / spanMs) * cW;
       chartLayout = { points, PAD, cW, cH, W, H, tMin, tMax, toX };
 
-      ctx.fillStyle = 'rgba(255,255,255,0.2)';
+      ctx.fillStyle = 'rgba(0,0,0,0.40)';
       ctx.font = '10px monospace';
       ctx.textAlign = 'center';
       const ticks = 6;
@@ -538,7 +537,7 @@
         ctx.fillStyle = color + '88';
         ctx.fillText(unit, xLbl, PAD.top - 5);
 
-        const rgb = color === '#22c55e' ? '34,197,94' : '249,115,22';
+        const rgb = color === '#16a34a' ? '22,163,74' : '234,88,12';
         const grad = ctx.createLinearGradient(0, PAD.top, 0, PAD.top + cH);
         grad.addColorStop(0, `rgba(${rgb},0.25)`);
         grad.addColorStop(0.55, `rgba(${rgb},0.07)`);
@@ -556,13 +555,12 @@
         ctx.strokeStyle = color;
         ctx.lineWidth = 2;
         ctx.lineJoin = 'round';
-        ctx.shadowColor = color;
-        ctx.shadowBlur = 8;
+        ctx.shadowBlur = 0;
         ctx.stroke();
         ctx.shadowBlur = 0;
 
         const lx = toX(sn - 1), ly = toY(series[sn - 1].v);
-        ctx.shadowColor = color; ctx.shadowBlur = 14;
+        ctx.shadowBlur = 0;
         ctx.beginPath(); ctx.arc(lx, ly, 4, 0, Math.PI * 2);
         ctx.fillStyle = color; ctx.fill();
         ctx.shadowBlur = 0;
@@ -575,13 +573,13 @@
       const _sharedMn = Math.max(0, _rawMin - _pad);
       const _sharedMx = _rawMax + _pad;
 
-      drawSeries('tflops', '#22c55e', 'left', 'TFLOPS', _sharedMn, _sharedMx);
-      drawSeries('nodes', '#f97316', 'right', 'nodes', _sharedMn, _sharedMx);
+      drawSeries('tflops', '#16a34a', 'left', 'TFLOPS', _sharedMn, _sharedMx);
+      drawSeries('nodes', '#ea580c', 'right', 'nodes', _sharedMn, _sharedMx);
 
       if (chartHoverIdx != null && points[chartHoverIdx]) {
         const hx = toX(chartHoverIdx);
         const hp = points[chartHoverIdx];
-        ctx.strokeStyle = 'rgba(255,255,255,0.18)';
+        ctx.strokeStyle = 'rgba(0,0,0,0.25)';
         ctx.lineWidth = 1;
         ctx.setLineDash([4, 4]);
         ctx.beginPath();
@@ -593,11 +591,11 @@
         const toY = v => PAD.top + cH - ((v - _sharedMn) / (_sharedMx - _sharedMn || 1)) * cH;
         ctx.beginPath();
         ctx.arc(hx, toY(hp.tflops), 5, 0, Math.PI * 2);
-        ctx.fillStyle = '#22c55e';
+        ctx.fillStyle = '#16a34a';
         ctx.fill();
         ctx.beginPath();
         ctx.arc(hx, toY(hp.nodes), 5, 0, Math.PI * 2);
-        ctx.fillStyle = '#f97316';
+        ctx.fillStyle = '#ea580c';
         ctx.fill();
       }
     }

@@ -7,19 +7,21 @@
   <meta name="description" content="DAI is a framework for white-label sovereign stablecoins whose utility is trade of AI compute. A perpetual market of compute providers — every currency pair, like Forex — with compute offers priced in national currencies.">
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://fonts.googleapis.com/css2?family=Iceland&display=swap" rel="stylesheet">
-  <link rel="icon" type="image/svg+xml" href="dai-miner.svg">
+  <link rel="icon" type="image/svg+xml" href="dai-miner-on-light.svg">
   <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
   <link rel="shortcut icon" href="favicon.ico">
   <script src="i18n.js" defer></script>
   <style>
-    :root { --bg: #000000; --accent: #22c55e; }
+    :root { --bg: #f5f6f2; --ink: #171717; --muted: #525252; --accent: #16a34a; --card: #ffffff; --line: #e4e6e0; }
 
-    body { font-family: 'Iceland', sans-serif; background: #000; color: #fff; line-height: 1.4; }
+    body { font-family: 'Iceland', sans-serif; background: var(--bg); color: var(--ink); line-height: 1.4; }
     h1, h2, h3, .font-display { font-family: 'Iceland', sans-serif; font-weight: 400; }
 
-    .glass { background: rgba(10,10,10,0.85); border: 1px solid #1f1f1f; backdrop-filter: blur(20px); }
-    .neon { color: #22c55e; }
-    .hero-bg { background: radial-gradient(circle at 50% 25%, rgba(34,197,94,0.10) 0%, transparent 65%); }
+    .glass { background: rgba(255,255,255,0.86); border: 1px solid var(--line); backdrop-filter: blur(20px); }
+    .neon { color: #16a34a; }
+    .muted { color: var(--muted); }
+    .section-alt { background: #eceee8; }
+    .hero-bg { background: radial-gradient(circle at 50% 25%, rgba(22,163,74,0.10) 0%, transparent 65%); }
 
     /* === GLOBAL +50% FONT SIZE SCALING (same as index) === */
     html { font-size: 150%; }
@@ -32,67 +34,74 @@
     .nav-links { display: none; }
     @media (min-width: 1024px) { .nav-links { display: flex; } }
     .hamburger { display: flex; flex-direction: column; gap: 5px; cursor: pointer; padding: 4px; }
-    .hamburger span { display: block; width: 22px; height: 2px; background: #fff; border-radius: 2px; transition: 0.25s; }
+    .hamburger span { display: block; width: 22px; height: 2px; background: #171717; border-radius: 2px; transition: 0.25s; }
     .hamburger.open span:nth-child(1) { transform: translateY(7px) rotate(45deg); }
     .hamburger.open span:nth-child(2) { opacity: 0; }
     .hamburger.open span:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
     @media (min-width: 1024px) { .hamburger { display: none; } }
     .mobile-drawer {
       display: none; position: fixed; top: 64px; left: 0; right: 0; z-index: 49;
-      background: #0a0a0a; border-bottom: 1px solid #1f1f1f;
+      background: #f5f6f2; border-bottom: 1px solid var(--line);
       flex-direction: column; padding: 16px 24px 24px; gap: 0;
     }
     @media (min-width: 640px) { .mobile-drawer { top: 80px; } }
     .mobile-drawer.open { display: flex; }
-    .mobile-drawer a { padding: 14px 0; font-size: 22px; color: #fff; border-bottom: 1px solid #1a1a1a; text-decoration: none; }
+    .mobile-drawer a { padding: 14px 0; font-size: 22px; color: #171717; border-bottom: 1px solid var(--line); text-decoration: none; }
     .mobile-drawer a:last-child { border-bottom: none; }
     @media (min-width: 1024px) { .mobile-drawer { display: none !important; } }
 
-    .chip { border: 1px solid #1f1f1f; background: rgba(10,10,10,0.6); border-radius: 999px; }
-    .ico { width: 40px; height: 40px; stroke: #22c55e; stroke-width: 1.6; fill: none; }
+    .chip { border: 1px solid var(--line); background: rgba(255,255,255,0.7); border-radius: 999px; }
+    .ico { width: 40px; height: 40px; stroke: #16a34a; stroke-width: 1.6; fill: none; }
     .card-hover { transition: transform .25s, border-color .25s; }
-    .card-hover:hover { transform: translateY(-4px); border-color: rgba(34,197,94,0.5); }
+    .card-hover:hover { transform: translateY(-4px); border-color: rgba(22,163,74,0.55); }
     .reveal { opacity: 0; transform: translateY(24px); transition: opacity .7s ease, transform .7s ease; }
     .reveal.in { opacity: 1; transform: none; }
 
     .section-full { min-height: 100dvh; display: flex; flex-direction: column; justify-content: center; }
 
+    .dai-lang-select {
+      background: #fff !important;
+      color: #171717 !important;
+      border: 1px solid #d4d6d0 !important;
+    }
+
     /* ── Pairs board ── */
-    .pair-cell { border: 1px solid #1f1f1f; background: rgba(10,10,10,0.7); border-radius: 6px; padding: 14px 16px; transition: border-color .25s; }
-    .pair-cell:hover { border-color: rgba(34,197,94,0.5); }
+    .pair-cell { border: 1px solid var(--line); background: rgba(255,255,255,0.8); border-radius: 6px; padding: 14px 16px; transition: border-color .25s; }
+    .pair-cell:hover { border-color: rgba(22,163,74,0.5); }
     .pair-rate { font-family: 'Iceland', sans-serif; font-size: 30px; line-height: 1; }
-    .tick-up   { color: #22c55e; }
-    .tick-down { color: #ef4444; }
+    .tick-up   { color: #16a34a; }
+    .tick-down { color: #dc2626; }
     .pair-delta { font-size: 13px; }
 
     /* ── Offers table ── */
     table.offers { width: 100%; border-collapse: collapse; }
-    table.offers th { text-align: left; font-size: 13px; letter-spacing: 2px; text-transform: uppercase; color: rgba(255,255,255,0.4); padding: 10px 14px; border-bottom: 1px solid #1f1f1f; font-weight: 400; }
-    table.offers td { padding: 14px; border-bottom: 1px solid #141414; font-size: 18px; }
+    table.offers th { text-align: left; font-size: 13px; letter-spacing: 2px; text-transform: uppercase; color: rgba(0,0,0,0.45); padding: 10px 14px; border-bottom: 1px solid var(--line); font-weight: 400; }
+    table.offers td { padding: 14px; border-bottom: 1px solid #eceee8; font-size: 18px; }
     table.offers tr:last-child td { border-bottom: 0; }
-    table.offers tr.row-hover:hover td { background: rgba(34,197,94,0.05); }
+    table.offers tr.row-hover:hover td { background: rgba(22,163,74,0.07); }
     .flag { font-size: 26px; vertical-align: -3px; }
     .mono { font-variant-numeric: tabular-nums; }
 
-    .ticker-wrap { overflow: hidden; border-top: 1px solid #1f1f1f; border-bottom: 1px solid #1f1f1f; background: rgba(10,10,10,0.7); }
+    .ticker-wrap { overflow: hidden; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); background: rgba(255,255,255,0.75); }
     .ticker { display: inline-flex; white-space: nowrap; animation: ticker-scroll 45s linear infinite; }
     .ticker:hover { animation-play-state: paused; }
     @keyframes ticker-scroll { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }
-    .ticker span.item { padding: 12px 26px; font-size: 20px; color: rgba(255,255,255,0.75); }
+    .ticker span.item { padding: 12px 26px; font-size: 20px; color: rgba(0,0,0,0.70); }
   </style>
 </head>
-<body class="bg-black text-white overflow-x-hidden">
+<body class="overflow-x-hidden">
   <!-- Nav -->
-  <nav class="border-b border-white/10 bg-black/80 backdrop-blur-xl fixed w-full z-50">
+  <nav class="border-b border-black/10 bg-[#f5f6f2]/85 backdrop-blur-xl fixed w-full z-50">
     <div class="max-w-7xl mx-auto px-4 sm:px-8 h-16 sm:h-20 flex items-center justify-between">
       <a href="index.html" class="flex items-center gap-x-2 sm:gap-x-3">
-        <img src="dai-miner.svg" alt="DAI Logo" width="36" height="36" class="sm:w-[48px] sm:h-[48px]" style="vertical-align: middle;" />
+        <img src="dai-miner-on-light.svg" alt="DAI Logo" width="36" height="36" class="sm:w-[48px] sm:h-[48px]" style="vertical-align: middle;" />
       </a>
       <div class="nav-links items-center gap-x-6 xl:gap-x-9 text-[17px] xl:text-[20px]">
-        <a href="dai.html" class="hover:text-[#22c55e] transition whitespace-nowrap" data-i18n="nav.dai">DAI</a>
-        <a href="framework.html" class="text-[#22c55e] transition whitespace-nowrap" data-i18n="nav.framework">Framework</a>
-        <a href="wallet/" class="hover:text-[#22c55e] transition whitespace-nowrap" data-i18n="nav.wallet">Wallet</a>
-        <a href="miner.html#start" class="px-3 lg:px-5 py-2 rounded-[4px] bg-[#22c55e] text-black hover:bg-white transition whitespace-nowrap" data-i18n="nav.runminer">Run a miner</a>
+        <a href="dai.html" class="hover:text-[#16a34a] transition whitespace-nowrap" data-i18n="nav.dai">DAI</a>
+        <a href="framework.html" class="text-[#16a34a] transition whitespace-nowrap" data-i18n="nav.framework">Framework</a>
+        <a href="wallet/" class="hover:text-[#16a34a] transition whitespace-nowrap" data-i18n="nav.wallet">Wallet</a>
+        <a href="https://assetux.com" target="_blank" rel="noopener" class="px-3 lg:px-5 py-2 rounded-[4px] border border-[#16a34a] text-[#16a34a] hover:bg-[#16a34a] hover:text-white transition whitespace-nowrap" data-i18n="nav.p2p">P2P</a>
+        <a href="miner.html#start" class="px-3 lg:px-5 py-2 rounded-[4px] bg-[#16a34a] text-white hover:bg-black transition whitespace-nowrap" data-i18n="nav.runminer">Run a miner</a>
         <div data-i18n-switch></div>
       </div>
       <button class="hamburger" id="hamburger" aria-label="Open menu">
@@ -106,6 +115,7 @@
     <a href="dai.html" data-i18n="nav.dai">DAI</a>
     <a href="framework.html" data-i18n="nav.framework">Framework</a>
     <a href="wallet/" data-i18n="nav.wallet">Wallet</a>
+    <a href="https://assetux.com" target="_blank" rel="noopener" data-i18n="nav.p2p">P2P</a>
     <a href="miner.html#start" data-i18n="nav.runminer">Run a miner</a>
     <div data-i18n-switch style="padding:14px 0"></div>
   </div>
@@ -113,21 +123,21 @@
   <!-- Hero -->
   <div class="relative min-h-[100dvh] flex items-center justify-center pt-16 sm:pt-20 hero-bg">
     <div class="relative z-10 max-w-6xl px-6 text-center">
-      <div class="uppercase tracking-[3px] text-xs text-[#22c55e] mb-6">THE FRAMEWORK</div>
+      <div class="uppercase tracking-[3px] text-xs text-[#16a34a] mb-6">THE FRAMEWORK</div>
       <h1 class="font-display text-[44px] sm:text-[70px] md:text-[110px] leading-[0.9]">
         Every currency.<br>
         <span class="neon">One compute market.</span>
       </h1>
-      <p class="mt-8 max-w-3xl mx-auto text-[18px] sm:text-[22px] md:text-[26px] text-white/60" data-i18n-html="fw.hero.sub">
-        White-label, sovereign <span class="text-white/90">AI compute</span> stablecoins
+      <p class="mt-8 max-w-3xl mx-auto text-[18px] sm:text-[22px] md:text-[26px] text-[#525252]" data-i18n-html="fw.hero.sub">
+        White-label, sovereign <span class="text-[#171717]">AI compute</span> stablecoins
       </p>
       <div class="mt-10 flex flex-col sm:flex-row gap-4 justify-center">
         <a href="#pairs"
-           class="inline-flex items-center justify-center px-8 py-3 bg-[#22c55e] text-black text-[18px] sm:text-[24px] md:text-[28px] rounded-[4px] hover:bg-white transition">
+           class="inline-flex items-center justify-center px-8 py-3 bg-[#16a34a] text-white text-[18px] sm:text-[24px] md:text-[28px] rounded-[4px] hover:bg-black transition">
           See the pairs
         </a>
         <a href="#offers"
-           class="inline-flex items-center justify-center px-8 py-3 border border-white/30 hover:bg-white/5 text-[18px] sm:text-[24px] md:text-[28px] rounded-[4px] transition">
+           class="inline-flex items-center justify-center px-8 py-3 border border-black/20 hover:bg-black/5 text-[18px] sm:text-[24px] md:text-[28px] rounded-[4px] transition">
           Browse compute offers
         </a>
       </div>
@@ -142,36 +152,36 @@
   <!-- How the framework works -->
   <div class="section-full max-w-6xl mx-auto px-4 sm:px-8 py-16 md:py-32">
     <div class="text-center mb-16 md:mb-24 reveal">
-      <div class="uppercase tracking-[3px] text-xs text-[#22c55e] mb-6">WHITE-LABEL SOVEREIGN STABLECOINS</div>
+      <div class="uppercase tracking-[3px] text-xs text-[#16a34a] mb-6">WHITE-LABEL SOVEREIGN STABLECOINS</div>
       <h2 class="font-display text-[40px] sm:text-[56px] md:text-[80px] leading-none">A stablecoin factory,<br>with utility built in.</h2>
     </div>
 
     <div class="grid md:grid-cols-3 gap-8 md:gap-10">
       <div class="glass card-hover p-6 md:p-8 rounded-[6px] reveal">
-        <div class="text-[#22c55e] text-[40px] md:text-[56px] font-display leading-none mb-3">01</div>
+        <div class="text-[#16a34a] text-[40px] md:text-[56px] font-display leading-none mb-3">01</div>
         <h3 class="text-[26px] md:text-[36px] tracking-tight mb-2">Mint locally</h3>
-        <p class="text-white/60 text-[16px] md:text-[19px]">A licensed issuer mints a coin pegged 1:1 to the national currency. Same chain, your flag.</p>
+        <p class="text-[#525252] text-[16px] md:text-[19px]">A licensed issuer mints a coin pegged 1:1 to the national currency. Same chain, your flag.</p>
       </div>
       <div class="glass card-hover p-6 md:p-8 rounded-[6px] reveal">
-        <div class="text-[#22c55e] text-[40px] md:text-[56px] font-display leading-none mb-3">02</div>
+        <div class="text-[#16a34a] text-[40px] md:text-[56px] font-display leading-none mb-3">02</div>
         <h3 class="text-[26px] md:text-[36px] tracking-tight mb-2">Back it with compute</h3>
-        <p class="text-white/60 text-[16px] md:text-[19px]">The coin buys AI compute from local GPUs — clubs, labs, home rigs.</p>
+        <p class="text-[#525252] text-[16px] md:text-[19px]">The coin buys AI compute from local GPUs — clubs, labs, home rigs.</p>
       </div>
       <div class="glass card-hover p-6 md:p-8 rounded-[6px] reveal">
-        <div class="text-[#22c55e] text-[40px] md:text-[56px] font-display leading-none mb-3">03</div>
+        <div class="text-[#16a34a] text-[40px] md:text-[56px] font-display leading-none mb-3">03</div>
         <h3 class="text-[26px] md:text-[36px] tracking-tight mb-2">Trade every pair</h3>
-        <p class="text-white/60 text-[16px] md:text-[19px]">All coins list against each other in one perpetual market.</p>
+        <p class="text-[#525252] text-[16px] md:text-[19px]">All coins list against each other in one perpetual market.</p>
       </div>
     </div>
   </div>
 
   <!-- Pairs market -->
-  <div id="pairs" class="section-full border-t border-white/10 bg-[#050505]">
+  <div id="pairs" class="section-full border-t border-black/10 section-alt">
     <div class="w-full max-w-6xl mx-auto px-4 sm:px-8 py-16 md:py-32">
       <div class="text-center mb-12 md:mb-20 reveal">
-        <div class="uppercase tracking-[3px] text-xs text-[#22c55e] mb-6">THE PERP MARKET</div>
+        <div class="uppercase tracking-[3px] text-xs text-[#16a34a] mb-6">THE PERP MARKET</div>
         <h2 class="font-display text-[40px] sm:text-[56px] md:text-[80px] leading-none">Compute pairs,<br>quoted like Forex.</h2>
-        <p class="mt-8 max-w-3xl mx-auto text-[17px] sm:text-[20px] md:text-[23px] text-white/60">
+        <p class="mt-8 max-w-3xl mx-auto text-[17px] sm:text-[20px] md:text-[23px] text-[#525252]">
           αιGEL/KGST, αιBTN/αιETB, KGST/αιGEL — every pair, no expiry.
           Buying compute in any currency is an FX trade.
         </p>
@@ -180,16 +190,16 @@
       <div id="pairs-board" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 reveal">
         <!-- filled by JS -->
       </div>
-      <p class="mt-6 text-center text-white/30 text-[14px]">Indicative cross-rates. Live quotes settle on-chain in &lt;60&nbsp;s.</p>
+      <p class="mt-6 text-center text-[#737373] text-[14px]">Indicative cross-rates. Live quotes settle on-chain in &lt;60&nbsp;s.</p>
     </div>
   </div>
 
   <!-- Compute offers / tenders -->
   <div id="offers" class="section-full max-w-6xl mx-auto px-4 sm:px-8 py-16 md:py-32">
     <div class="text-center mb-12 md:mb-20 reveal">
-      <div class="uppercase tracking-[3px] text-xs text-[#22c55e] mb-6">COMPUTE OFFERS</div>
+      <div class="uppercase tracking-[3px] text-xs text-[#16a34a] mb-6">COMPUTE OFFERS</div>
       <h2 class="font-display text-[40px] sm:text-[56px] md:text-[80px] leading-none">Tenders, minus the wait.</h2>
-      <p class="mt-8 max-w-3xl mx-auto text-[17px] sm:text-[20px] md:text-[23px] text-white/60">
+      <p class="mt-8 max-w-3xl mx-auto text-[17px] sm:text-[20px] md:text-[23px] text-[#525252]">
         Compute offers priced in national currencies. Buy like a tender — executed in seconds.
       </p>
     </div>
@@ -213,43 +223,43 @@
       <div class="glass card-hover p-8 md:p-10 rounded-[6px] reveal">
         <svg class="ico mb-5" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 3a15 15 0 0 1 0 18M12 3a15 15 0 0 0 0 18M3 12h18"/></svg>
         <h3 class="text-[30px] md:text-[42px] tracking-tight mb-3">Choose your geography</h3>
-        <p class="text-white/70 text-[17px] md:text-[20px]">Pin your job to one country. Local talent, local machines, local money.</p>
+        <p class="text-[#525252] text-[17px] md:text-[20px]">Pin your job to one country. Local talent, local machines, local money.</p>
       </div>
       <div class="glass card-hover p-8 md:p-10 rounded-[6px] reveal">
         <svg class="ico mb-5" viewBox="0 0 24 24"><path d="M3 17l6-6 4 4 8-8"/><path d="M14 7h7v7"/></svg>
         <h3 class="text-[30px] md:text-[42px] tracking-tight mb-3">Or take the open market</h3>
-        <p class="text-white/70 text-[17px] md:text-[20px]">Post to all geographies at once — the cheapest qualified compute wins.</p>
+        <p class="text-[#525252] text-[17px] md:text-[20px]">Post to all geographies at once — the cheapest qualified compute wins.</p>
       </div>
     </div>
   </div>
 
   <!-- Talent -->
-  <div class="section-full border-t border-white/10 bg-[#050505]">
+  <div class="section-full border-t border-black/10 section-alt">
     <div class="w-full max-w-6xl mx-auto px-4 sm:px-8 py-16 md:py-32">
       <div class="text-center mb-16 md:mb-24 reveal">
-        <div class="uppercase tracking-[3px] text-xs text-[#22c55e] mb-6">PEOPLE, NOT JUST MACHINES</div>
+        <div class="uppercase tracking-[3px] text-xs text-[#16a34a] mb-6">PEOPLE, NOT JUST MACHINES</div>
         <h2 class="font-display text-[40px] sm:text-[56px] md:text-[80px] leading-none">Hire the talent<br>next to the compute.</h2>
       </div>
       <div class="grid grid-cols-2 lg:grid-cols-4 gap-8 md:gap-10">
         <div class="glass card-hover p-6 md:p-8 rounded-[6px] reveal">
           <svg class="ico mb-4" viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.5-6 8-6s8 2 8 6"/></svg>
           <h3 class="text-[24px] md:text-[32px] tracking-tight mb-2">AI operators</h3>
-          <p class="text-white/60 text-[15px] md:text-[17px]">Paid in their own stablecoin, same hour.</p>
+          <p class="text-[#525252] text-[15px] md:text-[17px]">Paid in their own stablecoin, same hour.</p>
         </div>
         <div class="glass card-hover p-6 md:p-8 rounded-[6px] reveal">
           <svg class="ico mb-4" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>
           <h3 class="text-[24px] md:text-[32px] tracking-tight mb-2">Gaming clubs</h3>
-          <p class="text-white/60 text-[15px] md:text-[17px]">Idle hours sell compute in the background.</p>
+          <p class="text-[#525252] text-[15px] md:text-[17px]">Idle hours sell compute in the background.</p>
         </div>
         <div class="glass card-hover p-6 md:p-8 rounded-[6px] reveal">
           <svg class="ico mb-4" viewBox="0 0 24 24"><path d="M12 3 2 8l10 5 10-5z"/><path d="M6 10v6c0 1.5 2.7 3 6 3s6-1.5 6-3v-6"/></svg>
           <h3 class="text-[24px] md:text-[32px] tracking-tight mb-2">Universities</h3>
-          <p class="text-white/60 text-[15px] md:text-[17px]">Labs host compute, students get paid roles.</p>
+          <p class="text-[#525252] text-[15px] md:text-[17px]">Labs host compute, students get paid roles.</p>
         </div>
         <div class="glass card-hover p-6 md:p-8 rounded-[6px] reveal">
           <svg class="ico mb-4" viewBox="0 0 24 24"><path d="M3 21V8l9-5 9 5v13"/><path d="M9 21v-6h6v6"/></svg>
           <h3 class="text-[24px] md:text-[32px] tracking-tight mb-2">Home miners</h3>
-          <p class="text-white/60 text-[15px] md:text-[17px]">One card at home is a market participant.</p>
+          <p class="text-[#525252] text-[15px] md:text-[17px]">One card at home is a market participant.</p>
         </div>
       </div>
     </div>
@@ -258,56 +268,56 @@
   <!-- Live geographies -->
   <div class="section-full max-w-6xl mx-auto px-4 sm:px-8 py-16 md:py-32">
     <div class="text-center mb-16 md:mb-24 reveal">
-      <div class="uppercase tracking-[3px] text-xs text-[#22c55e] mb-6">THE MARKETS BOARD</div>
+      <div class="uppercase tracking-[3px] text-xs text-[#16a34a] mb-6">THE MARKETS BOARD</div>
       <h2 class="font-display text-[40px] sm:text-[56px] md:text-[80px] leading-none">Compute coins.<br>One chain.</h2>
-      <div class="mt-10 space-y-2 text-[15px] sm:text-[17px] md:text-[19px] tracking-[0.08em] text-white/50 font-display">
+      <div class="mt-10 space-y-2 text-[15px] sm:text-[17px] md:text-[19px] tracking-[0.08em] text-[#525252] font-display">
         <div>USDT / KGST / aiETB · aiGEL · aiBTN</div>
         <div>GELt / aiGEL / aiETB · aiBTN · KGST</div>
       </div>
-      <p class="mt-6 max-w-3xl mx-auto text-[16px] sm:text-[18px] text-white/55">Tether and the Government of Georgia are already building GELt. aiGEL is the compute coin on that rail.</p>
+      <p class="mt-6 max-w-3xl mx-auto text-[16px] sm:text-[18px] text-[#525252]">Tether and the Government of Georgia are already building GELt. aiGEL is the compute coin on that rail.</p>
     </div>
     <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-6 md:gap-8">
       <div class="glass p-6 rounded-[6px] reveal text-center">
         <div class="flag mb-2">🇬🇪</div>
-        <div class="text-[30px] md:text-[38px] text-[#22c55e] leading-none">GELt</div>
-        <div class="text-[15px] text-white/60 mt-2">External. Tether + GoG.</div>
+        <div class="text-[30px] md:text-[38px] text-[#16a34a] leading-none">GELt</div>
+        <div class="text-[15px] text-[#525252] mt-2">External. Tether + GoG.</div>
       </div>
       <a href="gel/" class="glass card-hover p-6 rounded-[6px] reveal text-center block">
         <div class="flag mb-2">🇬🇪</div>
-        <div class="text-[30px] md:text-[38px] text-[#22c55e] leading-none">αιGEL</div>
-        <div class="text-[15px] text-white/60 mt-2">Compute coin</div>
+        <div class="text-[30px] md:text-[38px] text-[#16a34a] leading-none">αιGEL</div>
+        <div class="text-[15px] text-[#525252] mt-2">Compute coin</div>
       </a>
       <a href="kgs/" class="glass card-hover p-6 rounded-[6px] reveal text-center block">
         <div class="flag mb-2">🇰🇬</div>
-        <div class="text-[30px] md:text-[38px] text-[#22c55e] leading-none">KGST</div>
-        <div class="text-[15px] text-white/60 mt-2">Rail. $0.03 hydro.</div>
+        <div class="text-[30px] md:text-[38px] text-[#16a34a] leading-none">KGST</div>
+        <div class="text-[15px] text-[#525252] mt-2">Rail. $0.03 hydro.</div>
       </a>
       <a href="etb/" class="glass card-hover p-6 rounded-[6px] reveal text-center block">
         <div class="flag mb-2">🇪🇹</div>
-        <div class="text-[30px] md:text-[38px] text-[#22c55e] leading-none">αιETB</div>
-        <div class="text-[15px] text-white/60 mt-2">Ethiopia — cheapest kWh, 1M students</div>
+        <div class="text-[30px] md:text-[38px] text-[#16a34a] leading-none">αιETB</div>
+        <div class="text-[15px] text-[#525252] mt-2">Ethiopia — cheapest kWh, 1M students</div>
       </a>
       <a href="btn/" class="glass card-hover p-6 rounded-[6px] reveal text-center block">
         <div class="flag mb-2">🇧🇹</div>
-        <div class="text-[30px] md:text-[38px] text-[#22c55e] leading-none">αιBTN</div>
-        <div class="text-[15px] text-white/60 mt-2">Bhutan — carbon-free hydro</div>
+        <div class="text-[30px] md:text-[38px] text-[#16a34a] leading-none">αιBTN</div>
+        <div class="text-[15px] text-[#525252] mt-2">Bhutan — carbon-free hydro</div>
       </a>
       <div class="glass p-6 rounded-[6px] reveal text-center">
-        <div class="text-[30px] md:text-[38px] text-[#22c55e] leading-none mt-8">USDT</div>
-        <div class="text-[15px] text-white/60 mt-2">On-ramp</div>
+        <div class="text-[30px] md:text-[38px] text-[#16a34a] leading-none mt-8">USDT</div>
+        <div class="text-[15px] text-[#525252] mt-2">On-ramp</div>
       </div>
     </div>
-    <p class="mt-10 text-center text-white/40 text-[16px] reveal">Your currency next? The framework is white-label.</p>
+    <p class="mt-10 text-center text-[#737373] text-[16px] reveal">Your currency next? The framework is white-label.</p>
   </div>
 
   <!-- Reserve funding -->
-  <div class="section-full border-t border-white/10 bg-[#050505]">
+  <div class="section-full border-t border-black/10 section-alt">
     <div class="w-full max-w-5xl mx-auto px-4 sm:px-8 py-16 md:py-32 text-center">
       <div class="reveal">
-        <div class="uppercase tracking-[3px] text-xs text-[#22c55e] mb-6" data-i18n="fw.fund.eyebrow">RESERVE FUNDING</div>
+        <div class="uppercase tracking-[3px] text-xs text-[#16a34a] mb-6" data-i18n="fw.fund.eyebrow">RESERVE FUNDING</div>
         <h2 class="font-display text-[40px] sm:text-[56px] md:text-[76px] leading-none" data-i18n-html="fw.fund.title">Seeded by an <span class="neon">offshore note.</span></h2>
-        <p class="mt-8 max-w-3xl mx-auto text-[17px] sm:text-[20px] md:text-[23px] text-white/60" data-i18n="fw.fund.desc">Each coin's reserve can be seeded with privately placed notes: an offshore SPV places them with qualified international investors, 100% of the proceeds sit in a ring-fenced custodial reserve backing the coin, and the notes are serviced by compute revenue plus yield on the reserve. Coin holders never carry investor risk.</p>
-        <p class="mt-6 max-w-3xl mx-auto text-[15px] text-white/35" data-i18n="fw.fund.notice">A structure, not an offer — available to qualified institutional investors on request.</p>
+        <p class="mt-8 max-w-3xl mx-auto text-[17px] sm:text-[20px] md:text-[23px] text-[#525252]" data-i18n="fw.fund.desc">Each coin's reserve can be seeded with privately placed notes: an offshore SPV places them with qualified international investors, 100% of the proceeds sit in a ring-fenced custodial reserve backing the coin, and the notes are serviced by compute revenue plus yield on the reserve. Coin holders never carry investor risk.</p>
+        <p class="mt-6 max-w-3xl mx-auto text-[15px] text-[#737373]" data-i18n="fw.fund.notice">A structure, not an offer — available to qualified institutional investors on request.</p>
       </div>
     </div>
   </div>
@@ -315,30 +325,26 @@
   <!-- Final CTA -->
   <div class="section-full max-w-5xl mx-auto px-4 sm:px-6 py-20 md:py-44 text-center hero-bg">
     <h2 class="font-display text-[44px] sm:text-[68px] md:text-[104px] leading-[0.9] reveal">Launch your currency's<br><span class="neon">compute coin.</span></h2>
-    <p class="mt-8 max-w-2xl mx-auto text-[17px] sm:text-[21px] text-white/60 reveal">One issuer, one pilot batch, 12 weeks. The coin stays yours.</p>
+    <p class="mt-8 max-w-2xl mx-auto text-[17px] sm:text-[21px] text-[#525252] reveal">One issuer, one pilot batch, 12 weeks. The coin stays yours.</p>
     <div class="mt-12 flex flex-col sm:flex-row gap-4 justify-center reveal">
-      <a href="https://calendly.com/dai_network" target="_blank" rel="noopener"
-         class="inline-flex items-center justify-center px-10 py-4 bg-[#22c55e] text-black text-[20px] sm:text-[26px] md:text-[30px] rounded-[4px] hover:bg-white transition">
-        Talk to us
-      </a>
       <a href="docs/"
-         class="inline-flex items-center justify-center px-10 py-4 border border-white/30 hover:bg-white/5 text-[20px] sm:text-[26px] md:text-[30px] rounded-[4px] transition">
+         class="inline-flex items-center justify-center px-10 py-4 bg-[#16a34a] text-white text-[20px] sm:text-[26px] md:text-[30px] rounded-[4px] hover:bg-black transition">
         Read the docs
       </a>
     </div>
   </div>
 
   <!-- Footer -->
-  <footer class="border-t border-white/10 py-8 footer-text text-white/50">
+  <footer class="border-t border-black/10 py-8 footer-text text-[#525252]">
     <div class="max-w-7xl mx-auto px-4 sm:px-8 flex flex-col sm:flex-row gap-2 sm:justify-between">
       <div data-i18n="idx.foot.tag">DAI — Decentralized AI compute, powered by local LLMs</div>
       <div class="flex gap-x-4 gap-y-2 flex-wrap">
-        <a href="miner.html" class="hover:text-white" data-i18n="idx.foot.miner">DAI Miner</a>
-        <a href="wallet/" class="hover:text-white" data-i18n="nav.wallet">Wallet</a>
-        <a href="docs/" class="hover:text-white" data-i18n="idx.foot.docs">Docs</a>
-        <a href="https://iamai.kg" class="hover:text-white" data-i18n="idx.foot.scanner">Scanner</a>
-        <a href="https://t.me/iamaihub" target="_blank" rel="noopener" class="hover:text-white">Telegram</a>
-        <a href="https://x.com/iamaihub" target="_blank" rel="noopener" class="hover:text-white">X</a>
+        <a href="miner.html" class="hover:text-[#171717]" data-i18n="idx.foot.miner">DAI Miner</a>
+        <a href="wallet/" class="hover:text-[#171717]" data-i18n="nav.wallet">Wallet</a>
+        <a href="docs/" class="hover:text-[#171717]" data-i18n="idx.foot.docs">Docs</a>
+        <a href="https://iamai.kg" class="hover:text-[#171717]" data-i18n="idx.foot.scanner">Scanner</a>
+        <a href="https://t.me/iamaihub" target="_blank" rel="noopener" class="hover:text-[#171717]">Telegram</a>
+        <a href="https://x.com/iamaihub" target="_blank" rel="noopener" class="hover:text-[#171717]">X</a>
       </div>
     </div>
   </footer>
@@ -383,10 +389,10 @@
     function renderPairs() {
       const board = document.getElementById('pairs-board');
       board.innerHTML = state.map((s, i) => {
-        const cls = s.drift > 0 ? 'tick-up' : s.drift < 0 ? 'tick-down' : 'text-white/85';
+        const cls = s.drift > 0 ? 'tick-up' : s.drift < 0 ? 'tick-down' : 'text-[#171717]';
         const arrow = s.drift > 0 ? '▲' : s.drift < 0 ? '▼' : '·';
         return `<div class="pair-cell" data-i="${i}">
-          <div class="text-[14px] text-white/50 tracking-wide">${s.pair.base.flag} ${s.pair.base.code} / ${s.pair.quote.code} ${s.pair.quote.flag}</div>
+          <div class="text-[14px] text-[#525252] tracking-wide">${s.pair.base.flag} ${s.pair.base.code} / ${s.pair.quote.code} ${s.pair.quote.flag}</div>
           <div class="pair-rate mono ${cls} mt-1">${fmtRate(s.rate)}</div>
           <div class="pair-delta mono ${cls}">${arrow} ${(Math.abs(s.drift) * 100).toFixed(3)}%</div>
         </div>`;
@@ -427,8 +433,8 @@
       document.getElementById('offers-body').innerHTML = rows.map(r => `
         <tr class="row-hover">
           <td><span class="flag">${r.c.flag}</span> &nbsp;${r.c.country}</td>
-          <td class="text-[#22c55e]">${r.c.code}</td>
-          <td class="mono text-white/60">$${r.c.power.toFixed(3)}</td>
+          <td class="text-[#16a34a]">${r.c.code}</td>
+          <td class="mono text-[#525252]">$${r.c.power.toFixed(3)}</td>
           <td class="mono">${fmtLocal(r.c.fx)} ${r.c.code}/USD</td>
           <td><a href="${r.c.slug}/" class="neon hover:underline whitespace-nowrap">View offer →</a></td>
         </tr>`).join('');
