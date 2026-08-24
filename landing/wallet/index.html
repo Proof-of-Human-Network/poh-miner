@@ -6,16 +6,24 @@
   <title>DAI Wallet • Track Your AI Compute Earnings</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://fonts.googleapis.com/css2?family=Iceland&display=swap" rel="stylesheet">
-  <link rel="icon" type="image/svg+xml" href="../dai-miner.svg">
+  <link rel="icon" type="image/svg+xml" href="../dai-miner-on-light.svg">
   <link rel="icon" type="image/png" sizes="32x32" href="../favicon-32.png">
   <link rel="shortcut icon" href="../favicon.ico">
   <script src="../i18n.js" defer></script>
   <style>
     html, body { overflow-x: hidden; max-width: 100vw; }
-    body { font-family: 'Iceland', sans-serif; background: #000; color: #fff; line-height: 1.45; }
+    :root {
+      --bg: #f5f6f2; --ink: #171717; --muted: #525252; --accent: #16a34a; --card: #ffffff; --line: #e4e6e0;
+    }
+    body { font-family: 'Iceland', sans-serif; background: var(--bg); color: var(--ink); line-height: 1.45; }
+    .section-alt { background: #eceee8; }
+    .dai-lang-select {
+      background: var(--card) !important; color: var(--ink) !important; border-color: var(--line) !important;
+    }
+    .dai-lang-select option { background: var(--card) !important; color: var(--ink) !important; }
     h1,h2,h3,.font-display { font-family: 'Iceland', sans-serif; font-weight: 400; }
-    .glass { background: rgba(10,10,10,0.85); border: 1px solid #1f1f1f; backdrop-filter: blur(20px); }
-    .neon { color: #22c55e; }
+    .glass { background: rgba(255,255,255,0.86); border: 1px solid var(--line); backdrop-filter: blur(20px); }
+    .neon { color: #16a34a; }
     html { font-size: 150%; }
     @media (max-width: 639px)  { html { font-size: 100%; } }
     @media (max-width: 767px)  { html { font-size: 110%; } }
@@ -26,7 +34,7 @@
     .reveal.visible { opacity: 1; transform: none; }
 
     /* Phone glow — clip so SVG side-buttons (x=-4) don't bleed */
-    .phone-glow { filter: drop-shadow(0 0 60px rgba(34,197,94,0.15)); overflow: hidden; }
+    .phone-glow { filter: drop-shadow(0 0 60px rgba(22,163,74,0.12)); overflow: hidden; }
     .phone-glow svg { display: block; max-width: 100%; height: auto; }
     @media (max-width: 639px) { .phone-glow svg { width: min(260px, 72vw) !important; } }
 
@@ -34,42 +42,42 @@
     .nav-links { display: none; }
     @media (min-width: 1024px) { .nav-links { display: flex; } }
     .hamburger { display: flex; flex-direction: column; gap: 5px; cursor: pointer; padding: 4px; }
-    .hamburger span { display: block; width: 22px; height: 2px; background: #fff; border-radius: 2px; transition: 0.25s; }
+    .hamburger span { display: block; width: 22px; height: 2px; background: #171717; border-radius: 2px; transition: 0.25s; }
     .hamburger.open span:nth-child(1) { transform: translateY(7px) rotate(45deg); }
     .hamburger.open span:nth-child(2) { opacity: 0; }
     .hamburger.open span:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
     @media (min-width: 1024px) { .hamburger { display: none; } }
     .mobile-drawer {
       display: none; position: fixed; top: 64px; left: 0; right: 0; z-index: 49;
-      background: #0a0a0a; border-bottom: 1px solid #1f1f1f;
+      background: #f5f6f2; border-bottom: 1px solid var(--line);
       flex-direction: column; padding: 16px 24px 24px; gap: 0;
     }
     @media (min-width: 640px) { .mobile-drawer { top: 80px; } }
     .mobile-drawer.open { display: flex; }
-    .mobile-drawer a { padding: 14px 0; font-size: 22px; color: #fff; border-bottom: 1px solid #1a1a1a; text-decoration: none; }
+    .mobile-drawer a { padding: 14px 0; font-size: 22px; color: #171717; border-bottom: 1px solid var(--line); text-decoration: none; }
     .mobile-drawer a:last-child { border-bottom: none; }
     @media (min-width: 1024px) { .mobile-drawer { display: none !important; } }
   </style>
 </head>
-<body class="bg-black text-white overflow-x-hidden">
+<body class="overflow-x-hidden">
 
   <!-- Nav -->
-  <nav class="border-b border-white/10 bg-black/80 backdrop-blur-xl fixed w-full z-50">
+  <nav class="border-b border-black/10 bg-[#f5f6f2]/85 backdrop-blur-xl fixed w-full z-50">
     <div class="max-w-7xl mx-auto px-4 sm:px-8 h-16 sm:h-20 flex items-center justify-between">
       <div class="flex items-center gap-x-3 sm:gap-x-6">
         <a href="../" class="flex items-center gap-x-2 sm:gap-x-3 hover:opacity-70 transition">
-          <img src="../dai-miner.svg" alt="DAI" width="32" height="32" class="sm:w-[40px] sm:h-[40px]"/>
-          <span class="font-display text-[24px] sm:text-[32px] text-white/50">Miner</span>
+          <img src="../dai-miner-on-light.svg" alt="DAI" width="32" height="32" class="sm:w-[40px] sm:h-[40px]"/>
+          <span class="font-display text-[24px] sm:text-[32px] text-[#737373]">Miner</span>
         </a>
-        <span class="text-white/20 text-lg sm:text-xl">/</span>
+        <span class="text-[#a3a3a3] text-lg sm:text-xl">/</span>
         <span class="font-display text-[24px] sm:text-[32px]">Wallet</span>
       </div>
       <div class="nav-links items-center gap-x-4 sm:gap-x-5 text-[16px] sm:text-[18px]">
-        <a href="#balance" class="hover:text-[#22c55e] transition whitespace-nowrap" data-i18n="wal.nav.balance">Balance</a>
-        <a href="#chat" class="hover:text-[#22c55e] transition whitespace-nowrap" data-i18n="wal.nav.chat">Chat</a>
-        <a href="#send" class="hover:text-[#22c55e] transition whitespace-nowrap" data-i18n="wal.nav.send">Send</a>
-        <a href="https://assetux.com" target="_blank" rel="noopener" class="px-3 sm:px-4 py-2 rounded-[4px] border border-[#22c55e] text-[#22c55e] hover:bg-[#22c55e] hover:text-black transition whitespace-nowrap" data-i18n="nav.p2p">P2P</a>
-        <a href="#download" class="px-3 sm:px-4 py-2 rounded-[4px] bg-[#22c55e] text-black hover:bg-white transition whitespace-nowrap" data-i18n="wal.nav.download">Download</a>
+        <a href="#balance" class="hover:text-[#16a34a] transition whitespace-nowrap" data-i18n="wal.nav.balance">Balance</a>
+        <a href="#chat" class="hover:text-[#16a34a] transition whitespace-nowrap" data-i18n="wal.nav.chat">Chat</a>
+        <a href="#send" class="hover:text-[#16a34a] transition whitespace-nowrap" data-i18n="wal.nav.send">Send</a>
+        <a href="https://assetux.com" target="_blank" rel="noopener" class="px-3 sm:px-4 py-2 rounded-[4px] border border-[#16a34a] text-[#16a34a] hover:bg-[#16a34a] hover:text-white transition whitespace-nowrap" data-i18n="nav.p2p">P2P</a>
+        <a href="#download" class="px-3 sm:px-4 py-2 rounded-[4px] bg-[#16a34a] text-white hover:bg-black transition whitespace-nowrap" data-i18n="wal.nav.download">Download</a>
         <div data-i18n-switch></div>
       </div>
       <button class="hamburger" id="hamburger" aria-label="Open menu">
@@ -91,32 +99,32 @@
   <!-- ═══ HERO ═══ -->
   <div class="relative min-h-[100dvh] flex items-center pt-16 sm:pt-20 overflow-hidden">
     <!-- Background gradient -->
-    <div class="absolute inset-0 bg-gradient-to-b from-[#22c55e]/4 via-transparent to-transparent pointer-events-none"></div>
-    <div class="absolute top-1/3 right-0 translate-x-1/3 w-[500px] h-[500px] bg-[#22c55e]/3 blur-[120px] rounded-full pointer-events-none"></div>
+    <div class="absolute inset-0 bg-gradient-to-b from-[#16a34a]/4 via-transparent to-transparent pointer-events-none"></div>
+    <div class="absolute top-1/3 right-0 translate-x-1/3 w-[500px] h-[500px] bg-[#16a34a]/3 blur-[120px] rounded-full pointer-events-none"></div>
 
     <div class="max-w-7xl mx-auto px-4 sm:px-8 w-full">
       <div class="flex flex-col lg:flex-row items-center gap-8 lg:gap-16">
 
         <!-- Text -->
         <div class="lg:w-1/2 text-center lg:text-left">
-          <div class="uppercase tracking-[3px] text-xs text-[#22c55e] mb-6" data-i18n="wal.hero.eyebrow">COMPANION APP</div>
+          <div class="uppercase tracking-[3px] text-xs text-[#16a34a] mb-6" data-i18n="wal.hero.eyebrow">COMPANION APP</div>
           <h1 class="font-display text-[56px] sm:text-[80px] md:text-[140px] leading-[0.88]" data-i18n-html="wal.hero.title">
             DAI<br>Wallet.
           </h1>
-          <p class="mt-6 text-[16px] sm:text-[20px] md:text-[26px] text-white/60 max-w-lg mx-auto lg:mx-0" data-i18n="wal.hero.sub">
+          <p class="mt-6 text-[16px] sm:text-[20px] md:text-[26px] text-[#525252] max-w-lg mx-auto lg:mx-0" data-i18n="wal.hero.sub">
             Your DAI balance, live from your node — right in your pocket.
           </p>
           <div class="mt-8 flex flex-col sm:flex-row gap-4 justify-center lg:justify-start">
             <a href="#download"
-               class="inline-flex items-center justify-center px-8 py-3 bg-[#22c55e] text-black text-[18px] sm:text-[22px] md:text-[26px] rounded-[4px] hover:bg-white transition" data-i18n="wal.hero.cta1">
+               class="inline-flex items-center justify-center px-8 py-3 bg-[#16a34a] text-white text-[18px] sm:text-[22px] md:text-[26px] rounded-[4px] hover:bg-black transition" data-i18n="wal.hero.cta1">
               Get the App
             </a>
             <a href="#balance"
-               class="inline-flex items-center justify-center px-8 py-3 border border-white/25 text-[18px] sm:text-[22px] md:text-[26px] rounded-[4px] hover:bg-white/5 transition" data-i18n="wal.hero.cta2">
+               class="inline-flex items-center justify-center px-8 py-3 border border-black/20 text-[18px] sm:text-[22px] md:text-[26px] rounded-[4px] hover:bg-black/5 transition" data-i18n="wal.hero.cta2">
               See features
             </a>
           </div>
-          <div class="mt-6 text-sm text-white/40" data-i18n="wal.hero.platforms">Android • iOS coming soon</div>
+          <div class="mt-6 text-sm text-[#737373]" data-i18n="wal.hero.platforms">Android • iOS coming soon</div>
         </div>
 
         <!-- Hero iPhone -->
@@ -138,17 +146,17 @@
               <!-- Status bar -->
               <text x="36" y="52" fill="white" font-size="13" font-family="system-ui" font-weight="600">9:41</text>
               <rect x="252" y="41" width="28" height="14" rx="3" fill="none" stroke="#fff" stroke-width="1.5"/>
-              <rect x="254" y="43" width="22" height="10" rx="2" fill="#22c55e"/>
+              <rect x="254" y="43" width="22" height="10" rx="2" fill="#16a34a"/>
               <rect x="281" y="45" width="4" height="6" rx="1" fill="#fff"/>
               <!-- Screen content: Home screen -->
               <!-- App header -->
               <text x="36" y="92" fill="white" font-size="20" font-family="sans-serif" font-weight="600">DAI Wallet</text>
               <!-- Balance card -->
               <rect x="28" y="106" width="284" height="148" rx="16" fill="#0f1a0f"/>
-              <rect x="28" y="106" width="284" height="148" rx="16" fill="none" stroke="#22c55e" stroke-width="0.5" stroke-opacity="0.4"/>
-              <text x="52" y="136" fill="#22c55e" font-size="10" font-family="monospace" letter-spacing="2">AVAILABLE BALANCE</text>
+              <rect x="28" y="106" width="284" height="148" rx="16" fill="none" stroke="#16a34a" stroke-width="0.5" stroke-opacity="0.4"/>
+              <text x="52" y="136" fill="#16a34a" font-size="10" font-family="monospace" letter-spacing="2">AVAILABLE BALANCE</text>
               <text x="52" y="180" fill="white" font-size="38" font-family="sans-serif" font-weight="200">12.48</text>
-              <text x="176" y="180" fill="#22c55e" font-size="18" font-family="monospace"> DAI</text>
+              <text x="176" y="180" fill="#16a34a" font-size="18" font-family="monospace"> DAI</text>
               <text x="52" y="204" fill="#4b5563" font-size="11" font-family="monospace">≈ $18.72 USD</text>
               <text x="52" y="238" fill="#374151" font-size="10" font-family="monospace">dai3a7f…c2e9  ·  node: 14 peers</text>
               <!-- Action row -->
@@ -159,25 +167,25 @@
               <text x="170" y="302" text-anchor="middle" fill="white" font-size="22" font-family="sans-serif">↓</text>
               <text x="170" y="326" text-anchor="middle" fill="#9ca3af" font-size="11" font-family="sans-serif">Receive</text>
               <rect x="224" y="270" width="88" height="72" rx="12" fill="#111"/>
-              <text x="268" y="302" text-anchor="middle" fill="#22c55e" font-size="18" font-family="sans-serif">⇋</text>
+              <text x="268" y="302" text-anchor="middle" fill="#16a34a" font-size="18" font-family="sans-serif">⇋</text>
               <text x="268" y="326" text-anchor="middle" fill="#9ca3af" font-size="11" font-family="sans-serif">P2P</text>
               <!-- Transactions -->
               <text x="36" y="368" fill="#4b5563" font-size="10" font-family="monospace" letter-spacing="1.5">RECENT</text>
               <!-- Tx 1 -->
               <rect x="28" y="380" width="284" height="52" rx="10" fill="#0d0d0d"/>
               <circle cx="52" cy="406" r="14" fill="#0f1a0f"/>
-              <text x="52" y="412" text-anchor="middle" fill="#22c55e" font-size="13">⛏</text>
+              <text x="52" y="412" text-anchor="middle" fill="#16a34a" font-size="13">⛏</text>
               <text x="76" y="400" fill="white" font-size="12" font-family="sans-serif">Block #7285 reward</text>
               <text x="76" y="418" fill="#4b5563" font-size="10" font-family="monospace">2 min ago</text>
-              <text x="290" y="400" text-anchor="end" fill="#22c55e" font-size="13" font-family="monospace">+0.60</text>
+              <text x="290" y="400" text-anchor="end" fill="#16a34a" font-size="13" font-family="monospace">+0.60</text>
               <text x="290" y="418" text-anchor="end" fill="#4b5563" font-size="10" font-family="monospace">DAI</text>
               <!-- Tx 2 -->
               <rect x="28" y="440" width="284" height="52" rx="10" fill="#0d0d0d"/>
               <circle cx="52" cy="466" r="14" fill="#0f1a0f"/>
-              <text x="52" y="472" text-anchor="middle" fill="#22c55e" font-size="13">⛏</text>
+              <text x="52" y="472" text-anchor="middle" fill="#16a34a" font-size="13">⛏</text>
               <text x="76" y="460" fill="white" font-size="12" font-family="sans-serif">Block #7284 reward</text>
               <text x="76" y="478" fill="#4b5563" font-size="10" font-family="monospace">8 min ago</text>
-              <text x="290" y="460" text-anchor="end" fill="#22c55e" font-size="13" font-family="monospace">+0.60</text>
+              <text x="290" y="460" text-anchor="end" fill="#16a34a" font-size="13" font-family="monospace">+0.60</text>
               <text x="290" y="478" text-anchor="end" fill="#4b5563" font-size="10" font-family="monospace">DAI</text>
               <!-- Tx 3 -->
               <rect x="28" y="500" width="284" height="52" rx="10" fill="#0d0d0d"/>
@@ -190,8 +198,8 @@
               <!-- Bottom tab bar -->
               <rect x="16" y="620" width="308" height="64" rx="0" fill="#0a0a0a"/>
               <line x1="16" y1="620" x2="324" y2="620" stroke="#1c1c1c" stroke-width="1"/>
-              <text x="62" y="644" text-anchor="middle" fill="#22c55e" font-size="8" font-family="monospace">●</text>
-              <text x="62" y="660" text-anchor="middle" fill="#22c55e" font-size="9" font-family="monospace">Home</text>
+              <text x="62" y="644" text-anchor="middle" fill="#16a34a" font-size="8" font-family="monospace">●</text>
+              <text x="62" y="660" text-anchor="middle" fill="#16a34a" font-size="9" font-family="monospace">Home</text>
               <text x="124" y="644" text-anchor="middle" fill="#374151" font-size="16" font-family="sans-serif">⇄</text>
               <text x="124" y="660" text-anchor="middle" fill="#374151" font-size="9" font-family="monospace">History</text>
               <text x="186" y="644" text-anchor="middle" fill="#374151" font-size="16" font-family="sans-serif">⇋</text>
@@ -207,19 +215,19 @@
   </div>
 
   <!-- ═══ STATS BAR ═══ -->
-  <div class="border-y border-white/10 py-6 bg-[#050505]">
+  <div class="border-y border-black/10 py-6 bg-[#eceee8]">
     <div class="max-w-5xl mx-auto px-4 sm:px-8 grid grid-cols-3 gap-4 sm:gap-8 text-center">
       <div>
         <div class="text-[28px] sm:text-[36px] md:text-[44px] font-display tracking-tighter neon">v0.4.0</div>
-        <div class="text-xs text-white/50 tracking-widest mt-1" data-i18n="wal.stats.version">CURRENT VERSION</div>
+        <div class="text-xs text-[#737373] tracking-widest mt-1" data-i18n="wal.stats.version">CURRENT VERSION</div>
       </div>
       <div>
         <div class="text-[28px] sm:text-[36px] md:text-[44px] font-display tracking-tighter">Android</div>
-        <div class="text-xs text-white/50 tracking-widest mt-1" data-i18n="wal.stats.availnow">AVAILABLE NOW</div>
+        <div class="text-xs text-[#737373] tracking-widest mt-1" data-i18n="wal.stats.availnow">AVAILABLE NOW</div>
       </div>
       <div>
-        <div class="text-[28px] sm:text-[36px] md:text-[44px] font-display tracking-tighter text-white/40">iOS</div>
-        <div class="text-xs text-white/50 tracking-widest mt-1" data-i18n="wal.stats.soon">COMING SOON</div>
+        <div class="text-[28px] sm:text-[36px] md:text-[44px] font-display tracking-tighter text-[#737373]">iOS</div>
+        <div class="text-xs text-[#737373] tracking-widest mt-1" data-i18n="wal.stats.soon">COMING SOON</div>
       </div>
     </div>
   </div>
@@ -241,12 +249,12 @@
             <rect x="125" y="26" width="90" height="28" rx="14" fill="#1a1a1a"/>
             <text x="36" y="52" fill="white" font-size="13" font-family="system-ui" font-weight="600">9:41</text>
             <rect x="252" y="41" width="28" height="14" rx="3" fill="none" stroke="#fff" stroke-width="1.5"/>
-            <rect x="254" y="43" width="22" height="10" rx="2" fill="#22c55e"/>
+            <rect x="254" y="43" width="22" height="10" rx="2" fill="#16a34a"/>
             <rect x="281" y="45" width="4" height="6" rx="1" fill="#fff"/>
             <!-- Balance focused view -->
             <text x="170" y="90" text-anchor="middle" fill="#4b5563" font-size="10" font-family="monospace" letter-spacing="1.5">YOUR BALANCE</text>
             <text x="170" y="160" text-anchor="middle" fill="white" font-size="52" font-family="sans-serif" font-weight="200">12.48</text>
-            <text x="170" y="190" text-anchor="middle" fill="#22c55e" font-size="20" font-family="monospace">DAI</text>
+            <text x="170" y="190" text-anchor="middle" fill="#16a34a" font-size="20" font-family="monospace">DAI</text>
             <text x="170" y="216" text-anchor="middle" fill="#374151" font-size="12" font-family="monospace">≈ $18.72 · updated just now</text>
             <!-- P2P rate card -->
             <rect x="36" y="236" width="268" height="100" rx="12" fill="#0a0a0a"/>
@@ -255,24 +263,24 @@
             <text x="52" y="322" fill="#1f2937" font-size="9" font-family="monospace">from open sell orders</text>
             <!-- Node connected -->
             <rect x="36" y="352" width="268" height="48" rx="10" fill="#0d0d0d"/>
-            <circle cx="62" cy="376" r="5" fill="#22c55e"><animate attributeName="opacity" values="1;0.3;1" dur="2s" repeatCount="indefinite"/></circle>
+            <circle cx="62" cy="376" r="5" fill="#16a34a"><animate attributeName="opacity" values="1;0.3;1" dur="2s" repeatCount="indefinite"/></circle>
             <text x="78" y="371" fill="#9ca3af" font-size="11" font-family="sans-serif">miner.iamai.kg</text>
             <text x="78" y="389" fill="#374151" font-size="10" font-family="monospace">14 peers · latency 18ms</text>
             <!-- Tx list header -->
             <text x="52" y="422" fill="#4b5563" font-size="10" font-family="monospace" letter-spacing="1.5">MINING REWARDS</text>
             <rect x="36" y="432" width="268" height="44" rx="8" fill="#0d0d0d"/>
             <text x="60" y="452" fill="#9ca3af" font-size="11" font-family="sans-serif">Today</text>
-            <text x="286" y="452" text-anchor="end" fill="#22c55e" font-size="13" font-family="monospace">+3.00 DAI</text>
+            <text x="286" y="452" text-anchor="end" fill="#16a34a" font-size="13" font-family="monospace">+3.00 DAI</text>
             <text x="60" y="468" fill="#4b5563" font-size="10" font-family="monospace">5 blocks mined</text>
             <rect x="36" y="484" width="268" height="44" rx="8" fill="#0d0d0d"/>
             <text x="60" y="504" fill="#9ca3af" font-size="11" font-family="sans-serif">Yesterday</text>
-            <text x="286" y="504" text-anchor="end" fill="#22c55e" font-size="13" font-family="monospace">+4.80 DAI</text>
+            <text x="286" y="504" text-anchor="end" fill="#16a34a" font-size="13" font-family="monospace">+4.80 DAI</text>
             <text x="60" y="520" fill="#4b5563" font-size="10" font-family="monospace">8 blocks mined</text>
             <!-- Bottom tabs -->
             <rect x="16" y="620" width="308" height="64" rx="0" fill="#0a0a0a"/>
             <line x1="16" y1="620" x2="324" y2="620" stroke="#1c1c1c" stroke-width="1"/>
-            <text x="62" y="644" text-anchor="middle" fill="#22c55e" font-size="8" font-family="monospace">●</text>
-            <text x="62" y="660" text-anchor="middle" fill="#22c55e" font-size="9" font-family="monospace">Home</text>
+            <text x="62" y="644" text-anchor="middle" fill="#16a34a" font-size="8" font-family="monospace">●</text>
+            <text x="62" y="660" text-anchor="middle" fill="#16a34a" font-size="9" font-family="monospace">Home</text>
             <text x="124" y="644" text-anchor="middle" fill="#374151" font-size="16" font-family="sans-serif">⇄</text>
             <text x="124" y="660" text-anchor="middle" fill="#374151" font-size="9" font-family="monospace">History</text>
             <text x="186" y="644" text-anchor="middle" fill="#374151" font-size="16" font-family="sans-serif">⇋</text>
@@ -285,31 +293,31 @@
 
       <!-- Text -->
       <div class="lg:w-1/2 reveal">
-        <div class="uppercase tracking-[3px] text-xs text-[#22c55e] mb-4" data-i18n="wal.balance.eyebrow">LIVE BALANCE</div>
+        <div class="uppercase tracking-[3px] text-xs text-[#16a34a] mb-4" data-i18n="wal.balance.eyebrow">LIVE BALANCE</div>
         <h2 class="font-display text-[44px] sm:text-[60px] md:text-[80px] leading-[0.9] mb-6" data-i18n-html="wal.balance.title">Your balance.<br>Straight from the node.</h2>
-        <p class="text-[16px] sm:text-[20px] md:text-[24px] text-white/60 mb-8" data-i18n="wal.balance.desc">
+        <p class="text-[16px] sm:text-[20px] md:text-[24px] text-[#525252] mb-8" data-i18n="wal.balance.desc">
           The wallet reads your balance and history directly from a network node. No accounts, no middlemen.
         </p>
         <div class="space-y-5">
           <div class="flex items-start gap-4">
-            <div class="w-2 h-2 rounded-full bg-[#22c55e] mt-3 flex-shrink-0"></div>
+            <div class="w-2 h-2 rounded-full bg-[#16a34a] mt-3 flex-shrink-0"></div>
             <div>
               <div class="text-[20px]" data-i18n="wal.balance.f1t">Live balance and history</div>
-              <div class="text-[18px] text-white/40" data-i18n="wal.balance.f1d">Mining rewards and transfers, read from the chain</div>
+              <div class="text-[18px] text-[#737373]" data-i18n="wal.balance.f1d">Mining rewards and transfers, read from the chain</div>
             </div>
           </div>
           <div class="flex items-start gap-4">
-            <div class="w-2 h-2 rounded-full bg-[#22c55e] mt-3 flex-shrink-0"></div>
+            <div class="w-2 h-2 rounded-full bg-[#16a34a] mt-3 flex-shrink-0"></div>
             <div>
               <div class="text-[20px]" data-i18n="wal.balance.f2t">USD estimate</div>
-              <div class="text-[18px] text-white/40" data-i18n="wal.balance.f2d">Priced from open P2P market orders</div>
+              <div class="text-[18px] text-[#737373]" data-i18n="wal.balance.f2d">Priced from open P2P market orders</div>
             </div>
           </div>
           <div class="flex items-start gap-4">
-            <div class="w-2 h-2 rounded-full bg-[#22c55e] mt-3 flex-shrink-0"></div>
+            <div class="w-2 h-2 rounded-full bg-[#16a34a] mt-3 flex-shrink-0"></div>
             <div>
               <div class="text-[20px]" data-i18n="wal.balance.f3t">Notifications</div>
-              <div class="text-[18px] text-white/40" data-i18n="wal.balance.f3d">Get notified when DAI arrives</div>
+              <div class="text-[18px] text-[#737373]" data-i18n="wal.balance.f3d">Get notified when DAI arrives</div>
             </div>
           </div>
         </div>
@@ -319,7 +327,7 @@
   </div>
 
   <!-- ═══ FEATURE 2: ASK AI ═══ -->
-  <div id="chat" class="border-t border-white/10 bg-[#030303]">
+  <div id="chat" class="border-t border-black/10 section-alt">
     <div class="max-w-7xl mx-auto px-4 sm:px-8 py-14 md:py-32">
       <div class="flex flex-col lg:flex-row-reverse items-center gap-10 lg:gap-20">
 
@@ -337,11 +345,11 @@
               <!-- Status bar -->
               <text x="36" y="52" fill="white" font-size="13" font-family="system-ui" font-weight="600">9:41</text>
               <rect x="252" y="41" width="28" height="14" rx="3" fill="none" stroke="#fff" stroke-width="1.5"/>
-              <rect x="254" y="43" width="22" height="10" rx="2" fill="#22c55e"/>
+              <rect x="254" y="43" width="22" height="10" rx="2" fill="#16a34a"/>
               <rect x="281" y="45" width="4" height="6" rx="1" fill="#fff"/>
               <!-- Header -->
               <text x="170" y="90" text-anchor="middle" fill="white" font-size="15" font-family="system-ui" font-weight="600">Ask AI</text>
-              <text x="170" y="108" text-anchor="middle" fill="#22c55e" font-size="9" font-family="monospace" letter-spacing="1">● NETWORK AI · PAY PER USE</text>
+              <text x="170" y="108" text-anchor="middle" fill="#16a34a" font-size="9" font-family="monospace" letter-spacing="1">● NETWORK AI · PAY PER USE</text>
               <line x1="16" y1="118" x2="324" y2="118" stroke="#1a1a1a" stroke-width="1"/>
               <!-- User bubble 1 -->
               <rect x="140" y="134" width="164" height="44" rx="14" fill="#1a2e1a"/>
@@ -352,7 +360,7 @@
               <text x="46" y="208" fill="#9ca3af" font-size="11" font-family="system-ui">DAI is a Decentralized Artificial Intelligence</text>
               <text x="46" y="224" fill="#9ca3af" font-size="11" font-family="system-ui">token — earned by running</text>
               <text x="46" y="240" fill="#9ca3af" font-size="11" font-family="system-ui">AI compute tasks, not mining.</text>
-              <text x="46" y="256" fill="#22c55e" font-size="9" font-family="monospace">answered by a network node</text>
+              <text x="46" y="256" fill="#16a34a" font-size="9" font-family="monospace">answered by a network node</text>
               <!-- User bubble 2 -->
               <rect x="140" y="280" width="164" height="30" rx="14" fill="#1a2e1a"/>
               <text x="222" y="300" text-anchor="middle" fill="white" font-size="11" font-family="system-ui">How do I earn more?</text>
@@ -362,7 +370,7 @@
               <text x="46" y="358" fill="#9ca3af" font-size="11" font-family="system-ui">Each AI job your node</text>
               <text x="46" y="374" fill="#9ca3af" font-size="11" font-family="system-ui">completes earns DAI.</text>
               <text x="46" y="390" fill="#9ca3af" font-size="11" font-family="system-ui">Faster hardware = more tasks.</text>
-              <text x="46" y="406" fill="#22c55e" font-size="9" font-family="monospace">answered by a network node</text>
+              <text x="46" y="406" fill="#16a34a" font-size="9" font-family="monospace">answered by a network node</text>
               <!-- User bubble 3 -->
               <rect x="176" y="430" width="128" height="30" rx="14" fill="#1a2e1a"/>
               <text x="240" y="450" text-anchor="middle" fill="white" font-size="11" font-family="system-ui">What does it cost?</text>
@@ -370,13 +378,13 @@
               <rect x="30" y="474" width="224" height="60" rx="14" fill="#111"/>
               <text x="46" y="492" fill="#9ca3af" font-size="11" font-family="system-ui">A small DAI fee per request,</text>
               <text x="46" y="508" fill="#9ca3af" font-size="11" font-family="system-ui">paid from your wallet.</text>
-              <text x="46" y="524" fill="#22c55e" font-size="9" font-family="monospace">answered by a network node</text>
+              <text x="46" y="524" fill="#16a34a" font-size="9" font-family="monospace">answered by a network node</text>
               <!-- Input bar -->
               <rect x="16" y="548" width="308" height="56" rx="0" fill="#0a0a0a"/>
               <line x1="16" y1="548" x2="324" y2="548" stroke="#1c1c1c" stroke-width="1"/>
               <rect x="28" y="562" width="244" height="32" rx="16" fill="#1a1a1a"/>
               <text x="50" y="583" fill="#374151" font-size="11" font-family="system-ui">Message AI…</text>
-              <rect x="282" y="562" width="32" height="32" rx="16" fill="#22c55e"/>
+              <rect x="282" y="562" width="32" height="32" rx="16" fill="#16a34a"/>
               <text x="298" y="583" text-anchor="middle" fill="black" font-size="16" font-family="sans-serif">↑</text>
               <!-- Bottom tab bar -->
               <rect x="16" y="620" width="308" height="64" rx="0" fill="#0a0a0a"/>
@@ -387,32 +395,32 @@
               <text x="124" y="660" text-anchor="middle" fill="#374151" font-size="9" font-family="monospace">History</text>
               <text x="186" y="644" text-anchor="middle" fill="#374151" font-size="16" font-family="sans-serif">⇋</text>
               <text x="186" y="660" text-anchor="middle" fill="#374151" font-size="9" font-family="monospace">P2P</text>
-              <text x="262" y="644" text-anchor="middle" fill="#22c55e" font-size="14" font-family="sans-serif">✦</text>
-              <text x="262" y="660" text-anchor="middle" fill="#22c55e" font-size="9" font-family="monospace">Ask AI</text>
+              <text x="262" y="644" text-anchor="middle" fill="#16a34a" font-size="14" font-family="sans-serif">✦</text>
+              <text x="262" y="660" text-anchor="middle" fill="#16a34a" font-size="9" font-family="monospace">Ask AI</text>
             </svg>
           </div>
         </div>
 
         <!-- Text -->
         <div class="lg:w-1/2 reveal">
-          <div class="uppercase tracking-[3px] text-xs text-[#22c55e] mb-4" data-i18n="wal.chat.eyebrow">ASK AI</div>
+          <div class="uppercase tracking-[3px] text-xs text-[#16a34a] mb-4" data-i18n="wal.chat.eyebrow">ASK AI</div>
           <h2 class="font-display text-[44px] sm:text-[60px] md:text-[80px] leading-[0.9] mb-6" data-i18n-html="wal.chat.title">Ask the network.<br>Pay in DAI.</h2>
-          <p class="text-[16px] sm:text-[20px] md:text-[24px] text-white/60 mb-8" data-i18n="wal.chat.desc">
+          <p class="text-[16px] sm:text-[20px] md:text-[24px] text-[#525252] mb-8" data-i18n="wal.chat.desc">
             Chat with an AI model running on network nodes. No account, no subscription — each request costs a small DAI fee from your wallet.
           </p>
           <div class="space-y-5">
             <div class="flex items-start gap-4">
-              <div class="w-2 h-2 rounded-full bg-[#22c55e] mt-3 flex-shrink-0"></div>
+              <div class="w-2 h-2 rounded-full bg-[#16a34a] mt-3 flex-shrink-0"></div>
               <div>
                 <div class="text-[20px]" data-i18n="wal.chat.f1t">Runs on the network</div>
-                <div class="text-[18px] text-white/40" data-i18n="wal.chat.f1d">Answers come from miner nodes, not a corporate cloud</div>
+                <div class="text-[18px] text-[#737373]" data-i18n="wal.chat.f1d">Answers come from miner nodes, not a corporate cloud</div>
               </div>
             </div>
             <div class="flex items-start gap-4">
-              <div class="w-2 h-2 rounded-full bg-[#22c55e] mt-3 flex-shrink-0"></div>
+              <div class="w-2 h-2 rounded-full bg-[#16a34a] mt-3 flex-shrink-0"></div>
               <div>
                 <div class="text-[20px]" data-i18n="wal.chat.f2t">Pay per use</div>
-                <div class="text-[18px] text-white/40" data-i18n="wal.chat.f2d">A tiny DAI fee per request — you choose the fee</div>
+                <div class="text-[18px] text-[#737373]" data-i18n="wal.chat.f2d">A tiny DAI fee per request — you choose the fee</div>
               </div>
             </div>
           </div>
@@ -439,7 +447,7 @@
             <rect x="125" y="26" width="90" height="28" rx="14" fill="#1a1a1a"/>
             <text x="36" y="52" fill="white" font-size="13" font-family="system-ui" font-weight="600">9:41</text>
             <rect x="252" y="41" width="28" height="14" rx="3" fill="none" stroke="#fff" stroke-width="1.5"/>
-            <rect x="254" y="43" width="22" height="10" rx="2" fill="#22c55e"/>
+            <rect x="254" y="43" width="22" height="10" rx="2" fill="#16a34a"/>
             <rect x="281" y="45" width="4" height="6" rx="1" fill="#fff"/>
             <!-- Header -->
             <text x="170" y="88" text-anchor="middle" fill="white" font-size="18" font-family="sans-serif" font-weight="600">Send DAI</text>
@@ -452,9 +460,9 @@
             <!-- Amount -->
             <text x="52" y="196" fill="#4b5563" font-size="10" font-family="monospace" letter-spacing="1.5">AMOUNT</text>
             <rect x="28" y="206" width="284" height="80" rx="10" fill="#0f1a0f"/>
-            <rect x="28" y="206" width="284" height="80" rx="10" fill="none" stroke="#22c55e" stroke-width="1" stroke-opacity="0.5"/>
+            <rect x="28" y="206" width="284" height="80" rx="10" fill="none" stroke="#16a34a" stroke-width="1" stroke-opacity="0.5"/>
             <text x="170" y="254" text-anchor="middle" fill="white" font-size="42" font-family="sans-serif" font-weight="200">2.00</text>
-            <text x="170" y="276" text-anchor="middle" fill="#22c55e" font-size="13" font-family="monospace">DAI</text>
+            <text x="170" y="276" text-anchor="middle" fill="#16a34a" font-size="13" font-family="monospace">DAI</text>
             <!-- Balance available -->
             <text x="170" y="308" text-anchor="middle" fill="#374151" font-size="11" font-family="monospace">Available: 12.48 DAI</text>
             <!-- Quick amounts -->
@@ -476,13 +484,13 @@
             <text x="52" y="452" fill="#9ca3af" font-size="11" font-family="sans-serif">Fee</text>
             <text x="286" y="452" text-anchor="end" fill="#374151" font-size="11" font-family="monospace">0.001 DAI</text>
             <!-- Send button -->
-            <rect x="28" y="476" width="284" height="48" rx="12" fill="#22c55e"/>
+            <rect x="28" y="476" width="284" height="48" rx="12" fill="#16a34a"/>
             <text x="170" y="505" text-anchor="middle" fill="#000" font-size="16" font-family="sans-serif" font-weight="700">Confirm &amp; Send</text>
             <!-- Bottom tabs -->
             <rect x="16" y="620" width="308" height="64" rx="0" fill="#0a0a0a"/>
             <line x1="16" y1="620" x2="324" y2="620" stroke="#1c1c1c" stroke-width="1"/>
-            <text x="62" y="644" text-anchor="middle" fill="#22c55e" font-size="8" font-family="monospace">●</text>
-            <text x="62" y="660" text-anchor="middle" fill="#22c55e" font-size="9" font-family="monospace">Home</text>
+            <text x="62" y="644" text-anchor="middle" fill="#16a34a" font-size="8" font-family="monospace">●</text>
+            <text x="62" y="660" text-anchor="middle" fill="#16a34a" font-size="9" font-family="monospace">Home</text>
             <text x="124" y="644" text-anchor="middle" fill="#374151" font-size="16" font-family="sans-serif">⇄</text>
             <text x="124" y="660" text-anchor="middle" fill="#374151" font-size="9" font-family="monospace">History</text>
             <text x="186" y="644" text-anchor="middle" fill="#374151" font-size="16" font-family="sans-serif">⇋</text>
@@ -495,31 +503,31 @@
 
       <!-- Text -->
       <div class="lg:w-1/2 reveal">
-        <div class="uppercase tracking-[3px] text-xs text-[#22c55e] mb-4" data-i18n="wal.send.eyebrow">SEND &amp; RECEIVE</div>
+        <div class="uppercase tracking-[3px] text-xs text-[#16a34a] mb-4" data-i18n="wal.send.eyebrow">SEND &amp; RECEIVE</div>
         <h2 class="font-display text-[44px] sm:text-[60px] md:text-[80px] leading-[0.9] mb-6" data-i18n-html="wal.send.title">Send DAI.<br>In seconds.</h2>
-        <p class="text-[16px] sm:text-[20px] md:text-[24px] text-white/60 mb-8" data-i18n="wal.send.desc">
+        <p class="text-[16px] sm:text-[20px] md:text-[24px] text-[#525252] mb-8" data-i18n="wal.send.desc">
           Peer-to-peer transfers between any DAI addresses.
         </p>
         <div class="space-y-5">
           <div class="flex items-start gap-4">
-            <div class="w-2 h-2 rounded-full bg-[#22c55e] mt-3 flex-shrink-0"></div>
+            <div class="w-2 h-2 rounded-full bg-[#16a34a] mt-3 flex-shrink-0"></div>
             <div>
               <div class="text-[20px]" data-i18n="wal.send.f1t">Paste or scan</div>
-              <div class="text-[18px] text-white/40" data-i18n="wal.send.f1d">Enter an address or scan a QR code</div>
+              <div class="text-[18px] text-[#737373]" data-i18n="wal.send.f1d">Enter an address or scan a QR code</div>
             </div>
           </div>
           <div class="flex items-start gap-4">
-            <div class="w-2 h-2 rounded-full bg-[#22c55e] mt-3 flex-shrink-0"></div>
+            <div class="w-2 h-2 rounded-full bg-[#16a34a] mt-3 flex-shrink-0"></div>
             <div>
               <div class="text-[20px]" data-i18n="wal.send.f2t">Receive with QR</div>
-              <div class="text-[18px] text-white/40" data-i18n="wal.send.f2d">Share your address as a QR code</div>
+              <div class="text-[18px] text-[#737373]" data-i18n="wal.send.f2d">Share your address as a QR code</div>
             </div>
           </div>
           <div class="flex items-start gap-4">
-            <div class="w-2 h-2 rounded-full bg-[#22c55e] mt-3 flex-shrink-0"></div>
+            <div class="w-2 h-2 rounded-full bg-[#16a34a] mt-3 flex-shrink-0"></div>
             <div>
               <div class="text-[20px]" data-i18n="wal.send.f3t">P2P market</div>
-              <div class="text-[18px] text-white/40" data-i18n="wal.send.f3d">Trade DAI for USDT inside the app</div>
+              <div class="text-[18px] text-[#737373]" data-i18n="wal.send.f3d">Trade DAI for USDT inside the app</div>
             </div>
           </div>
         </div>
@@ -529,29 +537,29 @@
   </div>
 
   <!-- ═══ NODE CONNECTIVITY ═══ -->
-  <div class="border-t border-white/10 bg-[#030303] py-24">
+  <div class="border-t border-black/10 section-alt py-24">
     <div class="max-w-5xl mx-auto px-4 sm:px-8 text-center reveal">
-      <div class="uppercase tracking-[3px] text-xs text-[#22c55e] mb-4" data-i18n="wal.node.eyebrow">DECENTRALIZED</div>
+      <div class="uppercase tracking-[3px] text-xs text-[#16a34a] mb-4" data-i18n="wal.node.eyebrow">DECENTRALIZED</div>
       <h2 class="font-display text-[40px] sm:text-[56px] md:text-[72px] leading-none mb-6" data-i18n-html="wal.node.title">Connects to your node.<br>Not a company.</h2>
-      <p class="text-[16px] sm:text-[20px] md:text-[24px] text-white/55 max-w-2xl mx-auto mb-14" data-i18n="wal.node.desc">
+      <p class="text-[16px] sm:text-[20px] md:text-[24px] text-[#525252] max-w-2xl mx-auto mb-14" data-i18n="wal.node.desc">
         No accounts, no central server — the app talks to network nodes directly.
       </p>
 
       <div class="grid md:grid-cols-3 gap-6 text-left max-w-4xl mx-auto">
         <div class="glass p-7 rounded-[4px]">
-          <div class="text-[#22c55e] text-sm tracking-widest mb-3">01</div>
+          <div class="text-[#16a34a] text-sm tracking-widest mb-3">01</div>
           <h3 class="text-[24px] md:text-[34px] mb-3" data-i18n="wal.node.c1t">Auto-discovery</h3>
-          <p class="text-white/55 text-[18px]" data-i18n="wal.node.c1d">Starts with built-in nodes and discovers peers automatically.</p>
+          <p class="text-[#525252] text-[18px]" data-i18n="wal.node.c1d">Starts with built-in nodes and discovers peers automatically.</p>
         </div>
         <div class="glass p-7 rounded-[4px]">
-          <div class="text-[#22c55e] text-sm tracking-widest mb-3">02</div>
+          <div class="text-[#16a34a] text-sm tracking-widest mb-3">02</div>
           <h3 class="text-[24px] md:text-[34px] mb-3" data-i18n="wal.node.c2t">Latency-aware</h3>
-          <p class="text-white/55 text-[18px]" data-i18n="wal.node.c2d">Pings nodes in parallel, uses the fastest, fails over if one drops.</p>
+          <p class="text-[#525252] text-[18px]" data-i18n="wal.node.c2d">Pings nodes in parallel, uses the fastest, fails over if one drops.</p>
         </div>
         <div class="glass p-7 rounded-[4px]">
-          <div class="text-[#22c55e] text-sm tracking-widest mb-3">03</div>
+          <div class="text-[#16a34a] text-sm tracking-widest mb-3">03</div>
           <h3 class="text-[24px] md:text-[34px] mb-3" data-i18n="wal.node.c3t">Your node first</h3>
-          <p class="text-white/55 text-[18px]" data-i18n="wal.node.c3d">Add your own node in Settings and connect straight to it.</p>
+          <p class="text-[#525252] text-[18px]" data-i18n="wal.node.c3d">Add your own node in Settings and connect straight to it.</p>
         </div>
       </div>
     </div>
@@ -560,9 +568,9 @@
   <!-- ═══ DOWNLOAD ═══ -->
   <div id="download" class="max-w-5xl mx-auto px-4 sm:px-8 py-14 md:py-32">
     <div class="text-center reveal">
-      <div class="uppercase tracking-[3px] text-xs text-[#22c55e] mb-4" data-i18n="wal.download.eyebrow">GET THE APP</div>
+      <div class="uppercase tracking-[3px] text-xs text-[#16a34a] mb-4" data-i18n="wal.download.eyebrow">GET THE APP</div>
       <h2 class="font-display text-[48px] sm:text-[72px] md:text-[96px] leading-[0.88] mb-6" data-i18n-html="wal.download.title">Download.<br>Run. Earn.</h2>
-      <p class="text-[16px] sm:text-[20px] md:text-[24px] text-white/55 max-w-xl mx-auto mb-12" data-i18n="wal.download.desc">
+      <p class="text-[16px] sm:text-[20px] md:text-[24px] text-[#525252] max-w-xl mx-auto mb-12" data-i18n="wal.download.desc">
         Sideload the APK. No Play Store, no tracking. Your keys stay on your device.
       </p>
 
@@ -570,14 +578,14 @@
         <!-- APK download -->
         <a href="../binaries/dai-miner-wallet.apk"
            download="dai-miner-wallet.apk"
-           class="inline-flex items-center gap-3 px-8 py-4 bg-[#22c55e] text-black text-[18px] sm:text-[22px] md:text-[28px] font-display rounded-[4px] hover:bg-white transition">
+           class="inline-flex items-center gap-3 px-8 py-4 bg-[#16a34a] text-white text-[18px] sm:text-[22px] md:text-[28px] font-display rounded-[4px] hover:bg-black transition">
           <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor"><path d="M17.523 15.341l-1.374-1.375A6.012 6.012 0 0016 12c0-1.15.323-2.225.875-3.145L15.5 7.5C14.424 8.819 13.8 10.432 13.8 12c0 1.567.623 3.181 1.699 4.5l1.374-1.375.65.216zM4.477 8.659L3.103 7.284A7.985 7.985 0 002 12c0 1.683.519 3.244 1.406 4.53l1.368-1.368A5.96 5.96 0 013.8 12c0-1.236.37-2.386.998-3.341h-.321zm10.016-5.016L13.12 4.916A7.973 7.973 0 0012 4.8c-1.16 0-2.257.25-3.249.695L10.126 6.87A5.98 5.98 0 0112 6.6c.713 0 1.396.127 2.03.36l.463-.317zM12 2C6.477 2 2 6.477 2 12s4.477 10 10 10 10-4.477 10-10S17.523 2 12 2zm0 18c-4.411 0-8-3.589-8-8s3.589-8 8-8 8 3.589 8 8-3.589 8-8 8z"/></svg>
           <span data-i18n="wal.download.cta">Download Android APK</span>
         </a>
 
         <!-- iOS coming soon -->
         <div class="glass px-10 py-5 rounded-[4px] text-center">
-          <div class="text-[22px] text-white/50" data-i18n="wal.download.ios">iOS — Coming soon</div>
+          <div class="text-[22px] text-[#737373]" data-i18n="wal.download.ios">iOS — Coming soon</div>
         </div>
       </div>
 
@@ -585,18 +593,18 @@
   </div>
 
   <!-- Footer -->
-  <footer class="border-t border-white/10 py-8 text-xs text-white/50">
+  <footer class="border-t border-black/10 py-8 text-xs text-[#737373]">
     <div class="max-w-7xl mx-auto px-4 sm:px-8 flex flex-col sm:flex-row gap-3 sm:justify-between sm:items-center">
       <div class="flex items-center gap-4">
-        <img src="../dai-miner.svg" alt="DAI" width="24" height="24" style="opacity:0.5"/>
+        <img src="../dai-miner-on-light.svg" alt="DAI" width="24" height="24" style="opacity:0.5"/>
         <span data-i18n="wal.foot.tag">DAI Miner Wallet — companion app for the decentralized AI compute network</span>
       </div>
       <div class="flex gap-6">
-        <a href="../miner.html" class="hover:text-white" data-i18n="nav.miner">Miner</a>
-        <a href="../" class="hover:text-white" data-i18n="nav.dai">DAI</a>
-        <a href="https://iamai.kg" target="_blank" class="hover:text-white">iamai.kg</a>
-        <a href="https://t.me/iamaihub" target="_blank" rel="noopener" class="hover:text-white">Telegram</a>
-        <a href="https://x.com/iamaihub" target="_blank" rel="noopener" class="hover:text-white">X</a>
+        <a href="../miner.html" class="hover:text-[#171717]" data-i18n="nav.miner">Miner</a>
+        <a href="../" class="hover:text-[#171717]" data-i18n="nav.dai">DAI</a>
+        <a href="https://iamai.kg" target="_blank" class="hover:text-[#171717]">iamai.kg</a>
+        <a href="https://t.me/iamaihub" target="_blank" rel="noopener" class="hover:text-[#171717]">Telegram</a>
+        <a href="https://x.com/iamaihub" target="_blank" rel="noopener" class="hover:text-[#171717]">X</a>
       </div>
     </div>
   </footer>

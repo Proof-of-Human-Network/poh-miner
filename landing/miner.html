@@ -7,22 +7,37 @@
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://fonts.googleapis.com/css2?family=Iceland&display=swap" rel="stylesheet">
   <!-- DAI favicons (self-contained in landing/ for direct / sub-CID use; also staged at root for full site) -->
-  <link rel="icon" type="image/svg+xml" href="dai-miner.svg">
+  <link rel="icon" type="image/svg+xml" href="dai-miner-on-light.svg">
   <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
   <link rel="shortcut icon" href="favicon.ico">
   <script src="i18n.js" defer></script>
   <style>
     :root {
-      --bg: #000000;
-      --accent: #22c55e;
+      --bg: #f5f6f2;
+      --ink: #171717;
+      --muted: #525252;
+      --accent: #16a34a;
+      --card: #ffffff;
+      --line: #e4e6e0;
     }
 
-    /* Match iamai.kg exactly */
     body {
       font-family: 'Iceland', sans-serif;
-      background: #000;
-      color: #fff;
+      background: var(--bg);
+      color: var(--ink);
       line-height: 1.45;
+    }
+
+    .section-alt { background: #eceee8; }
+
+    .dai-lang-select {
+      background: var(--card) !important;
+      color: var(--ink) !important;
+      border-color: var(--line) !important;
+    }
+    .dai-lang-select option {
+      background: var(--card) !important;
+      color: var(--ink) !important;
     }
 
     h1, h2, h3, .font-display {
@@ -34,8 +49,8 @@
       font-family: 'Iceland', sans-serif;
     }
 
-    .glass { background: rgba(10,10,10,0.85); border: 1px solid #1f1f1f; backdrop-filter: blur(20px); }
-    .neon { color: #22c55e; }
+    .glass { background: rgba(255,255,255,0.86); border: 1px solid var(--line); backdrop-filter: blur(20px); }
+    .neon { color: #16a34a; }
 
     #node-mesh {
       position: absolute;
@@ -47,7 +62,7 @@
     }
 
     .hero-bg {
-      background: radial-gradient(circle at 50% 30%, rgba(34,197,94,0.06) 0%, transparent 70%);
+      background: radial-gradient(circle at 50% 30%, rgba(22,163,74,0.10) 0%, transparent 70%);
     }
 
     /* === GLOBAL +50% FONT SIZE SCALING (applied across entire landing) === */
@@ -66,7 +81,7 @@
 
     /* Mobile hamburger */
     .hamburger { display: flex; flex-direction: column; gap: 5px; cursor: pointer; padding: 4px; }
-    .hamburger span { display: block; width: 22px; height: 2px; background: #fff; border-radius: 2px; transition: 0.25s; }
+    .hamburger span { display: block; width: 22px; height: 2px; background: #171717; border-radius: 2px; transition: 0.25s; }
     .hamburger.open span:nth-child(1) { transform: translateY(7px) rotate(45deg); }
     .hamburger.open span:nth-child(2) { opacity: 0; }
     .hamburger.open span:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
@@ -75,37 +90,37 @@
     /* Mobile menu drawer */
     .mobile-drawer {
       display: none; position: fixed; top: 64px; left: 0; right: 0; z-index: 49;
-      background: #0a0a0a; border-bottom: 1px solid #1f1f1f;
+      background: #f5f6f2; border-bottom: 1px solid var(--line);
       flex-direction: column; padding: 16px 24px 24px;
       gap: 0;
     }
     @media (min-width: 640px) { .mobile-drawer { top: 80px; } }
     .mobile-drawer.open { display: flex; }
     .mobile-drawer a {
-      padding: 14px 0; font-size: 22px; color: #fff;
-      border-bottom: 1px solid #1a1a1a; text-decoration: none;
+      padding: 14px 0; font-size: 22px; color: #171717;
+      border-bottom: 1px solid var(--line); text-decoration: none;
     }
     .mobile-drawer a:last-child { border-bottom: none; }
     @media (min-width: 1024px) { .mobile-drawer { display: none !important; } }
 
   </style>
 </head>
-<body class="bg-black text-white overflow-x-hidden">
+<body class="overflow-x-hidden">
   <!-- Nav -->
-  <nav class="border-b border-white/10 bg-black/80 backdrop-blur-xl fixed w-full z-50">
+  <nav class="border-b border-black/10 bg-[#f5f6f2]/85 backdrop-blur-xl fixed w-full z-50">
     <div class="max-w-7xl mx-auto px-4 sm:px-8 h-16 sm:h-20 flex items-center justify-between">
       <div class="flex items-center gap-x-2 sm:gap-x-4">
         <div class="flex items-center gap-x-2 sm:gap-x-3">
-          <img src="dai-miner.svg" alt="DAI Logo" width="36" height="36" class="sm:w-[48px] sm:h-[48px]" style="vertical-align: middle;" />
+          <img src="dai-miner-on-light.svg" alt="DAI Logo" width="36" height="36" class="sm:w-[48px] sm:h-[48px]" style="vertical-align: middle;" />
           <span class="font-display text-[32px] sm:text-[48px] md:text-[60px] leading-none">Miner</span>
         </div>
       </div>
       <div class="nav-links items-center gap-x-6 xl:gap-x-9 text-[17px] xl:text-[20px]">
-        <a href="framework.html" class="hover:text-[#22c55e] transition whitespace-nowrap" data-i18n="nav.framework">Framework</a>
-        <a href="dai.html" data-i18n="nav.dai" class="hover:text-[#22c55e] transition whitespace-nowrap">DAI</a>
-        <a href="wallet/" data-i18n="nav.wallet" class="hover:text-[#22c55e] transition whitespace-nowrap">Wallet</a>
-        <a href="https://assetux.com" target="_blank" rel="noopener" class="px-3 lg:px-5 py-2 rounded-[4px] border border-[#22c55e] text-[#22c55e] hover:bg-[#22c55e] hover:text-black transition whitespace-nowrap" data-i18n="nav.p2p">P2P</a>
-        <a href="dai.html" data-i18n="nav.dai" class="px-3 lg:px-5 py-2 rounded-[4px] border border-[#22c55e]/60 text-[#22c55e] hover:bg-[#22c55e]/10 transition whitespace-nowrap">DAI</a>
+        <a href="framework.html" class="hover:text-[#16a34a] transition whitespace-nowrap" data-i18n="nav.framework">Framework</a>
+        <a href="dai.html" data-i18n="nav.dai" class="hover:text-[#16a34a] transition whitespace-nowrap">DAI</a>
+        <a href="wallet/" data-i18n="nav.wallet" class="hover:text-[#16a34a] transition whitespace-nowrap">Wallet</a>
+        <a href="https://assetux.com" target="_blank" rel="noopener" class="px-3 lg:px-5 py-2 rounded-[4px] border border-[#16a34a] text-[#16a34a] hover:bg-[#16a34a] hover:text-white transition whitespace-nowrap" data-i18n="nav.p2p">P2P</a>
+        <a href="dai.html" data-i18n="nav.dai" class="px-3 lg:px-5 py-2 rounded-[4px] border border-[#16a34a]/60 text-[#16a34a] hover:bg-[#16a34a]/10 transition whitespace-nowrap">DAI</a>
         <div data-i18n-switch></div>
       </div>
       <button class="hamburger" id="hamburger" aria-label="Open menu">
@@ -138,11 +153,11 @@
 
       <div class="mt-10 flex flex-col sm:flex-row gap-4 justify-center">
         <a href="#start" data-i18n="mnr.hero.cta1"
-           class="inline-flex items-center justify-center px-8 py-3 bg-white text-black text-[18px] sm:text-[24px] md:text-[30px] rounded-[4px] hover:bg-[#22c55e] transition">
+           class="inline-flex items-center justify-center px-8 py-3 bg-[#16a34a] text-white text-[18px] sm:text-[24px] md:text-[30px] rounded-[4px] hover:bg-black transition">
           Start running a node
         </a>
         <a href="#network" data-i18n="mnr.hero.cta2"
-           class="inline-flex items-center justify-center px-8 py-3 border border-white/30 hover:bg-white/5 text-[18px] sm:text-[24px] md:text-[30px] rounded-[4px] transition">
+           class="inline-flex items-center justify-center px-8 py-3 border border-black/20 hover:bg-black/5 text-[18px] sm:text-[24px] md:text-[30px] rounded-[4px] transition">
           See the live mesh
         </a>
       </div>
@@ -154,9 +169,9 @@
     
     <div class="flex flex-col md:flex-row gap-12 items-center">
       <div class="md:w-5/12 md:pb-40">
-        <div data-i18n="mnr.net.eyebrow" class="uppercase tracking-[3px] text-xs text-[#22c55e] mb-3">THE INFRASTRUCTURE</div>
+        <div data-i18n="mnr.net.eyebrow" class="uppercase tracking-[3px] text-xs text-[#16a34a] mb-3">THE INFRASTRUCTURE</div>
         <h2 data-i18n-html="mnr.net.title" class="font-display text-[52px] sm:text-[72px] md:text-[90px] leading-none">A living mesh of<br>compute providers.</h2>
-        <p data-i18n="mnr.net.desc" class="mt-6 text-[18px] sm:text-[22px] md:text-[30px] text-white/70">Nodes running local LLMs form a decentralized AI compute network. When tasks arrive, your machine processes them and earns — no data center required.</p>
+        <p data-i18n="mnr.net.desc" class="mt-6 text-[18px] sm:text-[22px] md:text-[30px] text-[#525252]">Nodes running local LLMs form a decentralized AI compute network. When tasks arrive, your machine processes them and earns — no data center required.</p>
       </div>
 
       <!-- Real Mesh Visualization -->
@@ -170,45 +185,45 @@
   </div>
 
   <!-- ═══ APP SHOWCASE ═══ -->
-  <div class="border-t border-white/10 overflow-hidden" style="background:#030303;">
+  <div class="border-t border-black/10 overflow-hidden section-alt">
     <div class="max-w-7xl mx-auto px-4 sm:px-8 py-16 md:py-32">
 
       <div class="text-center mb-4">
-        <div data-i18n="mnr.app.eyebrow" class="uppercase tracking-[3px] text-xs text-[#22c55e] mb-4">THE DESKTOP APP</div>
+        <div data-i18n="mnr.app.eyebrow" class="uppercase tracking-[3px] text-xs text-[#16a34a] mb-4">THE DESKTOP APP</div>
         <h2 class="font-display text-[56px] sm:text-[80px] md:text-[130px] leading-[0.88]">DAI Miner.</h2>
-        <p data-i18n="mnr.app.desc" class="mt-6 text-[16px] sm:text-[20px] md:text-[26px] text-white/55 max-w-2xl mx-auto">One native app. Your node joins the network, your local LLM solves incoming AI tasks, and you earn DAI each time.</p>
+        <p data-i18n="mnr.app.desc" class="mt-6 text-[16px] sm:text-[20px] md:text-[26px] text-[#525252] max-w-2xl mx-auto">One native app. Your node joins the network, your local LLM solves incoming AI tasks, and you earn DAI each time.</p>
       </div>
 
       <!-- Mobile app summary card (hidden on sm+) -->
-      <div class="mt-8 sm:hidden rounded-2xl border border-white/10 bg-[#111] p-6 text-left space-y-4">
+      <div class="mt-8 sm:hidden rounded-2xl border border-black/10 bg-[#111] p-6 text-left space-y-4">
         <div class="flex items-center gap-3">
           <span class="w-3 h-3 rounded-full bg-[#ff5f57]"></span>
           <span class="w-3 h-3 rounded-full bg-[#febc2e]"></span>
           <span class="w-3 h-3 rounded-full bg-[#28c840]"></span>
-          <span class="text-white/30 text-xs ml-2" style="font-family:system-ui">DAI Miner — Mining Active</span>
+          <span class="text-[#737373] text-xs ml-2" style="font-family:system-ui">DAI Miner — Mining Active</span>
         </div>
-        <div class="font-mono text-xs space-y-2 text-white/70">
-          <div><span class="text-white/30">14:22:01</span> <span class="text-[#22c55e]">[DAI-Miner] Connected · 14 peers</span></div>
-          <div><span class="text-white/30">14:22:05</span> <span class="text-[#22c55e]">[LLM] ✓ qwen3-1.7b ready · serving compute</span></div>
-          <div><span class="text-white/30">14:22:19</span> <span class="text-[#22c55e]">[Task] ⚡ AI task received · running inference</span></div>
-          <div><span class="text-white/30">14:22:32</span> <span class="text-[#22c55e]">[Reward] ✓ +0.42 DAI earned · compute share</span></div>
+        <div class="font-mono text-xs space-y-2 text-[#525252]">
+          <div><span class="text-[#737373]">14:22:01</span> <span class="text-[#16a34a]">[DAI-Miner] Connected · 14 peers</span></div>
+          <div><span class="text-[#737373]">14:22:05</span> <span class="text-[#16a34a]">[LLM] ✓ qwen3-1.7b ready · serving compute</span></div>
+          <div><span class="text-[#737373]">14:22:19</span> <span class="text-[#16a34a]">[Task] ⚡ AI task received · running inference</span></div>
+          <div><span class="text-[#737373]">14:22:32</span> <span class="text-[#16a34a]">[Reward] ✓ +0.42 DAI earned · compute share</span></div>
         </div>
-        <div class="flex items-center gap-2 pt-2 border-t border-white/10">
-          <span class="w-2 h-2 rounded-full bg-[#22c55e] animate-pulse"></span>
-          <span class="text-[#22c55e] text-xs font-mono">MINING ACTIVE · Balance: 12.48 DAI</span>
+        <div class="flex items-center gap-2 pt-2 border-t border-black/10">
+          <span class="w-2 h-2 rounded-full bg-[#16a34a] animate-pulse"></span>
+          <span class="text-[#16a34a] text-xs font-mono">MINING ACTIVE · Balance: 12.48 DAI</span>
         </div>
       </div>
 
       <!-- macOS window mockup — hidden on small screens, unreadable at narrow widths -->
       <div class="mt-8 md:mt-16 relative max-w-6xl mx-auto hidden sm:block">
-        <div class="absolute -inset-10 bg-[#22c55e]/4 blur-3xl rounded-full pointer-events-none"></div>
-        <div class="relative rounded-2xl overflow-hidden border border-white/8 shadow-[0_40px_120px_rgba(0,0,0,0.9)]">
+        <div class="absolute -inset-10 bg-[#16a34a]/4 blur-3xl rounded-full pointer-events-none"></div>
+        <div class="relative rounded-2xl overflow-hidden border border-black/8 shadow-[0_40px_120px_rgba(0,0,0,0.9)]">
           <!-- Title bar -->
-          <div class="flex items-center gap-x-2 px-5 bg-[#161616] border-b border-white/5" style="height:42px;">
+          <div class="flex items-center gap-x-2 px-5 bg-[#161616] border-b border-black/5" style="height:42px;">
             <span style="width:13px;height:13px;border-radius:50%;background:#ff5f57;display:inline-block;"></span>
             <span style="width:13px;height:13px;border-radius:50%;background:#febc2e;display:inline-block;"></span>
             <span style="width:13px;height:13px;border-radius:50%;background:#28c840;display:inline-block;"></span>
-            <span class="mx-auto text-white/25 text-xs" style="font-family:system-ui;letter-spacing:0.03em;">DAI Miner — Mining Active</span>
+            <span class="mx-auto text-[#a3a3a3] text-xs" style="font-family:system-ui;letter-spacing:0.03em;">DAI Miner — Mining Active</span>
           </div>
           <!-- App SVG -->
           <svg viewBox="0 0 1280 720" xmlns="http://www.w3.org/2000/svg" style="width:100%;display:block;background:#0a0a0a;">
@@ -261,7 +276,7 @@
             <rect x="210" y="0" width="120" height="38" fill="#0a0a0a"/>
             <line x1="210" y1="38" x2="970" y2="38" stroke="#1c1c1c" stroke-width="1"/>
             <text x="270" y="24" text-anchor="middle" fill="#f9fafb" font-size="11" font-family="monospace" letter-spacing="1.5">LOGS</text>
-            <line x1="210" y1="38" x2="330" y2="38" stroke="#22c55e" stroke-width="2"/>
+            <line x1="210" y1="38" x2="330" y2="38" stroke="#16a34a" stroke-width="2"/>
             <text x="400" y="24" text-anchor="middle" fill="#374151" font-size="11" font-family="monospace" letter-spacing="1.5">CHAT</text>
             <text x="510" y="24" text-anchor="middle" fill="#374151" font-size="11" font-family="monospace" letter-spacing="1.5">SCANNER</text>
             <text x="626" y="24" text-anchor="middle" fill="#374151" font-size="11" font-family="monospace" letter-spacing="1.5">SEND</text>
@@ -369,10 +384,10 @@
   <!-- ═══ END APP SHOWCASE ═══ -->
 
     <!-- CTA: Ready to contribute real compute? -->
-  <div id="start" class="max-w-5xl mx-auto px-4 sm:px-6 py-14 md:py-40 border-t border-white/10">
+  <div id="start" class="max-w-5xl mx-auto px-4 sm:px-6 py-14 md:py-40 border-t border-black/10">
     <div class="text-center mb-10">
       <h2 data-i18n="mnr.dl.title" class="font-display text-[44px] sm:text-[60px] md:text-[78px] leading-none">Ready to contribute real compute?</h2>
-      <p data-i18n="mnr.dl.desc" class="mt-4 text-[16px] sm:text-[22px] md:text-[30px] text-white/70 max-w-2xl mx-auto">Download the pre-built binary for your system. Double-click to install — no terminal, no coding required for non-technical users.</p>
+      <p data-i18n="mnr.dl.desc" class="mt-4 text-[16px] sm:text-[22px] md:text-[30px] text-[#525252] max-w-2xl mx-auto">Download the pre-built binary for your system. Double-click to install — no terminal, no coding required for non-technical users.</p>
     </div>
 
     <div class="max-w-6xl mx-auto">
@@ -474,17 +489,17 @@
             </span>
             <div>
               <div class="font-semibold text-[30px]">Linux</div>
-              <div data-i18n="mnr.dl.linux.os" class="text-xs text-white/50">Ubuntu • Debian • Fedora • Any distro</div>
+              <div data-i18n="mnr.dl.linux.os" class="text-xs text-[#737373]">Ubuntu • Debian • Fedora • Any distro</div>
             </div>
           </div>
-          <div data-i18n="mnr.dl.linux.desc" class="text-sm text-white/70 mb-4 flex-1">Portable AppImage — one file, runs on any distro. Download → chmod +x → double-click or run from anywhere. No root install.</div>
+          <div data-i18n="mnr.dl.linux.desc" class="text-sm text-[#525252] mb-4 flex-1">Portable AppImage — one file, runs on any distro. Download → chmod +x → double-click or run from anywhere. No root install.</div>
           <div class="flex flex-col gap-2">
             <a href="https://github.com/Proof-of-Human-Network/poh-miner/releases/latest/download/dai-miner-linux-x64.AppImage" download="dai-miner-linux-x64.AppImage" data-i18n="mnr.dl.linux.btn1"
-               class="block w-full text-center bg-[#22c55e] hover:bg-white hover:text-black transition text-black py-3 rounded-[4px] text-sm font-medium">
+               class="block w-full text-center bg-[#16a34a] text-white hover:bg-black transition py-3 rounded-[4px] text-sm font-medium">
               Download AppImage (x64)
             </a>
             <a href="https://github.com/Proof-of-Human-Network/poh-miner/releases/latest/download/dai-miner-linux-arm64.AppImage" download="dai-miner-linux-arm64.AppImage" data-i18n="mnr.dl.linux.btn2"
-               class="block w-full text-center border border-white/30 hover:bg-white/5 py-3 rounded-[4px] text-sm font-medium transition">
+               class="block w-full text-center border border-black/20 hover:bg-black/5 text-[#171717] py-3 rounded-[4px] text-sm font-medium transition">
               Download AppImage (ARM64)
             </a>
           </div>
@@ -495,17 +510,17 @@
             <svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor" class="text-white flex-shrink-0"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/></svg>
             <div>
               <div class="font-semibold text-[30px]">macOS</div>
-              <div class="text-xs text-white/50">Mac Mini, MacBook, iMAC</div>
+              <div class="text-xs text-[#737373]">Mac Mini, MacBook, iMAC</div>
             </div>
           </div>
-          <div data-i18n="mnr.dl.mac.desc" class="text-sm text-white/70 mb-3 flex-1">Open .dmg → drag to Applications • may need “Open Anyway” in Security &amp; Privacy</div>
+          <div data-i18n="mnr.dl.mac.desc" class="text-sm text-[#525252] mb-3 flex-1">Open .dmg → drag to Applications • may need “Open Anyway” in Security &amp; Privacy</div>
           <div class="flex flex-col gap-2">
             <a href="https://github.com/Proof-of-Human-Network/poh-miner/releases/latest/download/dai-miner-macos-amd.dmg" download="dai-miner-macos-amd.dmg" data-i18n="mnr.dl.mac.btn1"
-               class="block w-full text-center bg-[#22c55e] hover:bg-white hover:text-black transition text-black py-3 rounded-[4px] text-sm font-medium">
+               class="block w-full text-center bg-[#16a34a] text-white hover:bg-black transition py-3 rounded-[4px] text-sm font-medium">
               Download Apple Silicon .dmg
             </a>
             <a href="https://github.com/Proof-of-Human-Network/poh-miner/releases/latest/download/dai-miner-macos-intel.dmg" download="dai-miner-macos-intel.dmg" data-i18n="mnr.dl.mac.btn2"
-               class="block w-full text-center border border-white/30 hover:bg-white/5 py-3 rounded-[4px] text-sm font-medium transition">
+               class="block w-full text-center border border-black/20 hover:bg-black/5 text-[#171717] py-3 rounded-[4px] text-sm font-medium transition">
               Download Intel .dmg installer
             </a>
           </div>
@@ -516,12 +531,12 @@
             <svg width="26" height="26" viewBox="0 0 24 24" fill="currentColor" class="text-white flex-shrink-0"><path d="M3 3h8v8H3V3zm10 0h8v8h-8V3zM3 13h8v8H3v-8zm10 0h8v8h-8v-8z"/></svg>
             <div>
               <div class="font-semibold text-[30px]">Windows</div>
-              <div class="text-xs text-white/50">Windows 10 / 11 (x64)</div>
+              <div class="text-xs text-[#737373]">Windows 10 / 11 (x64)</div>
             </div>
           </div>
-          <div data-i18n="mnr.dl.win.desc" class="text-sm text-white/70 mb-4 flex-1">Standard .exe installer with shortcuts, Start Menu entry, and clean uninstaller. Built with NSIS.</div>
+          <div data-i18n="mnr.dl.win.desc" class="text-sm text-[#525252] mb-4 flex-1">Standard .exe installer with shortcuts, Start Menu entry, and clean uninstaller. Built with NSIS.</div>
           <a href="https://github.com/Proof-of-Human-Network/poh-miner/releases/latest/download/dai-miner-windows-x64.exe" download="dai-miner-windows-x64.exe" data-i18n="mnr.dl.win.btn"
-             class="block w-full text-center bg-[#22c55e] hover:bg-white hover:text-black transition text-black py-3 rounded-[4px] text-sm font-medium">
+             class="block w-full text-center bg-[#16a34a] text-white hover:bg-black transition py-3 rounded-[4px] text-sm font-medium">
             Download Windows Installer
           </a>
         </div>
@@ -529,16 +544,16 @@
 
       <!-- Terminal / power-user fallback (kept prominent but secondary) -->
       <div class="mt-8 text-center">
-        <div data-i18n="mnr.dl.power.title" class="text-[18px] uppercase tracking-[1.5px] text-white/50 mb-2">Power users &amp; one-liner install</div>
-        <div class="inline-flex flex-col sm:flex-row items-center gap-2 bg-black/60 border border-white/10 rounded-[4px] px-5 py-3 text-sm font-mono max-w-full overflow-x-auto">
+        <div data-i18n="mnr.dl.power.title" class="text-[18px] uppercase tracking-[1.5px] text-[#737373] mb-2">Power users &amp; one-liner install</div>
+        <div class="inline-flex flex-col sm:flex-row items-center gap-2 bg-white border border-black/10 rounded-[4px] px-5 py-3 text-sm font-mono max-w-full overflow-x-auto text-[#171717]">
           curl -fsSL https://miner.iamai.kg/scripts/easy-start.sh | bash
         </div>
         <div class="mt-3 flex flex-wrap justify-center gap-x-4 text-xs">
-          <a href="scripts/easy-start.sh" download="easy-start.sh" data-i18n="mnr.dl.power.link1" class="text-[#22c55e] hover:underline">Download easy-start.sh</a>
-          <span class="text-white/20">•</span>
-          <a href="scripts/download-latest.sh" download="download-latest.sh" data-i18n="mnr.dl.power.link2" class="text-[#22c55e] hover:underline">download-latest.sh (picks binary)</a>
-          <span class="text-white/20">•</span>
-          <a href="https://github.com/Proof-of-Human-Network/poh-miner" target="_blank" data-i18n="mnr.dl.power.link3" class="text-white/60 hover:text-white">View build scripts + source</a>
+          <a href="scripts/easy-start.sh" download="easy-start.sh" data-i18n="mnr.dl.power.link1" class="text-[#16a34a] hover:underline">Download easy-start.sh</a>
+          <span class="text-[#a3a3a3]">•</span>
+          <a href="scripts/download-latest.sh" download="download-latest.sh" data-i18n="mnr.dl.power.link2" class="text-[#16a34a] hover:underline">download-latest.sh (picks binary)</a>
+          <span class="text-[#a3a3a3]">•</span>
+          <a href="https://github.com/Proof-of-Human-Network/poh-miner" target="_blank" data-i18n="mnr.dl.power.link3" class="text-[#525252] hover:text-[#171717]">View build scripts + source</a>
         </div>
       </div>
 
@@ -546,11 +561,11 @@
   </div>
 
   <!-- Prominent Wallet Section -->
-  <div id="wallet" class="max-w-6xl mx-auto px-6 py-16 border-t border-white/10">
+  <div id="wallet" class="max-w-6xl mx-auto px-6 py-16 border-t border-black/10">
     <div class="text-center mb-10">
-      <div data-i18n="mnr.wal.eyebrow" class="inline-block px-4 py-1 rounded-full border border-[#22c55e]/40 text-[#22c55e] text-sm tracking-[2px] mb-4">COMPANION APP</div>
+      <div data-i18n="mnr.wal.eyebrow" class="inline-block px-4 py-1 rounded-full border border-[#16a34a]/40 text-[#16a34a] text-sm tracking-[2px] mb-4">COMPANION APP</div>
       <h2 data-i18n="mnr.wal.title" class="font-display text-[40px] sm:text-[52px] md:text-[64px] leading-none tracking-[-2px]">DAI Miner Wallet</h2>
-      <p data-i18n="mnr.wal.sub" class="mt-4 text-[16px] sm:text-[22px] md:text-[28px] text-white/70 max-w-2xl mx-auto">
+      <p data-i18n="mnr.wal.sub" class="mt-4 text-[16px] sm:text-[22px] md:text-[28px] text-[#525252] max-w-2xl mx-auto">
         Send, receive, and track your mining rewards in real time — directly from your phone.
       </p>
     </div>
@@ -575,12 +590,12 @@
               <line x1="40" y1="14" x2="40" y2="42"/>
             </g>
             <!-- Green rising line (sharp & clean) -->
-            <path d="M15 38 L21 30 L27 32 L33 20 L39 15 L44 12" stroke="#22c55e" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
-            <circle cx="44" cy="12" r="2.5" fill="#22c55e"/>
+            <path d="M15 38 L21 30 L27 32 L33 20 L39 15 L44 12" stroke="#16a34a" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+            <circle cx="44" cy="12" r="2.5" fill="#16a34a"/>
           </svg>
         </div>
         <div data-i18n="mnr.wal.f1t" class="font-semibold text-[22px] mb-1">Live Balance</div>
-        <div data-i18n="mnr.wal.f1d" class="text-[17px] text-white/60">Real-time balance pulled from your running node via the lightweight Wallet API.</div>
+        <div data-i18n="mnr.wal.f1d" class="text-[17px] text-[#525252]">Real-time balance pulled from your running node via the lightweight Wallet API.</div>
       </div>
 
       <!-- Send & Receive -->
@@ -595,11 +610,11 @@
             <!-- Bottom right arrow -->
             <path d="M41 34 L32 41 V37 H23 V31 H32 V27 Z" fill="#fff"/>
             <!-- Green center highlight -->
-            <rect x="26" y="25" width="4" height="6" rx="1" fill="#22c55e"/>
+            <rect x="26" y="25" width="4" height="6" rx="1" fill="#16a34a"/>
           </svg>
         </div>
         <div data-i18n="mnr.wal.f2t" class="font-semibold text-[22px] mb-1">Send &amp; Receive</div>
-        <div data-i18n="mnr.wal.f2d" class="text-[17px] text-white/60">Full DAI transfers between addresses. Works with any node that knows the wallet.</div>
+        <div data-i18n="mnr.wal.f2d" class="text-[17px] text-[#525252]">Full DAI transfers between addresses. Works with any node that knows the wallet.</div>
       </div>
 
       <!-- Transaction History -->
@@ -611,7 +626,7 @@
             <!-- White scroll body -->
             <rect x="15" y="13" width="26" height="30" rx="2" fill="#fff"/>
             <!-- Green accent lines (text simulation) -->
-            <g stroke="#22c55e" stroke-width="2" stroke-linecap="round">
+            <g stroke="#16a34a" stroke-width="2" stroke-linecap="round">
               <line x1="19" y1="19" x2="37" y2="19"/>
               <line x1="19" y1="24" x2="37" y2="24"/>
               <line x1="19" y1="29" x2="37" y2="29"/>
@@ -623,7 +638,7 @@
           </svg>
         </div>
         <div data-i18n="mnr.wal.f3t" class="font-semibold text-[22px] mb-1">Transaction History</div>
-        <div data-i18n="mnr.wal.f3d" class="text-[17px] text-white/60">See all incoming rewards and outgoing sends with status and timestamps.</div>
+        <div data-i18n="mnr.wal.f3d" class="text-[17px] text-[#525252]">See all incoming rewards and outgoing sends with status and timestamps.</div>
       </div>
 
       <!-- Notifications -->
@@ -636,7 +651,7 @@
             <path d="M18 36 C18 41 22 44 28 44 C34 44 38 41 38 36" fill="#fff"/>
             <path d="M18 18 Q18 12 28 12 Q38 12 38 18 L38 32 Q38 36 28 36 Q18 36 18 32 Z" fill="#fff"/>
             <!-- Green highlight on top -->
-            <path d="M21 16 Q25 14 28 16" stroke="#22c55e" stroke-width="2.5" stroke-linecap="round"/>
+            <path d="M21 16 Q25 14 28 16" stroke="#16a34a" stroke-width="2.5" stroke-linecap="round"/>
             <!-- Dark bottom rim -->
             <rect x="17" y="35" width="22" height="4" rx="2" fill="#111827"/>
             <!-- Dark clapper -->
@@ -644,31 +659,31 @@
           </svg>
         </div>
         <div data-i18n="mnr.wal.f4t" class="font-semibold text-[22px] mb-1">Notifications</div>
-        <div data-i18n="mnr.wal.f4d" class="text-[17px] text-white/60">Get alerted when rewards arrive or transactions are confirmed.</div>
+        <div data-i18n="mnr.wal.f4d" class="text-[17px] text-[#525252]">Get alerted when rewards arrive or transactions are confirmed.</div>
       </div>
     </div>
 
     <div class="text-center flex flex-col sm:flex-row gap-4 justify-center">
       <a href="wallet/" data-i18n="mnr.wal.cta1"
-         class="inline-flex items-center justify-center px-10 py-4 bg-white hover:bg-[#22c55e] hover:text-black transition text-black text-[24px] font-medium rounded-[4px]">
+         class="inline-flex items-center justify-center px-10 py-4 bg-[#16a34a] text-white hover:bg-black transition text-[24px] font-medium rounded-[4px]">
         See Wallet →
       </a>
       <a href="binaries/dai-miner-wallet.apk" download="dai-miner-wallet.apk" data-i18n="mnr.wal.cta2"
-         class="inline-flex items-center justify-center px-10 py-4 bg-[#22c55e] hover:bg-white hover:text-black transition text-black text-[24px] font-medium rounded-[4px]">
+         class="inline-flex items-center justify-center px-10 py-4 bg-[#16a34a] text-white hover:bg-black transition text-[24px] font-medium rounded-[4px]">
         Download Android (.apk)
       </a>
     </div>
   </div>
 
-  <footer class="border-t border-white/10 py-8 footer-text text-white/50">
+  <footer class="border-t border-black/10 py-8 footer-text text-[#737373]">
     <div class="max-w-7xl mx-auto px-4 sm:px-8 flex flex-col sm:flex-row gap-2 sm:justify-between">
       <div data-i18n="mnr.foot.tag">DAI Miner Network — Decentralized AI compute, powered by local LLMs</div>
       <div class="flex gap-4">
-        <a href="docs/" data-i18n="mnr.foot.docs" class="hover:text-white">Docs</a>
-        <a href="https://iamai.kg" class="hover:text-white">iamai.kg</a>
-        <a href="https://t.me/iamaihub" target="_blank" rel="noopener" class="hover:text-white">Telegram</a>
-        <a href="https://x.com/iamaihub" target="_blank" rel="noopener" class="hover:text-white">X</a>
-        <a href="https://github.com/Proof-of-Human-Network" target="_blank" class="hover:text-white">GitHub</a>
+        <a href="docs/" data-i18n="mnr.foot.docs" class="hover:text-[#171717]">Docs</a>
+        <a href="https://iamai.kg" class="hover:text-[#171717]">iamai.kg</a>
+        <a href="https://t.me/iamaihub" target="_blank" rel="noopener" class="hover:text-[#171717]">Telegram</a>
+        <a href="https://x.com/iamaihub" target="_blank" rel="noopener" class="hover:text-[#171717]">X</a>
+        <a href="https://github.com/Proof-of-Human-Network" target="_blank" class="hover:text-[#171717]">GitHub</a>
       </div>
     </div>
   </footer>
@@ -734,7 +749,7 @@
         });
 
         // Draw connections (mesh)
-        ctx.strokeStyle = 'rgba(34, 197, 94, 0.15)';
+        ctx.strokeStyle = 'rgba(22, 163, 74, 0.20)';
         ctx.lineWidth = 1;
 
         for (let i = 0; i < nodes.length; i++) {
@@ -753,7 +768,7 @@
 
         // Draw nodes
         nodes.forEach(n => {
-          ctx.fillStyle = ['GE','DE','FR'].includes(n.country) ? '#22c55e' : 'rgba(255,255,255,0.85)';
+          ctx.fillStyle = ['GE','DE','FR'].includes(n.country) ? '#16a34a' : 'rgba(0,0,0,0.45)';
           ctx.beginPath();
           ctx.arc(n.x, n.y, n.radius, 0, Math.PI * 2);
           ctx.fill();
@@ -858,11 +873,11 @@
         ];
 
         let html = `<div class="mb-3">Your real location: <strong>${myCountryName} (${myCountry})</strong></div>`;
-        html += `<div class="text-xs text-white/60 mb-2">Advantage if you ran a miner in these countries:</div>`;
+        html += `<div class="text-xs text-[#525252] mb-2">Advantage if you ran a miner in these countries:</div>`;
 
         examples.forEach(ex => {
           const mult = getAdvantageMultiplier(myCountry, ex.code);
-          const color = mult >= 3 ? '#22c55e' : (mult >= 1.5 ? '#eab308' : '#ef4444');
+          const color = mult >= 3 ? '#16a34a' : (mult >= 1.5 ? '#eab308' : '#ef4444');
           html += `<div class="flex justify-between text-sm py-0.5">
             <span>${ex.name} (${ex.code})</span>
             <span style="color:${color}; font-weight:600;">${mult.toFixed(1)}x</span>
@@ -981,9 +996,9 @@
 
       const spanMs = chartLayout.tMax - chartLayout.tMin;
       tip.innerHTML =
-        '<div class="text-white/45 mb-1">' + fmtChartTime(p.t, spanMs) + '</div>' +
-        '<div class="text-[#f97316]">' + fmtV(p.nodes) + ' nodes</div>' +
-        '<div class="text-[#22c55e]">' + fmtV(p.tflops) + ' TFLOPS</div>';
+        '<div class="text-[#737373] mb-1">' + fmtChartTime(p.t, spanMs) + '</div>' +
+        '<div class="text-[#ea580c]">' + fmtV(p.nodes) + ' nodes</div>' +
+        '<div class="text-[#16a34a]">' + fmtV(p.tflops) + ' TFLOPS</div>';
 
       const rect = wrap.getBoundingClientRect();
       const tipW = 132, tipH = 68;
@@ -1006,7 +1021,7 @@
       const ctx = canvas.getContext('2d');
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-      ctx.fillStyle = '#0b0b0b';
+      ctx.fillStyle = '#ffffff';
       ctx.fillRect(0, 0, W, H);
 
       const PAD = { top: 18, right: 52, bottom: 30, left: 52 };
@@ -1016,14 +1031,14 @@
 
       for (let i = 0; i <= 4; i++) {
         const y = PAD.top + (cH / 4) * i;
-        ctx.strokeStyle = 'rgba(255,255,255,0.04)';
+        ctx.strokeStyle = 'rgba(0,0,0,0.06)';
         ctx.lineWidth = 1;
         ctx.beginPath(); ctx.moveTo(PAD.left, y); ctx.lineTo(PAD.left + cW, y); ctx.stroke();
       }
 
       if (points.length < 2) {
         chartLayout = null;
-        ctx.fillStyle = 'rgba(255,255,255,0.15)';
+        ctx.fillStyle = 'rgba(0,0,0,0.28)';
         ctx.font = '13px system-ui,sans-serif';
         ctx.textAlign = 'center';
         ctx.fillText('Collecting data…', PAD.left + cW / 2, PAD.top + cH / 2 + 5);
@@ -1036,7 +1051,7 @@
       const toX = i => PAD.left + ((points[i].t - tMin) / spanMs) * cW;
       chartLayout = { points, PAD, cW, cH, W, H, tMin, tMax, toX };
 
-      ctx.fillStyle = 'rgba(255,255,255,0.2)';
+      ctx.fillStyle = 'rgba(0,0,0,0.40)';
       ctx.font = '10px monospace';
       ctx.textAlign = 'center';
       const ticks = 6;
@@ -1067,7 +1082,7 @@
         ctx.fillStyle = color + '88';
         ctx.fillText(unit, xLbl, PAD.top - 5);
 
-        const rgb = color === '#22c55e' ? '34,197,94' : '249,115,22';
+        const rgb = color === '#16a34a' ? '22,163,74' : '234,88,12';
         const grad = ctx.createLinearGradient(0, PAD.top, 0, PAD.top + cH);
         grad.addColorStop(0, `rgba(${rgb},0.25)`);
         grad.addColorStop(0.55, `rgba(${rgb},0.07)`);
@@ -1085,16 +1100,13 @@
         ctx.strokeStyle = color;
         ctx.lineWidth = 2;
         ctx.lineJoin = 'round';
-        ctx.shadowColor = color;
-        ctx.shadowBlur = 8;
-        ctx.stroke();
         ctx.shadowBlur = 0;
+        ctx.stroke();
 
         const lx = toX(sn - 1), ly = toY(series[sn - 1].v);
-        ctx.shadowColor = color; ctx.shadowBlur = 14;
+        ctx.shadowBlur = 0;
         ctx.beginPath(); ctx.arc(lx, ly, 4, 0, Math.PI * 2);
         ctx.fillStyle = color; ctx.fill();
-        ctx.shadowBlur = 0;
       }
 
       const _allVals = points.flatMap(p => [p.tflops, p.nodes]);
@@ -1104,13 +1116,13 @@
       const _sharedMn = Math.max(0, _rawMin - _pad);
       const _sharedMx = _rawMax + _pad;
 
-      drawSeries('tflops', '#22c55e', 'left', 'TFLOPS', _sharedMn, _sharedMx);
-      drawSeries('nodes', '#f97316', 'right', 'nodes', _sharedMn, _sharedMx);
+      drawSeries('tflops', '#16a34a', 'left', 'TFLOPS', _sharedMn, _sharedMx);
+      drawSeries('nodes', '#ea580c', 'right', 'nodes', _sharedMn, _sharedMx);
 
       if (chartHoverIdx != null && points[chartHoverIdx]) {
         const hx = toX(chartHoverIdx);
         const hp = points[chartHoverIdx];
-        ctx.strokeStyle = 'rgba(255,255,255,0.18)';
+        ctx.strokeStyle = 'rgba(0,0,0,0.25)';
         ctx.lineWidth = 1;
         ctx.setLineDash([4, 4]);
         ctx.beginPath();
@@ -1122,11 +1134,11 @@
         const toY = v => PAD.top + cH - ((v - _sharedMn) / (_sharedMx - _sharedMn || 1)) * cH;
         ctx.beginPath();
         ctx.arc(hx, toY(hp.tflops), 5, 0, Math.PI * 2);
-        ctx.fillStyle = '#22c55e';
+        ctx.fillStyle = '#16a34a';
         ctx.fill();
         ctx.beginPath();
         ctx.arc(hx, toY(hp.nodes), 5, 0, Math.PI * 2);
-        ctx.fillStyle = '#f97316';
+        ctx.fillStyle = '#ea580c';
         ctx.fill();
       }
     }
