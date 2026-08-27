@@ -27,11 +27,11 @@ const METHODS_FILE = path.join(CONFIG_DIR, 'methods.json');
 
 const PRIMARY_SOURCE = 'https://iamai.kg/methods/verifyer';
 
-// Robust list of HTTP gateways (in priority order). iamai.kg is primary (reliable
-// DNS); iamai.kg kept as a fallback. Both proxy the same backend.
+// Robust list of HTTP gateways (in priority order). iamai.kg is primary;
+// miner.iamai.kg kept as a fallback. Both proxy the same backend.
 const GATEWAYS = [
   'https://iamai.kg/methods/verifyer',
-  'https://iamai.kg/methods/verifyer',
+  'https://miner.iamai.kg/methods/verifyer',
 ];
 
 // Public IPFS gateways used when lastKnownCID is set

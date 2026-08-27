@@ -1,6 +1,6 @@
 {
   "name": "dai-miner",
-  "version": "0.4.24",
+  "version": "0.4.25",
   "description": "Run the DAI Miner Network. Earn DAI by contributing compute (great on Mac Mini, PCs, servers).",
   "author": {
     "name": "Bogdan Sizov",
