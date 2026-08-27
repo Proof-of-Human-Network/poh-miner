@@ -110,7 +110,84 @@ const CIRCUIT_OPEN_AFTER = 3;
 const RETRY_AFTER_MS = 5 * 60 * 1000;
 let _circuitOpenAt = 0;
 
+// ── Backend fault classification ────────────────────────────────────────────
+// Inference runs in a separate process (bare.exe on Windows, bare elsewhere).
+// When that worker dies before the RPC handshake the SDK reports a generic
+// RPCInitTimeoutError, so a machine that physically cannot run the shipped
+// inference addon looks identical to a slow start — and users go hunting for
+// network problems. The real diagnosis is already there, buried in the error's
+// `cause` chain as "Worker process exited with code N, signal S". Decode it.
+//
+// Some faults are permanent: no amount of retrying makes a CPU grow AVX2, so
+// those latch the breaker open instead of re-spawning a doomed worker every
+// five minutes.
+const WORKER_EXIT_RE = /exited with code (-?\d+|null), signal (\w+|null)/i;
+
+// Windows surfaces NTSTATUS values as unsigned exit codes.
+const BACKEND_FAULTS = {
+  // 0xC000001D STATUS_ILLEGAL_INSTRUCTION. The win32 llama.cpp addon is a single
+  // monolith built at an AVX2/FMA baseline with no runtime CPU dispatch, unlike
+  // linux-x64 which ships per-microarch backends (…-ivybridge.so, …-haswell.so)
+  // and dlopens whichever the host scores highest. So on Windows anything older
+  // than Haswell — Xeon E5 v1/v2, pre-Zen AMD, the Atom-line Celeron/Pentium —
+  // dies on the first quantized dot product. Vulkan does not save it: ggml
+  // registers and initializes the CPU backend unconditionally, long before any
+  // GPU is consulted.
+  3221225501: {
+    code: 'cpu-unsupported',
+    permanent: true,
+    message: 'this CPU has no AVX2/FMA support, which the bundled inference engine requires',
+    hint: 'Local inference is unavailable on this machine. The Linux build ships an AVX-only fallback and runs on this hardware.',
+  },
+  // 0xC0000135 STATUS_DLL_NOT_FOUND — the MSVC runtime or the Vulkan loader.
+  3221225781: {
+    code: 'runtime-missing',
+    permanent: false,
+    message: 'a system library the inference engine needs is missing',
+    hint: 'Install the Microsoft Visual C++ Redistributable (x64) and current GPU drivers, then restart.',
+  },
+};
+
+let _backendFault = null;   // { code, message, hint, permanent, detail } once diagnosed
+
+// Walk the `cause` chain — the exit status is nested a couple of levels down.
+function classifyBackendError(err) {
+  let text = '';
+  for (let e = err, depth = 0; e && depth < 6; e = e.cause, depth++) {
+    text += ' ' + (e.message || '');
+  }
+  const m = WORKER_EXIT_RE.exec(text);
+  if (!m) return null;
+
+  // POSIX reports the same fault as a signal rather than an exit status.
+  if (m[2] === 'SIGILL') return { ...BACKEND_FAULTS[3221225501], detail: m[0] };
+
+  // Node may hand back the NTSTATUS as a negative int32; >>> 0 normalizes both.
+  const fault = BACKEND_FAULTS[Number(m[1]) >>> 0];
+  return fault ? { ...fault, detail: m[0] } : null;
+}
+
+// Diagnose once, loudly. Called from every path that can surface a dead worker.
+function noteBackendError(err) {
+  const fault = classifyBackendError(err);
+  if (!fault) return null;
+  if (!_backendFault) {
+    console.error(`[qvac] Inference backend cannot start on this machine: ${fault.message}.`);
+    console.error(`[qvac] ${fault.hint}`);
+    console.error(`[qvac] (worker ${fault.detail})`);
+  }
+  _backendFault = fault;
+  if (fault.permanent) _circuitOpenAt = Date.now();   // latched by circuitOpen()
+  return fault;
+}
+
+function backendFault() {
+  return _backendFault;
+}
+
 function circuitOpen() {
+  // A permanent hardware fault never heals — don't burn a worker spawn retrying.
+  if (_backendFault && _backendFault.permanent) return true;
   if (!_circuitOpenAt) return false;
   if (Date.now() - _circuitOpenAt < RETRY_AFTER_MS) return true;
   _circuitOpenAt = 0;
@@ -306,6 +383,7 @@ async function getModelId(requested) {
   try {
     return await p;
   } catch (err) {
+    noteBackendError(err);
     _loadPromises.delete(name);
     _trackDownload(name, { state: 'error', error: err.message || String(err), finishedAt: Date.now() });
     throw err;
@@ -420,12 +498,14 @@ async function chat(messages, opts = {}) {
 
       text = text.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
       _failures = 0;
+      _backendFault = null;
       if (withUsage) {
         const promptTokens = estimatePromptTokens(history);
         return { text, promptTokens, completionTokens, totalTokens: promptTokens + completionTokens };
       }
       return text;
     } catch (err) {
+      noteBackendError(err);
       _failures++;
       if (_failures >= CIRCUIT_OPEN_AFTER) {
         _circuitOpenAt = Date.now();
@@ -504,13 +584,15 @@ function status() {
     defaultModel: DEFAULT_MODEL,
     maxResident: MAX_RESIDENT,
     loaded: [..._loaded.keys()],
-    circuitOpen: !!_circuitOpenAt && circuitOpen(),
+    circuitOpen: circuitOpen(),
+    fault: _backendFault,
   };
 }
 
 module.exports = {
   chat,
   complete,
+  backendFault,
   listModels,
   isInstalled,
   getModelId,

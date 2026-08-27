@@ -3100,7 +3100,14 @@ export class DAIMinerNode {
                 }
               } catch { /* ignore */ }
             }
-            const fallback = isUnavailable
+            // A diagnosed backend fault (e.g. a CPU without AVX2) is not a transient
+            // outage — say so instead of telling the user to try again shortly.
+            let fault = null;
+            try { fault = (await getQvacModels())?.backendFault?.() || null; } catch { /* not loaded */ }
+
+            const fallback = fault
+              ? `Local inference can't run on this machine: ${fault.message}. ${fault.hint}`
+              : isUnavailable
               ? (isPrivate
                   ? 'Local LLM is unavailable. Private mode keeps this conversation on your device only — switch to Public to allow a peer miner or configured AI provider to answer instead.'
                   : 'Local LLM is unavailable and no peer miner or configured AI provider could be reached. Try again shortly.')
