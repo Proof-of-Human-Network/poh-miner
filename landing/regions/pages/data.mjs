@@ -27,7 +27,7 @@ export const COUNTRIES = [
                ridgeFar:'#2b1a2b', ridgeMid:'#1d1220', accentA:'#e8a06a', accentB:'#6b3b2f' },
   },
   {
-    slug: 'btn', cc: 'bt', lang: 'en', country: 'Bhutan', coin: 'aiBTN',
+    slug: 'btn', cc: 'bt', lang: 'dz', country: 'Bhutan', coin: 'aiBTN',
     landmark: "Paro Taktsang — the Tiger's Nest", scene: 'cliffMonastery',
     power: 0.03, fx: 84,
     palette: { skyTop:'#04080e', skyMid:'#0a1a22', skyLow:'#12313a', moon:'#eaf7ff',

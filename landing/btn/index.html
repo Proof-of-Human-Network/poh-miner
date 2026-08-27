@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="dz">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Decentralized AI compute, paid in aiBTN — iamai.kg</title>
-<meta name="description" content="Your machine answers AI tasks for the network and is paid in aiBTN — no data centre, no cloud contract, no permission needed.">
+<title>དབུས་མེད་ AI རྩིས་སྒྲུབ། aiBTN གིས་སྤྲོད། — iamai.kg</title>
+<meta name="description" content="ཁྱོད་ཀྱི་གློག་རིག་གིས་དྲ་བའི་དོན་ལུ་ AI ལས་ཀ་འབད་བཞིནམ་ལས་ aiBTN ཐོབ། གནས་སྡུད་ལྟེ་བ་མེད། སྤྲིན་གྱི་གན་རྒྱ་མེད། གནང་བ་ཞུ་མི་དགོ།">
 <link rel="icon" type="image/svg+xml" href="../dai-miner-on-light.svg">
 <link rel="stylesheet" href="../regions-fonts.css">
 <link rel="stylesheet" href="../regions-page.css">
@@ -13,8 +13,8 @@
     --sky-top:#04080e; --sky-mid:#0a1a22; --sky-low:#12313a;
     --moon:#eaf7ff; --ridge-far:#122a30; --ridge-mid:#0b1c22;
     --accent-a:#bfe6dd; --accent-b:#2f5a55;
-    --display:'Iceland','Inter',sans-serif;
-    --fs-hero:clamp(2.75rem,1.6rem + 5.6vw,6rem);
+    --display:'Noto Serif Tibetan','Noto Sans Tibetan','Jomolhari','DDC Uchen','Inter',system-ui,sans-serif;
+    --fs-hero:clamp(2rem,1.2rem + 3.4vw,3.6rem);
   }
   /* Long words in any script must wrap rather than run off the page. */
   .headline{overflow-wrap:anywhere;hyphens:auto;max-width:22ch}
@@ -41,147 +41,154 @@
         <stop offset="1" stop-color="var(--accent-b)"/>
       </linearGradient></defs>
     <rect width="1440" height="900" fill="url(#sky-hero)"/>
-    <circle cx="1150" cy="180" r="300" fill="url(#glow-hero)"/>
-    <circle cx="1150" cy="180" r="26" fill="var(--moon)" opacity=".9"/>
+    <circle cx="260" cy="170" r="300" fill="url(#glow-hero)"/>
+    <circle cx="260" cy="170" r="26" fill="var(--moon)" opacity=".9"/>
     <g class="stars" data-stars="hero"></g>
     <path d="M0 500 L220 440 L440 496 L680 424 L920 488 L1180 428 L1440 484 L1440 660 L0 660 Z" fill="var(--ridge-far)"/>
-    <path d="M300 900 L360 380 L500 300 L640 372 L700 900 Z" fill="var(--ridge-mid)"/>
-    <path d="M980 900 L1020 470 L1120 420 L1220 466 L1260 900 Z" fill="var(--ridge-mid)" opacity=".8"/>
+    <path d="M120 900 L180 470 L300 402 L430 466 L470 900 Z" fill="var(--ridge-mid)" opacity=".65"/>
+    <path d="M820 900 L880 300 L1010 214 L1150 296 L1210 900 Z" fill="var(--ridge-mid)"/>
+    <path d="M880 300 L1010 214 L1150 296 L1150 352 L880 358 Z" fill="var(--accent-b)" opacity=".45"/>
     <g fill="url(#subj-hero)">
-      <rect x="416" y="452" width="120" height="76" rx="3"/>
-      <path d="M406 452 L476 416 L546 452 Z"/>
-      <rect x="452" y="404" width="48" height="46" rx="3"/>
-      <path d="M444 404 L476 380 L508 404 Z"/>
-      <rect x="540" y="486" width="64" height="48" rx="3"/>
-      <path d="M532 486 L572 462 L612 486 Z"/>
+      <rect x="936" y="392" width="140" height="88" rx="3"/>
+      <path d="M924 392 L1006 348 L1088 392 Z"/>
+      <rect x="978" y="332" width="56" height="52" rx="3"/>
+      <path d="M968 332 L1006 302 L1044 332 Z"/>
+      <rect x="1080" y="432" width="74" height="56" rx="3"/>
+      <path d="M1070 432 L1117 404 L1164 432 Z"/>
+      <rect x="884" y="440" width="58" height="46" rx="3" opacity=".9"/>
+      <path d="M876 440 L913 416 L950 440 Z" opacity=".9"/>
     </g>
-    <g fill="var(--moon)" opacity=".8">
-      <rect x="436" y="474" width="11" height="16" rx="2"/><rect x="470" y="474" width="11" height="16" rx="2"/>
-      <rect x="504" y="474" width="11" height="16" rx="2"/><rect x="558" y="502" width="10" height="14" rx="2"/>
+    <g fill="var(--moon)" opacity=".85">
+      <rect x="958" y="418" width="12" height="18" rx="2"/><rect x="998" y="418" width="12" height="18" rx="2"/>
+      <rect x="1038" y="418" width="12" height="18" rx="2"/><rect x="1100" y="450" width="11" height="16" rx="2"/>
+      <rect x="902" y="456" width="10" height="15" rx="2"/>
     </g>
-    <path d="M0 792 L1440 756 L1440 900 L0 900 Z" fill="var(--sky-top)" opacity=".5"/>
+    <g stroke="var(--accent-a)" stroke-width="2" opacity=".35" fill="none">
+      <path d="M1006 302 L1006 286"/><path d="M960 348 Q1006 330 1052 348"/>
+    </g>
+    <path d="M0 812 L1440 772 L1440 900 L0 900 Z" fill="var(--sky-top)" opacity=".5"/>
   </svg>
   <div class="veil"></div>
 
   <div class="topbar">
     <a class="brand" href="../index.html"><span class="dot"></span> iamai.kg</a>
     <nav class="nav">
-      <a href="#compute">Compute</a>
+      <a href="#compute">རྩིས་སྒྲུབ།</a>
       <a href="#coin">aiBTN</a>
-      <a href="#here">Bhutan</a>
+      <a href="#here">འབྲུག</a>
       <a href="../index.html">DAI</a>
-      <a href="../wallet/">Wallet</a>
+      <a href="../wallet/">དངུལ་སྒམ།</a>
       <a href="../explorer/">Explorer</a>
-      <a href="../miner.html">DAI Miner</a>
+      <a href="../miner.html">DAI གཏེར་སྐྲུན།</a>
     </nav>
   </div>
 
   <div class="hero-inner wrap">
-    <h1 class="headline">Decentralized AI compute, paid in aiBTN</h1>
-    <p class="lede">Your machine answers AI tasks for the network and is paid in aiBTN — no data centre, no cloud contract, no permission needed.</p>
-    <p class="scene-cap">Paro Taktsang — the Tiger's Nest</p>
+    <h1 class="headline">དབུས་མེད་ AI རྩིས་སྒྲུབ། aiBTN གིས་སྤྲོད།</h1>
+    <p class="lede">ཁྱོད་ཀྱི་གློག་རིག་གིས་དྲ་བའི་དོན་ལུ་ AI ལས་ཀ་འབད་བཞིནམ་ལས་ aiBTN ཐོབ། གནས་སྡུད་ལྟེ་བ་མེད། སྤྲིན་གྱི་གན་རྒྱ་མེད། གནང་བ་ཞུ་མི་དགོ།</p>
+    <p class="scene-cap">སྤ་རོ་སྟག་ཚང་།</p>
   </div>
 </header>
 
 <section id="compute" class="band">
   <div class="wrap">
-    <p class="eyebrow">What this is</p>
-    <h2>A network that computes.</h2>
+    <p class="eyebrow">འདི་ག་ཅི་སྨོ།</p>
+    <h2>རྩིས་སྒྲུབ་འབད་མི་དྲ་བ།</h2>
     <div class="grid-3">
         <article class="card">
-          <h3>Decentralized</h3>
-          <p>Independent nodes, peer to peer. No company owns the mesh and there is no central switch to flip.</p>
+          <h3>དབུས་མེད།</h3>
+          <p>རང་དབང་ཅན་གྱི་མཚམས་ཚུ། གཅིག་ལས་གཅིག། དྲ་བ་འདི་ཚོང་སྡེ་ག་གིས་ཡང་བདག་འཛིན་མི་འབད། བཀག་ནིའི་ལྟེ་བའི་མཐེབ་གཅུ་ཡང་མེད།</p>
         </article>
         <article class="card">
-          <h3>Encrypted &amp; sovereign</h3>
-          <p>You hold the keys. Chat is end-to-end encrypted and your data never leaves your terms.</p>
+          <h3>གསང་སྐུད་དང་རང་དབང་།</h3>
+          <p>ལྡེ་མིག་ཚུ་ཁྱོད་ལུ་ཡོད། ཁ་བརྡ་འདི་མཐའ་ལས་མཐའ་ཚུན་གསང་སྐུད་འབད་ཡོདཔ་ལས་ ཁྱོད་ཀྱི་གནས་སྡུད་ཁྱོད་ཀྱི་གནས་སྟངས་ལས་ཕྱི་ཁར་མི་འགྱོ།</p>
         </article>
         <article class="card">
-          <h3>Pay per use</h3>
-          <p>Metered per AI token with a hard budget per job. Unused budget is returned.</p>
+          <h3>ལག་ལེན་དང་འཁྲིལ་ཏེ་སྤྲོད།</h3>
+          <p>AI ཊོ་ཀཱན་རེ་རེ་བཞིན་དུ་ཚད་འཇལ་ཞིནམ་ལས་ ལས་ཀ་རེ་ལུ་མ་དངུལ་གྱི་ཚད་ངེས་ཅན་ཡོད། མ་ལག་ལེན་འཐབ་པའི་མ་དངུལ་འདི་ཕྱིར་སློག་འབད་ཨིན།</p>
         </article></div>
   </div>
 </section>
 
 <section id="coin" class="band alt">
   <div class="wrap">
-    <p class="eyebrow">The payment layer</p>
-    <h2>Settled in aiBTN.</h2>
+    <p class="eyebrow">སྤྲོད་ལེན་གྱི་རིམ་པ།</p>
+    <h2>aiBTN ནང་གཏན་འཁེལ།</h2>
     <div class="grid-2">
         <article class="card">
           <h3>aiBTN</h3>
-          <p>The local rail. Value moves in the currency people actually earn and spend.</p>
+          <p>ས་གནས་ཀྱི་ལམ། རིན་ཐང་འདི་མི་ཚུ་གིས་ངོ་མ་ཐོབ་ཞིནམ་ལས་གཏང་མི་དངུལ་ནང་འགྱོ།</p>
         </article>
         <article class="card">
-          <h3>DAI provides the compute</h3>
-          <p>Decentralized AI compute for that economy, priced and settled locally.</p>
+          <h3>DAI གིས་རྩིས་སྒྲུབ་བྱིན།</h3>
+          <p>དཔལ་འབྱོར་དེ་གི་དོན་ལུ་དབུས་མེད་ AI རྩིས་སྒྲུབ། ས་གནས་ནང་རིན་གོང་བཟོ་ཞིནམ་ལས་གཏན་འཁེལ་འབདཝ་ཨིན།</p>
         </article></div>
   </div>
 </section>
 
 <section id="here" class="band">
   <div class="wrap">
-    <p class="eyebrow">Why here</p>
-    <h2>Built in Bhutan.</h2>
+    <p class="eyebrow">ག་ཅི་འབད་ནཱ།</p>
+    <h2>འབྲུག་ནང་བཟོ་བཟོཝ།</h2>
     <div class="grid-4">
         <article class="card">
-          <h3>Affordable power</h3>
-          <p>Electricity is the real input cost of AI compute, and here it is cheap enough to leave a margin.</p>
+          <h3>གོང་ཚད་འོས་འབབ་ཅན་གྱི་གློག</h3>
+          <p>གློག་མེ་འདི་ AI རྩིས་སྒྲུབ་ཀྱི་གཙོ་བོའི་གླ་ཆ་ཨིནམ་ལས་ ནཱ་ལུ་ཁེ་ཕན་ལྷག་ལུས་ཚུགས་པའི་ཁེ་གོང་ཡོད།</p>
         </article>
         <article class="card">
-          <h3>People who build</h3>
-          <p>A young, technical workforce that can run nodes and write the skills that run on them.</p>
+          <h3>བཟོ་སྐྲུན་འབད་མི་མི་ཚུ།</h3>
+          <p>མཚམས་ཚུ་གཡོག་བཀོལ་ཞིནམ་ལས་ དེ་གུ་ལཱ་འབད་མི་རིག་རྩལ་འབྲི་ཚུགས་མི་ན་གཞོན་དང་འཕྲུལ་རིག་གི་ལས་མི།</p>
         </article>
         <article class="card">
-          <h3>Local demand</h3>
-          <p>AI priced in local money, reachable without a foreign card or a foreign bank.</p>
+          <h3>ས་གནས་ཀྱི་དགོས་མཁོ།</h3>
+          <p>AI འདི་ས་གནས་ཀྱི་དངུལ་ནང་རིན་གོང་བཟོཝ་ཨིན། ཕྱི་རྒྱལ་གྱི་ཤོག་བྱང་ཡང་ན་དངུལ་ཁང་མེད་པར་ལེན་ཚུགས།</p>
         </article>
         <article class="card">
-          <h3>Sovereign by design</h3>
-          <p>The coin stays yours. The network settles it without asking anyone for permission.</p>
+          <h3>བཀོད་སྒྲིག་ལས་རང་དབང་།</h3>
+          <p>དངུལ་སྒོར་འདི་ཁྱོད་རང་གི་ཨིན། དྲ་བ་གིས་ག་ལས་ཡང་གནང་བ་མ་ཞུ་བར་གཏན་འཁེལ་འབདཝ་ཨིན།</p>
         </article></div>
   </div>
 </section>
 
 <section id="market" class="band alt">
   <div class="wrap">
-    <p class="eyebrow">The local market</p>
-    <h2>aiBTN buys compute.</h2>
-    <p class="lede narrow">Hard currency settles into aiBTN — and aiBTN buys AI compute, local talent and local experience in Bhutan.</p>
+    <p class="eyebrow">ས་གནས་ཀྱི་ཁྲོམ།</p>
+    <h2>aiBTN གིས་རྩིས་སྒྲུབ་ཉོཝ་ཨིན།</h2>
+    <p class="lede narrow">དངུལ་སྲ་བ་འདི་ aiBTN ནང་གཏན་འཁེལ་འབདཝ་ཨིན། aiBTN གིས་འབྲུག་ནང་ AI རྩིས་སྒྲུབ་དང་ ས་གནས་ཀྱི་རིག་རྩལ་ དེ་ལས་ཉམས་མྱོང་ཉོཝ་ཨིན།</p>
     <div class="flow">
-      <div class="flow-step"><span class="flow-k">Fiat in</span><span class="flow-v">USD · EUR · USDT</span></div>
+      <div class="flow-step"><span class="flow-k">ནང་འཛུལ་དངུལ།</span><span class="flow-v">USD · EUR · USDT</span></div>
       <div class="flow-arrow" aria-hidden="true">→</div>
-      <div class="flow-step accent"><span class="flow-k">Bhutan stablecoin</span><span class="flow-v">aiBTN</span></div>
+      <div class="flow-step accent"><span class="flow-k">འབྲུག་གི་བརྟན་དངུལ།</span><span class="flow-v">aiBTN</span></div>
       <div class="flow-arrow" aria-hidden="true">→</div>
-      <div class="flow-step"><span class="flow-k">What you get</span><span class="flow-v">AI compute · Local talent · Experience</span></div>
+      <div class="flow-step"><span class="flow-k">ཁྱོད་ཀྱིས་ཐོབ་མི།</span><span class="flow-v">AI རྩིས་སྒྲུབ། · ས་གནས་ཀྱི་རིག་རྩལ། · ཉམས་མྱོང་།</span></div>
     </div>
   </div>
 </section>
 
 <section id="exchange" class="band">
   <div class="wrap">
-    <p class="eyebrow">Exchange</p>
-    <h2>Trade it peer to peer.</h2>
-    <p class="lede narrow">Swap USDT, aiBTN and the other compute coins on the open P2P market. Both legs settle on chain in seconds.</p>
-    <p><a class="btn" href="https://assetux.com" target="_blank" rel="noopener">Open the P2P market</a></p>
+    <p class="eyebrow">བརྗེ་སོར།</p>
+    <h2>གཅིག་ལས་གཅིག་ཚོང་འབྲེལ།</h2>
+    <p class="lede narrow">ཁ་ཕྱེ་བའི་ P2P ཁྲོམ་ནང་ USDT དང་ aiBTN དེ་ལས་རྩིས་སྒྲུབ་ཀྱི་དངུལ་སྒོར་གཞན་ཚུ་བརྗེ་སོར་འབད། ཕྱོགས་གཉིས་ཆ་ར་སྐར་ཆ་ཁ་ཤས་ནང་ཅིང་གུ་གཏན་འཁེལ་འགྱོཝ་ཨིན།</p>
+    <p><a class="btn" href="https://assetux.com" target="_blank" rel="noopener">P2P ཁྲོམ་ཁ་ཕྱེ།</a></p>
   </div>
 </section>
 
 <section id="start" class="band alt">
   <div class="wrap center">
-    <p class="eyebrow">Get started</p>
-    <h2>Put your machine to work.</h2>
-    <p class="lede narrow">Run a node. Earn aiBTN.</p>
+    <p class="eyebrow">འགོ་བཙུགས།</p>
+    <h2>ཁྱོད་ཀྱི་གློག་རིག་ལཱ་ནང་བཙུགས།</h2>
+    <p class="lede narrow">མཚམས་གཅིག་གཡོག་བཀོལ། aiBTN ཐོབ།</p>
     <p class="cta-row">
-      <a class="btn primary" href="../miner.html#start">Run a node</a>
-      <a class="btn" href="../docs/">Read the docs</a>
+      <a class="btn primary" href="../miner.html#start">མཚམས་གཡོག་བཀོལ།</a>
+      <a class="btn" href="../docs/">ཡིག་ཆ་ལྷག</a>
     </p>
   </div>
 </section>
 
 <footer class="foot">
   <div class="wrap foot-inner">
-    <span>Decentralized AI compute for the aiBTN economy · Bhutan</span>
+    <span>aiBTN དཔལ་འབྱོར་གྱི་དོན་ལུ་དབུས་མེད་ AI རྩིས་སྒྲུབ། · འབྲུག</span>
     <span class="foot-links">
       <a href="../index.html">iamai.kg</a>
       <a href="../explorer/">Explorer</a>

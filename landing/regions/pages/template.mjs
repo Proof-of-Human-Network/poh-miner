@@ -22,6 +22,7 @@ const DISPLAY = {
   ar: "'Noto Naskh Arabic','Amiri','Segoe UI',system-ui,sans-serif",
   ur: "'Noto Nastaliq Urdu','Noto Naskh Arabic','Segoe UI',system-ui,sans-serif",
   fa: "'Vazirmatn','Noto Naskh Arabic','Segoe UI',system-ui,sans-serif",
+  dz: "'Noto Serif Tibetan','Noto Sans Tibetan','Jomolhari','DDC Uchen','Inter',system-ui,sans-serif",
 };
 
 // Long compound words (Kyrgyz "Борборсуздандырылган", Amharic, German-style
