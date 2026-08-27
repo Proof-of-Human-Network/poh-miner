@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DAI Explorer • Blocks, transactions and addresses on the DAI chain</title>
+  <meta name="description" content="Browse the DAI chain — recent blocks, transactions, addresses and completed AI compute jobs.">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Iceland&display=swap" rel="stylesheet">
+  <link rel="icon" type="image/svg+xml" href="../dai-miner-on-light.svg">
+  <link rel="icon" type="image/png" sizes="32x32" href="../favicon-32.png">
+  <link rel="shortcut icon" href="../favicon.ico">
+  <script src="../i18n.js" defer></script>
+  <style>
+    :root { --bg: #f5f6f2; --ink: #171717; --muted: #525252; --accent: #16a34a; --card: #ffffff; --line: #e4e6e0; }
+    body { font-family: 'Iceland', sans-serif; background: var(--bg); color: var(--ink); line-height: 1.4; }
+    h1, h2, h3, .font-display { font-family: 'Iceland', sans-serif; font-weight: 400; }
+    .glass { background: rgba(255,255,255,0.86); border: 1px solid var(--line); backdrop-filter: blur(20px); }
+    .neon { color: #16a34a; }
+    .muted { color: var(--muted); }
+    html { font-size: 150%; }
+    @media (max-width: 639px) { html { font-size: 100%; } }
+    @media (max-width: 767px) { html { font-size: 110%; } }
+    .footer-text { font-size: 1.25rem !important; }
+
+    .nav-links { display: none; }
+    @media (min-width: 1024px) { .nav-links { display: flex; } }
+    .hamburger { display: flex; flex-direction: column; gap: 5px; cursor: pointer; padding: 4px; }
+    .hamburger span { display: block; width: 22px; height: 2px; background: #171717; border-radius: 2px; transition: 0.25s; }
+    .hamburger.open span:nth-child(1) { transform: translateY(7px) rotate(45deg); }
+    .hamburger.open span:nth-child(2) { opacity: 0; }
+    .hamburger.open span:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
+    @media (min-width: 1024px) { .hamburger { display: none; } }
+    .mobile-drawer {
+      display: none; position: fixed; top: 64px; left: 0; right: 0; z-index: 49;
+      background: #f5f6f2; border-bottom: 1px solid var(--line);
+      flex-direction: column; padding: 16px 24px 24px;
+    }
+    @media (min-width: 640px) { .mobile-drawer { top: 80px; } }
+    .mobile-drawer.open { display: flex; }
+    .mobile-drawer a { padding: 14px 0; font-size: 22px; color: #171717; border-bottom: 1px solid var(--line); text-decoration: none; }
+    .mobile-drawer a:last-child { border-bottom: none; }
+    @media (min-width: 1024px) { .mobile-drawer { display: none !important; } }
+    .dai-lang-select { background: #fff !important; color: #171717 !important; border: 1px solid #d4d6d0 !important; }
+
+    /* Explorer-specific */
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    .xcard { background: var(--card); border: 1px solid var(--line); border-radius: 8px; }
+    .xrow { transition: border-color .18s, transform .18s; }
+    .xrow:hover { border-color: rgba(22,163,74,0.5); transform: translateY(-1px); }
+    .xtab { border: 1px solid var(--line); background: #fff; color: var(--muted); cursor: pointer; }
+    .xtab.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+    .xlink { color: var(--accent); cursor: pointer; word-break: break-all; }
+    .xlink:hover { text-decoration: underline; }
+    .kv { display: flex; justify-content: space-between; gap: 12px; padding: 6px 0; border-bottom: 1px solid var(--line); }
+    .kv:last-child { border-bottom: none; }
+    .kv dt { color: var(--muted); font-size: 0.9rem; white-space: nowrap; }
+    .kv dd { text-align: right; word-break: break-all; }
+    .scroll-x { overflow-x: auto; }
+    .spin { display: inline-block; width: 14px; height: 14px; border: 2px solid var(--line); border-top-color: var(--accent); border-radius: 50%; animation: sp .7s linear infinite; }
+    @keyframes sp { to { transform: rotate(360deg); } }
+    .badge { border: 1px solid var(--line); border-radius: 999px; padding: 1px 8px; font-size: 0.8rem; color: var(--muted); }
+  </style>
+</head>
+<body class="overflow-x-hidden">
+  <!-- Nav -->
+  <nav class="border-b border-black/10 bg-[#f5f6f2]/85 backdrop-blur-xl fixed w-full z-50">
+    <div class="max-w-7xl mx-auto px-4 sm:px-8 h-16 sm:h-20 flex items-center justify-between">
+      <a href="../index.html" class="flex items-center gap-2">
+        <img src="../dai-miner-on-light.svg" alt="DAI Logo" width="36" height="36" class="sm:w-[48px] sm:h-[48px]" style="vertical-align: middle;" />
+      </a>
+      <div class="nav-links items-center gap-x-6 xl:gap-x-9 text-[17px] xl:text-[20px]">
+        <a href="../dai.html" class="hover:text-[#16a34a] transition whitespace-nowrap" data-i18n="nav.dai">DAI</a>
+        <a href="../framework.html" class="hover:text-[#16a34a] transition whitespace-nowrap" data-i18n="nav.framework">Framework</a>
+        <a href="../wallet/" class="hover:text-[#16a34a] transition whitespace-nowrap" data-i18n="nav.wallet">Wallet</a>
+        <a href="./" class="text-[#16a34a] transition whitespace-nowrap" data-i18n="nav.explorer">Explorer</a>
+        <a href="https://assetux.com" target="_blank" rel="noopener" class="px-3 lg:px-5 py-2 rounded-[4px] border border-[#16a34a] text-[#16a34a] hover:bg-[#16a34a] hover:text-white transition whitespace-nowrap" data-i18n="nav.p2p">P2P</a>
+        <a href="../miner.html#start" class="px-3 lg:px-5 py-2 rounded-[4px] bg-[#16a34a] text-white hover:bg-black transition whitespace-nowrap" data-i18n="nav.runminer">Run a miner</a>
+        <div data-i18n-switch></div>
+      </div>
+      <button class="hamburger" id="hamburger" aria-label="Open menu"><span></span><span></span><span></span></button>
+    </div>
+  </nav>
+
+  <div class="mobile-drawer" id="mobile-drawer">
+    <a href="../dai.html" data-i18n="nav.dai">DAI</a>
+    <a href="../framework.html" data-i18n="nav.framework">Framework</a>
+    <a href="../wallet/" data-i18n="nav.wallet">Wallet</a>
+    <a href="./" data-i18n="nav.explorer">Explorer</a>
+    <a href="https://assetux.com" target="_blank" rel="noopener" data-i18n="nav.p2p">P2P</a>
+    <a href="../miner.html#start" data-i18n="nav.runminer">Run a miner</a>
+    <div data-i18n-switch style="padding:14px 0"></div>
+  </div>
+
+  <main class="pt-24 sm:pt-28 pb-20 max-w-6xl mx-auto px-4 sm:px-8">
+    <header class="mb-8">
+      <h1 class="font-display text-[40px] sm:text-[56px] leading-none" data-i18n="exp.title">Chain Explorer</h1>
+      <p class="muted mt-3 text-[16px] sm:text-[18px]" data-i18n="exp.sub">Blocks, transactions, addresses and completed AI compute jobs on the DAI chain.</p>
+    </header>
+
+    <!-- Network summary -->
+    <section class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8" id="stats">
+      <div class="xcard p-4"><div class="muted text-[14px]" data-i18n="exp.stat.height">Chain height</div><div class="text-[26px] neon mono" id="stat-height">—</div></div>
+      <div class="xcard p-4"><div class="muted text-[14px]" data-i18n="exp.stat.peers">Peers</div><div class="text-[26px] mono" id="stat-peers">—</div></div>
+      <div class="xcard p-4"><div class="muted text-[14px]" data-i18n="exp.stat.supply">Circulating</div><div class="text-[26px] mono" id="stat-supply">—</div></div>
+      <div class="xcard p-4"><div class="muted text-[14px]" data-i18n="exp.stat.node">Node</div><div class="text-[17px] mono truncate" id="stat-node">—</div></div>
+    </section>
+
+    <!-- Search -->
+    <section class="mb-6">
+      <div class="flex flex-col sm:flex-row gap-2">
+        <input id="q" type="search" autocomplete="off"
+               class="flex-1 mono text-[15px] px-4 py-3 rounded-[6px] border border-[#e4e6e0] bg-white outline-none focus:border-[#16a34a]"
+               data-i18n-ph="exp.search.ph" placeholder="Search by address, tx hash, or block height…" />
+        <button id="go" class="px-6 py-3 rounded-[6px] bg-[#16a34a] text-white hover:bg-black transition text-[17px]" data-i18n="exp.search.btn">Search</button>
+      </div>
+      <p class="muted text-[14px] mt-2" data-i18n="exp.search.hint">Tip: paste a <span class="mono">dai…</span> address to see its balance, transfers and jobs.</p>
+    </section>
+
+    <!-- Tabs -->
+    <div class="flex gap-2 mb-4">
+      <button class="xtab active px-4 py-2 rounded-[6px] text-[15px]" id="tab-blocks" data-i18n="exp.tab.blocks">Blocks</button>
+      <button class="xtab px-4 py-2 rounded-[6px] text-[15px]" id="tab-result" data-i18n="exp.tab.result">Result</button>
+    </div>
+
+    <section id="view-blocks"></section>
+    <section id="view-result" style="display:none"></section>
+  </main>
+
+  <footer class="border-t border-black/10 py-8 footer-text muted">
+    <div class="max-w-7xl mx-auto px-4 sm:px-8 flex flex-col sm:flex-row gap-2 sm:justify-between">
+      <div data-i18n="idx.foot.tag">DAI — Decentralized AI compute, powered by local LLMs</div>
+      <div class="flex gap-x-4 gap-y-2 flex-wrap">
+        <a href="../miner.html" class="hover:text-[#171717]" data-i18n="idx.foot.miner">DAI Miner</a>
+        <a href="../wallet/" class="hover:text-[#171717]" data-i18n="nav.wallet">Wallet</a>
+        <a href="../docs/" class="hover:text-[#171717]" data-i18n="idx.foot.docs">Docs</a>
+        <a href="./" class="hover:text-[#171717]" data-i18n="nav.explorer">Explorer</a>
+      </div>
+    </div>
+  </footer>
+
+  <script src="explorer.js" defer></script>
+</body>
+</html>

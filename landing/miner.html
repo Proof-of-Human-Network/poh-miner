@@ -119,6 +119,7 @@
         <a href="framework.html" class="hover:text-[#16a34a] transition whitespace-nowrap" data-i18n="nav.framework">Framework</a>
         <a href="dai.html" data-i18n="nav.dai" class="hover:text-[#16a34a] transition whitespace-nowrap">DAI</a>
         <a href="wallet/" data-i18n="nav.wallet" class="hover:text-[#16a34a] transition whitespace-nowrap">Wallet</a>
+        <a href="explorer/" class="hover:text-[#16a34a] transition whitespace-nowrap" data-i18n="nav.explorer">Explorer</a>
         <a href="https://assetux.com" target="_blank" rel="noopener" class="px-3 lg:px-5 py-2 rounded-[4px] border border-[#16a34a] text-[#16a34a] hover:bg-[#16a34a] hover:text-white transition whitespace-nowrap" data-i18n="nav.p2p">P2P</a>
         <a href="dai.html" data-i18n="nav.dai" class="px-3 lg:px-5 py-2 rounded-[4px] border border-[#16a34a]/60 text-[#16a34a] hover:bg-[#16a34a]/10 transition whitespace-nowrap">DAI</a>
         <div data-i18n-switch></div>
@@ -134,6 +135,7 @@
     <a href="framework.html" data-i18n="nav.framework">Framework</a>
     <a href="dai.html" data-i18n="nav.dai">DAI</a>
     <a href="wallet/" data-i18n="nav.wallet">Wallet</a>
+    <a href="explorer/" data-i18n="nav.explorer">Explorer</a>
     <a href="https://assetux.com" target="_blank" rel="noopener" data-i18n="nav.p2p">P2P</a>
     <a href="dai.html" data-i18n="mnr.nav.daicoin">DAI coin</a>
     <div data-i18n-switch style="padding:14px 0"></div>
@@ -176,7 +178,7 @@
 
       <!-- Real Mesh Visualization -->
       <div class="md:w-7/12 relative">
-        <div class="aspect-[16/9] rounded-[4px] overflow-hidden bg-black relative">
+        <div class="aspect-[16/9] rounded-[4px] overflow-hidden bg-white border border-black/10 relative">
           <canvas id="live-mesh" class="absolute inset-0 w-full h-full"></canvas>
         </div>
       </div>
@@ -731,7 +733,7 @@
             vx: (Math.random() - 0.5) * 0.6,
             vy: (Math.random() - 0.5) * 0.6,
             radius: 2.5 + Math.random() * 2,
-            country: ['GE','SG','US','DE','JP','BR','AU','IN'][i % 8]
+            country: ['KG','ET','BD','PK','EG','BT','AO','IR'][i % 8]
           });
         }
       }
@@ -768,7 +770,7 @@
 
         // Draw nodes
         nodes.forEach(n => {
-          ctx.fillStyle = ['GE','DE','FR'].includes(n.country) ? '#16a34a' : 'rgba(0,0,0,0.45)';
+          ctx.fillStyle = ['KG','ET','BD'].includes(n.country) ? '#16a34a' : 'rgba(23,23,23,0.55)';
           ctx.beginPath();
           ctx.arc(n.x, n.y, n.radius, 0, Math.PI * 2);
           ctx.fill();

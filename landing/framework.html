@@ -100,6 +100,7 @@
         <a href="dai.html" class="hover:text-[#16a34a] transition whitespace-nowrap" data-i18n="nav.dai">DAI</a>
         <a href="framework.html" class="text-[#16a34a] transition whitespace-nowrap" data-i18n="nav.framework">Framework</a>
         <a href="wallet/" class="hover:text-[#16a34a] transition whitespace-nowrap" data-i18n="nav.wallet">Wallet</a>
+        <a href="explorer/" class="hover:text-[#16a34a] transition whitespace-nowrap" data-i18n="nav.explorer">Explorer</a>
         <a href="https://assetux.com" target="_blank" rel="noopener" class="px-3 lg:px-5 py-2 rounded-[4px] border border-[#16a34a] text-[#16a34a] hover:bg-[#16a34a] hover:text-white transition whitespace-nowrap" data-i18n="nav.p2p">P2P</a>
         <a href="miner.html#start" class="px-3 lg:px-5 py-2 rounded-[4px] bg-[#16a34a] text-white hover:bg-black transition whitespace-nowrap" data-i18n="nav.runminer">Run a miner</a>
         <div data-i18n-switch></div>
@@ -115,6 +116,7 @@
     <a href="dai.html" data-i18n="nav.dai">DAI</a>
     <a href="framework.html" data-i18n="nav.framework">Framework</a>
     <a href="wallet/" data-i18n="nav.wallet">Wallet</a>
+    <a href="explorer/" data-i18n="nav.explorer">Explorer</a>
     <a href="https://assetux.com" target="_blank" rel="noopener" data-i18n="nav.p2p">P2P</a>
     <a href="miner.html#start" data-i18n="nav.runminer">Run a miner</a>
     <div data-i18n-switch style="padding:14px 0"></div>
@@ -182,7 +184,7 @@
         <div class="uppercase tracking-[3px] text-xs text-[#16a34a] mb-6">THE PERP MARKET</div>
         <h2 class="font-display text-[40px] sm:text-[56px] md:text-[80px] leading-none">Compute pairs,<br>quoted like Forex.</h2>
         <p class="mt-8 max-w-3xl mx-auto text-[17px] sm:text-[20px] md:text-[23px] text-[#525252]">
-          αιGEL/KGST, αιBTN/αιETB, KGST/αιGEL — every pair, no expiry.
+          αιBDT/KGST, αιBTN/αιETB, αιPKR/αιEGP — every pair, no expiry.
           Buying compute in any currency is an FX trade.
         </p>
       </div>
@@ -271,22 +273,12 @@
       <div class="uppercase tracking-[3px] text-xs text-[#16a34a] mb-6">THE MARKETS BOARD</div>
       <h2 class="font-display text-[40px] sm:text-[56px] md:text-[80px] leading-none">Compute coins.<br>One chain.</h2>
       <div class="mt-10 space-y-2 text-[15px] sm:text-[17px] md:text-[19px] tracking-[0.08em] text-[#525252] font-display">
-        <div>USDT / KGST / aiETB · aiGEL · aiBTN</div>
-        <div>GELt / aiGEL / aiETB · aiBTN · KGST</div>
+        <div>USDT / KGST / aiETB · aiBDT · aiPKR</div>
+        <div>aiEGP / aiVES / aiIQD · aiBTN · aiPYG</div>
       </div>
-      <p class="mt-6 max-w-3xl mx-auto text-[16px] sm:text-[18px] text-[#525252]">Tether and the Government of Georgia are already building GELt. aiGEL is the compute coin on that rail.</p>
+      <p class="mt-6 max-w-3xl mx-auto text-[16px] sm:text-[18px] text-[#525252]">Fourteen sovereign compute coins on one chain. Each one is issued locally, priced locally, and settles against every other.</p>
     </div>
     <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-6 md:gap-8">
-      <div class="glass p-6 rounded-[6px] reveal text-center">
-        <div class="flag mb-2">🇬🇪</div>
-        <div class="text-[30px] md:text-[38px] text-[#16a34a] leading-none">GELt</div>
-        <div class="text-[15px] text-[#525252] mt-2">External. Tether + GoG.</div>
-      </div>
-      <a href="gel/" class="glass card-hover p-6 rounded-[6px] reveal text-center block">
-        <div class="flag mb-2">🇬🇪</div>
-        <div class="text-[30px] md:text-[38px] text-[#16a34a] leading-none">αιGEL</div>
-        <div class="text-[15px] text-[#525252] mt-2">Compute coin</div>
-      </a>
       <a href="kgs/" class="glass card-hover p-6 rounded-[6px] reveal text-center block">
         <div class="flag mb-2">🇰🇬</div>
         <div class="text-[30px] md:text-[38px] text-[#16a34a] leading-none">KGST</div>
@@ -302,24 +294,67 @@
         <div class="text-[30px] md:text-[38px] text-[#16a34a] leading-none">αιBTN</div>
         <div class="text-[15px] text-[#525252] mt-2">Bhutan — carbon-free hydro</div>
       </a>
+      <a href="ves/" class="glass card-hover p-6 rounded-[6px] reveal text-center block">
+        <div class="flag mb-2">🇻🇪</div>
+        <div class="text-[30px] md:text-[38px] text-[#16a34a] leading-none">αιVES</div>
+        <div class="text-[15px] text-[#525252] mt-2">Venezuela — subsidised power</div>
+      </a>
+      <a href="pyg/" class="glass card-hover p-6 rounded-[6px] reveal text-center block">
+        <div class="flag mb-2">🇵🇾</div>
+        <div class="text-[30px] md:text-[38px] text-[#16a34a] leading-none">αιPYG</div>
+        <div class="text-[15px] text-[#525252] mt-2">Paraguay — Itaipú hydro surplus</div>
+      </a>
+      <a href="bdt/" class="glass card-hover p-6 rounded-[6px] reveal text-center block">
+        <div class="flag mb-2">🇧🇩</div>
+        <div class="text-[30px] md:text-[38px] text-[#16a34a] leading-none">αιBDT</div>
+        <div class="text-[15px] text-[#525252] mt-2">Bangladesh — 170M people, dense demand</div>
+      </a>
+      <a href="pkr/" class="glass card-hover p-6 rounded-[6px] reveal text-center block">
+        <div class="flag mb-2">🇵🇰</div>
+        <div class="text-[30px] md:text-[38px] text-[#16a34a] leading-none">αιPKR</div>
+        <div class="text-[15px] text-[#525252] mt-2">Pakistan — large youth developer base</div>
+      </a>
+      <a href="egp/" class="glass card-hover p-6 rounded-[6px] reveal text-center block">
+        <div class="flag mb-2">🇪🇬</div>
+        <div class="text-[30px] md:text-[38px] text-[#16a34a] leading-none">αιEGP</div>
+        <div class="text-[15px] text-[#525252] mt-2">Egypt — regional compute hub</div>
+      </a>
+      <a href="iqd/" class="glass card-hover p-6 rounded-[6px] reveal text-center block">
+        <div class="flag mb-2">🇮🇶</div>
+        <div class="text-[30px] md:text-[38px] text-[#16a34a] leading-none">αιIQD</div>
+        <div class="text-[15px] text-[#525252] mt-2">Iraq — subsidised grid, rebuilding</div>
+      </a>
+      <a href="aoa/" class="glass card-hover p-6 rounded-[6px] reveal text-center block">
+        <div class="flag mb-2">🇦🇴</div>
+        <div class="text-[30px] md:text-[38px] text-[#16a34a] leading-none">αιAOA</div>
+        <div class="text-[15px] text-[#525252] mt-2">Angola — hydro build-out</div>
+      </a>
+      <a href="cup/" class="glass card-hover p-6 rounded-[6px] reveal text-center block">
+        <div class="flag mb-2">🇨🇺</div>
+        <div class="text-[30px] md:text-[38px] text-[#16a34a] leading-none">αιCUP</div>
+        <div class="text-[15px] text-[#525252] mt-2">Cuba — closed FX, high compute demand</div>
+      </a>
+      <a href="lyd/" class="glass card-hover p-6 rounded-[6px] reveal text-center block">
+        <div class="flag mb-2">🇱🇾</div>
+        <div class="text-[30px] md:text-[38px] text-[#16a34a] leading-none">αιLYD</div>
+        <div class="text-[15px] text-[#525252] mt-2">Libya — lowest-cost energy</div>
+      </a>
+      <a href="sdg/" class="glass card-hover p-6 rounded-[6px] reveal text-center block">
+        <div class="flag mb-2">🇸🇩</div>
+        <div class="text-[30px] md:text-[38px] text-[#16a34a] leading-none">αιSDG</div>
+        <div class="text-[15px] text-[#525252] mt-2">Sudan — parallel-market economy</div>
+      </a>
+      <a href="irr/" class="glass card-hover p-6 rounded-[6px] reveal text-center block">
+        <div class="flag mb-2">🇮🇷</div>
+        <div class="text-[30px] md:text-[38px] text-[#16a34a] leading-none">αιIRR</div>
+        <div class="text-[15px] text-[#525252] mt-2">Iran — cheap power, sanctioned rails</div>
+      </a>
       <div class="glass p-6 rounded-[6px] reveal text-center">
         <div class="text-[30px] md:text-[38px] text-[#16a34a] leading-none mt-8">USDT</div>
         <div class="text-[15px] text-[#525252] mt-2">On-ramp</div>
       </div>
     </div>
     <p class="mt-10 text-center text-[#737373] text-[16px] reveal">Your currency next? The framework is white-label.</p>
-  </div>
-
-  <!-- Reserve funding -->
-  <div class="section-full border-t border-black/10 section-alt">
-    <div class="w-full max-w-5xl mx-auto px-4 sm:px-8 py-16 md:py-32 text-center">
-      <div class="reveal">
-        <div class="uppercase tracking-[3px] text-xs text-[#16a34a] mb-6" data-i18n="fw.fund.eyebrow">RESERVE FUNDING</div>
-        <h2 class="font-display text-[40px] sm:text-[56px] md:text-[76px] leading-none" data-i18n-html="fw.fund.title">Seeded by an <span class="neon">offshore note.</span></h2>
-        <p class="mt-8 max-w-3xl mx-auto text-[17px] sm:text-[20px] md:text-[23px] text-[#525252]" data-i18n="fw.fund.desc">Each coin's reserve can be seeded with privately placed notes: an offshore SPV places them with qualified international investors, 100% of the proceeds sit in a ring-fenced custodial reserve backing the coin, and the notes are serviced by compute revenue plus yield on the reserve. Coin holders never carry investor risk.</p>
-        <p class="mt-6 max-w-3xl mx-auto text-[15px] text-[#737373]" data-i18n="fw.fund.notice">A structure, not an offer — available to qualified institutional investors on request.</p>
-      </div>
-    </div>
   </div>
 
   <!-- Final CTA -->
@@ -341,6 +376,7 @@
       <div class="flex gap-x-4 gap-y-2 flex-wrap">
         <a href="miner.html" class="hover:text-[#171717]" data-i18n="idx.foot.miner">DAI Miner</a>
         <a href="wallet/" class="hover:text-[#171717]" data-i18n="nav.wallet">Wallet</a>
+        <a href="explorer/" class="hover:text-[#171717]" data-i18n="nav.explorer">Explorer</a>
         <a href="docs/" class="hover:text-[#171717]" data-i18n="idx.foot.docs">Docs</a>
         <a href="https://iamai.kg" class="hover:text-[#171717]" data-i18n="idx.foot.scanner">Scanner</a>
         <a href="https://t.me/iamaihub" target="_blank" rel="noopener" class="hover:text-[#171717]">Telegram</a>
@@ -354,10 +390,20 @@
     // Figures mirror regions/src/data.mjs (electricity + hardware amortisation,
     // 24-month payback margin). Indicative, not audited.
     const COINS = [
-      { code: 'αιGEL', slug: 'gel', flag: '🇬🇪', country: 'Georgia',    fx: 2.7, power: 0.07  },
-      { code: 'KGST',  slug: 'kgs', flag: '🇰🇬', country: 'Kyrgyzstan', fx: 87,  power: 0.035 },
-      { code: 'αιETB', slug: 'etb', flag: '🇪🇹', country: 'Ethiopia',   fx: 128, power: 0.02  },
-      { code: 'αιBTN', slug: 'btn', flag: '🇧🇹', country: 'Bhutan',     fx: 84,  power: 0.03  },
+      { code: 'KGST',  slug: 'kgs', flag: '🇰🇬', country: 'Kyrgyzstan', fx: 87,      power: 0.035 },
+      { code: 'αιETB', slug: 'etb', flag: '🇪🇹', country: 'Ethiopia',   fx: 128,     power: 0.02  },
+      { code: 'αιBTN', slug: 'btn', flag: '🇧🇹', country: 'Bhutan',     fx: 84,      power: 0.03  },
+      { code: 'αιVES', slug: 'ves', flag: '🇻🇪', country: 'Venezuela',  fx: 250,     power: 0.01  },
+      { code: 'αιPYG', slug: 'pyg', flag: '🇵🇾', country: 'Paraguay',   fx: 7300,    power: 0.05  },
+      { code: 'αιBDT', slug: 'bdt', flag: '🇧🇩', country: 'Bangladesh', fx: 122,     power: 0.08  },
+      { code: 'αιPKR', slug: 'pkr', flag: '🇵🇰', country: 'Pakistan',   fx: 282,     power: 0.09  },
+      { code: 'αιEGP', slug: 'egp', flag: '🇪🇬', country: 'Egypt',      fx: 48,      power: 0.05  },
+      { code: 'αιIQD', slug: 'iqd', flag: '🇮🇶', country: 'Iraq',       fx: 1310,    power: 0.03  },
+      { code: 'αιAOA', slug: 'aoa', flag: '🇦🇴', country: 'Angola',     fx: 915,     power: 0.02  },
+      { code: 'αιCUP', slug: 'cup', flag: '🇨🇺', country: 'Cuba',       fx: 400,     power: 0.03  },
+      { code: 'αιLYD', slug: 'lyd', flag: '🇱🇾', country: 'Libya',      fx: 5.5,     power: 0.01  },
+      { code: 'αιSDG', slug: 'sdg', flag: '🇸🇩', country: 'Sudan',      fx: 2600,    power: 0.02  },
+      { code: 'αιIRR', slug: 'irr', flag: '🇮🇷', country: 'Iran',       fx: 1000000, power: 0.01  },
     ];
 
     // Provider pay price per M AI tokens, USD (same model as regions/src/data.mjs)
@@ -384,7 +430,13 @@
       return v.toFixed(v >= 0.01 ? 4 : 5);
     }
 
-    const state = UNIQUE_PAIRS.map(p => ({ pair: p, rate: crossRate(p), drift: 0 }));
+    // 14 coins cross to 91 unique pairs — far more than the board or ticker can
+    // show legibly. Every pair still trades on-chain; the board samples the first
+    // BOARD_LIMIT so the grid stays a few rows tall.
+    const BOARD_LIMIT = 20;
+    const BOARD_PAIRS = UNIQUE_PAIRS.slice(0, BOARD_LIMIT);
+
+    const state = BOARD_PAIRS.map(p => ({ pair: p, rate: crossRate(p), drift: 0 }));
 
     function renderPairs() {
       const board = document.getElementById('pairs-board');
