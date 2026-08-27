@@ -50,33 +50,55 @@ const SCENES = {
     <path d="M120 640 L300 640 L300 900 L120 900 Z M520 668 L700 668 L700 900 L520 900 Z M980 684 L1180 684 L1180 900 L980 900 Z" fill="url(#subj-${id})" opacity=".5"/>
     <path d="M0 792 L1440 748 L1440 900 L0 900 Z" fill="var(--sky-top)" opacity=".55"/>`,
 
-  // Paro Taktsang — the monastery pinned to a sheer cliff.
-  cliffMonastery: (id) => `${open(id, 1150, 180)}
+  // Paro Taktsang — the monastery pinned to a sheer cliff. Kept to the right of
+  // the canvas so the hero copy, which sits left, never covers it.
+  cliffMonastery: (id) => `${open(id, 260, 170)}
     <path d="M0 500 L220 440 L440 496 L680 424 L920 488 L1180 428 L1440 484 L1440 660 L0 660 Z" fill="var(--ridge-far)"/>
-    <path d="M300 900 L360 380 L500 300 L640 372 L700 900 Z" fill="var(--ridge-mid)"/>
-    <path d="M980 900 L1020 470 L1120 420 L1220 466 L1260 900 Z" fill="var(--ridge-mid)" opacity=".8"/>
+    <path d="M120 900 L180 470 L300 402 L430 466 L470 900 Z" fill="var(--ridge-mid)" opacity=".65"/>
+    <path d="M820 900 L880 300 L1010 214 L1150 296 L1210 900 Z" fill="var(--ridge-mid)"/>
+    <path d="M880 300 L1010 214 L1150 296 L1150 352 L880 358 Z" fill="var(--accent-b)" opacity=".45"/>
     <g fill="url(#subj-${id})">
-      <rect x="416" y="452" width="120" height="76" rx="3"/>
-      <path d="M406 452 L476 416 L546 452 Z"/>
-      <rect x="452" y="404" width="48" height="46" rx="3"/>
-      <path d="M444 404 L476 380 L508 404 Z"/>
-      <rect x="540" y="486" width="64" height="48" rx="3"/>
-      <path d="M532 486 L572 462 L612 486 Z"/>
+      <rect x="936" y="392" width="140" height="88" rx="3"/>
+      <path d="M924 392 L1006 348 L1088 392 Z"/>
+      <rect x="978" y="332" width="56" height="52" rx="3"/>
+      <path d="M968 332 L1006 302 L1044 332 Z"/>
+      <rect x="1080" y="432" width="74" height="56" rx="3"/>
+      <path d="M1070 432 L1117 404 L1164 432 Z"/>
+      <rect x="884" y="440" width="58" height="46" rx="3" opacity=".9"/>
+      <path d="M876 440 L913 416 L950 440 Z" opacity=".9"/>
     </g>
-    <g fill="var(--moon)" opacity=".8">
-      <rect x="436" y="474" width="11" height="16" rx="2"/><rect x="470" y="474" width="11" height="16" rx="2"/>
-      <rect x="504" y="474" width="11" height="16" rx="2"/><rect x="558" y="502" width="10" height="14" rx="2"/>
+    <g fill="var(--moon)" opacity=".85">
+      <rect x="958" y="418" width="12" height="18" rx="2"/><rect x="998" y="418" width="12" height="18" rx="2"/>
+      <rect x="1038" y="418" width="12" height="18" rx="2"/><rect x="1100" y="450" width="11" height="16" rx="2"/>
+      <rect x="902" y="456" width="10" height="15" rx="2"/>
     </g>
-    <path d="M0 792 L1440 756 L1440 900 L0 900 Z" fill="var(--sky-top)" opacity=".5"/>`,
+    <g stroke="var(--accent-a)" stroke-width="2" opacity=".35" fill="none">
+      <path d="M1006 302 L1006 286"/><path d="M960 348 Q1006 330 1052 348"/>
+    </g>
+    <path d="M0 812 L1440 772 L1440 900 L0 900 Z" fill="var(--sky-top)" opacity=".5"/>`,
 
-  // Salto Ángel — the world's tallest fall off a flat-topped tepui.
-  waterfallTepui: (id) => `${open(id, 300, 170)}
-    <path d="M0 540 L240 496 L520 536 L820 484 L1120 528 L1440 486 L1440 680 L0 680 Z" fill="var(--ridge-far)"/>
-    <path d="M700 900 L700 300 L1180 268 L1180 900 Z" fill="var(--ridge-mid)"/>
-    <path d="M700 300 L1180 268 L1180 316 L700 348 Z" fill="var(--accent-b)" opacity=".55"/>
-    <path d="M880 316 Q894 520 872 700 Q902 720 926 700 Q908 520 924 314 Z" fill="url(#subj-${id})" opacity=".9"/>
-    <ellipse cx="898" cy="712" rx="120" ry="26" fill="var(--moon)" opacity=".18"/>
-    <path d="M0 700 L360 664 L760 704 L1440 660 L1440 900 L0 900 Z" fill="var(--ridge-mid)" opacity=".85"/>`,
+  // Salto Ángel — the fall drops ~979m off the Auyán-tepui, so the cliff is the
+  // subject and the water is a long thin ribbon with a mist plume at the base.
+  waterfallTepui: (id) => `${open(id, 250, 165)}
+    <path d="M0 560 L240 516 L520 556 L820 504 L1120 548 L1440 506 L1440 700 L0 700 Z" fill="var(--ridge-far)"/>
+    <path d="M560 900 L560 372 Q600 300 700 288 L1160 246 Q1250 262 1268 330 L1268 900 Z" fill="var(--ridge-mid)"/>
+    <path d="M560 372 Q600 300 700 288 L1160 246 Q1250 262 1268 330 L1268 384 L560 428 Z" fill="var(--accent-b)" opacity=".5"/>
+    <g fill="var(--sky-top)" opacity=".28">
+      <path d="M612 430 L634 900 L596 900 Z"/><path d="M742 414 L760 900 L726 900 Z"/>
+      <path d="M1046 384 L1064 900 L1030 900 Z"/><path d="M1190 366 L1206 900 L1176 900 Z"/>
+    </g>
+    <path d="M872 402 Q884 560 876 690 Q890 700 906 690 Q898 560 910 400 Z" fill="url(#subj-${id})" opacity=".95"/>
+    <path d="M884 402 Q892 560 886 682 L896 682 Q890 560 898 400 Z" fill="var(--moon)" opacity=".55"/>
+    <g fill="var(--moon)" opacity=".16">
+      <ellipse cx="890" cy="704" rx="118" ry="30"/><ellipse cx="838" cy="722" rx="76" ry="20"/>
+      <ellipse cx="946" cy="720" rx="82" ry="22"/>
+    </g>
+    <path d="M0 726 Q300 694 640 730 Q980 766 1440 716 L1440 900 L0 900 Z" fill="var(--ridge-mid)" opacity=".92"/>
+    <g fill="var(--ridge-far)" opacity=".9">
+      <path d="M96 744 Q120 690 144 744 Z"/><path d="M188 754 Q214 692 240 754 Z"/>
+      <path d="M300 748 Q322 700 344 748 Z"/><path d="M1180 736 Q1204 684 1228 736 Z"/>
+      <path d="M1300 744 Q1322 696 1344 744 Z"/>
+    </g>`,
 
   // Itaipú — the dam wall and its spillway, the reason power is cheap here.
   dam: (id) => `${open(id, 1160, 180)}
