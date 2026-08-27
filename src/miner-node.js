@@ -63,6 +63,10 @@ import { loadAllSkills, writeSkillFile } from './skills/loader.js';
 import { estimateTokens, estimateChatTokens, outputTokenCap, settleFee, timeoutFee, GAS, gasPriceFor } from './jobs/gas-estimator.js';
 import { ASSETS, STABLE_TICKERS, normalizeCurrency, isKnownAsset, decimalsOf, listAssets, fromRaw as assetFromRaw } from './assets.js';
 import { feedbackStore } from './jobs/feedback-store.js';
+
+// Max length of a free-text feedback comment. Mirrored by the Electron and
+// wallet star-rating dialogs — keep the three in sync.
+export const FEEDBACK_COMMENT_MAX = 300;
 import http from 'http';
 import { resolveRpcConfig } from './rpc/resolver.js';
 import crypto from 'crypto';
@@ -1958,9 +1962,9 @@ export class DAIMinerNode {
               res.statusCode = 404;
               return res.end(JSON.stringify({ error: 'job not found' }));
             }
-            if (comment && comment.length > 500) {
+            if (comment && comment.length > FEEDBACK_COMMENT_MAX) {
               res.statusCode = 400;
-              return res.end(JSON.stringify({ error: 'comment exceeds 500 chars' }));
+              return res.end(JSON.stringify({ error: `comment exceeds ${FEEDBACK_COMMENT_MAX} chars` }));
             }
             if (feedbackStore.getByJob(jobId)) {
               res.statusCode = 409;
@@ -1975,7 +1979,7 @@ export class DAIMinerNode {
               originalVerdict:  rec.result?.verdict || null,
               stars:            hasStars ? stars : null,
               rating,
-              comment:          (comment || '').slice(0, 500),
+              comment:          (comment || '').slice(0, FEEDBACK_COMMENT_MAX),
               timestamp:        Date.now(),
               signature:        signature || null,
               unverified:       !signature,
@@ -1995,6 +1999,23 @@ export class DAIMinerNode {
             // Neutral (3★) carries no clear correction signal — skip the brain update for it.
             const scannedAddress = rec.job?.payload?.address || rec.result?.address;
             const fbAiVerdict    = transition.originalVerdict;
+
+            // Chat/compute answers carry no signals to reweight — the lesson is the
+            // comment itself, distilled into the brain state and replayed into later
+            // system prompts by recentFeedbackGuidance().
+            if (!(scannedAddress && fbAiVerdict)) {
+              getBrain().then(b => {
+                if (!b?.onChatFeedback) return;
+                return b.onChatFeedback({
+                  jobId,
+                  stars:   transition.stars,
+                  comment: transition.comment,
+                  prompt:  rec.job?.payload?.prompt || rec.job?.payload?.message || '',
+                  reply:   rec.result?.reply || rec.result?.message || '',
+                });
+              }).catch(e => console.warn('[DAI-Miner] Brain chat-feedback failed:', e.message));
+            }
+
             if (scannedAddress && fbAiVerdict && rating !== 'neutral') {
               const fbCorrection = rating === 'negative'
                 ? (fbAiVerdict === 'HUMAN' ? 'AI' : 'HUMAN')
@@ -3585,7 +3606,7 @@ export class DAIMinerNode {
       }
 
       // GET /api/p2p/markets — pair list + last (book mid) + 24h change (null until history).
-      // Optional ?pair=BASE-QUOTE (e.g. KGST-USDT-TRC20). GELt is not listed.
+      // Optional ?pair=BASE-QUOTE (e.g. KGST-USDT-TRC20).
       if (req.method === 'GET' && url.pathname === '/api/p2p/markets') {
         const pair = url.searchParams.get('pair') || undefined;
         const result = this.p2pOrderStore.listMarkets({ pair });
@@ -3768,7 +3789,7 @@ export class DAIMinerNode {
             const baseAsset = order.baseAsset || 'DAI';
 
             // ── Atomic on-chain swap ────────────────────────────────────────────
-            // Sell order whose quote is another on-chain asset (e.g. KGST/aiGEL):
+            // Sell order whose quote is another on-chain asset (e.g. KGST/aiBDT):
             // maker's base already sits in escrow; the taker's quote debits here.
             // Both legs settle in ONE p2p-swap-filled transition — no payment-sent
             // step: the taker's own dai address receives the base, the maker's
@@ -6037,9 +6058,39 @@ export class DAIMinerNode {
   // Run a chat completion on the local QVAC backend. `messages` may include a
   // leading system message. Returns the assistant text ('' if none). Throws if
   // QVAC is disabled/unavailable so callers can fall back or surface an error.
+  /**
+   * Recent user feedback, as a short block appended to the system prompt.
+   * Cached briefly so a busy node does not re-read the brain state per request.
+   */
+  async _feedbackGuidance() {
+    const now = Date.now();
+    if (this._fbGuidanceAt && now - this._fbGuidanceAt < 60_000) return this._fbGuidanceStr || '';
+    let out = '';
+    try {
+      const b = await getBrain();
+      if (b?.recentFeedbackGuidance) out = b.recentFeedbackGuidance(5) || '';
+    } catch { /* guidance is best-effort — never block a reply */ }
+    this._fbGuidanceStr = out;
+    this._fbGuidanceAt  = now;
+    return out;
+  }
+
   async _llmChat(messages, { model, timeoutMs = 60_000 } = {}) {
     const qvac = await getQvacModels();
     if (!qvac || !qvac.ENABLED) throw new Error('Inference backend (QVAC) is unavailable');
+
+    // Past feedback shapes future answers: fold the learned directives into the
+    // system message (or prepend one) before the model ever sees the question.
+    try {
+      const guidance = await this._feedbackGuidance();
+      if (guidance) {
+        const sysIdx = messages.findIndex(m => m.role === 'system');
+        messages = sysIdx >= 0
+          ? messages.map((m, i) => i === sysIdx ? { ...m, content: `${m.content}\n\n${guidance}` } : m)
+          : [{ role: 'system', content: guidance }, ...messages];
+      }
+    } catch { /* ignore — never block a reply on guidance */ }
+
     const reply = await qvac.chat(messages, {
       model: model || this.config.model || 'qwen3-1.7b',
       timeLimit: timeoutMs,

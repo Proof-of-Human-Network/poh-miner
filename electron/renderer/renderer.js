@@ -2648,6 +2648,101 @@ async function _signJobPayment(jobId, amount) {
   return r.json(); // { requesterAddress, txHash, signature, signingPublicKey }
 }
 
+// ── Star-rating feedback dialog ───────────────────────────────────────────────
+// Clicking a star opens this instead of submitting straight away, so the user can
+// say *why*. The comment is capped at FEEDBACK_COMMENT_MAX on the node; the same
+// limit is enforced here so the textarea and the API agree.
+window.FEEDBACK_COMMENT_MAX = 300;
+
+window._openFeedbackDialog = function(jobId, stars, container) {
+  if (!jobId || document.querySelector('.fbdlg-overlay')) return;
+  const MAX = window.FEEDBACK_COMMENT_MAX;
+  let picked = Math.min(5, Math.max(1, parseInt(stars, 10) || 1));
+
+  const overlay = document.createElement('div');
+  overlay.className = 'fbdlg-overlay';
+  overlay.innerHTML = `
+    <div class="fbdlg" role="dialog" aria-modal="true" aria-label="Rate this answer">
+      <div class="fbdlg-title">Rate this answer</div>
+      <div class="fbdlg-sub">Your rating and comment train this node's brain and shape later replies.</div>
+      <div class="fbdlg-stars">${[1,2,3,4,5].map(n =>
+        `<span class="fbdlg-star${n <= picked ? ' on' : ''}" data-star="${n}" role="button" aria-label="${n} star${n===1?'':'s'}">★</span>`).join('')}</div>
+      <textarea maxlength="${MAX}" placeholder="What was good or wrong about it? (optional)"></textarea>
+      <div class="fbdlg-count"><span class="fbdlg-n">0</span>/${MAX}</div>
+      <div class="fbdlg-err"></div>
+      <div class="fbdlg-actions">
+        <button class="fbdlg-btn fbdlg-skip">Skip</button>
+        <button class="fbdlg-btn primary fbdlg-send">Submit</button>
+      </div>
+    </div>`;
+  document.body.appendChild(overlay);
+
+  const ta    = overlay.querySelector('textarea');
+  const nEl   = overlay.querySelector('.fbdlg-n');
+  const cnt   = overlay.querySelector('.fbdlg-count');
+  const errEl = overlay.querySelector('.fbdlg-err');
+  const paint = () => overlay.querySelectorAll('.fbdlg-star')
+    .forEach(el => el.classList.toggle('on', parseInt(el.dataset.star, 10) <= picked));
+
+  overlay.querySelectorAll('.fbdlg-star').forEach(el => {
+    el.onclick = () => { picked = parseInt(el.dataset.star, 10); paint(); };
+  });
+  ta.addEventListener('input', () => {
+    // maxlength stops typing, but a paste can still arrive oversized in some engines.
+    if (ta.value.length > MAX) ta.value = ta.value.slice(0, MAX);
+    nEl.textContent = ta.value.length;
+    cnt.classList.toggle('limit', ta.value.length >= MAX);
+  });
+
+  const close = () => { document.removeEventListener('keydown', onKey); overlay.remove(); };
+  const onKey = (e) => {
+    if (e.key === 'Escape') close();
+    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) submit();
+  };
+  document.addEventListener('keydown', onKey);
+  overlay.addEventListener('mousedown', e => { if (e.target === overlay) close(); });
+  overlay.querySelector('.fbdlg-skip').onclick = close;
+
+  async function submit() {
+    const btn = overlay.querySelector('.fbdlg-send');
+    btn.disabled = true; btn.textContent = 'Sending…'; errEl.textContent = '';
+    const ok = await window._postJobFeedback(jobId, picked, ta.value.trim());
+    if (ok === true) {
+      if (container) {
+        container.innerHTML = `<span class="chat-feedback-label">Thanks! ${'★'.repeat(picked)}${'☆'.repeat(5 - picked)}</span>`;
+      }
+      close();
+    } else {
+      errEl.textContent = typeof ok === 'string' ? ok : 'Could not submit feedback.';
+      btn.disabled = false; btn.textContent = 'Submit';
+    }
+  }
+  overlay.querySelector('.fbdlg-send').onclick = submit;
+  setTimeout(() => ta.focus(), 0);
+};
+
+// Single POST path shared by both chat renderers. Resolves true, or an error string.
+window._postJobFeedback = async function(jobId, stars, comment) {
+  const port = window._minerApiPort || 3456;
+  try {
+    const r = await fetch(`http://localhost:${port}/api/jobs/${jobId}/feedback`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        stars,
+        comment: (comment || '').slice(0, window.FEEDBACK_COMMENT_MAX),
+        requesterAddress: window._localWallet,
+      }),
+    });
+    if (r.ok) return true;
+    let msg = `Request failed (${r.status})`;
+    try { const j = await r.json(); if (j?.error) msg = j.error; } catch {}
+    return msg;
+  } catch (e) {
+    return e.message || 'Network error.';
+  }
+};
+
 function _renderJobFeedbackStars(jobId) {
   const port = window._minerApiPort || 3456;
   const msgs = document.getElementById('chat-messages');
@@ -2670,17 +2765,8 @@ function _renderJobFeedbackStars(jobId) {
   });
   msgs.appendChild(fb);
   if (!window._sendJobFeedback) {
-    window._sendJobFeedback = async function(jId, stars2, container) {
-      try {
-        const r = await fetch(`http://localhost:${port}/api/jobs/${jId}/feedback`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ stars: stars2, requesterAddress: window._localWallet }),
-        });
-        if (r.ok && container) {
-          container.innerHTML = `<span class="chat-feedback-label">Thanks! ${'★'.repeat(stars2)}${'☆'.repeat(5 - stars2)}</span>`;
-        }
-      } catch {}
+    window._sendJobFeedback = function(jId, stars2, container) {
+      window._openFeedbackDialog(jId, stars2, container);
     };
   }
 }
@@ -2937,17 +3023,8 @@ async function sendChatMessage() {
     msgs.appendChild(fb);
   }
 
-  window._sendJobFeedback = async function(jobId, stars, container) {
-    try {
-      const r = await fetch(`http://localhost:${port}/api/jobs/${jobId}/feedback`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ stars, requesterAddress: window._localWallet }),
-      });
-      if (r.ok && container) {
-        container.innerHTML = `<span class="chat-feedback-label">Thanks! ${'★'.repeat(stars)}${'☆'.repeat(5 - stars)}</span>`;
-      }
-    } catch {}
+  window._sendJobFeedback = function(jobId, stars, container) {
+    window._openFeedbackDialog(jobId, stars, container);
   };
 
   // Phase 1: poll job until verdict is ready, return raw job result object

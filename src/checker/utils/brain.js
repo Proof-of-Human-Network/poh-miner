@@ -634,6 +634,87 @@ Which signal type was most misleading? One sentence max.
   console.log(`[brain] Feedback recorded: ${aiVerdict}→${correction} for ${address}`);
 }
 
+// ── 7b. onChatFeedback — user rates a chat/compute answer 1-5★ + comment ─────
+// Verdict jobs teach the signal weights (onVerdictFeedback above). Chat and
+// compute answers have no signals to reweight, so the lesson lives in the brain
+// state instead: the comment is distilled into a short directive that is
+// injected into later system prompts by recentFeedbackGuidance().
+
+async function onChatFeedback({ jobId, stars, comment, prompt = '', reply = '' }) {
+  const nStars = Number(stars);
+  if (!Number.isInteger(nStars) || nStars < 1 || nStars > 5) return;
+  const text = (comment || '').slice(0, 300).trim();
+
+  const list = getFeedback();
+  list.push({
+    kind: 'chat',
+    jobId: jobId || null,
+    stars: nStars,
+    comment: text || null,
+    prompt: (prompt || '').slice(0, 200) || null,
+    reply: (reply || '').slice(0, 300) || null,
+    ts: new Date().toISOString(),
+  });
+  saveFeedback(list);
+
+  // Without a comment there is nothing to learn beyond the score itself.
+  if (!text) {
+    console.log(`[brain] Chat feedback recorded: ${nStars}★ (no comment)`);
+    return;
+  }
+
+  // Ask the learner to turn the complaint/praise into one reusable directive.
+  const verdict = nStars >= 4 ? 'liked' : nStars <= 2 ? 'disliked' : 'was lukewarm about';
+  const distillPrompt = `A user ${verdict} an AI answer and left a comment. Turn it into ONE short, reusable instruction for answering future questions better.
+
+${prompt ? `User asked: "${String(prompt).slice(0, 200)}"` : ''}
+${reply ? `AI answered: "${String(reply).slice(0, 300)}"` : ''}
+Rating: ${nStars}/5
+User comment: "${text}"
+
+Reply with a single imperative sentence, max 20 words. No preamble.
+{"directive":"..."}`;
+
+  let directive = null;
+  try {
+    const out = await Promise.race([
+      learnerChatJSON(distillPrompt, ['directive'], { maxTokens: 60, timeLimit: 20000 }),
+      new Promise(resolve => setTimeout(() => resolve(null), 30000)),
+    ]);
+    directive = out?.directive ? String(out.directive).slice(0, 200) : null;
+  } catch { /* the raw comment is still recorded below */ }
+
+  const note = `\n\n### Chat Feedback — ${new Date().toISOString()}\n` +
+    `Rating: ${nStars}/5${jobId ? ` (job ${jobId})` : ''}\n` +
+    `Comment: "${text}"\n` +
+    (directive ? `Directive: ${directive}` : '');
+  saveBrainState((getBrainState() + note).trim());
+
+  console.log(`[brain] Chat feedback recorded: ${nStars}★${directive ? ` → "${directive}"` : ''}`);
+}
+
+// Compact guidance block injected into later system prompts so past feedback
+// actually changes future answers. Prefers distilled directives, falls back to
+// raw comments. Low ratings are the useful signal, so they are listed first.
+function recentFeedbackGuidance(n = 5) {
+  let list;
+  try { list = getFeedback(); } catch { return ''; }
+  const chat = list.filter(f => f.kind === 'chat' && f.comment);
+  if (!chat.length) return '';
+
+  const state = getBrainState();
+  const directives = [...state.matchAll(/^Directive: (.+)$/gm)].map(m => m[1].trim());
+
+  // Distilled directives are strictly better than the raw comments they came
+  // from, so only fall back to comments when the learner produced none.
+  const lines = directives.length
+    ? directives.slice(-n).map(d => `- ${d}`)
+    : chat.slice(-n).map(f => `- (${f.stars}/5) ${String(f.comment).slice(0, 120)}`);
+  if (!lines.length) return '';
+  return 'Guidance learned from earlier user feedback — follow it unless the user says otherwise:\n' +
+    [...new Set(lines)].slice(0, n).join('\n');
+}
+
 // ── vibeCheck ─────────────────────────────────────────────────────────────────
 // Reads Farcaster casts and Paragraph publications for an address and asks the
 // LLM to characterise the person's topics, writing style, and human signals.
@@ -746,4 +827,4 @@ Be direct. Name specific values. End with a one-sentence signal assessment.`;
   return reply || 'No interpretation available.';
 }
 
-module.exports = { analyzeHumanness, vibeCheck, onNewMethod, onVote, onVerdictFeedback, consolidate, getWeights, validateDescription, validateFeedback, loadSkillContexts, routeMessage, interpretSkillResult };
+module.exports = { analyzeHumanness, vibeCheck, onNewMethod, onVote, onVerdictFeedback, onChatFeedback, recentFeedbackGuidance, consolidate, getWeights, validateDescription, validateFeedback, loadSkillContexts, routeMessage, interpretSkillResult };

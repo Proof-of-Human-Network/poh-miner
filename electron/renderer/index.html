@@ -400,6 +400,39 @@
     .chat-star-row { display: inline-flex; gap: 2px; }
     .chat-star { font-size: 16px; line-height: 1; color: #2a2a2a; cursor: pointer; transition: color 0.1s; }
     .chat-star.hover, .chat-star:hover { color: #facc15; }
+
+    /* ── Star-rating feedback dialog ───────────────────────────────────────── */
+    .fbdlg-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.72);
+      display: flex; align-items: center; justify-content: center; z-index: 9000;
+    }
+    .fbdlg {
+      background: #0d0d0d; border: 1px solid #262626; border-radius: 10px;
+      width: min(420px, calc(100vw - 40px)); padding: 18px 18px 14px;
+      box-shadow: 0 18px 50px rgba(0,0,0,0.6); font-family: inherit;
+    }
+    .fbdlg-title { font-size: 13px; color: #e5e7eb; margin-bottom: 2px; }
+    .fbdlg-sub { font-size: 11px; color: #6b7280; margin-bottom: 12px; }
+    .fbdlg-stars { display: flex; gap: 4px; margin-bottom: 12px; }
+    .fbdlg-star { font-size: 22px; line-height: 1; color: #2a2a2a; cursor: pointer; transition: color .1s; }
+    .fbdlg-star.on { color: #facc15; }
+    .fbdlg textarea {
+      width: 100%; box-sizing: border-box; min-height: 84px; resize: vertical;
+      background: #070707; border: 1px solid #232323; border-radius: 6px;
+      color: #e5e7eb; font-family: inherit; font-size: 12px; padding: 9px 10px; outline: none;
+    }
+    .fbdlg textarea:focus { border-color: #16a34a; }
+    .fbdlg-count { font-size: 10px; color: #6b7280; text-align: right; margin-top: 4px; font-variant-numeric: tabular-nums; }
+    .fbdlg-count.limit { color: #f59e0b; }
+    .fbdlg-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 12px; }
+    .fbdlg-btn {
+      padding: 7px 14px; border-radius: 6px; font-size: 12px; cursor: pointer;
+      border: 1px solid #2a2a2a; background: #141414; color: #9ca3af; font-family: inherit;
+    }
+    .fbdlg-btn:hover { background: #1c1c1c; }
+    .fbdlg-btn.primary { background: #16a34a; border-color: #16a34a; color: #04140a; font-weight: 600; }
+    .fbdlg-btn.primary:hover { background: #15903f; }
+    .fbdlg-err { font-size: 11px; color: #ef4444; margin-top: 8px; min-height: 14px; }
     .chat-copy-btn { background: none; border: 1px solid #222; border-radius: 4px; color: #555; cursor: pointer; font-size: 12px; padding: 1px 6px; margin-left: 4px; transition: color 0.15s, border-color 0.15s; }
     .chat-copy-btn:hover { color: #888; border-color: #444; }
     @keyframes blink { 50% { opacity: 0; } }
