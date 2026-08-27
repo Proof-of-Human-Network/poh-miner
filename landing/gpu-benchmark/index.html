@@ -193,15 +193,6 @@ const I18N = {
     bkNodeShare:'Түйүндүн үлүшү (85%)', bkElectricity:'Электр энергиясы', bkNet:'Таза', bkPerDay:'Күнүнө',
     bkPerMonth:'Айына', foot:'Ар бир миллион чыгуу токени үчүн $0.15 баада, түйүн 85% алат, электр энергиясы алынып салынат. Өткөрүмдүүлүк браузерде fp32 матрица көбөйтүү аркылуу болжолдонот — консервативдик төмөнкү чек, техникалык документ эмес. Жайгашкан жериңиз жана электр баасы IP дарегиңизден болжолдонот; жогорудагы бааны оңдоңуз, сандар дароо жаңырат. Эч нерсе эч жакка жөнөтүлбөйт; баары браузериңизде иштейт.'
   },
-  ka:{ name:'ქართული',
-    eyebrow:'DAI · გამოთვლა', title:'სანამ აქ ხართ, თქვენს GPU-ს შეუძლია გამოიმუშაოს.', sub:'დაატრიალეთ, რომ გაზომოთ ეს მოწყობილობა და ნახოთ, რამდენს გამოიმუშავებდა ქსელში — ახლავე, იქ, სადაც ხართ.', cta:'დააჭირეთ სანახავად',
-    ctaSub:'რამდენს გამოვიმუშავებდი', measuring:'იზომება…', perHour:'საათში', earnedLabel:'გამომუშავებული ყურებისას:',
-    start:'დაიწყე შემოსავალი', lblGpu:'GPU', lblLoc:'მდებარეობა', lblKwh:'/კვტ·სთ',
-    lblEdit:'შეცვლა', hidden:'ბრაუზერმა დამალა', unknown:'უცნობი', how:'როგორ არის დათვლილი',
-    notSupported:'არ არის მხარდაჭერილი', bkThroughput:'GPU წარმადობა', bkInference:'სავარაუდო ინფერენსი', bkGross:'მთლიანი შემოსავალი',
-    bkNodeShare:'კვანძის წილი (85%)', bkElectricity:'ელექტროენერგია', bkNet:'წმინდა', bkPerDay:'დღეში',
-    bkPerMonth:'თვეში', foot:'ფასი — $0.15 მილიონ გამომავალ ტოკენზე, კვანძი იტოვებს 85%-ს, გამოკლებული ელექტროენერგია. წარმადობა შეფასებულია ბრაუზერში fp32 მატრიცის გამრავლებით — კონსერვატიული შეფასება, არა ტექნიკური მონაცემები. მდებარეობა და ელექტროენერგიის ფასი განისაზღვრება თქვენი IP-ით; შეასწორეთ ფასი ზემოთ და ციფრები მაშინვე განახლდება. არაფერი იგზავნება; ყველაფერი თქვენს ბრაუზერში სრულდება.'
-  },
   cn:{ name:'中文',
     eyebrow:'DAI · 算力', title:'你坐在这里时，GPU 本可以在赚钱。', sub:'转动以测量此设备，看看它此刻、在你所在之处能在网络上赚多少。', cta:'点击查看',
     ctaSub:'我能赚多少', measuring:'测量中…', perHour:'每小时', earnedLabel:'观看期间已赚：',
@@ -273,12 +264,39 @@ const I18N = {
     notSupported:'Non pris en charge', bkThroughput:'Débit GPU', bkInference:'Inférence est.', bkGross:'Revenu brut',
     bkNodeShare:'Part du nœud (85%)', bkElectricity:'Électricité', bkNet:'Net', bkPerDay:'Par jour',
     bkPerMonth:'Par mois', foot:'Au prix de 0,15 $ par million de tokens de sortie, le nœud gardant 85%, moins l\'électricité. Le débit est estimé à partir d\'une multiplication de matrices fp32 dans le navigateur — un minimum prudent, pas une fiche technique. L\'emplacement et l\'électricité sont déduits de votre IP ; corrigez le prix ci-dessus et les chiffres se mettent à jour en direct. Rien n\'est envoyé nulle part ; tout s\'exécute dans votre navigateur.'
+  },
+  bn:{ name:'বাংলা',
+    eyebrow:'DAI · কম্পিউট', title:'আপনি যখন বসে আছেন, আপনার GPU তখন আয় করতে পারত।', sub:'এই ডিভাইসটি মেপে দেখতে ঘোরান এবং জানুন নেটওয়ার্কে এটি কত আয় করত — এখনই, আপনি যেখানে আছেন।', cta:'দেখতে ক্লিক করুন',
+    ctaSub:'আমি কত আয় করতে পারতাম', measuring:'মাপা হচ্ছে…', perHour:'প্রতি ঘণ্টায়', earnedLabel:'দেখার সময় আয় হয়েছে:',
+    start:'আয় শুরু করুন', lblGpu:'GPU', lblLoc:'অবস্থান', lblKwh:'/kWh',
+    lblEdit:'সম্পাদনা', hidden:'ব্রাউজার লুকিয়েছে', unknown:'অজানা', how:'এটি কীভাবে হিসাব করা হয়',
+    notSupported:'সমর্থিত নয়', bkThroughput:'GPU থ্রুপুট', bkInference:'আনুমানিক ইনফারেন্স', bkGross:'মোট আয়',
+    bkNodeShare:'নোডের অংশ (85%)', bkElectricity:'বিদ্যুৎ', bkNet:'নিট', bkPerDay:'প্রতিদিন',
+    bkPerMonth:'প্রতি মাসে', foot:'প্রতি মিলিয়ন আউটপুট টোকেনে $0.15 দরে, নোড রাখে 85%, বিদ্যুৎ খরচ বাদে। থ্রুপুট অনুমান করা হয় ব্রাউজারে fp32 ম্যাট্রিক্স গুণন থেকে — এটি একটি রক্ষণশীল সর্বনিম্ন, কোনো স্পেক শিট নয়। অবস্থান ও বিদ্যুতের দাম আপনার IP থেকে অনুমান করা; উপরে দাম ঠিক করে দিন, সংখ্যাগুলো সঙ্গে সঙ্গে হালনাগাদ হবে। কিছুই কোথাও পাঠানো হয় না; সবটাই আপনার ব্রাউজারে চলে।'
+  },
+  ur:{ name:'اردو', rtl:true,
+    eyebrow:'DAI · کمپیوٹ', title:'جب تک آپ یہاں بیٹھے ہیں، آپ کا GPU کما سکتا تھا۔', sub:'اس آلے کو ماپنے کے لیے گھمائیں اور دیکھیں کہ یہ نیٹ ورک پر کتنا کماتا — ابھی، جہاں آپ ہیں۔', cta:'دیکھنے کے لیے کلک کریں',
+    ctaSub:'میں کتنا کما سکتا تھا', measuring:'ماپا جا رہا ہے…', perHour:'فی گھنٹہ', earnedLabel:'دیکھتے ہوئے کمایا گیا:',
+    start:'کمانا شروع کریں', lblGpu:'GPU', lblLoc:'مقام', lblKwh:'/kWh',
+    lblEdit:'ترمیم', hidden:'براؤزر نے چھپا دیا', unknown:'نامعلوم', how:'یہ کیسے نکالا گیا',
+    notSupported:'معاون نہیں', bkThroughput:'GPU تھرو پٹ', bkInference:'تخمینی انفرنس', bkGross:'مجموعی آمدنی',
+    bkNodeShare:'نوڈ کا حصہ (85%)', bkElectricity:'بجلی', bkNet:'خالص', bkPerDay:'یومیہ',
+    bkPerMonth:'ماہانہ', foot:'فی ملین آؤٹ پٹ ٹوکن $0.15 کے حساب سے، نوڈ 85% رکھتا ہے، بجلی منہا کر کے۔ تھرو پٹ کا تخمینہ براؤزر میں fp32 میٹرکس ضرب سے لگایا جاتا ہے — یہ ایک محتاط کم سے کم ہے، کوئی اسپیک شیٹ نہیں۔ مقام اور بجلی کی قیمت آپ کے IP سے اندازہ لگائی جاتی ہے؛ اوپر قیمت درست کریں، اعداد فوراً اپ ڈیٹ ہو جائیں گے۔ کچھ بھی کہیں نہیں بھیجا جاتا؛ سب کچھ آپ کے براؤزر میں چلتا ہے۔'
+  },
+  pt:{ name:'Português',
+    eyebrow:'DAI · Computação', title:'Enquanto você está aqui, sua GPU poderia estar ganhando.', sub:'Gire para medir este dispositivo e ver quanto ele ganharia na rede — agora mesmo, onde você está.', cta:'Clique para ver',
+    ctaSub:'Quanto eu poderia ganhar', measuring:'Medindo…', perHour:'por hora', earnedLabel:'Ganho enquanto você assiste:',
+    start:'Comece a ganhar', lblGpu:'GPU', lblLoc:'Local', lblKwh:'/kWh',
+    lblEdit:'editar', hidden:'ocultado pelo navegador', unknown:'Desconhecido', how:'Como isto é calculado',
+    notSupported:'Não suportado', bkThroughput:'Taxa da GPU', bkInference:'Inferência est.', bkGross:'Receita bruta',
+    bkNodeShare:'Parte do nó (85%)', bkElectricity:'Eletricidade', bkNet:'Líquido', bkPerDay:'Por dia',
+    bkPerMonth:'Por mês', foot:'Precificado a $0,15 por milhão de tokens de saída, com o nó ficando com 85%, menos a eletricidade. A taxa de processamento é estimada por uma multiplicação de matrizes fp32 no navegador — um piso conservador, não uma ficha técnica. Local e eletricidade são deduzidos do seu IP; corrija o preço acima e os números se atualizam ao vivo. Nada é enviado a lugar nenhum; tudo roda no seu navegador.'
   }
 };
 let LANG = 'en';
 const t = k => (I18N[LANG] && I18N[LANG][k]) || I18N.en[k] || k;
 
-const ALIAS = {zh:'cn', yue:'hk', ar:'arab', fa:'farsi', pes:'farsi'};
+const ALIAS = {zh:'cn', yue:'hk', ar:'arab', fa:'farsi', pes:'farsi', bng:'bn', urd:'ur', por:'pt'};
 function resolveLang(tag){
   const raw = String(tag||'').toLowerCase().replace(/_/g,'-');
   if(/^zh-(hk|mo|tw|hant)/.test(raw) || raw.startsWith('yue')) return 'hk';

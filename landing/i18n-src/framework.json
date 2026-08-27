@@ -20,13 +20,6 @@
     "fw.fund.desc": "Ар бир монетанын резерви жеке жайгаштырылган ноталар менен түзүлүшү мүмкүн: офшордук SPV аларды квалификациялуу эл аралык инвесторлорго жайгаштырат, каражаттын 100% монетаны камсыздаган өзүнчө кастодиалдык резервде сакталат, ал эми ноталар эсептөө кирешеси жана резервдин кирешеси менен тейленет. Монета ээлери инвестордун тобокелин эч качан көтөрбөйт.",
     "fw.fund.notice": "Бул сунуш эмес, структура — квалификациялуу институционалдык инвесторлорго суроо-талап боюнча жеткиликтүү."
   },
-  "ka": {
-    "fw.hero.sub": "White-label, სუვერენული სტეიბლქოინები <span class=\"text-[#171717]\">AI გამოთვლისთვის</span>",
-    "fw.fund.eyebrow": "რეზერვის დაფინანსება",
-    "fw.fund.title": "საწყისი კაპიტალი — <span class=\"neon\">ოფშორული ნოტით.</span>",
-    "fw.fund.desc": "თითოეული მონეტის რეზერვი შეიძლება შეივსოს კერძოდ განთავსებული ნოტებით: ოფშორული SPV მათ კვალიფიციურ საერთაშორისო ინვესტორებთან ათავსებს, შემოსული თანხის 100% ინახება განცალკევებულ საკასტოდიო რეზერვში, რომელიც მონეტას უზრუნველყოფს, ნოტები კი გამოთვლის შემოსავლითა და რეზერვის სარგებლით ფინანსდება. მონეტის მფლობელები ინვესტორის რისკს არასდროს ატარებენ.",
-    "fw.fund.notice": "ეს სტრუქტურაა და არა შეთავაზება — ხელმისაწვდომია კვალიფიციური ინსტიტუციური ინვესტორებისთვის მოთხოვნით."
-  },
   "cn": {
     "fw.hero.sub": "白标、主权的<span class=\"text-[#171717]\">AI 算力</span>稳定币",
     "fw.fund.eyebrow": "储备融资",
@@ -82,5 +75,26 @@
     "fw.fund.title": "Amorcée par une <span class=\"neon\">note offshore.</span>",
     "fw.fund.desc": "La réserve de chaque coin peut être amorcée par des notes placées en privé : une SPV offshore les place auprès d'investisseurs internationaux qualifiés, 100 % des fonds restent dans une réserve cantonnée chez un dépositaire qui adosse le coin, et les notes sont servies par les revenus du calcul plus le rendement de la réserve. Les détenteurs du coin ne portent jamais le risque investisseur.",
     "fw.fund.notice": "Une structure, pas une offre — disponible sur demande pour les investisseurs institutionnels qualifiés."
+  },
+  "bn": {
+    "fw.hero.sub": "হোয়াইট-লেবেল, সার্বভৌম <span class=\"text-[#171717]\">AI কম্পিউট</span> স্টেবলকয়েন",
+    "fw.fund.eyebrow": "রিজার্ভ তহবিল",
+    "fw.fund.title": "সূচনা <span class=\"neon\">অফশোর নোটের মাধ্যমে।</span>",
+    "fw.fund.desc": "প্রতিটি কয়েনের রিজার্ভ ব্যক্তিগতভাবে ইস্যু করা নোটের মাধ্যমে গঠন করা যায়: একটি অফশোর SPV সেগুলো যোগ্য আন্তর্জাতিক বিনিয়োগকারীদের কাছে ইস্যু করে, প্রাপ্ত অর্থের 100% কয়েনের সমর্থনকারী একটি পৃথক কাস্টডিয়াল রিজার্ভে থাকে, এবং নোটগুলো পরিশোধ করা হয় কম্পিউট আয় ও রিজার্ভের মুনাফা থেকে। কয়েনধারীরা কখনোই বিনিয়োগকারীর ঝুঁকি বহন করেন না।",
+    "fw.fund.notice": "এটি একটি কাঠামো, কোনো প্রস্তাব নয় — অনুরোধে যোগ্য প্রাতিষ্ঠানিক বিনিয়োগকারীদের জন্য উপলব্ধ।"
+  },
+  "ur": {
+    "fw.hero.sub": "وائٹ لیبل، خودمختار <span class=\"text-[#171717]\">AI کمپیوٹ</span> اسٹیبل کوائنز",
+    "fw.fund.eyebrow": "ریزرو فنڈنگ",
+    "fw.fund.title": "آغاز <span class=\"neon\">آف شور نوٹ سے۔</span>",
+    "fw.fund.desc": "ہر سکے کا ریزرو نجی طور پر جاری کردہ نوٹوں سے قائم کیا جا سکتا ہے: ایک آف شور SPV انہیں اہل بین الاقوامی سرمایہ کاروں کو جاری کرتا ہے، حاصل شدہ رقم کا 100% سکے کی پشت پناہی کرنے والے علیحدہ کسٹوڈیل ریزرو میں رہتا ہے، اور نوٹوں کی ادائیگی کمپیوٹ آمدنی اور ریزرو پر منافع سے ہوتی ہے۔ سکہ رکھنے والے کبھی سرمایہ کار کا خطرہ نہیں اٹھاتے۔",
+    "fw.fund.notice": "یہ ایک ڈھانچہ ہے، کوئی پیشکش نہیں — درخواست پر اہل ادارہ جاتی سرمایہ کاروں کے لیے دستیاب۔"
+  },
+  "pt": {
+    "fw.hero.sub": "Stablecoins de <span class=\"text-[#171717]\">computação de IA</span> soberanas e white-label",
+    "fw.fund.eyebrow": "FINANCIAMENTO DA RESERVA",
+    "fw.fund.title": "Iniciada por uma <span class=\"neon\">nota offshore.</span>",
+    "fw.fund.desc": "A reserva de cada moeda pode ser formada com notas de colocação privada: uma SPV offshore as coloca junto a investidores internacionais qualificados, 100% dos recursos ficam em uma reserva custodial segregada que lastreia a moeda, e as notas são remuneradas pela receita de computação mais o rendimento da reserva. Os detentores da moeda nunca assumem o risco do investidor.",
+    "fw.fund.notice": "Uma estrutura, não uma oferta — disponível a investidores institucionais qualificados mediante solicitação."
   }
 }

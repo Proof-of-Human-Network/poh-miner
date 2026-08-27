@@ -335,7 +335,7 @@ run();</div>
 
           <div class="glass rounded-[4px] p-5 mb-6 text-[17px] text-[#525252]">
             <div class="neon mb-2 text-[20px]" data-i18n="doc.assets.title">Stablecoins &amp; multi-currency</div>
-            <p class="mb-2" data-i18n-html="doc.assets.p1">Four compute coins ride on the chain alongside DAI: <strong>αιGEL, KGST, αιETB, αιBTN</strong> (wire tickers <code>aiGEL</code>, <code>KGST</code>, <code>aiETB</code>, <code>aiBTN</code>). They use <strong>2 decimals</strong> (1 unit = 100 raw); DAI keeps 9 (1&nbsp;DAI&nbsp;=&nbsp;1e9&nbsp;μDAI). Dollar on-ramp is off-chain <strong>USDT</strong> (<code>USDT-ERC20</code>, <code>USDT-TRC20</code>, <code>USDT-TON</code>, <code>USDT-SOL</code>, <code>USDT-BEP20</code>). Two forex meshes: <code>USDT / KGST / aiETB · aiGEL · aiBTN</code> and <code>GELt / aiGEL / aiETB · aiBTN · KGST</code>. <strong>GELt</strong> is external (Tether + Government of Georgia) — not an on-chain asset. Armenia is not listed.</p>
+            <p class="mb-2" data-i18n-html="doc.assets.p1">Fourteen regional stablecoins ride on the DAI chain alongside DAI: <strong>KGST</strong> (Kyrgyzstan som, bridged across DAI/BSC/Tron) plus <strong>αιETB, αιBTN, αιVES, αιPYG, αιBDT, αιPKR, αιEGP, αιIQD, αιAOA, αιCUP, αιLYD, αιSDG, αιIRR</strong> (wire tickers <code>aiETB</code>, <code>aiBTN</code>, <code>aiVES</code>, <code>aiPYG</code>, <code>aiBDT</code>, <code>aiPKR</code>, <code>aiEGP</code>, <code>aiIQD</code>, <code>aiAOA</code>, <code>aiCUP</code>, <code>aiLYD</code>, <code>aiSDG</code>, <code>aiIRR</code>). All use <strong>2 decimals</strong> (1 unit = 100 raw); DAI keeps 9 (1&nbsp;DAI&nbsp;=&nbsp;1e9&nbsp;μDAI). Off-chain on-ramps: <strong>USDT</strong> (<code>USDT-ERC20</code>, <code>USDT-TRC20</code>, <code>USDT-TON</code>, <code>USDT-SOL</code>, <code>USDT-BEP20</code>), <strong>USDC</strong>, and bank transfer.</p>
             <p class="mb-2" data-i18n-html="doc.assets.p2"><code>GET /api/assets</code> lists every asset with decimals, display names and per-currency gas prices. <code>GET /api/wallet/balance</code> returns an additional <code>assets</code> map with each stablecoin's raw and display balance.</p>
             <p data-i18n-html="doc.assets.p3">Transfers: <code>POST /api/wallet/send</code> (and <code>/api/tx/submit</code>) accept a <code>currency</code> field — omit it for DAI. A transaction's signed hash includes <code>currency</code> ONLY when non-DAI, so existing DAI transactions and signatures remain valid unchanged.</p>
           </div>
@@ -702,13 +702,13 @@ run();</div>
           <h2 class="text-[32px] mb-6 neon" data-i18n="doc.p2p.title">P2P Exchange</h2>
 
           <div class="glass rounded-[4px] p-5 mb-6 text-[17px] text-[#525252]">
-            <p data-i18n-html="doc.p2p.swap">On-chain assets (<code>DAI</code>, <code>KGST</code>, <code>aiGEL</code>, <code>aiETB</code>, <code>aiBTN</code>) trade as base. When both legs are on-chain (e.g. <code>KGST/aiGEL</code>, or DAI for aiGEL) the trade settles <strong>atomically</strong> in one step — no payment-sent/confirm phase; the taker's own dai address receives the base. Off-chain legs (USDT, USDC, bank transfer) keep the manual escrow flow. Maker pay-to for off-chain quotes is <code>order.paymentMethods[].address</code>. Meshes: <code>USDT / KGST / aiETB · aiGEL · aiBTN</code> and <code>GELt / aiGEL / aiETB · aiBTN · KGST</code> (GELt external, not listed).</p>
+            <p data-i18n-html="doc.p2p.swap">On-chain DAI assets (<code>DAI</code>, <code>aiETB</code>, <code>aiBTN</code>, <code>aiBDT</code>, <code>aiPKR</code>, …) + bridged <code>KGST</code> (DAI/BSC/Tron) trade as base. When both legs settle on DAI (e.g. <code>KGST/aiBDT</code> or <code>DAI/aiETB</code>) the trade settles <strong>atomically</strong> in one step — no payment-sent/confirm phase; proceeds go directly to the taker's dai address. Off-chain legs (USDT, USDC, bank transfer) keep the manual escrow flow.</p>
           </div>
           <p class="text-[#525252] text-[18px] mb-6" data-i18n="doc.p2p.intro">Peer-to-peer DAI trading with on-chain escrow.</p>
 
           <div class="endpoint-card">
             <div class="mb-2"><span class="method method-get">GET</span> <code class="text-[#171717]">/api/p2p/currencies</code></div>
-            <p class="text-[#525252] text-[18px]" data-i18n="doc.p2p.currencies">Supported quotes and on-chain bases. Includes KGST and USDT wires. GELt is not listed.</p>
+            <p class="text-[#525252] text-[18px]" data-i18n="doc.p2p.currencies">Supported quotes and on-chain bases. Includes KGST and USDT wires.</p>
           </div>
 
           <div class="endpoint-card">
