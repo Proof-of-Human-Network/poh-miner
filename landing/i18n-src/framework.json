@@ -96,5 +96,19 @@
     "fw.fund.title": "Iniciada por uma <span class=\"neon\">nota offshore.</span>",
     "fw.fund.desc": "A reserva de cada moeda pode ser formada com notas de colocação privada: uma SPV offshore as coloca junto a investidores internacionais qualificados, 100% dos recursos ficam em uma reserva custodial segregada que lastreia a moeda, e as notas são remuneradas pela receita de computação mais o rendimento da reserva. Os detentores da moeda nunca assumem o risco do investidor.",
     "fw.fund.notice": "Uma estrutura, não uma oferta — disponível a investidores institucionais qualificados mediante solicitação."
+  },
+  "am": {
+    "fw.hero.sub": "ኋይት-ሌብል፣ ሉዓላዊ <span class=\"text-[#171717]\">የAI ስሌት</span> ስቴብልኮይኖች",
+    "fw.fund.eyebrow": "የመጠባበቂያ ፈንድ",
+    "fw.fund.title": "በ<span class=\"neon\">የባህር ማዶ ኖት</span> የተጀመረ።",
+    "fw.fund.desc": "የእያንዳንዱ ሳንቲም መጠባበቂያ በግል በሚቀርቡ ኖቶች ሊጀመር ይችላል፦ የባህር ማዶ SPV ለብቁ ዓለም አቀፍ ባለሀብቶች ያቀርባቸዋል፣ 100% ገቢው ሳንቲሙን በሚደግፍ የተለየ የአደራ መጠባበቂያ ውስጥ ይቀመጣል፣ ኖቶቹም በስሌት ገቢና በመጠባበቂያው ትርፍ ይከፈላሉ። የሳንቲም ባለቤቶች የባለሀብቱን ስጋት አይሸከሙም።",
+    "fw.fund.notice": "መዋቅር እንጂ ቅናሽ አይደለም — በጥያቄ ለብቁ ተቋማዊ ባለሀብቶች ይቀርባል።"
+  },
+  "dz": {
+    "fw.hero.sub": "ཝའིཊ་ལེབཱལ། རང་དབང་ཅན་གྱི་ <span class=\"text-[#171717]\">AI རྩིས་སྒྲུབ་</span>བརྟན་དངུལ།",
+    "fw.fund.eyebrow": "ཉར་ཚགས་མ་དངུལ།",
+    "fw.fund.title": "<span class=\"neon\">རྒྱ་མཚོའི་ཕྱི་ཁའི་ནོཊི་</span>གིས་འགོ་བཙུགས།",
+    "fw.fund.desc": "དངུལ་སྒོར་རེ་རེའི་ཉར་ཚགས་འདི་སྒེར་གྱིས་བཀོད་པའི་ནོཊི་གིས་འགོ་བཙུགས་ཚུགས། རྒྱ་མཚོའི་ཕྱི་ཁའི་ SPV གིས་དེ་ཚུ་ཚད་ལྡན་རྒྱལ་སྤྱིའི་མ་རྩ་གཏོང་མི་ཚུ་ལུ་བཀོདཔ་ཨིན། ཐོབ་པའི་དངུལ་གྱི་བརྒྱ་ཆ་ 100 འདི་དངུལ་སྒོར་ལུ་རྒྱབ་སྐྱོར་འབད་མི་ལོགས་སུ་བའི་ཉར་ཚགས་ནང་བཞག་ཨིན། ནོཊི་ཚུ་རྩིས་སྒྲུབ་ཀྱི་འོང་འབབ་དང་ཉར་ཚགས་ཀྱི་ཁེ་བཟང་གིས་སྤྲོདཔ་ཨིན། དངུལ་སྒོར་འཆང་མི་ཚུ་གིས་མ་རྩ་གཏོང་མིའི་ཉེན་ཁ་ནམ་ཡང་མི་འབག།",
+    "fw.fund.notice": "འདི་བཀོད་སྒྲིག་ཅིག་ཨིན་ གོ་སྐབས་ཅིག་མེན། ཞུ་བ་དང་འཁྲིལ་ཏེ་ཚད་ལྡན་གཞི་ཚོགས་ཀྱི་མ་རྩ་གཏོང་མི་ཚུ་ལུ་འཐོབ་ཚུགས།"
   }
 }

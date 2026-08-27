@@ -291,12 +291,30 @@ const I18N = {
     notSupported:'Não suportado', bkThroughput:'Taxa da GPU', bkInference:'Inferência est.', bkGross:'Receita bruta',
     bkNodeShare:'Parte do nó (85%)', bkElectricity:'Eletricidade', bkNet:'Líquido', bkPerDay:'Por dia',
     bkPerMonth:'Por mês', foot:'Precificado a $0,15 por milhão de tokens de saída, com o nó ficando com 85%, menos a eletricidade. A taxa de processamento é estimada por uma multiplicação de matrizes fp32 no navegador — um piso conservador, não uma ficha técnica. Local e eletricidade são deduzidos do seu IP; corrija o preço acima e os números se atualizam ao vivo. Nada é enviado a lugar nenhum; tudo roda no seu navegador.'
+  },
+  am:{ name:'አማርኛ',
+    eyebrow:'DAI · ስሌት', title:'እዚህ ተቀምጠው ሳሉ፣ GPUዎ ገንዘብ ማግኘት ይችል ነበር።', sub:'ይህን መሣሪያ ለመለካትና በአውታረ መረቡ ላይ ስንት እንደሚያገኝ ለማየት ያሽከርክሩ — አሁኑኑ፣ ባሉበት።', cta:'ለማየት ይጫኑ',
+    ctaSub:'ስንት ማግኘት እችል ነበር', measuring:'በመለካት ላይ…', perHour:'በሰዓት', earnedLabel:'ሲመለከቱ የተገኘ፦',
+    start:'ማግኘት ይጀምሩ', lblGpu:'GPU', lblLoc:'ቦታ', lblKwh:'/kWh',
+    lblEdit:'አርትዕ', hidden:'በአሳሹ ተደብቋል', unknown:'ያልታወቀ', how:'ይህ እንዴት እንደሚሰላ',
+    notSupported:'አይደገፍም', bkThroughput:'የGPU አቅም', bkInference:'ግምታዊ ኢንፈረንስ', bkGross:'ጠቅላላ ገቢ',
+    bkNodeShare:'የአንጓ ድርሻ (85%)', bkElectricity:'ኤሌክትሪክ', bkNet:'ተጣራ', bkPerDay:'በቀን',
+    bkPerMonth:'በወር', foot:'በሚሊዮን የውጤት ቶከን $0.15 ተተምኖ፣ አንጓው 85% ይይዛል፣ ኤሌክትሪክ ተቀንሶ። አቅሙ በአሳሽ ውስጥ በfp32 ማትሪክስ ማባዛት ይገመታል — ጥንቁቅ ዝቅተኛ ግምት እንጂ የቴክኒክ ዝርዝር አይደለም። ቦታና የኤሌክትሪክ ዋጋ ከIPዎ ይገመታሉ፤ ከላይ ያለውን ዋጋ ያስተካክሉ፣ ቁጥሮቹም ወዲያው ይዘምናሉ። ምንም ነገር የትም አይላክም፤ ሁሉም በአሳሽዎ ውስጥ ይሠራል።'
+  },
+  dz:{ name:'རྫོང་ཁ',
+    eyebrow:'DAI · རྩིས་སྒྲུབ།', title:'ཁྱོད་ནཱ་སྡོད་པའི་སྐབས་ ཁྱོད་ཀྱི་ GPU གིས་ཐོབ་ཚུགསཔ་ཨིན།', sub:'ཐབས་འཕྲུལ་འདི་ཚད་འཇལ་ཞིནམ་ལས་ དྲ་བ་གུ་ག་དེམ་ཅིག་ཐོབ་ནི་ཨིན་ན་བལྟ་ནིའི་དོན་ལུ་འཁོར།  ད་ལྟོ་རང་ ཁྱོད་ག་ཏེ་ཡོད་ས་ལས།', cta:'བལྟ་ནིའི་དོན་ལུ་ཨེབ།',
+    ctaSub:'ང་གིས་ག་དེམ་ཅིག་ཐོབ་ཚུགས་ག', measuring:'ཚད་འཇལ་བཞིན་ཡོད…', perHour:'ཆུ་ཚོད་རེ་ལུ།', earnedLabel:'བལྟ་བའི་སྐབས་ཐོབ་མི།',
+    start:'ཐོབ་ནི་འགོ་བཙུགས།', lblGpu:'GPU', lblLoc:'ས་གནས།', lblKwh:'/kWh',
+    lblEdit:'ཞུན་དག།', hidden:'བརའུ་ཟར་གྱིས་སྦས་ཡོད།', unknown:'མ་ཤེས།', how:'འདི་ག་དེ་སྦེ་རྩིས་སྟོན་འབདཝ་ཨིན་ན།',
+    notSupported:'རྒྱབ་སྐྱོར་མེད།', bkThroughput:'GPU གི་ནུས་ཚད།', bkInference:'ཚོད་རྩིས་ཀྱི་ཨིན་ཕེ་རེནསི།', bkGross:'བསྡོམས་འོང་འབབ།',
+    bkNodeShare:'མཚམས་ཀྱི་སྐལ་ཆ། (85%)', bkElectricity:'གློག་མེ།', bkNet:'གཙང་མ།', bkPerDay:'ཉིནམ་རེ་ལུ།',
+    bkPerMonth:'ཟླཝ་རེ་ལུ།', foot:'ཐོན་སྐྱེད་ཀྱི་ཊོ་ཀཱན་ས་ཡ་རེ་ལུ་ $0.15 གི་རིན་གོང་། མཚམས་ཀྱིས་བརྒྱ་ཆ་ 85 འཆངམ་ཨིན། གློག་མེ་ཕྱིར་བཏོན་ཏེ། ནུས་ཚད་འདི་བརའུ་ཟར་ནང་ fp32 གི་མེ་ཊི་རིཀསི་བསྒྱུར་བ་ལས་ཚོད་རྩིས་འབདཝ་ཨིན། — འདི་གནས་ཚད་དམའ་ཤོས་ཀྱི་ཚོད་རྩིས་ཨིན། ཁྱད་ཆོས་ཀྱི་ཐོ་མེན། ས་གནས་དང་གློག་མེའི་རིན་གོང་འདི་ཁྱོད་ཀྱི་ IP ལས་ཚོད་རྩིས་འབདཝ་ཨིན། ལྟག་གི་རིན་གོང་འདི་བསྒྱུར་བཅོས་འབད་བ་ཅིན་ ཨང་གྲངས་ཚུ་འཕྲལ་མགྱོགས་དུས་མཐུན་བཟོཝ་ཨིན། ག་ཅི་ཡང་ག་ཏེ་ཡང་མི་གཏང་། ག་ར་ཁྱོད་ཀྱི་བརའུ་ཟར་ནང་རང་གཡོག་བཀོལཝ་ཨིན།'
   }
 };
 let LANG = 'en';
 const t = k => (I18N[LANG] && I18N[LANG][k]) || I18N.en[k] || k;
 
-const ALIAS = {zh:'cn', yue:'hk', ar:'arab', fa:'farsi', pes:'farsi', bng:'bn', urd:'ur', por:'pt'};
+const ALIAS = {zh:'cn', yue:'hk', ar:'arab', fa:'farsi', pes:'farsi', bng:'bn', urd:'ur', por:'pt', amh:'am', dzo:'dz', bo:'dz'};
 function resolveLang(tag){
   const raw = String(tag||'').toLowerCase().replace(/_/g,'-');
   if(/^zh-(hk|mo|tw|hant)/.test(raw) || raw.startsWith('yue')) return 'hk';
