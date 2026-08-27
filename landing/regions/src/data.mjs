@@ -4,69 +4,6 @@
 
 export const COUNTRIES = [
   {
-    cc: 'ge',
-    langs: ['en'],
-    domain: 'iamai.kg',
-    stableLive: false,  // like everywhere else, the local stablecoin is minted with a partner issuer
-    country: 'Georgia',
-    countryOf: 'Georgia',
-    adjective: 'Georgian',
-    capital: 'Tbilisi',
-    currency: 'Lari',
-    iso: 'GEL',
-    sign: '₾',
-    stable: 'αιGEL',
-    stableName: 'αιGEL',
-    fx: 2.7,              // local currency units per USD
-    power: 0.07,          // USD / kWh, blended commercial
-    population: '3.7M',
-    itWorkforce: '15,000',
-    students: '150,000',
-    universities: '60',
-    clubs: '50',
-    pcsPerClub: 25,
-    localHour: 7.0,       // USD, blended skilled AI-ops hour
-    westHour: 45,         // USD, equivalent Western rate
-    avgWage: 650,         // USD / month
-    whyHere: [
-      ['Crypto-friendly by statute', 'A licensed VASP regime, no capital controls, and an EU-candidate legal trajectory.'],
-      ['Low, flat taxation', 'Small-business and IT-zone regimes keep contributor income intact.'],
-      ['Banking that clears', 'Correspondent access to EUR and USD without CIS sanction exposure.'],
-    ],
-    sectorNote: 'Georgia is where the model runs first: a licensed VASP regime, a sovereign Lari stablecoin already issued, and banking that clears EUR and USD.',
-  },
-  {
-    cc: 'am',
-    langs: ['en', 'ru'],
-    domain: 'dai.am',
-    country: 'Armenia',
-    countryOf: 'Armenia',
-    adjective: 'Armenian',
-    capital: 'Yerevan',
-    currency: 'Dram',
-    iso: 'AMD',
-    sign: '֏',
-    stable: 'αιAMD',
-    stableName: 'αιAMD',
-    fx: 385,
-    power: 0.075,
-    population: '3.0M',
-    itWorkforce: '30,000',
-    students: '90,000',
-    universities: '25',
-    clubs: '40',
-    pcsPerClub: 22,
-    localHour: 7.5,
-    westHour: 45,
-    avgWage: 620,
-    whyHere: [
-      ['The deepest engineering bench in the region', 'A mature IT sector, strong mathematics schooling, and a large returning diaspora.'],
-      ['EAEU and CIS gateway', 'Payment and trade access to a market that Western rails reach only with friction.'],
-      ['Established tech incentives', 'Long-standing IT tax relief and an active technology-park ecosystem.'],
-    ],
-    sectorNote: 'Armenia runs the machines others only own: the deepest engineering bench in the region is what keeps a distributed compute fleet online.',
-  },
-  {
     cc: 'kg',
     langs: ['en', 'ru'],
     domain: 'iamai.kg',
