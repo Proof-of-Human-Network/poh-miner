@@ -5,19 +5,29 @@
 // Anchor: USD_PER_1M_TOKENS ($0.05 per million AI tokens paid to miners),
 // converted at each currency's fx rate:
 //   raw/token = 0.05 × fxPerUSD × 100(raw per unit) ÷ 1e6
-// e.g. aiGEL (₾2.7/$): 1M tokens = 13.5 raw = ₾0.135 ≈ $0.05. For reference,
-// a 3090-class GPU's electricity in Georgia is ~₾0.02/1M tokens, so this rate
-// leaves miners a healthy margin. Node operators can override any entry with
-// config.gasPrices = { aiGEL: <number>, ... }.
+// e.g. aiETB (Br 128/$): 1M tokens = 640 raw = Br 6.40 ≈ $0.05. Rates for the
+// soft/parallel-market currencies (aiVES, aiIRR, aiSDG, aiCUP) track the street
+// rate, not the official peg, and drift fast — re-check before launch. Node
+// operators can override any entry with config.gasPrices = { aiETB: <n>, ... }.
 // NOT consensus: the accepting miner enforces its own floor; settlement pays
 // whatever was escrowed in exactly the currency paid.
 export const USD_PER_1M_TOKENS = 0.05;
 export const GAS_PRICES = {
   DAI:   1,          // μDAI / token
-  aiGEL: 1.35e-5,    // ₾0.135 / 1M tokens (fx 2.7)
   KGST:  4.35e-4,    // 4.35 som / 1M tokens (fx 87)
   aiETB: 6.4e-4,     // Br 6.40 / 1M tokens (fx 128)
   aiBTN: 4.2e-4,     // Nu. 4.20 / 1M tokens (fx 84)
+  aiVES: 1.25e-3,    // Bs. 12.50 / 1M tokens (fx 250)
+  aiPYG: 3.65e-2,    // ₲ 365 / 1M tokens (fx 7300)
+  aiBDT: 6.1e-4,     // ৳ 6.10 / 1M tokens (fx 122)
+  aiPKR: 1.41e-3,    // ₨ 14.10 / 1M tokens (fx 282)
+  aiEGP: 2.4e-4,     // E£ 2.40 / 1M tokens (fx 48)
+  aiIQD: 6.55e-3,    // ع.د 65.50 / 1M tokens (fx 1310)
+  aiAOA: 4.575e-3,   // Kz 45.75 / 1M tokens (fx 915)
+  aiCUP: 2.0e-3,     // MN$ 20.00 / 1M tokens (fx 400)
+  aiLYD: 2.75e-5,    // ل.د 0.275 / 1M tokens (fx 5.5)
+  aiSDG: 1.3e-2,     // ج.س 130 / 1M tokens (fx 2600)
+  aiIRR: 5.0,        // ﷼ 50,000 / 1M tokens (fx 1,000,000)
 };
 
 /** Effective per-token gas price for a currency, honouring config.gasPrices overrides. */

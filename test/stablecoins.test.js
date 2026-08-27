@@ -31,11 +31,11 @@ describe('assets registry', () => {
   it('normalize + raw conversions', () => {
     expect(normalizeCurrency(undefined)).toBe('DAI');
     expect(normalizeCurrency('DAI')).toBe('DAI');
-    expect(normalizeCurrency('aiGEL')).toBe('aiGEL');
+    expect(normalizeCurrency('aiBDT')).toBe('aiBDT');
     expect(isKnownAsset('KGST')).toBe(true);
     expect(isKnownAsset('DOGE')).toBe(false);
-    expect(toRaw('aiGEL', 12.5)).toBe(1250);
-    expect(fromRaw('aiGEL', 1250)).toBe(12.5);
+    expect(toRaw('aiBDT', 12.5)).toBe(1250);
+    expect(fromRaw('aiBDT', 1250)).toBe(12.5);
     expect(toRaw('DAI', 1)).toBe(1e9);
   });
 });
@@ -55,12 +55,12 @@ describe('tx hashing backward compatibility', () => {
 
   it('non-DAI currency changes the hash and round-trips through JSON', () => {
     const dai = new DAITransaction({ ...fields });
-    const gel = new DAITransaction({ ...fields, currency: 'aiGEL' });
-    expect(gel.txHash).not.toBe(dai.txHash);
-    expect(gel.txHash).toBe(computeTxFieldsHash({ ...fields, currency: 'aiGEL' }));
-    const revived = DAITransaction.fromJSON(JSON.parse(JSON.stringify(gel.toJSON())));
-    expect(revived.txHash).toBe(gel.txHash);
-    expect(revived.currency).toBe('aiGEL');
+    const bdt = new DAITransaction({ ...fields, currency: 'aiBDT' });
+    expect(bdt.txHash).not.toBe(dai.txHash);
+    expect(bdt.txHash).toBe(computeTxFieldsHash({ ...fields, currency: 'aiBDT' }));
+    const revived = DAITransaction.fromJSON(JSON.parse(JSON.stringify(bdt.toJSON())));
+    expect(revived.txHash).toBe(bdt.txHash);
+    expect(revived.currency).toBe('aiBDT');
     // DAI tx serializes WITHOUT a currency key at all
     expect('currency' in JSON.parse(JSON.stringify(dai.toJSON()))).toBe(false);
   });
@@ -70,7 +70,7 @@ describe('multi-asset ledger', () => {
   function seeded() {
     const l = new TxLedgerState();
     l.applyGenesisAllocations({ genesisAllocations: [
-      { address: A, balance: 5_000_000_000, nonce: 0, assets: { aiGEL: 10_000, KGST: 500 } },
+      { address: A, balance: 5_000_000_000, nonce: 0, assets: { aiBDT: 10_000, KGST: 500 } },
       { address: T, balance: 0, nonce: 0, assets: Object.fromEntries(STABLE_TICKERS.map(t => [t, 100_000])) },
     ] });
     return l;
@@ -79,20 +79,20 @@ describe('multi-asset ledger', () => {
   it('genesis credits per-asset balances and mints per-asset supply', () => {
     const l = seeded();
     expect(l.getBalance(A)).toBe(5_000_000_000);
-    expect(l.getBalance(A, 'aiGEL')).toBe(10_000);
+    expect(l.getBalance(A, 'aiBDT')).toBe(10_000);
     expect(l.getBalance(T, 'aiBTN')).toBe(100_000);
     const audit = l.checkSupplyInvariant();
     expect(audit.ok).toBe(true);
-    expect(audit.assets.aiGEL.totalMinted).toBe(110_000);
+    expect(audit.assets.aiBDT.totalMinted).toBe(110_000);
   });
 
   it('trusted currency tx moves the right asset and pays the fee in it', () => {
     const l = seeded();
-    const tx = new DAITransaction({ from: A, to: B, amount: 1_000, fee: 10, nonce: 1, timestamp: 1, currency: 'aiGEL' });
+    const tx = new DAITransaction({ from: A, to: B, amount: 1_000, fee: 10, nonce: 1, timestamp: 1, currency: 'aiBDT' });
     const r = l.applyBlock({ height: 1, minerWallet: B, transactions: [tx.toJSON()] }, { strict: true, skipVerify: true });
     expect(r.valid).toBe(true);
-    expect(l.getBalance(A, 'aiGEL')).toBe(10_000 - 1_010);
-    expect(l.getBalance(B, 'aiGEL')).toBe(1_000 + 10);  // amount + fee, both in aiGEL
+    expect(l.getBalance(A, 'aiBDT')).toBe(10_000 - 1_010);
+    expect(l.getBalance(B, 'aiBDT')).toBe(1_000 + 10);  // amount + fee, both in aiBDT
     expect(l.getBalance(B)).toBe(0);                     // no DAI moved
     expect(l.checkSupplyInvariant().ok).toBe(true);
   });
@@ -111,9 +111,9 @@ describe('multi-asset ledger', () => {
   it('clone() deep-copies asset maps', () => {
     const l = seeded();
     const c = l.clone();
-    c._debit(A, 5_000, 'aiGEL');
-    expect(l.getBalance(A, 'aiGEL')).toBe(10_000);
-    expect(c.getBalance(A, 'aiGEL')).toBe(5_000);
+    c._debit(A, 5_000, 'aiBDT');
+    expect(l.getBalance(A, 'aiBDT')).toBe(10_000);
+    expect(c.getBalance(A, 'aiBDT')).toBe(5_000);
   });
 });
 
@@ -122,7 +122,7 @@ describe('atomic p2p-swap-filled', () => {
     const l = new TxLedgerState();
     l.applyGenesisAllocations({ genesisAllocations: [
       { address: A, balance: 0, nonce: 0, assets: { KGST: 10_000 } },   // maker sells KGST
-      { address: B, balance: 0, nonce: 0, assets: { aiGEL: 2_000 } },    // taker pays aiGEL
+      { address: B, balance: 0, nonce: 0, assets: { aiBDT: 2_000 } },    // taker pays aiBDT
     ] });
     // Maker's sell order escrowed the base
     l.applyP2PEscrowTransition({ type: 'p2p-order-created', side: 'sell', escrowLocked: true, maker: A, daiAmount: 8_700, baseAsset: 'KGST' });
@@ -133,13 +133,13 @@ describe('atomic p2p-swap-filled', () => {
     const l = swapLedger();
     const ok = l.applyP2PEscrowTransition({
       type: 'p2p-swap-filled', tradeId: 't1', orderId: 'o1', maker: A, taker: B,
-      baseAsset: 'KGST', baseAmount: 8_700, quoteAsset: 'aiGEL', quoteAmount: 270,
+      baseAsset: 'KGST', baseAmount: 8_700, quoteAsset: 'aiBDT', quoteAmount: 270,
       baseRecipient: B, quoteRecipient: A, referrer: null, referralFee: 0, updatedAt: 1,
     });
     expect(ok).toBe(true);
     expect(l.getBalance(B, 'KGST')).toBe(8_700);
-    expect(l.getBalance(A, 'aiGEL')).toBe(270);
-    expect(l.getBalance(B, 'aiGEL')).toBe(2_000 - 270);
+    expect(l.getBalance(A, 'aiBDT')).toBe(270);
+    expect(l.getBalance(B, 'aiBDT')).toBe(2_000 - 270);
     expect(l.getBalance(ESCROW_ADDRESS, 'KGST')).toBe(0);
     expect(l.checkSupplyInvariant().ok).toBe(true);
   });
@@ -148,13 +148,13 @@ describe('atomic p2p-swap-filled', () => {
     const l = swapLedger();
     const ok = l.applyP2PEscrowTransition({
       type: 'p2p-swap-filled', tradeId: 't1', orderId: 'o1', maker: A, taker: B,
-      baseAsset: 'KGST', baseAmount: 8_700, quoteAsset: 'aiGEL', quoteAmount: 99_999, // > taker balance
+      baseAsset: 'KGST', baseAmount: 8_700, quoteAsset: 'aiBDT', quoteAmount: 99_999, // > taker balance
       baseRecipient: B, quoteRecipient: A, referralFee: 0, updatedAt: 1,
     });
     expect(ok).toBe(false);
     expect(l.getBalance(ESCROW_ADDRESS, 'KGST')).toBe(8_700); // untouched
-    expect(l.getBalance(B, 'aiGEL')).toBe(2_000);
-    expect(l.getBalance(A, 'aiGEL')).toBe(0);
+    expect(l.getBalance(B, 'aiBDT')).toBe(2_000);
+    expect(l.getBalance(A, 'aiBDT')).toBe(0);
   });
 
   it('referral fee comes out of the base leg', () => {
@@ -162,7 +162,7 @@ describe('atomic p2p-swap-filled', () => {
     const R = 'dai' + 'd'.repeat(40);
     l.applyP2PEscrowTransition({
       type: 'p2p-swap-filled', tradeId: 't1', orderId: 'o1', maker: A, taker: B,
-      baseAsset: 'KGST', baseAmount: 8_700, quoteAsset: 'aiGEL', quoteAmount: 270,
+      baseAsset: 'KGST', baseAmount: 8_700, quoteAsset: 'aiBDT', quoteAmount: 270,
       baseRecipient: B, quoteRecipient: A, referrer: R, referralFee: 26, updatedAt: 1,
     });
     expect(l.getBalance(B, 'KGST')).toBe(8_700 - 26);
@@ -175,12 +175,12 @@ describe('genesis with assets', () => {
   it('allocations carry assets deterministically; DAI-only rows keep legacy shape', () => {
     const allocs = buildAllocations({
       [A]: { balance: 100, nonce: 2 },
-      [T]: { balance: 0, nonce: 0, assets: { KGST: 5, aiGEL: 7 } },
+      [T]: { balance: 0, nonce: 0, assets: { KGST: 5, aiBDT: 7 } },
     });
     const plain = allocs.find(a => a.address === A);
     expect('assets' in plain).toBe(false);
     const treas = allocs.find(a => a.address === T);
-    expect(Object.keys(treas.assets)).toEqual(['KGST', 'aiGEL']); // default JS sort (K < a)
+    expect(Object.keys(treas.assets)).toEqual(['KGST', 'aiBDT']); // default JS sort (K < a)
   });
 
   it('two genesis builds from the same snapshot hash identically; assets change the hash', () => {
@@ -189,7 +189,7 @@ describe('genesis with assets', () => {
     const g2 = buildMigrationGenesis(snap).genesis;
     expect(blockHashOf(g1)).toBe(blockHashOf(g2));
     const withAssets = buildMigrationGenesis({
-      balances: { [A]: { balance: 100, nonce: 0, assets: { aiGEL: 1 } } },
+      balances: { [A]: { balance: 100, nonce: 0, assets: { aiBDT: 1 } } },
       genesisTimestamp: 1_800_000_000_000,
     }).genesis;
     expect(blockHashOf(withAssets)).not.toBe(blockHashOf(g1));
@@ -203,28 +203,28 @@ describe('per-currency gas', () => {
       const expected = 0.05 * ASSETS[t].fxPerUSD * 100 / 1e6;
       expect(GAS_PRICES[t]).toBeCloseTo(expected, 10);
     }
-    // aiGEL: 1M tokens = 13.5 raw = ₾0.135 ≈ $0.05 (feeFor ceils to whole raw units)
-    expect(feeFor(1_000_000, 'aiGEL')).toBe(14);
+    // aiBDT: 1M tokens = 610 raw = ৳6.10 ≈ $0.05 (feeFor ceils to whole raw units)
+    expect(feeFor(1_000_000, 'aiBDT')).toBe(610);
   });
 
-  it('$50 of aiGEL buys ~1B tokens (the $200-client / $0.05-miner scenario)', () => {
-    // $50 in GEL = 135 GEL = 13_500 raw units of aiGEL
-    const budgetRaw = 13_500;
-    const tokens = budgetRaw / GAS_PRICES.aiGEL;
+  it('$50 of aiBDT buys ~1B tokens (the $200-client / $0.05-miner scenario)', () => {
+    // $50 in BDT = ৳6,100 = 610_000 raw units of aiBDT
+    const budgetRaw = 610_000;
+    const tokens = budgetRaw / GAS_PRICES.aiBDT;
     expect(tokens).toBeCloseTo(1e9, -3);   // ≈ 1 billion AI tokens
   });
 
   it('gasPriceFor honours config overrides; feeFor floors at 1 raw unit', () => {
     expect(gasPriceFor('DAI')).toBe(1);
-    expect(gasPriceFor('aiGEL')).toBe(GAS_PRICES.aiGEL);
-    expect(gasPriceFor('aiGEL', { gasPrices: { aiGEL: 0.5 } })).toBe(0.5);
-    expect(feeFor(1000, 'aiGEL')).toBe(1);        // fractional price → floor 0.01 GEL
+    expect(gasPriceFor('aiBDT')).toBe(GAS_PRICES.aiBDT);
+    expect(gasPriceFor('aiBDT', { gasPrices: { aiBDT: 0.5 } })).toBe(0.5);
+    expect(feeFor(1000, 'aiBDT')).toBe(1);        // fractional price → floor ৳0.01
     expect(feeFor(1000, 'DAI')).toBe(1000);
   });
 
   it('outputTokenCap handles fractional stablecoin gas prices', () => {
-    // 100 raw aiGEL (1 GEL) at 2.7e-7/token would allow ~370M tokens — clamped by the hard ceiling.
-    const cap = outputTokenCap(100, gasPriceFor('aiGEL'), 0);
+    // 100 raw aiBDT (৳1) at 6.1e-4/token would allow ~164k tokens — clamped by the hard ceiling.
+    const cap = outputTokenCap(100, gasPriceFor('aiBDT'), 0);
     expect(cap).toBeGreaterThan(0);
     expect(cap).toBeLessThanOrEqual(4096);
   });

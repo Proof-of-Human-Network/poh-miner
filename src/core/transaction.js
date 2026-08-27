@@ -95,7 +95,7 @@ export class TxMempool {
     this.getLedger = getLedger;
     this.txs = new Map();            // txHash → DAITransaction
     // "address:currency" → total raw units locked in mempool. Per-asset keying so
-    // a pending aiGEL send never locks the sender's DAI (and vice versa).
+    // a pending aiETB send never locks the sender's DAI (and vice versa).
     this.pendingOut = new Map();
     this.accountPendingNonce = new Map(); // address → highest pending nonce
     this.spentTxHashes = new Set();  // txHashes already mined on canonical chain

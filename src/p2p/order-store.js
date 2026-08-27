@@ -174,7 +174,7 @@ export class OrderStore {
   }
 
   // Every listed BASE-QUOTE pair plus last (book mid). change24h is filled in
-  // by PriceHistory when the HTTP handler has a sampler. GELt is not listed.
+  // by PriceHistory when the HTTP handler has a sampler.
   listMarkets({ pair } = {}) {
     let pairs;
     if (pair) {
