@@ -362,6 +362,11 @@ const DEFAULT_BOOTNODES = [
   "https://bootnode.aist.exchange",
 ];
 
+// How long to wait before re-running public-host detection after it failed.
+// Detection failure is often transient (bootnode restarting, port forwarded
+// later), so it must never be cached for the whole process lifetime.
+const PUBLIC_HOST_RETRY_MS = 10 * 60 * 1000;
+
 export class DAIMinerNode {
   constructor(config) {
     // Resolve new friendly RPC format ("rpc" + providers) into legacy format
@@ -4940,6 +4945,16 @@ export class DAIMinerNode {
               if (res.status !== 404) console.warn(`[DAI-Miner] Relay stream ${base} → ${res.status}`);
               throw new Error(`stream ${res.status}`);
             }
+            // A misrouted relay path (e.g. nginx serving the landing page for an
+            // unmapped /stream) answers 200 with HTML. Without this check that
+            // parses as an empty SSE stream, resets the backoff, and turns into a
+            // 1 req/s hot loop while the node is silently deaf to all gossip.
+            const ctype = res.headers.get('content-type') || '';
+            if (!ctype.includes('text/event-stream')) {
+              console.warn(`[DAI-Miner] Relay stream ${base} returned content-type "${ctype}" ` +
+                `instead of text/event-stream — relay route is misconfigured, not an SSE endpoint.`);
+              throw new Error('stream bad content-type');
+            }
             console.log(`[DAI-Miner] Relay stream connected: ${base} (live gossip push)`);
             state.backoff = 1000;
             const reader = res.body.getReader();
@@ -5142,6 +5157,12 @@ export class DAIMinerNode {
     const explicit = process.env.DAI_PUBLIC_HOST || this.config.publicHost;
     if (explicit) { this._publicHost = explicit; this._publicHostResolved = true; return explicit; }
 
+    // A failed detection is NOT cached for the process lifetime — a bootnode that
+    // was down at startup, or a port-forward added later, must be able to promote
+    // this node to a public peer without a restart. Retry on a cooldown so we
+    // don't re-probe on every registration cycle.
+    if (this._publicHostRetryAt && Date.now() < this._publicHostRetryAt) return null;
+
     const port = this.config.walletApiPort || 3456;
 
     // Zero-config reachability: try to auto-open the port on the router (UPnP →
@@ -5162,7 +5183,10 @@ export class DAIMinerNode {
         const who = await fetch(`${base}/whoami`, { signal: AbortSignal.timeout(6000) })
           .then(r => (r.ok ? r.json() : null)).catch(() => null);
         const ip = who?.ip;
-        if (!ip) continue;
+        if (!ip) {
+          console.warn(`[DAI-Miner] Reachability: ${base}/whoami did not return an IP — trying next bootnode.`);
+          continue;
+        }
         this._observedIp = ip; // remember for follower registration display, even if not reachable
         const probe = await fetch(`${base}/probe?port=${port}`, { signal: AbortSignal.timeout(9000) })
           .then(r => (r.ok ? r.json() : null)).catch(() => null);
@@ -5173,14 +5197,20 @@ export class DAIMinerNode {
           return ip;
         }
         console.log(`[DAI-Miner] Not publicly reachable at ${ip}:${port} (NAT/firewall) — running as a follower/compute client. ` +
-          `To appear as a public node, forward port ${port} or set DAI_PUBLIC_HOST.`);
+          `To appear as a public node, forward port ${port} or set DAI_PUBLIC_HOST. ` +
+          `Will re-check in ${Math.round(PUBLIC_HOST_RETRY_MS / 60000)} min.`);
         this._publicHost = null;
-        this._publicHostResolved = true;
+        this._publicHostRetryAt = Date.now() + PUBLIC_HOST_RETRY_MS;
         return null;
       } catch { /* try next bootnode */ }
     }
+    // Every bootnode failed to give us an observed IP. Stay a follower for now,
+    // but re-check later — this is the transient case (bootnode restarting), not
+    // a verdict about our own reachability.
+    console.warn('[DAI-Miner] Reachability: no bootnode returned an observed IP — ' +
+      `staying a follower, re-checking in ${Math.round(PUBLIC_HOST_RETRY_MS / 60000)} min.`);
     this._publicHost = null;
-    this._publicHostResolved = true;
+    this._publicHostRetryAt = Date.now() + PUBLIC_HOST_RETRY_MS;
     return null;
   }
 
