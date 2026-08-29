@@ -359,6 +359,7 @@ function isTrulyLocalRequest(req) {
 // (e.g. fresh GUI onboarding). Individual users can override via config.bootnodes.
 const DEFAULT_BOOTNODES = [
   "https://miner.iamai.kg",
+  "https://bootnode.aist.exchange",
 ];
 
 export class DAIMinerNode {
