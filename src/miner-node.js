@@ -4405,6 +4405,21 @@ export class DAIMinerNode {
       } catch { /* IPFS unreachable too — proceed with whatever we have */ }
     }
 
+    // 2c. Directly-connected swarm peers. These need no reachable address and no
+    // bootnode, so they are the only candidates that still work when every
+    // bootnode is down and this node is behind NAT.
+    for (const c of (this.swarm?.syncCandidates() || [])) candidates.push(c);
+
+    // Uniform read interface so the sync logic below is transport-agnostic:
+    // HTTP candidates fetch a URL, swarm candidates round-trip over the DHT.
+    for (const c of candidates) {
+      if (c.get) continue;
+      c.get = (path, timeoutMs = 15000) =>
+        fetch(`${c.base}${path}`, { signal: AbortSignal.timeout(timeoutMs) })
+          .then(r => (r.ok ? r.json() : null))
+          .catch(() => null);
+    }
+
     if (!candidates.length) {
       console.log('[DAI-Miner] No sync candidates found');
       return;
@@ -4413,24 +4428,24 @@ export class DAIMinerNode {
 
     // 3. Find the candidate with the most chainWork (heaviest chain) across the whole network
     let bestHeight = -1;
-    let bestBase   = null;
+    let bestPeer   = null;
     let bestLabel  = null;
     let bestWork   = '0';
 
     await Promise.allSettled(candidates.map(async c => {
+      const name = c.label ?? c.base;
       try {
-        const r = await fetch(`${c.base}/chain/tip`, { signal: AbortSignal.timeout(15000) });
-        if (!r.ok) { console.log(`[DAI-Miner] [Sync] ${c.base} tip → non-ok ${r.status}`); return; }
-        const tip = await r.json();
+        const tip = await c.get('/chain/tip', 15000);
+        if (!tip) { console.log(`[DAI-Miner] [Sync] ${name} tip → no response`); return; }
         const work = tip.chainWork || '0';
-        console.log(`[DAI-Miner] [Sync] ${c.label ?? c.base} height=${tip.height} work=${work}`);
+        console.log(`[DAI-Miner] [Sync] ${name} height=${tip.height} work=${work}`);
         if (compareChainWork(work, bestWork) > 0) {
           bestHeight = tip.height ?? -1;
-          bestBase   = c.base;
-          bestLabel  = c.label;
+          bestPeer   = c;
+          bestLabel  = name;
           bestWork   = work;
         }
-      } catch (e) { console.log(`[DAI-Miner] [Sync] ${c.base} tip fail: ${e.message}`); }
+      } catch (e) { console.log(`[DAI-Miner] [Sync] ${name} tip fail: ${e.message}`); }
     }));
     const localWork = getTipChainWork(this.chain);
     console.log(`[DAI-Miner] [Sync] best=${bestLabel} height=${bestHeight} work=${bestWork} | local work=${localWork}`);
@@ -4445,13 +4460,12 @@ export class DAIMinerNode {
     // Use actual block height, not array index — chain may be truncated to last N blocks on disk
     const chainOffset    = this.chain[0]?.height ?? 0;
     const localChainHeight = this.chain.length > 0 ? this.chain[this.chain.length - 1].height : -1;
-    if (bestBase && bestHeight >= 1 && localChainHeight >= 1) {
+    if (bestPeer && bestHeight >= 1 && localChainHeight >= 1) {
       forkCheckHeight = Math.min(localChainHeight, bestHeight);
       try {
         const forkTo = bestHeight > forkCheckHeight ? forkCheckHeight + 1 : forkCheckHeight;
-        const r = await fetch(`${bestBase}/chain/blocks?from=${forkCheckHeight}&to=${forkTo}`, { signal: AbortSignal.timeout(30000) });
-        if (r.ok) {
-          const blocks = await r.json();
+        const blocks = await bestPeer.get(`/chain/blocks?from=${forkCheckHeight}&to=${forkTo}`, 30000);
+        if (Array.isArray(blocks)) {
           const peerRaw = selectPeerBlockOnTip(blocks, forkCheckHeight, DAIBlock);
           if (peerRaw) {
             const peerBlock  = DAIBlock.fromJSON ? DAIBlock.fromJSON(peerRaw) : new DAIBlock(peerRaw);
@@ -4470,29 +4484,26 @@ export class DAIMinerNode {
 
     // 3c. Genesis check: if the peer's block 0 hash differs from ours, it's a completely
     // different network — never sync from it, regardless of chainWork.
-    if (bestBase && this.chain.length > 0) {
+    if (bestPeer && this.chain.length > 0) {
       const localGenesis     = this.chain.find(b => b.height === 0) ?? this.chain[0];
       const localGenesisHash = localGenesis?.getHashSync();
       if (localGenesisHash) {
         let genesisVerified = false;
         for (let attempt = 1; attempt <= 3 && !genesisVerified; attempt++) {
           try {
-            const r = await fetch(`${bestBase}/chain/blocks?from=0&to=0`, { signal: AbortSignal.timeout(30000) });
-            if (r.ok) {
-              const blocks = await r.json();
-              if (Array.isArray(blocks) && blocks.length > 0) {
-                const peerGenesis     = DAIBlock.fromJSON ? DAIBlock.fromJSON(blocks[0]) : new DAIBlock(blocks[0]);
-                const peerGenesisHash = peerGenesis.getHashSync();
-                if (peerGenesisHash !== localGenesisHash) {
-                  console.error(`[DAI-Miner] ⛔ GENESIS MISMATCH — peer ${bestLabel} is on a different network!`);
-                  console.error(`[DAI-Miner]    local genesis: ${localGenesisHash}`);
-                  console.error(`[DAI-Miner]    peer  genesis: ${peerGenesisHash}`);
-                  console.error(`[DAI-Miner]    Refusing to sync. Wipe ~/.dai-miner/chain if you intend to join a new network.`);
-                  return;
-                }
-                console.log(`[DAI-Miner] [Sync] Genesis hash verified ✓ (${localGenesisHash.slice(0, 12)}…)`);
-                genesisVerified = true;
+            const blocks = await bestPeer.get('/chain/blocks?from=0&to=0', 30000);
+            if (Array.isArray(blocks) && blocks.length > 0) {
+              const peerGenesis     = DAIBlock.fromJSON ? DAIBlock.fromJSON(blocks[0]) : new DAIBlock(blocks[0]);
+              const peerGenesisHash = peerGenesis.getHashSync();
+              if (peerGenesisHash !== localGenesisHash) {
+                console.error(`[DAI-Miner] ⛔ GENESIS MISMATCH — peer ${bestLabel} is on a different network!`);
+                console.error(`[DAI-Miner]    local genesis: ${localGenesisHash}`);
+                console.error(`[DAI-Miner]    peer  genesis: ${peerGenesisHash}`);
+                console.error(`[DAI-Miner]    Refusing to sync. Wipe ~/.dai-miner/chain if you intend to join a new network.`);
+                return;
               }
+              console.log(`[DAI-Miner] [Sync] Genesis hash verified ✓ (${localGenesisHash.slice(0, 12)}…)`);
+              genesisVerified = true;
             }
           } catch (e) {
             if (attempt === 3) {
@@ -4504,7 +4515,7 @@ export class DAIMinerNode {
     }
 
     // 4. IPFS fallback if no live peer has a longer chain
-    if (!bestBase && this.ipfsSync) {
+    if (!bestPeer && this.ipfsSync) {
       const snap = await this.ipfsSync.fetchChainSnapshot();
       if (snap?.blocks?.length && snap.height > localChainHeight) {
         console.log(`[DAI-Miner] Applying IPFS chain snapshot (height ${snap.height})`);
@@ -4528,7 +4539,7 @@ export class DAIMinerNode {
       return;
     }
 
-    if (!bestBase) { console.log('[DAI-Miner] [Sync] no reachable peer found — aborting'); return; }
+    if (!bestPeer) { console.log('[DAI-Miner] [Sync] no reachable peer found — aborting'); return; }
 
     // 5. Download blocks in chunks of 500
     // On a fresh start (only genesis locally) download from 0 and replace the whole
@@ -4545,8 +4556,8 @@ export class DAIMinerNode {
     // ancestor (within finality depth) BEFORE the partial-reorg / full-resync path
     // below, which escalates a few-block miner fork into a genesis wipe that
     // finality then rejects — leaving the node permanently stuck on its own fork.
-    if (isFork && bestBase && compareChainWork(bestWork, localWork) > 0) {
-      const healed = await this._tryBoundedReorg(bestBase, bestHeight);
+    if (isFork && bestPeer && compareChainWork(bestWork, localWork) > 0) {
+      const healed = await this._tryBoundedReorg(bestPeer, bestHeight);
       if (healed) {
         console.log('[DAI-Miner] [Sync] Fork healed via bounded reorg — chains converged.');
         return;
@@ -4584,9 +4595,7 @@ export class DAIMinerNode {
       const from = localHeight + 1;
       const to   = Math.min(from + CHUNK - 1, bestHeight);
       try {
-        const r = await fetch(`${bestBase}/chain/blocks?from=${from}&to=${to}`, { signal: AbortSignal.timeout(60000) });
-        if (!r.ok) break;
-        const blocks = await r.json();
+        const blocks = await bestPeer.get(`/chain/blocks?from=${from}&to=${to}`, 60000);
         if (!Array.isArray(blocks) || blocks.length === 0) break;
         if (isFreshStart) {
           downloadedBlocks.push(...blocks);
@@ -4633,7 +4642,7 @@ export class DAIMinerNode {
               // (splice at the common ancestor within FINALITY_DEPTH) BEFORE escalating to a
               // full chain re-download — the full resync blocks the event loop across
               // hundreds of blocks and orphans in-flight jobs/payments (multi-miner churn).
-              const stallHealed = await this._tryBoundedReorg(bestBase, bestHeight);
+              const stallHealed = await this._tryBoundedReorg(bestPeer, bestHeight);
               if (stallHealed) {
                 console.log('[DAI-Miner] [Sync] Incremental stall healed via bounded reorg — chains converged.');
                 return;
@@ -4688,7 +4697,7 @@ export class DAIMinerNode {
           // Anchor didn't link — try a cheap bounded reorg (deeper common-ancestor search
           // within FINALITY_DEPTH) before falling back to the event-loop-blocking full
           // chain re-download.
-          const anchorHealed = await this._tryBoundedReorg(bestBase, bestHeight);
+          const anchorHealed = await this._tryBoundedReorg(bestPeer, bestHeight);
           if (anchorHealed) {
             console.log('[DAI-Miner] [Sync] Anchor mismatch healed via bounded reorg — chains converged.');
             return;
@@ -4702,9 +4711,7 @@ export class DAIMinerNode {
             const from = h + 1;
             const to   = Math.min(from + CHUNK - 1, bestHeight);
             try {
-              const r2 = await fetch(`${bestBase}/chain/blocks?from=${from}&to=${to}`, { signal: AbortSignal.timeout(60000) });
-              if (!r2.ok) break;
-              const bs = await r2.json();
+              const bs = await bestPeer.get(`/chain/blocks?from=${from}&to=${to}`, 60000);
               if (!Array.isArray(bs) || bs.length === 0) break;
               downloadedBlocks.push(...bs);
               h = to;
@@ -5007,12 +5014,19 @@ export class DAIMinerNode {
         signingPrivateKey,
         networkId: this.config.networkId || 'dai-mainnet',
         bootstrap: this.config.dhtBootstrap || null,
+        // Cached alongside the other node state, following getBrainDataDir()'s
+        // ~/.dai-miner convention.
+        nodesFile: process.env.DAI_DHT_NODES_FILE
+          || path.join(os.homedir(), '.dai-miner', 'dht-nodes.json'),
         // Envelopes arriving over the swarm go through exactly the same
         // verify/dedupe path as the HTTP ones, so the two transports overlap
         // harmlessly while the network upgrades.
         onEnvelope: (envelope) => {
           Promise.resolve(this.gossip.receive(envelope)).catch(() => {});
         },
+        // Serve chain reads to peers directly, so a NAT'd node can sync from
+        // another NAT'd node with no HTTP endpoint and no bootnode involved.
+        onRequest: (path) => this._serveSwarmRead(path),
       });
       await this.swarm.start();
       // Leave the DHT cleanly on shutdown. Follows the same per-subsystem signal
@@ -5025,6 +5039,49 @@ export class DAIMinerNode {
       console.warn(`[DAI-Miner] Swarm transport unavailable (${e.message}) — falling back to bootnode relay.`);
       this.swarm = null;
     }
+  }
+
+  /**
+   * Read-only chain queries answered over the swarm. Mirrors the GET shapes of
+   * the HTTP API so both transports return identical payloads and the sync path
+   * does not care which one it is talking to.
+   *
+   * Read-only by construction: the path is matched against an explicit pattern
+   * allowlist and anything else returns null, so a peer can never reach a
+   * state-changing route through this channel.
+   */
+  async _serveSwarmRead(path) {
+    if (typeof path !== 'string') return null;
+
+    if (path === '/chain/tip') {
+      const tip = this.chain[this.chain.length - 1];
+      if (!tip) return null;
+      // Field-for-field identical to the HTTP route, chainWork included: chain
+      // selection compares these values across peers, so the same chain must
+      // never score differently depending on which transport reported it.
+      return {
+        height: tip.height,
+        hash: tip.getHashSync(),
+        timestamp: tip.timestamp,
+        chainWork: tip.chainWork || '0',
+      };
+    }
+
+    const blocks = path.match(/^\/chain\/blocks\?from=(\d+)&to=(\d+)$/);
+    if (blocks) {
+      const from = Number(blocks[1]);
+      let to = Number(blocks[2]);
+      if (!Number.isFinite(from) || !Number.isFinite(to) || from < 0 || to < from) return null;
+      // Mirror the HTTP route exactly: clamp rather than reject, and select on
+      // the canonical tip path. A plain height filter could hand back off-path
+      // blocks from a stale fork, which the sync logic would then treat as
+      // authoritative.
+      const limit = 500;
+      if (to - from + 1 > limit) to = from + limit - 1;
+      return blocksOnTipPath(this.chain, from, to).map(b => (b.toJSON ? b.toJSON() : b));
+    }
+
+    return null;
   }
 
   async _stopSwarm() {
@@ -6693,6 +6750,19 @@ export class DAIMinerNode {
    * true if the fork was healed. If no common ancestor exists within finality
    * depth, the fork is genuinely deeper than finality and we do NOT wipe.
    */
+  /**
+   * Normalise a sync source to a single read function. Callers may hold either a
+   * transport-agnostic candidate (HTTP or swarm) or a bare bootnode URL string.
+   */
+  _peerGetter(peerOrBase) {
+    if (peerOrBase && typeof peerOrBase.get === 'function') return peerOrBase.get;
+    const base = String(peerOrBase).replace(/\/$/, '');
+    return (path, timeoutMs = 30000) =>
+      fetch(`${base}${path}`, { signal: AbortSignal.timeout(timeoutMs) })
+        .then(r => (r.ok ? r.json() : null))
+        .catch(() => null);
+  }
+
   async _tryBoundedReorg(peerBase, peerTipHeight) {
     const localTip = this.chain[this.chain.length - 1]?.height ?? -1;
     if (localTip < 0 || peerTipHeight < 0) return false;
@@ -6700,10 +6770,8 @@ export class DAIMinerNode {
 
     let peerBlocks;
     try {
-      const r = await fetch(`${peerBase.replace(/\/$/, '')}/chain/blocks?from=${from}&to=${peerTipHeight}`,
-        { signal: AbortSignal.timeout(60000) });
-      if (!r.ok) return false;
-      const raw = await r.json();
+      const raw = await this._peerGetter(peerBase)(
+        `/chain/blocks?from=${from}&to=${peerTipHeight}`, 60000);
       if (!Array.isArray(raw) || !raw.length) return false;
       peerBlocks = raw.map(b => (DAIBlock.fromJSON ? DAIBlock.fromJSON(b) : new DAIBlock(b)));
     } catch { return false; }

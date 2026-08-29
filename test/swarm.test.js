@@ -1,5 +1,8 @@
 import { describe, it, expect, afterAll } from 'vitest';
 import createTestnet from 'hyperdht/testnet.js';
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
 import { DAISwarm, deriveSwarmSeed, deriveTopic } from '../src/network/swarm.js';
 
 /**
@@ -87,4 +90,82 @@ describe('DAISwarm transport', () => {
     expect(received).toHaveLength(1);
     expect(received[0].message.blob.length).toBe(500_000);
   }, 30000);
+});
+
+describe('DAISwarm chain RPC', () => {
+  let testnet, server, client;
+
+  afterAll(async () => {
+    await server?.destroy();
+    await client?.destroy();
+    await testnet?.destroy();
+  });
+
+  it('serves chain reads peer-to-peer and fails closed on unknown paths', async () => {
+    testnet = await createTestnet(3);
+
+    const served = [];
+    server = new DAISwarm({
+      signingPrivateKey: 'KEY-SERVER', networkId: 'rpc-net', bootstrap: testnet.bootstrap,
+      onRequest: (path) => {
+        served.push(path);
+        if (path === '/chain/tip') return { height: 42, chainWork: '999' };
+        return null;   // anything not explicitly handled must return null
+      },
+    });
+    client = new DAISwarm({ signingPrivateKey: 'KEY-CLIENT', networkId: 'rpc-net', bootstrap: testnet.bootstrap });
+
+    await server.start();
+    await client.start();
+
+    const deadline = Date.now() + 30000;
+    while (client.peerCount === 0 && Date.now() < deadline) {
+      await new Promise(r => setTimeout(r, 100));
+    }
+    expect(client.peerCount).toBeGreaterThan(0);
+
+    const [candidate] = client.syncCandidates();
+    expect(candidate.swarm).toBe(true);
+
+    const tip = await candidate.get('/chain/tip', 10000);
+    expect(tip).toEqual({ height: 42, chainWork: '999' });
+
+    // An unserved path resolves null rather than hanging until the timeout,
+    // so the sync loop moves on to the next candidate immediately.
+    const t0 = Date.now();
+    expect(await candidate.get('/chain/blocks?from=0&to=0', 10000)).toBeNull();
+    expect(Date.now() - t0).toBeLessThan(5000);
+    expect(served).toContain('/chain/tip');
+  }, 60000);
+});
+
+describe('DAISwarm DHT node cache', () => {
+  const file = path.join(os.tmpdir(), `dai-dht-nodes-${Date.now()}.json`);
+  afterAll(() => { try { fs.unlinkSync(file); } catch { /* already gone */ } });
+
+  it('reads back a cached node list', () => {
+    fs.writeFileSync(file, JSON.stringify([{ host: '1.2.3.4', port: 49737 }]));
+    const s = new DAISwarm({ signingPrivateKey: 'K', nodesFile: file });
+    expect(s._loadNodes()).toEqual([{ host: '1.2.3.4', port: 49737 }]);
+  });
+
+  it('drops malformed entries instead of feeding them to the DHT', () => {
+    fs.writeFileSync(file, JSON.stringify([
+      { host: 'ok.example', port: 1 },
+      { host: 'no-port' },
+      { port: 2 },
+      null,
+      { host: 5, port: 'x' },
+    ]));
+    const s = new DAISwarm({ signingPrivateKey: 'K', nodesFile: file });
+    expect(s._loadNodes()).toEqual([{ host: 'ok.example', port: 1 }]);
+  });
+
+  it('treats a corrupt or missing cache as empty rather than throwing', () => {
+    fs.writeFileSync(file, 'not json at all');
+    expect(new DAISwarm({ signingPrivateKey: 'K', nodesFile: file })._loadNodes()).toEqual([]);
+    const gone = path.join(os.tmpdir(), 'definitely-not-here-' + Date.now() + '.json');
+    expect(new DAISwarm({ signingPrivateKey: 'K', nodesFile: gone })._loadNodes()).toEqual([]);
+    expect(new DAISwarm({ signingPrivateKey: 'K' })._loadNodes()).toEqual([]);
+  });
 });
