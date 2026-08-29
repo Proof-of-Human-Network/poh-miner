@@ -137,7 +137,7 @@ export function buildPage(c, l) {
     <p class="eyebrow">${esc(l.s5Eyebrow)}</p>
     <h2>${esc(l.s5Title)}</h2>
     <p class="lede narrow">${esc(l.s5Lede)}</p>
-    <p><a class="btn" href="https://assetux.com" target="_blank" rel="noopener">${esc(l.s5Cta)}</a></p>
+    <p><a class="btn" href="https://aist.exchange" target="_blank" rel="noopener">${esc(l.s5Cta)}</a></p>
   </div>
 </section>
 
