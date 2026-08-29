@@ -1,53 +1,91 @@
 {
   "_comment": "Copy this file to config.json (or ~/.dai-miner/config.json). This is the current recommended format used by both CLI and the Electron GUI (onboarding + RPC settings).",
-
   "_model_comment": "Inference runs in-process via QVAC. `model` is a QVAC model id/alias (qwen3-0.6b, qwen3-1.7b, qwen3-4b, qwen3-8b) or a GGUF URL. No Ollama.",
   "model": "qwen3-1.7b",
   "inferenceMode": "auto",
   "llmApiKey": "",
-
   "autoStart": true,
   "region": "auto",
-
   "bootnodes": [
-    "https://miner.iamai.kg"
+    "https://miner.iamai.kg",
+    "https://bootnode.aist.exchange"
   ],
-
+  "_dhtBootstrap_comment": "Optional, normally omitted. DHT entry points for the peer-to-peer transport, as \"ip@hostname:port\". Unset means the built-in public defaults, which is what you want unless you are running a private network. Contacted once at startup to enter the DHT; never in the data path. All nodes must agree — pointing some at an isolated DHT and others at the public one silently splits the network. See _dhtBootstrap_example for our node.",
+  "_dhtBootstrap_example": [
+    "203.18.98.51@bootnode.aist.exchange:49737"
+  ],
   "rpc": {
     "solana": {
       "provider": "helius",
       "apiKey": "YOUR_HELIUS_KEY"
     },
-    "1": { "provider": "alchemy", "apiKey": "API_KEY" },
-    "8453": { "provider": "alchemy", "apiKey": "API_KEY" },
-    "42161": { "provider": "alchemy", "apiKey": "API_KEY" },
-    "56": { "provider": "alchemy", "apiKey": "API_KEY" },
-    "137": { "provider": "alchemy", "apiKey": "API_KEY" },
-    "10": { "provider": "alchemy", "apiKey": "API_KEY" },
-    "5000": { "provider": "alchemy", "apiKey": "API_KEY" },
-    "43114": { "provider": "alchemy", "apiKey": "API_KEY" },
-    "324": { "provider": "alchemy", "apiKey": "API_KEY" },
-    "59144": { "provider": "alchemy", "apiKey": "API_KEY" },
-    "143": { "provider": "alchemy", "apiKey": "API_KEY" },
-    "534352": { "provider": "alchemy", "apiKey": "API_KEY" },
-    "25": { "provider": "alchemy", "apiKey": "API_KEY" },
-    "480": { "provider": "alchemy", "apiKey": "API_KEY" }
+    "1": {
+      "provider": "alchemy",
+      "apiKey": "API_KEY"
+    },
+    "8453": {
+      "provider": "alchemy",
+      "apiKey": "API_KEY"
+    },
+    "42161": {
+      "provider": "alchemy",
+      "apiKey": "API_KEY"
+    },
+    "56": {
+      "provider": "alchemy",
+      "apiKey": "API_KEY"
+    },
+    "137": {
+      "provider": "alchemy",
+      "apiKey": "API_KEY"
+    },
+    "10": {
+      "provider": "alchemy",
+      "apiKey": "API_KEY"
+    },
+    "5000": {
+      "provider": "alchemy",
+      "apiKey": "API_KEY"
+    },
+    "43114": {
+      "provider": "alchemy",
+      "apiKey": "API_KEY"
+    },
+    "324": {
+      "provider": "alchemy",
+      "apiKey": "API_KEY"
+    },
+    "59144": {
+      "provider": "alchemy",
+      "apiKey": "API_KEY"
+    },
+    "143": {
+      "provider": "alchemy",
+      "apiKey": "API_KEY"
+    },
+    "534352": {
+      "provider": "alchemy",
+      "apiKey": "API_KEY"
+    },
+    "25": {
+      "provider": "alchemy",
+      "apiKey": "API_KEY"
+    },
+    "480": {
+      "provider": "alchemy",
+      "apiKey": "API_KEY"
+    }
   },
-
   "rpcOverrides": {
     "btc": "https://mempool.space/api",
     "tron": "https://api.trongrid.io/jsonrpc?api_key=YOUR_TRONGRID_KEY",
     "ton": "https://toncenter.com/api/v2/jsonRPC?api_key=YOUR_TONCENTER_KEY",
     "xlm": "https://horizon.stellar.org"
   },
-
   "etherscanApiKey": "YOUR_ETHERSCAN_KEY_HERE",
-
   "daiWallet": "",
   "solanaAddress": "",
-
   "onboarded": false,
-
   "_comment_skills": "Public skill deploy fee: 100 DAI (escrowed for code_audit). Graduation staking threshold: 1,000 DAI total.",
   "meilisearch": {
     "mandatory": true,
@@ -58,7 +96,6 @@
     "apiKey": "",
     "indexJobs": "dai-chat-history"
   },
-
   "_comment_ipfs": "Local IPFS (Kubo) auto-starts to back up chain + brain state. Binary auto-downloads to ~/.dai-miner/bin on first run; repo in ~/.dai-miner/ipfs. Gateway is 8081 to avoid the bootnode's 8080. Set autoStart:false or env DAI_SKIP_IPFS=1 to disable.",
   "ipfs": {
     "autoStart": true,
@@ -67,7 +104,6 @@
     "bindHost": "127.0.0.1",
     "startupTimeoutMs": 60000
   },
-
   "_comment_genesisAlloc": "Optional: pre-fund addresses at block 0 on a clean network start. Amounts in raw DAI (1 DAI = 1000000000 raw). Only applied once when chain is empty.",
   "genesisAlloc": {
     "dai_YOUR_WALLET_HERE": 1000000000000
