@@ -41,18 +41,35 @@ import { JobBoard } from './jobs/job-board.js';
 const ipfsStore = new IPFSStore();
 
 const argv = process.argv.slice(2);
-const PORT = parseInt(argv.find(a => a.startsWith('--port='))?.split('=')[1] || '8080');
-const BIND_HOST = argv.find(a => a.startsWith('--bind='))?.split('=')[1]
+/**
+ * Read a CLI flag written either as `--name=value` or as `--name value`.
+ *
+ * Only the `=` form used to be understood. pm2 passes `--data-dir` and `--port`
+ * space-separated, so those overrides were silently dropped and the defaults
+ * applied instead — which is how the bootnode quietly moved to a fresh data
+ * directory (and left its network history behind) when the default was
+ * rebranded from .poh-bootnode to .dai-bootnode.
+ */
+function argValue(name) {
+  const eq = argv.find(a => a.startsWith(`--${name}=`));
+  if (eq) return eq.slice(name.length + 3);
+  const i = argv.indexOf(`--${name}`);
+  if (i !== -1 && argv[i + 1] && !argv[i + 1].startsWith('--')) return argv[i + 1];
+  return undefined;
+}
+
+const PORT = parseInt(argValue('port') || '8080');
+const BIND_HOST = argValue('bind')
   || process.env.DAI_BOOTNODE_BIND
   || '127.0.0.1';
-const DATA_DIR = argv.find(a => a.startsWith('--data-dir='))?.split('=')[1] || path.join(process.env.HOME || '.', '.dai-bootnode');
-const PEER_SYNC_URL = argv.find(a => a.startsWith('--peer='))?.split('=').slice(1).join('=') || null;
+const DATA_DIR = argValue('data-dir') || path.join(process.env.HOME || '.', '.dai-bootnode');
+const PEER_SYNC_URL = argValue('peer') || null;
 const ALLOW_LOCAL_HOSTS = argv.includes('--allow-local-hosts')
   || process.env.DAI_BOOTNODE_ALLOW_LOCAL === '1';
 // Genesis migration: path to a balance/nonce snapshot. When set AND the chain is
 // empty, height-0 is built as a migration genesis that mints the snapshot. Absent
 // → legacy empty genesis (unchanged). See scripts/genesis/README.md.
-const GENESIS_SNAPSHOT = argv.find(a => a.startsWith('--genesis-snapshot='))?.split('=').slice(1).join('=')
+const GENESIS_SNAPSHOT = argValue('genesis-snapshot')
   || process.env.DAI_GENESIS_SNAPSHOT
   || null;
 
