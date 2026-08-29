@@ -11,14 +11,18 @@
  *   node scripts/genesis/export-snapshot.mjs --data-dir ~/.dai-bootnode \
  *        [--height H] [--out snap.json] [--exclude addr1,addr2] [--include-system] \
  *        [--genesis-timestamp <ms>] \
- *        [--mint-stables] [--treasury <daiAddr>]
+ *        [--mint-stables] [--treasury <daiAddr>] [--force-abandon-escrow]
  *
  * --mint-stables adds the initial stablecoin supply (INITIAL_STABLE_SUPPLY_RAW
  * from src/assets.js) to the treasury row (--treasury overrides the address).
  * Existing per-asset balances in the replayed ledger are always carried over.
  *
  * By default the finalized tip is used (reorg-safe) and known system addresses
- * (e.g. the audit vault) are dropped. Pass --include-system to keep them.
+ * (the audit vault and the P2P escrow pool) are dropped. Pass --include-system
+ * to keep them.
+ *
+ * Exits 3 if the P2P escrow pool still holds funds — those belong to open trades
+ * whose records reset-node.sh wipes, so they must be settled before exporting.
  */
 import crypto from 'crypto';
 import fs from 'fs';
@@ -35,7 +39,16 @@ const { TREASURY_ADDRESS, INITIAL_STABLE_SUPPLY_RAW } = await import(path.join(N
 // System / non-user addresses excluded by default (kept with --include-system).
 const SYSTEM_ADDRESSES = new Set([
   'daiaudit000000000000000000000000000000000001', // audit vault
+  'dai_p2p_escrow',                               // P2P escrow pool — see the guard below
 ]);
+
+// The escrow pool is a pseudo-address holding funds locked against open trades.
+// reset-node.sh wipes $BASE/p2p (orders.json + trades.json) along with the chain,
+// so carrying an escrow balance into the new genesis would mint funds that no
+// remaining trade could ever release -- stranded permanently. Dropping it instead
+// destroys whatever was locked. Neither is acceptable, so a non-empty escrow is a
+// hard stop: settle or cancel the open trades first, then re-export.
+const ESCROW_ADDRESS = 'dai_p2p_escrow';
 
 const argv = process.argv.slice(2);
 const arg = (k, d) => { const i = argv.indexOf(k); return i >= 0 ? argv[i + 1] : d; };
@@ -69,6 +82,22 @@ async function main() {
 
   const addrs = new Set([...ledger.balances.keys(), ...ledger.nonces.keys()]);
   if (ledger.assetBalances) for (const m of ledger.assetBalances.values()) for (const a of m.keys()) addrs.add(a);
+
+  // Hard stop on locked escrow. Silently carrying it forward strands the funds
+  // (the trades that would release them are wiped with the chain); silently
+  // dropping it destroys them. Either way the operator must decide, so refuse.
+  const escrowDai = ledger.balances.get(ESCROW_ADDRESS) || 0;
+  const escrowAssets = ledger.getAssetBalances ? ledger.getAssetBalances(ESCROW_ADDRESS) : {};
+  const escrowAssetTotal = Object.values(escrowAssets).reduce((a, b) => a + (Number(b) || 0), 0);
+  if ((escrowDai > 0 || escrowAssetTotal > 0) && !argv.includes('--force-abandon-escrow')) {
+    console.error(`[snapshot] REFUSING: P2P escrow (${ESCROW_ADDRESS}) still holds funds.`);
+    console.error(`[snapshot]   DAI: ${escrowDai}${escrowAssetTotal ? `  assets: ${JSON.stringify(escrowAssets)}` : ''}`);
+    console.error('[snapshot]   reset-node.sh wipes p2p/orders.json + trades.json with the chain, so');
+    console.error('[snapshot]   these funds would have no trade left to release them.');
+    console.error('[snapshot]   Settle or cancel every open trade first, then re-export.');
+    console.error('[snapshot]   (--force-abandon-escrow discards them deliberately.)');
+    process.exit(3);
+  }
 
   // Optional stablecoin genesis mint to the treasury (fresh-reset only).
   const mintStables = argv.includes('--mint-stables');

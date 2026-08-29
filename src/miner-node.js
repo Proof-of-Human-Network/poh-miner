@@ -3973,9 +3973,21 @@ export class DAIMinerNode {
 
         readBody().then(body => {
           const { address, signingPublicKey, signature, timestamp, reason } = body;
-          const auth = verifyP2PAuth(address, signingPublicKey, signature,
-            { address, timestamp, action, tradeId });
+          // `reason` is free text that gets persisted into brain transitions and
+          // gossiped network-wide, so it must be attributable. Prefer a signature
+          // that commits to it; fall back to the legacy payload (which does not)
+          // so older clients keep working, but then DROP the reason rather than
+          // recording unsigned text as something the user said.
+          let auth = verifyP2PAuth(address, signingPublicKey, signature,
+            { address, timestamp, action, tradeId, ...(reason !== undefined ? { reason } : {}) });
+          let reasonSigned = !auth.error;
+          if (auth.error && reason !== undefined) {
+            auth = verifyP2PAuth(address, signingPublicKey, signature,
+              { address, timestamp, action, tradeId });
+            reasonSigned = false;
+          }
           if (auth.error) { res.statusCode = 401; return res.end(JSON.stringify(auth)); }
+          const signedReason = reasonSigned ? reason : undefined;
           const ownerAddress = auth.address;
 
           const trade = this.p2pOrderStore.getTrade(tradeId);
@@ -4051,10 +4063,10 @@ export class DAIMinerNode {
           if (action === 'dispute') {
             const canDispute = _isAddr(trade.taker) || (order && _isAddr(order.maker));
             if (!canDispute) { res.statusCode = 403; return res.end(JSON.stringify({ error: 'not a trade participant' })); }
-            const result = this.p2pOrderStore.disputeTrade(tradeId, { reason });
+            const result = this.p2pOrderStore.disputeTrade(tradeId, { reason: signedReason });
             if (result.error) { res.statusCode = 400; return res.end(JSON.stringify(result)); }
             this._appliedP2PIds.add(`trade-${tradeId}-dispute`);
-            this.pendingBrainTransitions.push({ type: 'p2p-trade-dispute', tradeId, reason: reason || '', updatedAt: Date.now() });
+            this.pendingBrainTransitions.push({ type: 'p2p-trade-dispute', tradeId, reason: signedReason || '', updatedAt: Date.now() });
             this.gossip.publish('p2p-trade', result.trade).catch(() => {});
             return res.end(JSON.stringify(result));
           }
