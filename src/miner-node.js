@@ -3468,8 +3468,18 @@ export class DAIMinerNode {
           return res.end(JSON.stringify({ type: 'notfound', q }));
         }
 
-        // Address lookup
-        const balance = this.walletManager.getBalance(q);
+        // Address lookup.
+        // Read the canonical chain ledger, not walletManager — the latter loads
+        // ~/.dai-miner/wallets/<address>.json and so returns 0 for every address
+        // this node does not itself hold keys for, which is nearly every address
+        // a visitor looks up. /api/wallet/balance already uses the ledger, which
+        // is why the two endpoints disagreed.
+        const balance = this._confirmedBalance(q);
+        const assetsHeld = this._confirmedAssets(q);
+        const assets = {};
+        for (const [t, raw] of Object.entries(assetsHeld)) {
+          assets[t] = { raw, display: assetFromRaw(t, raw) };
+        }
         const entries = (this.balanceJournal?._entries || [])
           .filter(e => e.address === q)
           .slice(-50)
@@ -3482,7 +3492,7 @@ export class DAIMinerNode {
             label:   e.delta > 0 ? (e.txHash?.startsWith('reward-') || e.txHash?.startsWith('coinbase') ? 'Mining reward' : 'Received') : 'Sent',
           }));
         const jobCtx = this._getWalletJobContext(q, 10);
-        return res.end(JSON.stringify({ type: 'address', address: q, balance, entries, jobs: jobCtx.jobs, latestSkillMemory: jobCtx.latestSkillMemory }));
+        return res.end(JSON.stringify({ type: 'address', address: q, balance, assets, entries, jobs: jobCtx.jobs, latestSkillMemory: jobCtx.latestSkillMemory }));
       }
 
       // ── MCP status (/api/mcp/status) — configured servers + connected tools ──

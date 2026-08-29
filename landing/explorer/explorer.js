@@ -270,6 +270,21 @@
           return j.mined || (j.verdict && j.verdict !== 'pending' && j.verdict !== 'submitted');
         });
 
+        // Stablecoin holdings, when the address has any.
+        var assetRows = '';
+        if (d.assets) {
+          var tickers = Object.keys(d.assets).filter(function (k) {
+            return Number(d.assets[k] && d.assets[k].raw) > 0;
+          });
+          assetRows = tickers.map(function (k) {
+            var a = d.assets[k];
+            return '<div class="kv">' +
+              '<dt class="mono">' + esc(k) + '</dt>' +
+              '<dd class="mono">' + esc(a.display != null ? a.display : a.raw) + '</dd>' +
+            '</div>';
+          }).join('');
+        }
+
         var html =
           '<div class="xcard p-5 mb-4">' +
             '<div class="muted text-[14px]">' + esc(t('exp.address', 'Address')) + '</div>' +
@@ -278,6 +293,7 @@
               '<span class="muted text-[15px]">' + esc(t('exp.balance', 'Balance')) + '</span>' +
               '<span class="font-display text-[34px] neon mono">' + esc(dai(d.balance)) + ' DAI</span>' +
             '</div>' +
+            (assetRows ? '<dl class="mt-3">' + assetRows + '</dl>' : '') +
           '</div>';
 
         if (jobs.length) {
