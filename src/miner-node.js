@@ -20,6 +20,7 @@ import { detectMyCountry, getCountryProximityMultiplier } from './jobs/geo.js';
 import { getMethodsManager } from './signals/methods-manager.js';
 import { P2PGossip } from './network/p2p-gossip.js';
 import { DAISwarm } from './network/swarm.js';
+import { PairingRelay, PAIRING_LIMITS } from './network/pairing-relay.js';
 import { validateResultWork } from './validation/result-validator.js';
 import {
   calculateBlockRewards,
@@ -424,6 +425,8 @@ export class DAIMinerNode {
     // Direct peer transport. Started in start() once the identity wallet is
     // loaded, since the swarm identity is derived from the signing key.
     this.swarm = null;
+    // Browser↔signer rendezvous. In-memory and bounded; nothing is persisted.
+    this.pairingRelay = new PairingRelay();
     this.chainStore = new ChainStore();
     const msCfg = this.config.meilisearch || {};
     const msHost = resolveMeilisearchUrl(msCfg);
@@ -3586,6 +3589,62 @@ export class DAIMinerNode {
         }
         res.statusCode = 404;
         return res.end(JSON.stringify({ error: 'No profile cached for this address' }));
+      }
+
+      // ── Pairing relay (/api/pair/*) ───────────────────────────────────────────
+      // Rendezvous for a browser that holds no signing key and the wallet or node
+      // that does. Payloads are sealed to the session key, so this node only ever
+      // moves opaque bytes. See src/network/pairing-relay.js.
+      const pairMatch = url.pathname.match(/^\/api\/pair\/([^/]+)$/);
+      if (pairMatch) {
+        const topic = pairMatch[1];
+
+        if (req.method === 'GET') {
+          const since = Number(url.searchParams.get('since') || 0) || 0;
+          const wait = Number(url.searchParams.get('wait') || 25000) || 0;
+          // A side never receives its own writes back, so both ends can poll the
+          // same topic without echoing themselves.
+          const as = url.searchParams.get('as') === 'signer' ? 'signer' : 'browser';
+          this.pairingRelay.wait(topic, since, wait, as).then(result => {
+            if (result.error) { res.statusCode = 400; return res.end(JSON.stringify(result)); }
+            res.end(JSON.stringify(result));
+          }).catch(e => { res.statusCode = 500; res.end(JSON.stringify({ error: e.message })); });
+          return;
+        }
+
+        if (req.method === 'POST') {
+          let raw = '';
+          let tooBig = false;
+          req.on('data', c => {
+            raw += c;
+            // Reject oversized bodies while streaming — waiting for 'end' would
+            // let an unauthenticated caller buffer unbounded memory first.
+            if (raw.length > PAIRING_LIMITS.MAX_PAYLOAD_BYTES * 2) {
+              tooBig = true;
+              res.statusCode = 413;
+              res.end(JSON.stringify({ error: 'payload too large' }));
+              req.destroy();
+            }
+          });
+          req.on('end', () => {
+            if (tooBig) return;
+            try {
+              const { from, payload, close } = JSON.parse(raw || '{}');
+              if (close) return res.end(JSON.stringify(this.pairingRelay.close(topic)));
+              const result = this.pairingRelay.publish(topic, from, payload);
+              if (result.error) { res.statusCode = 400; return res.end(JSON.stringify(result)); }
+              res.end(JSON.stringify(result));
+            } catch (e) {
+              res.statusCode = 400;
+              res.end(JSON.stringify({ error: e.message }));
+            }
+          });
+          return;
+        }
+      }
+
+      if (req.method === 'GET' && url.pathname === '/api/pair-stats') {
+        return res.end(JSON.stringify(this.pairingRelay.stats()));
       }
 
       // ── P2P Exchange API (/api/p2p/*) ─────────────────────────────────────────

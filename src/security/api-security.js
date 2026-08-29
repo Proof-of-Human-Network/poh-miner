@@ -7,13 +7,26 @@ const LOCAL_ADDRS = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1']);
 /** POST paths reachable from remote peers (everything else is localhost-only). */
 const PUBLIC_POST_PATHS = new Set(['/gossip']);
 
+/**
+ * Prefixes reachable from remote peers. Used where the path carries an id, so an
+ * exact-match Set cannot express it.
+ *
+ * /api/pair/ is the browser↔signer rendezvous. It is intentionally open: the
+ * whole point is to bootstrap a session for a caller that has no identity yet,
+ * and it carries only payloads sealed to a session key the relay cannot read.
+ * Abuse is bounded inside PairingRelay (topic/message/size/TTL caps) rather than
+ * by an identity check that cannot exist at this stage of the handshake.
+ */
+const PUBLIC_POST_PREFIXES = ['/api/pair/'];
+
 export function isLocalRequest(req) {
   const remote = req.socket?.remoteAddress || '';
   return LOCAL_ADDRS.has(remote);
 }
 
 export function isPublicPostPath(pathname) {
-  return PUBLIC_POST_PATHS.has(pathname);
+  if (PUBLIC_POST_PATHS.has(pathname)) return true;
+  return PUBLIC_POST_PREFIXES.some(prefix => pathname.startsWith(prefix));
 }
 
 export function isStateChangingMethod(method) {
