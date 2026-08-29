@@ -41,12 +41,23 @@ export const STABLE_TICKERS = [
   'aiEGP', 'aiIQD', 'aiAOA', 'aiCUP', 'aiLYD', 'aiSDG', 'aiIRR',
 ];
 
-// ── Genesis supply (owner fills in before executing the reset) ───────────────
+// ── Genesis supply ──────────────────────────────────────────────────────────
 // The treasury receives the entire initial stablecoin supply in the migration
-// genesis. Placeholder values: 1,000,000.00 of each (2-decimal raw units).
-export const TREASURY_ADDRESS = 'dai_TODO_OWNER_TREASURY';
+// genesis. Each currency is minted at the same USD-equivalent value rather than
+// the same nominal amount, so a unit of every stablecoin is backed by the same
+// notional size at launch.
+//
+// The basis is 185,185 USD per currency (500,000 GEL at ~2.70 GEL/USD). GEL is
+// a unit of account for sizing this mint only — it is not an on-chain asset.
+//
+// Derived from fxPerUSD at module load, but genesis identity does NOT depend on
+// this constant: buildMigrationGenesis bakes the resulting amounts into the
+// snapshot, and the snapshot fixes the genesis hash. Editing fxPerUSD later
+// changes gas pricing, never the supply of an already-launched chain.
+export const TREASURY_ADDRESS = 'dai977927faa8e24e3c7fad041d4468cacdd8c365c8';
+export const GENESIS_USD_PER_STABLE = 185_185;
 export const INITIAL_STABLE_SUPPLY_RAW = Object.fromEntries(
-  STABLE_TICKERS.map(t => [t, 100_000_000]),   // 1,000,000.00 in raw (×100)
+  STABLE_TICKERS.map(t => [t, Math.round(GENESIS_USD_PER_STABLE * ASSETS[t].fxPerUSD * 100)]),
 );
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
