@@ -19,6 +19,7 @@ import { computeBoardJobPaymentHash } from './jobs/board-payment.js';
 import { detectMyCountry, getCountryProximityMultiplier } from './jobs/geo.js';
 import { getMethodsManager } from './signals/methods-manager.js';
 import { P2PGossip } from './network/p2p-gossip.js';
+import { DAISwarm } from './network/swarm.js';
 import { validateResultWork } from './validation/result-validator.js';
 import {
   calculateBlockRewards,
@@ -415,8 +416,14 @@ export class DAIMinerNode {
       this.config.wallet || 'unknown-miner',
       () => this.peers || [],   // live peer list — updated by discoverAndRegisterWithBootnodes
       () => this.config.bootnodes || DEFAULT_BOOTNODES,
-      { getIdentityWallet: () => this.identityWallet },
+      {
+        getIdentityWallet: () => this.identityWallet,
+        getSwarm: () => this.swarm,
+      },
     );
+    // Direct peer transport. Started in start() once the identity wallet is
+    // loaded, since the swarm identity is derived from the signing key.
+    this.swarm = null;
     this.chainStore = new ChainStore();
     const msCfg = this.config.meilisearch || {};
     const msHost = resolveMeilisearchUrl(msCfg);
@@ -4916,6 +4923,57 @@ export class DAIMinerNode {
    * so overlap with the inbox-poll fallback or with multiple relays is harmless.
    * One long-lived reader per relay, with exponential-backoff reconnect.
    */
+  /**
+   * Direct peer-to-peer transport (Hyperswarm/HyperDHT).
+   *
+   * Deliberately not gated on bootnodes: the point of this transport is that two
+   * NAT'd nodes anywhere in the world reach each other directly, with no server
+   * in the data path. Failure is never fatal — the HTTP relay below still works,
+   * so a node with no DHT reachability degrades to the old behaviour instead of
+   * failing to start.
+   */
+  async _startSwarm() {
+    if (this.swarm) return;
+    if (this.config.swarm === false || process.env.DAI_NO_SWARM === '1') {
+      console.log('[DAI-Miner] Swarm transport disabled by config — using bootnode relay only.');
+      return;
+    }
+    const signingPrivateKey = this.identityWallet?.signingPrivateKey;
+    if (!signingPrivateKey) {
+      console.warn('[DAI-Miner] No signing key yet — swarm transport not started.');
+      return;
+    }
+    try {
+      this.swarm = new DAISwarm({
+        signingPrivateKey,
+        networkId: this.config.networkId || 'dai-mainnet',
+        bootstrap: this.config.dhtBootstrap || null,
+        // Envelopes arriving over the swarm go through exactly the same
+        // verify/dedupe path as the HTTP ones, so the two transports overlap
+        // harmlessly while the network upgrades.
+        onEnvelope: (envelope) => {
+          Promise.resolve(this.gossip.receive(envelope)).catch(() => {});
+        },
+      });
+      await this.swarm.start();
+      // Leave the DHT cleanly on shutdown. Follows the same per-subsystem signal
+      // pattern as the Kubo and Meilisearch daemons above; the existing SIGINT
+      // handler calls process.exit, so this is best-effort rather than awaited.
+      const stopSwarm = () => { try { this.swarm?.destroy(); } catch { /* */ } };
+      process.on('SIGINT', stopSwarm);
+      process.on('SIGTERM', stopSwarm);
+    } catch (e) {
+      console.warn(`[DAI-Miner] Swarm transport unavailable (${e.message}) — falling back to bootnode relay.`);
+      this.swarm = null;
+    }
+  }
+
+  async _stopSwarm() {
+    if (!this.swarm) return;
+    try { await this.swarm.destroy(); } catch { /* already down */ }
+    this.swarm = null;
+  }
+
   _startRelayStream() {
     if (this._relayStreams) return;
     if (!this.identityWallet || typeof this.identityWallet.sign !== 'function') return;
@@ -5315,6 +5373,11 @@ export class DAIMinerNode {
     } else {
       console.log('[DAI-Miner] No bootnodes configured — running in local/dev mode only');
     }
+
+    // Direct peer-to-peer transport — intentionally OUTSIDE the bootnode gate.
+    // A node with no bootnodes configured can still find peers and sync via the
+    // DHT; that independence is the entire point of this transport.
+    await this._startSwarm();
 
     // Drop in-progress work when another miner wins a job
     this.gossip.subscribe('new-result', ({ requestId }) => {

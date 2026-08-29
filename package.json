@@ -82,6 +82,7 @@
     "axios": "^1.18.0",
     "ethers": "^6.17.0",
     "hyparquet": "^1.26.1",
+    "hyperswarm": "4.17.0",
     "meilisearch": "^0.41.0",
     "qrcode": "^1.5.4"
   },

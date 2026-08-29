@@ -44,6 +44,11 @@ export class P2PGossip {
     this.nodeId = nodeId;
     this.getPeers = getPeers;          // () => [{ host, walletApiPort, wallet }]
     this.getBootnodes = getBootnodes;  // () => string[]  e.g. ['https://miner.iamai.kg']
+    // Optional Hyperswarm transport. When present every envelope also goes out
+    // over direct peer connections, which is the only path that reaches a NAT'd
+    // node without relaying through a bootnode. Both transports can run at once:
+    // receive() dedupes by envelope id, so a duplicate delivery is a no-op.
+    this.getSwarm = options.getSwarm || null;
     this.getIdentityWallet = options.getIdentityWallet || null;
     this.requireSignatures = options.requireSignatures ?? !!this.getIdentityWallet;
     this.listeners = new Map();        // topic → [handler]
@@ -130,6 +135,11 @@ export class P2PGossip {
   }
 
   async _broadcast(envelope, skipWallet) {
+    // Direct peer-to-peer first: works for NAT'd nodes, and costs the bootnode
+    // nothing. The HTTP fan-out below stays until every node has upgraded.
+    try { this.getSwarm?.()?.broadcast(envelope); }
+    catch { /* transport down — HTTP below still carries it */ }
+
     const peers = (this.getPeers?.() || []).filter(p =>
       p.reachable !== false &&   // followers (NAT'd) can't be dialed — they receive via the bootnode relay inbox
       p.wallet !== skipWallet &&
