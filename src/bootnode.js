@@ -368,8 +368,12 @@ function schedulePeerDirectoryPin() {
     _pinDebounce = null;
     try {
       pruneStalePeers();
+      // Only dialable peers belong in the directory: its whole purpose is to let a
+      // node sync when every bootnode is down, and a follower's host is either a
+      // NAT'd address or the literal 'localhost' — never a usable dial target.
       const peerList = Array.from(peers.values())
         .filter(p => p.signingPublicKey && Wallet.isAddressBoundToSigningKey(p.wallet, p.signingPublicKey))
+        .filter(p => p.reachable !== false && isPublicPeerHost(p.host))
         .map(p => ({
         wallet:        p.wallet,
         host:          p.host,
@@ -377,6 +381,7 @@ function schedulePeerDirectoryPin() {
         p2pPort:       p.p2pPort || null,
         region:        p.region  || null,
         verified:      true,
+        reachable:     true,
         methodsHash:   p.methodsHash || null,
         ts:            p.lastSeen,
       }));

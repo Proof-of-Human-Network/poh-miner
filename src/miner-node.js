@@ -4326,6 +4326,10 @@ export class DAIMinerNode {
         const ipfsPeers  = await this.ipfsSync.fetchPeerDirectory(walletAddr);
         const known = new Set(candidates.map(c => c.base));
         for (const p of ipfsPeers) {
+          // Directories pinned by older bootnodes carry followers too, with a
+          // NAT'd host or the literal 'localhost'. Never dial those.
+          if (p.reachable === false) continue;
+          if (!p.host || p.host === 'localhost' || p.host === '127.0.0.1') continue;
           const base = `http://${p.host}:${p.walletApiPort}`;
           if (!known.has(base)) {
             known.add(base);
