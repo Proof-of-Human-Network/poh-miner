@@ -25,8 +25,10 @@
     .glass { background: rgba(255,255,255,0.86); border: 1px solid var(--line); backdrop-filter: blur(20px); }
     .neon { color: #16a34a; }
     html { font-size: 150%; }
-    @media (max-width: 639px)  { html { font-size: 100%; } }
-    @media (max-width: 767px)  { html { font-size: 110%; } }
+    /* Widest-first: both match on a phone, and the later rule wins, so the
+       narrower breakpoint has to come last or it never applies. */
+    @media (max-width: 767px) { html { font-size: 110%; } }
+    @media (max-width: 639px) { html { font-size: 100%; } }
     .text-xs, .text-\[10px\], .text-\[15px\] { font-size: 0.92rem !important; }
 
     /* Scroll fade-in */

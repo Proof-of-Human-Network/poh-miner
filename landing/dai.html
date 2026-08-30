@@ -30,8 +30,10 @@
 
     /* === GLOBAL +50% FONT SIZE SCALING === */
     html { font-size: 150%; }
-    @media (max-width: 639px)  { html { font-size: 100%; } }
-    @media (max-width: 767px)  { html { font-size: 110%; } }
+    /* Widest-first: both match on a phone, and the later rule wins, so the
+       narrower breakpoint has to come last or it never applies. */
+    @media (max-width: 767px) { html { font-size: 110%; } }
+    @media (max-width: 639px) { html { font-size: 100%; } }
     .text-xs, .text-\[10px\], .text-\[15px\] { font-size: 0.92rem !important; }
     .footer-text { font-size: 1.25rem !important; }
 

@@ -19,8 +19,10 @@
     .neon { color: #16a34a; }
     .muted { color: var(--muted); }
     html { font-size: 150%; }
-    @media (max-width: 639px) { html { font-size: 100%; } }
+    /* Widest-first: both match on a phone, and the later rule wins, so the
+       narrower breakpoint has to come last or it never applies. */
     @media (max-width: 767px) { html { font-size: 110%; } }
+    @media (max-width: 639px) { html { font-size: 100%; } }
     .footer-text { font-size: 1.25rem !important; }
 
     .nav-links { display: none; }

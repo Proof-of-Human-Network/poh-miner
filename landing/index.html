@@ -24,8 +24,10 @@
     .section-alt { background: #eceee8; }
 
     html { font-size: 150%; }
-    @media (max-width: 639px)  { html { font-size: 100%; } }
+    /* Widest-first: both match on a phone, and the later rule wins, so the
+       narrower breakpoint has to come last or it never applies. */
     @media (max-width: 767px)  { html { font-size: 110%; } }
+    @media (max-width: 639px)  { html { font-size: 100%; } }
     .text-xs, .text-\[10px\], .text-\[15px\] { font-size: 0.92rem !important; }
     .footer-text { font-size: 1.25rem !important; }
 
@@ -218,7 +220,7 @@
   <footer class="border-t border-black/10 py-10">
     <div class="max-w-6xl mx-auto px-4 sm:px-8 flex flex-col md:flex-row items-center justify-between gap-4 muted footer-text">
       <span data-i18n="idx.foot.tag">DAI — Modular AI network. Each node. Each skill. Each contribution.</span>
-      <div class="flex items-center gap-6">
+      <div class="flex flex-wrap justify-center items-center gap-x-6 gap-y-2">
         <a href="miner.html" class="hover:text-[#16a34a] transition" data-i18n="idx.foot.miner">DAI Miner</a>
         <a href="wallet/" class="hover:text-[#16a34a] transition" data-i18n="nav.wallet">Wallet</a>
         <a href="explorer/" class="hover:text-[#16a34a] transition" data-i18n="nav.explorer">Explorer</a>
