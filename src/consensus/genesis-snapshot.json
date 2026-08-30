@@ -1,19 +1,20 @@
 {
   "version": 1,
-  "sourceHeight": 10034,
-  "tipHeight": 10134,
-  "finalizedHeight": 10034,
-  "snapshotHash": "7439d3931866de0d062e643634f73f035f2a65a267b0861508955882c0b30305",
-  "totalMinted": 1371900000000,
-  "coinbaseDust": 12108925000,
+  "sourceHeight": 499,
+  "tipHeight": 499,
+  "finalizedHeight": 399,
+  "snapshotHash": "de421588e78a6aa09bbd78fc06922208d407a4eee43de77bd7ed5a9d763111a2",
+  "totalMinted": 1384741075000,
+  "coinbaseDust": 0,
   "excludedBalance": 0,
   "excluded": [
     "daiaudit000000000000000000000000000000000001",
     "dai_p2p_escrow"
   ],
-  "sumBalances": 1359791075000,
-  "addressCount": 36,
-  "generatedAt": "2026-08-30T06:23:08.000Z",
+  "sumBalances": 1384741075000,
+  "addressCount": 38,
+  "genesisTimestamp": 1788102390000,
+  "generatedAt": "2026-08-30T15:06:30.195Z",
   "balances": {
     "dai11eedf721d3068feabafddfacb734a7cf0469ea0": {
       "balance": 10445000000,
@@ -40,7 +41,7 @@
       "nonce": 0
     },
     "dai3d459b3bc9c48a6695cae6b2ea4bc8f454bf00da": {
-      "balance": 296894825000,
+      "balance": 321829825000,
       "nonce": 2
     },
     "dai40436108338303d415d89277bfa1768db88a8ebb": {
@@ -67,12 +68,20 @@
       "balance": 120000000,
       "nonce": 0
     },
+    "dai519905e0d26425f679796935988163e27698bd83": {
+      "balance": 14000000,
+      "nonce": 1
+    },
     "dai541f40a648d989f229318247a586673bc9994866": {
       "balance": 3300000000,
       "nonce": 0
     },
     "dai57e7d3560c95eff5954252228eaba17cb5700f34": {
       "balance": 2695000000,
+      "nonce": 0
+    },
+    "dai58287d1daf23a7396421689827a8e6f3e7671fd3": {
+      "balance": 1000000,
       "nonce": 0
     },
     "dai59212ce512fbf507484f66e416a26869a4d42a8b": {
@@ -175,7 +184,5 @@
       "balance": 2000000000,
       "nonce": 0
     }
-  },
-  "genesisTimestamp": 1788048000000,
-  "note": "Balance migration at source height 10034 \u2014 36 addresses carried over, treasury seeded with 14 stablecoins at 185,185 USD equivalent each."
+  }
 }

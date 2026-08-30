@@ -3,7 +3,7 @@
  * Allowlisted hosts only — builtins never take a free-form URL from the model.
  */
 
-export const UA = 'dai-miner/0.4.26 (+https://iamai.kg)';
+export const UA = 'dai-miner/0.4.27 (+https://iamai.kg)';
 export const TIMEOUT_MS = 12_000;
 export const MAX_CHARS = 24_000;
 
