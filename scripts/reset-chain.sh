@@ -19,6 +19,31 @@
 
 set -euo pipefail
 
+# ─────────────────────────────────────────────────────────────────────────────
+# DO NOT USE. Superseded by scripts/genesis/reset-node.sh.
+#
+# This script `rm -rf`s /root/.dai-miner and /root/.dai-bootnode wholesale. It
+# tars the keys to a backup first but NEVER RESTORES THEM, so the node comes
+# back with a brand-new identity and every migrated balance becomes unspendable
+# -- the genesis snapshot preserves balances by address, and the keys to those
+# addresses would be sitting in a tarball.
+#
+# Its pm2 names and paths are also stale: it targets dai-bootnode/dai-miner at
+# /root/dai-miner, while hk runs poh-bootnode/poh-miner at /root/poh-miner.
+#
+# reset-node.sh does the same job surgically: dry-run by default, backs up each
+# target, and explicitly preserves wallets/, .wallet-key and config.json.
+#
+# Note --new-genesis here also sets balances={}, which is a FRESH chain, not the
+# balance migration. For a migration use:
+#   node scripts/genesis/export-snapshot.mjs --data-dir <dir> --mint-stables
+# ─────────────────────────────────────────────────────────────────────────────
+if [ "${I_UNDERSTAND_THIS_DESTROYS_WALLET_KEYS:-}" != "yes" ]; then
+  echo "refusing to run: this script destroys wallet keys (see header)." >&2
+  echo "use scripts/genesis/reset-node.sh instead." >&2
+  exit 1
+fi
+
 HK=hk
 NODE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 SNAP="$NODE_DIR/src/consensus/genesis-snapshot.json"
