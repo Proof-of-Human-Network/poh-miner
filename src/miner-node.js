@@ -35,6 +35,7 @@ import {
 import { computeChainWork, compareChainWork, getTipChainWork } from './consensus/chain-selection.js';
 import { createGenesisBlock, buildMigrationGenesis, loadSnapshot, defaultMigrationSnapshot, EXPECTED_GENESIS_HASH } from './consensus/genesis.js';
 import { blockId, blocksOnTipPath, selectPeerBlockOnTip } from './consensus/chain-path.js';
+import { TxIndex } from './consensus/tx-index.js';
 import { mineBlockThreaded, getNextDifficulty, MIN_BLOCK_SPACING_MS } from './consensus/pow.js';
 import {
   validateBlock,
@@ -441,6 +442,9 @@ export class DAIMinerNode {
     this.walletManager = new WalletManager();
     this.txMempool = new TxMempool(this.walletManager, () => this.txLedger);
     this.txLedger = null; // canonical coinbase+tx replay; rebuilt from chain
+    // Chain-derived transaction history. Rebuilt with the ledger, so every node
+    // reports the same history for an address rather than only what it submitted.
+    this.txIndex = new TxIndex();
     this.p2pOrderStore = new OrderStore();
     this.p2pEscrow = new EscrowManager();
     this.p2pReferral = new ReferralStore();
@@ -479,6 +483,7 @@ export class DAIMinerNode {
     // Persisted to disk so a restart doesn't drop pending compute rewards before
     // they're mined (workers still get paid after the node comes back).
     this._pendingResultsPath = path.join(os.homedir(), '.dai-miner', 'chain', 'pending-results.json');
+    this._pendingTransitionsPath = path.join(os.homedir(), '.dai-miner', 'chain', 'pending-transitions.json');
     this.pendingValidResults = this._loadPendingResults();
 
     // Submission history for pattern detection and strike system (software protection)
@@ -554,7 +559,12 @@ export class DAIMinerNode {
     this.brainSync = null; // populated in _initBrainSync()
 
     // Brain mutations buffered since last block — flushed into block.stateTransitions at mining time
-    this.pendingBrainTransitions = [];
+    // Durable, not just in-memory. A P2P escrow lock or release updates balances
+    // immediately but only becomes real once a block carries its transition; the
+    // ledger is replayed from the chain, so a transition lost to a restart makes
+    // the balance change silently revert. That is how a completed trade could
+    // pay out in memory and leave the taker with nothing after the next rebuild.
+    this.pendingBrainTransitions = this._loadPendingTransitions();
 
     // Skill staking: skillId → { total: number (μDAI), stakers: Map(address → amount) }
     this._skillStakes = new Map();
@@ -1402,20 +1412,47 @@ export class DAIMinerNode {
 
       if (url.pathname === '/api/wallet/transactions') {
         const address = url.searchParams.get('address');
-        const history = (this.submissionHistory || [])
-          .filter(tx => {
-            if (!address) return true;
-            // Support both mining submissions (have .address) and send/transfer records (have from/to)
-            if (tx.address === address) return true;
-            if (tx.from === address || tx.to === address) return true;
-            return false;
-          })
-          .slice(-50);
+        const limit = Math.min(500, Math.max(1, parseInt(url.searchParams.get('limit') || '50', 10) || 50));
+        if (!address) { res.statusCode = 400; return res.end(JSON.stringify({ error: 'address required' })); }
 
-        return res.end(JSON.stringify({
-          address,
-          transactions: history
-        }));
+        // Read from the chain-derived index, not this node's own submissions.
+        // A recipient never submits anything, so the old source could only ever
+        // show a transfer to the sender — the receiving node reported an empty
+        // history for a transfer already reflected in its balance.
+        const mined = this.txIndex.forAddress(address, limit);
+
+        // Anything still in the mempool is the local view by nature; surface it
+        // as pending so a just-sent transfer does not vanish until it is mined.
+        const pending = (this.txMempool?.getPending?.() || [])
+          .filter(tx => tx.from === address || tx.to === address)
+          .map(tx => ({
+            id: tx.txHash || null, type: 'transfer', from: tx.from, to: tx.to,
+            amount: tx.amount, fee: tx.fee || 0, currency: tx.currency || 'DAI',
+            memo: tx.memo || '', timestamp: tx.timestamp, blockHeight: null, status: 'pending',
+          }));
+
+        return res.end(JSON.stringify({ address, transactions: [...pending, ...mined] }));
+      }
+
+      // GET /api/tx/<id> — one transaction by hash, straight from the index.
+      // Coinbase credits have no hash, so they carry a synthetic stable id.
+      const txLookup = url.pathname.match(/^\/api\/tx\/([A-Za-z0-9_-]{1,128})$/);
+      if (req.method === 'GET' && txLookup) {
+        const entry = this.txIndex.get(txLookup[1]);
+        if (!entry) {
+          const pending = (this.txMempool?.getPending?.() || []).find(t => t.txHash === txLookup[1]);
+          if (!pending) { res.statusCode = 404; return res.end(JSON.stringify({ error: 'transaction not found' })); }
+          return res.end(JSON.stringify({
+            id: pending.txHash, type: 'transfer', from: pending.from, to: pending.to,
+            amount: pending.amount, fee: pending.fee || 0, currency: pending.currency || 'DAI',
+            memo: pending.memo || '', timestamp: pending.timestamp, blockHeight: null, status: 'pending',
+          }));
+        }
+        return res.end(JSON.stringify(entry));
+      }
+
+      if (req.method === 'GET' && url.pathname === '/api/tx-stats') {
+        return res.end(JSON.stringify(this.txIndex.stats()));
       }
 
       // Public job history for a wallet (chain + local cache)
@@ -3821,6 +3858,7 @@ export class DAIMinerNode {
           this.p2pOrderStore._patchOrder(result.order.id, { escrowLocked: result.order.escrowLocked });
           this._appliedP2PIds.add(`order-${result.order.id}`);
           this.pendingBrainTransitions.push({ type: 'p2p-order-created', ...result.order });
+          this._persistPendingTransitions();
           this.gossip.publish('p2p-order', result.order).catch(() => {});
           return res.end(JSON.stringify(result));
         }).catch(e => { res.statusCode = 400; res.end(JSON.stringify({ error: e.message })); });
@@ -3858,6 +3896,7 @@ export class DAIMinerNode {
             // Refund escrow for buy orders where taker locked (handled in trade cancel)
             this._appliedP2PIds.add(`order-cancel-${orderId}`);
             this.pendingBrainTransitions.push({ type: 'p2p-order-cancelled', orderId, maker: ownerAddress, side: orderSide, escrowLocked: wasEscrowLocked, daiAmount: orderDAIAmount, ...(cancelBase !== 'DAI' ? { baseAsset: cancelBase } : {}), updatedAt: Date.now() });
+            this._persistPendingTransitions();
             this.gossip.publish('p2p-order', result.order).catch(() => {});
             return res.end(JSON.stringify(result));
           }).catch(e => { res.statusCode = 400; res.end(JSON.stringify({ error: e.message })); });
@@ -3938,6 +3977,7 @@ export class DAIMinerNode {
 
             this._appliedP2PIds.add(`trade-${result.trade.id}`);
             this.pendingBrainTransitions.push({ type: 'p2p-trade-created', ...result.trade, orderSide: order.side, ...(baseAsset !== 'DAI' ? { baseAsset } : {}) });
+            this._persistPendingTransitions();
             this.gossip.publish('p2p-order', this.p2pOrderStore.getOrder(orderId)).catch(() => {});
             this.gossip.publish('p2p-trade', result.trade).catch(() => {});
             return res.end(JSON.stringify(result));
@@ -4004,6 +4044,7 @@ export class DAIMinerNode {
             if (result.error) { res.statusCode = 400; return res.end(JSON.stringify(result)); }
             this._appliedP2PIds.add(`trade-${tradeId}-payment-sent`);
             this.pendingBrainTransitions.push({ type: 'p2p-trade-payment-sent', tradeId, updatedAt: Date.now() });
+            this._persistPendingTransitions();
             this.gossip.publish('p2p-trade', result.trade).catch(() => {});
             return res.end(JSON.stringify(result));
           }
@@ -4032,6 +4073,7 @@ export class DAIMinerNode {
             if (result.error) { res.statusCode = 400; return res.end(JSON.stringify(result)); }
             this._appliedP2PIds.add(`trade-${tradeId}-release`);
             this.pendingBrainTransitions.push({ type: 'p2p-trade-release', tradeId, recipient, daiAmount: releaseAmount, referrer: referrer || null, referralFee, ...(relBase !== 'DAI' ? { baseAsset: relBase } : {}), updatedAt: Date.now() });
+            this._persistPendingTransitions();
             this.gossip.publish('p2p-trade', result.trade).catch(() => {});
             this.gossip.publish('p2p-order', this.p2pOrderStore.getOrder(trade.orderId)).catch(() => {});
             return res.end(JSON.stringify({ ...result, referralFee }));
@@ -4055,6 +4097,7 @@ export class DAIMinerNode {
             if (result.error) { res.statusCode = 400; return res.end(JSON.stringify(result)); }
             this._appliedP2PIds.add(`trade-${tradeId}-cancel`);
             this.pendingBrainTransitions.push({ type: 'p2p-trade-cancel', tradeId, locker, daiAmount: lockAmt, escrowLocked: hadEscrow, ...(cnclBase !== 'DAI' ? { baseAsset: cnclBase } : {}), updatedAt: Date.now() });
+            this._persistPendingTransitions();
             this.gossip.publish('p2p-trade', result.trade).catch(() => {});
             this.gossip.publish('p2p-order', this.p2pOrderStore.getOrder(trade.orderId)).catch(() => {});
             return res.end(JSON.stringify(result));
@@ -4067,6 +4110,7 @@ export class DAIMinerNode {
             if (result.error) { res.statusCode = 400; return res.end(JSON.stringify(result)); }
             this._appliedP2PIds.add(`trade-${tradeId}-dispute`);
             this.pendingBrainTransitions.push({ type: 'p2p-trade-dispute', tradeId, reason: signedReason || '', updatedAt: Date.now() });
+            this._persistPendingTransitions();
             this.gossip.publish('p2p-trade', result.trade).catch(() => {});
             return res.end(JSON.stringify(result));
           }
@@ -4629,6 +4673,7 @@ export class DAIMinerNode {
               }
               this._applyBlockState(block);
               this.chain.push(block);
+              this.txIndex.addBlock(block);
               this.chainStore.saveBlock(block);
               this._advanceTxLedger(block);
               this.currentDifficulty = getNextDifficulty(this.chain);
@@ -5988,6 +6033,7 @@ export class DAIMinerNode {
 
     const ledger = await replayChainLedgerAsync(this.chain, { applyP2P: true });
     this.txLedger = ledger;
+    this.txIndex.rebuild(this.chain);
     this.txMempool.setSpentTxHashes(ledger.spentTxHashes);
 
     const balances = ledger.balances;
@@ -6146,6 +6192,7 @@ export class DAIMinerNode {
     this._abortMining();
 
     this.chain.push(block);
+    this.txIndex.addBlock(block);
     this._advanceTxLedger(block);
     this.chainStore.saveBlock(block);
     this._indexBlockInSearch(block);
@@ -7226,6 +7273,35 @@ export class DAIMinerNode {
     this._applySettlement(settled);
     this.pendingBrainTransitions.push(settled);
     return true;
+  }
+
+  // ── Durable pending-transition queue ────────────────────────────────────────
+  // Mirrors the pending-reward queue below. State transitions carry the on-chain
+  // half of P2P escrow: without them the ledger replay never sees the movement.
+  _loadPendingTransitions() {
+    try {
+      if (!fs.existsSync(this._pendingTransitionsPath)) return [];
+      const raw = JSON.parse(fs.readFileSync(this._pendingTransitionsPath, 'utf8'));
+      if (!Array.isArray(raw)) return [];
+      const out = raw.filter(t => t && typeof t.type === 'string');
+      if (out.length) console.log(`[DAI-Miner] Restored ${out.length} pending state transition(s) from disk`);
+      return out;
+    } catch (e) {
+      console.warn('[DAI-Miner] Could not load pending-transitions queue:', e.message);
+      return [];
+    }
+  }
+
+  _persistPendingTransitions() {
+    try {
+      fs.mkdirSync(path.dirname(this._pendingTransitionsPath), { recursive: true });
+      const tmp = this._pendingTransitionsPath + '.tmp';
+      // Write-then-rename so a crash mid-write cannot leave a truncated queue.
+      fs.writeFileSync(tmp, JSON.stringify(this.pendingBrainTransitions));
+      fs.renameSync(tmp, this._pendingTransitionsPath);
+    } catch (e) {
+      console.warn('[DAI-Miner] Could not persist pending-transitions queue:', e.message);
+    }
   }
 
   // ── Durable pending-reward queue ────────────────────────────────────────────
@@ -8387,6 +8463,7 @@ export class DAIMinerNode {
     if (newBlock.meetsDifficultySync()) {
       // PoW succeeded — now safe to consume the transitions we snapshotted above.
       this.pendingBrainTransitions.splice(0, brainTransitions.filter(t => t.type !== 'brain-state-root').length);
+      this._persistPendingTransitions();   // the queue shrank — record that before a restart can replay them
 
       // Sign the block with our identity key after PoW is solved
       if (this.identityWallet) newBlock.sign(this.identityWallet);
@@ -8401,6 +8478,7 @@ export class DAIMinerNode {
       }
 
       this.chain.push(newBlock);
+      this.txIndex.addBlock(newBlock);
       this._advanceTxLedger(newBlock);
       this.chainStore.saveBlock(newBlock);
       console.log(`[DAI-Miner] Produced block #${newBlock.height} (nonce ${newBlock.nonce})`);
