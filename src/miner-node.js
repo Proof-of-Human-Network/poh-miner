@@ -7179,6 +7179,13 @@ export class DAIMinerNode {
   }
 
   _enqueueJob(job) {
+    // A job can arrive more than once — announced locally and again over gossip.
+    // The queue was deduped but the active slot was not, so the second arrival
+    // queued the job behind itself: "queued (slot busy with <its own id>)". The
+    // drain guards usually caught it afterwards, but only once the result was
+    // marked done, so it could still burn a slot or re-run the work.
+    if (this._activeJobId === job.id) return;
+
     if (this._activeJobId) {
       if (!this._pendingJobQueue.some(j => j.id === job.id)) {
         this._pendingJobQueue.push(job);

@@ -83,13 +83,15 @@ export function planTaskCascade(message, ctx = {}) {
     const cardHits = searchCards(catalogCards, segment, 3);
     if (cardHits.length) {
       for (const c of cardHits.slice(0, 2)) {
+        const cardArgs = buildMcpArgs(c, segment);
+        if (!cardArgs) continue;   // nothing fillable — calling it would only be rejected
         stage.push({
           kind: 'mcp',
           id: `mcp:${c.mcpId}__${c.tool}`,
           server: c.mcpId,
           tool: c.qualified || `${c.mcpId}__${c.tool}`,
           bareTool: c.tool,
-          arguments: { query: segment, message: segment, q: segment },
+          arguments: cardArgs,
           segment,
         });
       }
@@ -175,13 +177,15 @@ export function planTaskCascade(message, ctx = {}) {
       const preferred = tools.find(t =>
         /search|find|list|product|item|price|catalog|query|lookup|get_/i.test(`${t.tool} ${t.description || ''}`)
       ) || tools[0];
+      const toolArgs = buildMcpArgs(preferred, full);
+      if (!toolArgs) continue;   // nothing fillable — calling it would only be rejected
       mcpStage.push({
         kind: 'mcp',
         id: `mcp:${server}__${preferred.tool}`,
         server,
         tool: preferred.name, // already namespaced server__tool
         bareTool: preferred.tool,
-        arguments: { query: full, message: full, q: full },
+        arguments: toolArgs,
         segment: full,
       });
     }
@@ -297,6 +301,42 @@ export async function executeTaskCascade(plan, runners, userMessage) {
   // Aggregate (mixture-of-agents synthesizer)
   const reply = await aggregateResults(userMessage, allResults, priorContext, runners);
   return { reply, results: allResults, stages: plan.stages.length, reason: plan.reason };
+}
+
+/**
+ * Build arguments for a blind MCP call from the user's text.
+ *
+ * Previously every tool got { query, message, q } set to the whole message,
+ * regardless of what it declared. Two failure modes followed. A tool that
+ * declares none of those keys received nothing useful and rejected the call —
+ * onion-search__fetch_pages takes only `indexes`, so it answered "indexes
+ * required" and the work was wasted twice, once on a peer and again on the
+ * local fallback. And spraying three synonyms meant a tool reading any of them
+ * got the same value under a key it never asked for.
+ *
+ * Now only declared properties are filled, one canonical text field rather than
+ * three. A tool with no text-shaped input cannot be called blind at all, so it
+ * is skipped instead of being called and rejected.
+ *
+ * Note this does not make the VALUE correct: a tool whose text field wants a
+ * place name still receives the whole sentence. Extracting the right value needs
+ * the model, which is what the _mcpChat tool loop is for; this only stops calls
+ * that could never have succeeded.
+ */
+const MCP_TEXT_KEYS = ['query', 'q', 'search', 'search_query', 'keyword', 'keywords',
+  'text', 'message', 'prompt', 'input', 'question', 'term'];
+
+export function buildMcpArgs(tool, text) {
+  const props = (tool && tool.inputSchema && tool.inputSchema.properties) || null;
+  // No schema published: fall back to the old generic shape rather than refusing
+  // to call a tool that may well accept it.
+  if (!props || Object.keys(props).length === 0) {
+    return { query: text, message: text, q: text };
+  }
+  for (const key of MCP_TEXT_KEYS) {
+    if (Object.prototype.hasOwnProperty.call(props, key)) return { [key]: text };
+  }
+  return null;   // nothing text-shaped to fill — not callable blind
 }
 
 async function runOneTask(task, runners, userMessage, priorContext) {
