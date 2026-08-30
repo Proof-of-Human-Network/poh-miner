@@ -363,8 +363,13 @@ run();</div>
           </div>
 
           <div class="endpoint-card">
-            <div class="mb-2"><span class="method method-get">GET</span> <code class="text-[#171717]">/api/wallet/transactions?address=&lt;addr&gt;</code></div>
-            <p class="text-[#525252] text-[18px]" data-i18n="doc.chain.transactions">DAI transfer history.</p>
+            <div class="mb-2"><span class="method method-get">GET</span> <code class="text-[#171717]">/api/wallet/transactions?address=&lt;addr&gt;&amp;limit=&lt;n&gt;</code></div>
+            <p class="text-[#525252] text-[18px]" data-i18n="doc.chain.transactions">DAI transfer history, read from the chain — every node returns the same result for an address, and both sender and recipient see a transfer once it is mined. Mempool entries appear first with <code>status: "pending"</code>.</p>
+          </div>
+
+          <div class="endpoint-card">
+            <div class="mb-2"><span class="method method-get">GET</span> <code class="text-[#171717]">/api/tx/&lt;id&gt;</code></div>
+            <p class="text-[#525252] text-[18px]" data-i18n="doc.chain.txbyid">One transaction by hash. Falls back to the mempool before returning 404, so a just-submitted transfer resolves immediately. Mining rewards have no hash of their own and carry a synthetic id of the form <code>coinbase-&lt;height&gt;-&lt;kind&gt;-&lt;address&gt;</code>.</p>
           </div>
 
           <div class="endpoint-card">

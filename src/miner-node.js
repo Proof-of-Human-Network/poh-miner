@@ -1436,8 +1436,15 @@ export class DAIMinerNode {
 
       // GET /api/tx/<id> — one transaction by hash, straight from the index.
       // Coinbase credits have no hash, so they carry a synthetic stable id.
+      //
+      // /api/tx/ is a shared namespace: /api/tx/pending and /api/tx/submit are
+      // named routes defined further down. A bare id pattern matches those too,
+      // and because this handler runs first it silently swallowed
+      // GET /api/tx/pending. Reserved names are excluded so the named routes
+      // keep winning; add to this set when adding another /api/tx/<name> route.
+      const TX_RESERVED = new Set(['pending', 'submit']);
       const txLookup = url.pathname.match(/^\/api\/tx\/([A-Za-z0-9_-]{1,128})$/);
-      if (req.method === 'GET' && txLookup) {
+      if (req.method === 'GET' && txLookup && !TX_RESERVED.has(txLookup[1])) {
         const entry = this.txIndex.get(txLookup[1]);
         if (!entry) {
           const pending = (this.txMempool?.getPending?.() || []).find(t => t.txHash === txLookup[1]);
