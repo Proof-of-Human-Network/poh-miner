@@ -1,30 +1,34 @@
 {
   "version": 1,
-  "sourceHeight": 17347,
-  "tipHeight": 17347,
-  "finalizedHeight": 17247,
-  "snapshotHash": "322d07a5702e2cf4ff4338e908f8844e3effdad331e874dceb935d4b09a2cf64",
-  "totalMinted": 869250000000,
-  "coinbaseDust": 0,
+  "sourceHeight": 10034,
+  "tipHeight": 10134,
+  "finalizedHeight": 10034,
+  "snapshotHash": "7439d3931866de0d062e643634f73f035f2a65a267b0861508955882c0b30305",
+  "totalMinted": 1371900000000,
+  "coinbaseDust": 12108925000,
   "excludedBalance": 0,
   "excluded": [
-    "daiaudit000000000000000000000000000000000001"
+    "daiaudit000000000000000000000000000000000001",
+    "dai_p2p_escrow"
   ],
-  "sumBalances": 869250000000,
-  "addressCount": 24,
-  "genesisTimestamp": 1787461800000,
-  "generatedAt": "2026-08-23T05:08:13.363664Z",
-  "note": "Hard fork 2026-08-23: PoH\u2192DAI, 1 POH = 1 DAI. Chain resets to height 0. Addresses remapped poh{hex}\u2192dai{hex}. Keys unchanged.",
-  "migration": {
-    "fromPrefix": "poh",
-    "toPrefix": "dai",
-    "rate": "1 POH = 1 DAI",
-    "sourceChainHeight": 17347,
-    "sourceSnapshotHash": "4710f263cd8ddc435b9c5ecb981a3804028ba61a96ca8ee1b1f57aab46398f86"
-  },
+  "sumBalances": 1359791075000,
+  "addressCount": 36,
+  "generatedAt": "2026-08-30T06:23:08.000Z",
   "balances": {
     "dai11eedf721d3068feabafddfacb734a7cf0469ea0": {
       "balance": 10445000000,
+      "nonce": 0
+    },
+    "dai17c436407615e23bb980fe9577bcbe8a210871fd": {
+      "balance": 27037500000,
+      "nonce": 0
+    },
+    "dai3099e0100531d9ef1dc50363eadefb67e5fe1489": {
+      "balance": 115000000,
+      "nonce": 0
+    },
+    "dai384d7936c860b1517cfd58b96d73512c0ab01422": {
+      "balance": 1500000000,
       "nonce": 0
     },
     "dai392533e5ff9742e2eeefd4d660fde054564c88db": {
@@ -36,15 +40,23 @@
       "nonce": 0
     },
     "dai3d459b3bc9c48a6695cae6b2ea4bc8f454bf00da": {
-      "balance": 45000000,
-      "nonce": 0
+      "balance": 296894825000,
+      "nonce": 2
     },
     "dai40436108338303d415d89277bfa1768db88a8ebb": {
       "balance": 543185000000,
       "nonce": 3
     },
+    "dai477959dfb482cb7881d99be09f7cdd069446d4d2": {
+      "balance": 43085000000,
+      "nonce": 0
+    },
     "dai47d4fdb0fdc110d3d037cfcae8832cf2bde1e8f1": {
       "balance": 5760000000,
+      "nonce": 0
+    },
+    "dai494405f188f5f356f9b346329c8dae42f18473dd": {
+      "balance": 3245000000,
       "nonce": 0
     },
     "dai4adb21192a5346a113e340b0dd41a7cdc6e0edeb": {
@@ -67,6 +79,10 @@
       "balance": 86427500000,
       "nonce": 0
     },
+    "dai59a8e4a991a2791b317ef476fb01e6e4cfc9a140": {
+      "balance": 585000000,
+      "nonce": 0
+    },
     "dai5d96888dbe12c44fde4f8722e1ab5c0cba8d830a": {
       "balance": 10037500000,
       "nonce": 0
@@ -83,6 +99,18 @@
       "balance": 860000000,
       "nonce": 0
     },
+    "dai8a44712e67a1a0941fea7226b729755f095b16fe": {
+      "balance": 38351250000,
+      "nonce": 0
+    },
+    "dai8e88e5a750baf523e5e0a977681cc202b18ff31b": {
+      "balance": 190000000,
+      "nonce": 0
+    },
+    "dai914f12aad6fa7e3d968fbd83fe9d9e29ae1e37ca": {
+      "balance": 28625000000,
+      "nonce": 0
+    },
     "dai9160d844dd2bcf3999c8276ec8b8e744d4d11b4a": {
       "balance": 210000000,
       "nonce": 0
@@ -93,6 +121,30 @@
     },
     "dai974a078a352ae493198264effb024f2f7589f2b8": {
       "balance": 300000000,
+      "nonce": 0
+    },
+    "dai977927faa8e24e3c7fad041d4468cacdd8c365c8": {
+      "balance": 1303750000,
+      "nonce": 0,
+      "assets": {
+        "KGST": 1611109500,
+        "aiAOA": 16944427500,
+        "aiBDT": 2259257000,
+        "aiBTN": 1555554000,
+        "aiCUP": 7407400000,
+        "aiEGP": 888888000,
+        "aiETB": 2370368000,
+        "aiIQD": 24259235000,
+        "aiIRR": 18518500000000,
+        "aiLYD": 101851750,
+        "aiPKR": 5222217000,
+        "aiPYG": 135185050000,
+        "aiSDG": 48148100000,
+        "aiVES": 4629625000
+      }
+    },
+    "dai992454116ca7a5cfef9811703a37c04bc1b489a8": {
+      "balance": 3742500000,
       "nonce": 0
     },
     "dai9f43f4afe00630f5196409c73927ba6f88d4da8b": {
@@ -115,9 +167,15 @@
       "balance": 56400000000,
       "nonce": 0
     },
+    "daieb9016fdc7527ea87b458a458db0108a306bb19e": {
+      "balance": 45911250000,
+      "nonce": 0
+    },
     "daiec17befd1d9780c52daac57426e033ca5bdb1437": {
       "balance": 2000000000,
       "nonce": 0
     }
-  }
+  },
+  "genesisTimestamp": 1788048000000,
+  "note": "Balance migration at source height 10034 \u2014 36 addresses carried over, treasury seeded with 14 stablecoins at 185,185 USD equivalent each."
 }

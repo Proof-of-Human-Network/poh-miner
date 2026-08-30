@@ -20,7 +20,7 @@ import { computeChainWork } from './chain-selection.js';
 // A node whose on-disk chain has a DIFFERENT genesis is running the pre-fork
 // chain and auto-migrates to this one (see miner-node _migrateChainIfStale).
 // Set to null to disable the pin (dev / pre-migration builds).
-export const EXPECTED_GENESIS_HASH = '61dec1003e5455eb7ee5bd9b02c3d05dabae0ccb81723cacaa201b51d8bd2d9a';
+export const EXPECTED_GENESIS_HASH = 'bc72976f46bcfc2d76336ce67273fa74d12c4e3014d82372e35e42c60b89e148';
 
 /** Path to the snapshot bundled with the app (ships in the build), or null. */
 export function defaultMigrationSnapshot() {
