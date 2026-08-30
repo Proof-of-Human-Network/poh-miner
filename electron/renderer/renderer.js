@@ -6189,3 +6189,122 @@ async function explorerSearch() {
     }
   } catch (e) { view.innerHTML = `<div style="color:#ef4444;font-size:11px;text-align:center;padding:20px 0;font-family:monospace;">${e.message}</div>`; }
 }
+
+// ── Remote signer pairing ─────────────────────────────────────────────────────
+// A site (aist.exchange) asks this node to sign a P2P action. The key never
+// leaves the main process: the request is shown here, and only after the human
+// approves does a signature go back. Desktop pairs by link — no camera, no QR.
+
+let _pairWallet = null;
+let _pairUnsub = [];
+
+function pairOpen() {
+  const modal = document.getElementById('pair-modal');
+  if (!modal) return;
+  modal.style.display = 'flex';
+  pairSetError('');
+  const el = document.getElementById('pair-wallet');
+  if (el) el.textContent = 'loading…';
+  // Only the node's own wallet holds a private key; every other wallet record is
+  // an externally registered public key and cannot sign here. Read it live
+  // rather than caching, so a miner started after this panel opened still works.
+  daiMinerAPI.getStatus().then((status) => {
+    _pairWallet = status?.daiWallet || status?.wallet || null;
+    if (el) el.textContent = _pairWallet || 'no wallet — start the miner first';
+  }).catch(() => {
+    if (el) el.textContent = 'could not read wallet';
+  });
+  daiMinerAPI.pair.status().then(st => pairRender(st.active, st.address));
+}
+
+function pairClose() {
+  const modal = document.getElementById('pair-modal');
+  if (modal) modal.style.display = 'none';
+}
+
+function pairSetError(msg) {
+  const el = document.getElementById('pair-error');
+  if (!el) return;
+  el.textContent = msg || '';
+  el.style.display = msg ? 'block' : 'none';
+}
+
+function pairRender(active, address) {
+  const idle = document.getElementById('pair-idle');
+  const live = document.getElementById('pair-active');
+  if (!idle || !live) return;
+  idle.style.display = active ? 'none' : 'block';
+  live.style.display = active ? 'block' : 'none';
+  const a = document.getElementById('pair-active-addr');
+  if (a && address) a.textContent = address;
+}
+
+async function pairStart() {
+  const uri = (document.getElementById('pair-uri')?.value || '').trim();
+  if (!uri) return pairSetError('Paste the pairing link first.');
+  if (!_pairWallet) return pairSetError('No wallet available to sign with.');
+
+  const btn = document.getElementById('pair-start-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Connecting…'; }
+  pairSetError('');
+  try {
+    const res = await daiMinerAPI.pair.start(uri, _pairWallet);
+    if (res?.error) { pairSetError(res.error); return; }
+    document.getElementById('pair-uri').value = '';
+    document.getElementById('pair-requests').textContent = 'Waiting for requests…';
+    pairRender(true, res.address);
+  } catch (e) {
+    pairSetError(e.message || 'Could not pair.');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Connect'; }
+  }
+}
+
+async function pairEnd() {
+  await daiMinerAPI.pair.end();
+  pairRender(false, null);
+}
+
+/** Render one request with approve/reject. Nothing is signed until a click. */
+function pairShowRequest({ id, req }) {
+  const host = document.getElementById('pair-requests');
+  if (!host) return;
+  const human = req?.human || {};
+  const fields = req?.fields || {};
+  const rows = Object.entries(fields)
+    .map(([k, v]) => `<div style="color:#888;">${k}: <span style="color:#ddd;">${String(v)}</span></div>`)
+    .join('');
+
+  const card = document.createElement('div');
+  card.style.cssText = 'border:1px solid #333;border-radius:6px;padding:10px;margin-bottom:8px;background:#111;';
+  card.innerHTML = `
+    <div style="color:#22c55e;font-size:12px;margin-bottom:4px;">${human.title || req?.action || 'Signature request'}</div>
+    ${human.detail ? `<div style="color:#aaa;font-size:11px;margin-bottom:6px;">${human.detail}</div>` : ''}
+    ${human.warning ? `<div style="color:#f59e0b;font-size:11px;margin-bottom:6px;">${human.warning}</div>` : ''}
+    <div style="font-size:11px;font-family:monospace;margin-bottom:8px;">${rows}</div>
+    <div style="display:flex;gap:8px;">
+      <button data-ok="0" style="flex:1;padding:7px;border:1px solid #444;border-radius:4px;background:#111;color:#aaa;font-size:12px;cursor:pointer;">Reject</button>
+      <button data-ok="1" style="flex:1;padding:7px;border:none;border-radius:4px;background:#22c55e;color:#000;font-weight:600;font-size:12px;cursor:pointer;">Approve</button>
+    </div>`;
+
+  if (host.dataset.empty !== '0') { host.textContent = ''; host.dataset.empty = '0'; }
+  host.prepend(card);
+
+  card.querySelectorAll('button[data-ok]').forEach(b => {
+    b.addEventListener('click', async () => {
+      const approved = b.dataset.ok === '1';
+      card.querySelectorAll('button').forEach(x => { x.disabled = true; });
+      await daiMinerAPI.pair.decide(id, approved);
+      card.querySelector('div').textContent = approved ? 'Approved ✓' : 'Rejected';
+      setTimeout(() => card.remove(), 2500);
+    });
+  });
+}
+
+if (window.daiMinerAPI?.pair) {
+  _pairUnsub.push(daiMinerAPI.pair.onRequest(pairShowRequest));
+  _pairUnsub.push(daiMinerAPI.pair.onState((s) => {
+    if (s?.state === 'ended' || s?.state === 'error') pairRender(false, null);
+    if (s?.state === 'error') pairSetError(s.message || 'Session ended unexpectedly.');
+  }));
+}

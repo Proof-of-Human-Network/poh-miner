@@ -92,4 +92,23 @@ contextBridge.exposeInMainWorld('daiMinerAPI', {
       return () => ipcRenderer.removeListener('setup:progress', handler);
     },
   },
+
+  // Remote-signer pairing: a site asks, the human here approves, only the
+  // signature goes back. The key stays in the main process.
+  pair: {
+    start:  (uri, walletAddress) => ipcRenderer.invoke('pair:start', uri, walletAddress),
+    decide: (id, approved) => ipcRenderer.invoke('pair:decide', id, approved),
+    end:    () => ipcRenderer.invoke('pair:end'),
+    status: () => ipcRenderer.invoke('pair:status'),
+    onRequest: (cb) => {
+      const handler = (_e, msg) => cb(msg);
+      ipcRenderer.on('pair:request', handler);
+      return () => ipcRenderer.removeListener('pair:request', handler);
+    },
+    onState: (cb) => {
+      const handler = (_e, msg) => cb(msg);
+      ipcRenderer.on('pair:state', handler);
+      return () => ipcRenderer.removeListener('pair:state', handler);
+    },
+  },
 });

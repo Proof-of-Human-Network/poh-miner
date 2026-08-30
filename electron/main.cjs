@@ -401,6 +401,93 @@ async function _chatCrypto() {
 ipcMain.handle('crypto:seal', async (_e, recipientPubB64, plaintext) => (await _chatCrypto()).seal(recipientPubB64, plaintext));
 ipcMain.handle('crypto:open', async (_e, envelope, privateKeyB64) => (await _chatCrypto()).open(envelope, privateKeyB64));
 ipcMain.handle('crypto:derive-keypair', async (_e, secret) => (await _chatCrypto()).deriveEncryptionKeypair(secret));
+// ── Remote signer pairing ─────────────────────────────────────────────────────
+// Lets aist.exchange (or any site) ask this node to sign a P2P action. The
+// browser never holds a DAI key; it sends a request, the human approves it here,
+// and only the signature goes back. Same engine the CLI signer uses, so there is
+// one implementation of the protocol rather than two.
+function _pairSigner() {
+  return import(pathToFileURL(path.join(__dirname, '../scripts/pair-signer.js')).href);
+}
+
+let pairSession = null;          // at most one live session
+let pairPending = new Map();     // requestId -> resolve(boolean)
+
+ipcMain.handle('pair:start', async (_e, uri, walletAddress) => {
+  if (pairSession) return { error: 'a session is already active — end it first' };
+  const mod = await _pairSigner();
+
+  let parsed;
+  try {
+    parsed = mod.parseUri(uri);     // reject a bad link before touching any key
+  } catch (err) {
+    return { error: `not a valid pairing link: ${err.message}` };
+  }
+
+  let identity;
+  try {
+    identity = walletAddress
+      ? await mod.identityFromWallet(walletAddress)
+      : mod.identityFromSeed(undefined);
+  } catch (err) {
+    return { error: err.message };
+  }
+
+  const session = new mod.SignerSession({
+    uri,
+    identity,
+    // Hold each request until the renderer reports a human decision.
+    onRequest: (req) => new Promise((resolve) => {
+      const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      pairPending.set(id, resolve);
+      mainWindow?.webContents.send('pair:request', { id, req });
+    }),
+  });
+
+  try {
+    // The relay needs our public key on file before it will accept signatures.
+    await mod.registerKey(parsed.relay, identity);
+    await session.hello('DAI Miner desktop');
+  } catch (err) {
+    return { error: `pairing failed: ${err.message}` };
+  }
+
+  pairSession = session;
+  // serve() loops until revoked; running it unawaited keeps the IPC call from
+  // blocking for the life of the session.
+  session.serve()
+    .catch((err) => mainWindow?.webContents.send('pair:state', { state: 'error', message: err.message }))
+    .finally(() => {
+      if (pairSession === session) pairSession = null;
+      mainWindow?.webContents.send('pair:state', { state: 'ended' });
+    });
+
+  return { ok: true, address: identity.address, relay: parsed.relay };
+});
+
+ipcMain.handle('pair:decide', (_e, id, approved) => {
+  const resolve = pairPending.get(id);
+  if (!resolve) return { error: 'that request already expired' };
+  pairPending.delete(id);
+  resolve(!!approved);
+  return { ok: true };
+});
+
+ipcMain.handle('pair:end', async () => {
+  const session = pairSession;
+  pairSession = null;
+  // Deny anything still waiting rather than leaving the browser hanging.
+  for (const resolve of pairPending.values()) { try { resolve(false); } catch { /* */ } }
+  pairPending.clear();
+  try { await session?.revoke(); } catch { /* already gone */ }
+  return { ok: true };
+});
+
+ipcMain.handle('pair:status', () => ({
+  active: !!pairSession,
+  address: pairSession?.id?.address || null,
+}));
+
 ipcMain.handle('get-status', () => {
   if (!minerNode) return null;
 
