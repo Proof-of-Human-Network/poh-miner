@@ -32,7 +32,7 @@ export const PUBLIC_APIS_CARDS = [
   card({ id: 'public-apis/crypto-price', tool: 'public_crypto_price', summary: 'Current cryptocurrency price (CoinGecko)', tags: ['crypto', 'price'], triggers: ['bitcoin', 'btc', 'eth', 'ethereum', 'crypto price', 'coin price'] }),
   card({ id: 'public-apis/crypto-search', tool: 'public_crypto_search', summary: 'Search CoinGecko coins by name or symbol', tags: ['crypto', 'search'], triggers: ['crypto search', 'coin search', 'token search'] }),
   card({ id: 'public-apis/forex', tool: 'public_forex_rates', summary: 'FX rates from Frankfurter (ECB)', tags: ['forex', 'fx', 'currency'], triggers: ['forex', 'exchange rate', 'usd to', 'eur to', 'fx rate'] }),
-  card({ id: 'public-apis/geo', tool: 'public_geo_lookup', summary: 'Place name → lat/lon (Nominatim/OSM)', tags: ['geo', 'map'], triggers: ['where is', 'coordinates', 'lat lon', 'geocode'] }),
+  card({ id: 'public-apis/geo', tool: 'public_geo_lookup', summary: 'Place name → lat/lon (Nominatim/OSM)', tags: ['geo', 'map', 'travel'], triggers: ['where is', 'coordinates', 'lat lon', 'geocode', 'places to visit', 'best places', 'visit in', 'attractions', 'sightseeing'] }),
   card({ id: 'public-apis/geo-reverse', tool: 'public_geo_reverse', summary: 'Lat/lon → place name (Nominatim/OSM)', tags: ['geo', 'map'], triggers: ['reverse geocode', 'what city'] }),
   card({ id: 'public-apis/country', tool: 'public_country_info', summary: 'Country facts from REST Countries', tags: ['country'], triggers: ['country', 'capital of', 'population of', 'iso code'] }),
   card({ id: 'public-apis/hackernews', tool: 'public_hackernews_top', summary: 'Top Hacker News stories', tags: ['news', 'hn'], triggers: ['hacker news', 'hackernews', 'hn top'] }),

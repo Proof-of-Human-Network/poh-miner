@@ -6,9 +6,18 @@
  * synthesizes a final answer (mixture-of-agents style — inspired by Sakana
  * Fugu: multiple specialist proposers, then one aggregator).
  *
+ * Two planners share this executor:
+ *   - planTaskCascade (this file) — heuristic: regex segments + catalog
+ *     trigger hits + shop fan-out. Sync, no LLM. Fallback when the catalog
+ *     planner is off, parse-fails, or finds no candidates.
+ *   - planCatalogCascade (mcp-planner.js) — catalog-first LLM JSON plan
+ *     over a short candidate list, with extracted arguments and dependsOn.
+ *
  * Stages run sequentially (so "weather yesterday AND generate an image with
  * the degree on it" can feed stage-1 weather into stage-2 image intent).
  * Tasks inside a stage run in parallel (e.g. 10 ecommerce MCP shops).
+ * `_mcpChat` stays the fast path for simple single-tool chat (letter-pick);
+ * this cascade is what actually fills MCP schemas for multi-intent requests.
  */
 
 import { needsDatasetLookup, searchDatasets, disambiguateDataset } from '../datasets/hf-dataset-search.js';
@@ -275,32 +284,121 @@ export async function executeTaskCascade(plan, runners, userMessage) {
 
   const allResults = [];
   let priorContext = '';
+  const priorById = {};
+  const priorSnippets = {};
 
   for (let si = 0; si < plan.stages.length; si++) {
     const stage = plan.stages[si];
     const stageResults = await Promise.all(stage.map(async (task) => {
       const started = Date.now();
+      const resolved = task.kind === 'mcp'
+        ? { ...task, arguments: resolveTaskArgs(task, priorById, userMessage) }
+        : task;
       try {
-        const out = await runOneTask(task, runners, userMessage, priorContext);
-        return { ...task, ok: true, output: out, ms: Date.now() - started };
+        const out = await runOneTask(resolved, runners, userMessage, priorContext, priorSnippets);
+        return { ...resolved, ok: true, output: out, ms: Date.now() - started };
       } catch (e) {
-        return { ...task, ok: false, error: e.message || String(e), ms: Date.now() - started };
+        return { ...resolved, ok: false, error: e.message || String(e), ms: Date.now() - started };
       }
     }));
     allResults.push(...stageResults);
 
-    // Build context for dependent later stages (Fugu-style intermediate state)
+    for (const r of stageResults) {
+      priorById[r.id] = r;
+      if (r.cardId) priorById[r.cardId] = r;
+      priorSnippets[r.id] = { id: r.id, kind: r.kind, ok: r.ok, output: r.ok ? r.output : r.error };
+      priorById[r.id].extracted = r.ok ? extractUsefulFields(r.output) : {};
+    }
+
+    // Structured JSON per task id, plus the flat string the aggregator already uses.
     const bits = stageResults.map(r => {
       if (!r.ok) return `[${r.id}] ERROR: ${r.error}`;
       const body = typeof r.output === 'string' ? r.output : JSON.stringify(r.output, null, 2);
       return `[${r.id}]\n${String(body).slice(0, 4000)}`;
     });
-    priorContext = (priorContext ? priorContext + '\n\n' : '') + bits.join('\n\n');
+    const structured = JSON.stringify(
+      Object.fromEntries(Object.entries(priorSnippets).map(([k, v]) => [k, {
+        ok: v.ok, kind: v.kind,
+        output: typeof v.output === 'string' ? v.output.slice(0, 2000) : v.output,
+      }])),
+    );
+    priorContext = (priorContext ? priorContext + '\n\n' : '') + bits.join('\n\n')
+      + `\n\n[structured]\n${structured.slice(0, 6000)}`;
   }
 
-  // Aggregate (mixture-of-agents synthesizer)
-  const reply = await aggregateResults(userMessage, allResults, priorContext, runners);
+  const reply = await aggregateResults(userMessage, allResults, priorContext, runners, plan);
   return { reply, results: allResults, stages: plan.stages.length, reason: plan.reason };
+}
+
+export function isPlaceholder(v) {
+  if (v == null || v === '') return true;
+  if (typeof v !== 'string') return false;
+  return /^\$/.test(v) || /^\{\{/.test(v) || v === 'null' || v === 'TBD' || v === '<pending>';
+}
+
+/** Pull lat/lon/city/name out of a tool result so a later stage can fill args. */
+export function extractUsefulFields(output) {
+  let obj = output;
+  if (typeof output === 'string') {
+    try { obj = JSON.parse(output); } catch { return {}; }
+  }
+  if (!obj || typeof obj !== 'object') return {};
+  const out = {};
+  const grab = (key, aliases) => {
+    for (const a of aliases) {
+      if (obj[a] != null && obj[a] !== '') { out[key] = obj[a]; return; }
+    }
+  };
+  grab('latitude', ['latitude', 'lat']);
+  grab('longitude', ['longitude', 'lon', 'lng']);
+  grab('city', ['city', 'place', 'name', 'display_name']);
+  grab('query', ['query', 'q']);
+  const hit = Array.isArray(obj.hits) ? obj.hits[0] : null;
+  if (hit && typeof hit === 'object') {
+    if (out.latitude == null && hit.lat != null) out.latitude = hit.lat;
+    if (out.longitude == null && hit.lon != null) out.longitude = hit.lon;
+    if (out.city == null && (hit.name || hit.display_name)) out.city = hit.name || hit.display_name;
+  }
+  return out;
+}
+
+function collectedPriorFields(task, priorById) {
+  const extracted = {};
+  for (const dep of task.dependsOn || []) {
+    const prior = priorById[dep];
+    if (!prior?.ok) continue;
+    Object.assign(extracted, prior.extracted || extractUsefulFields(prior.output));
+  }
+  // If no explicit dependsOn, still let later stages see the last prior outputs.
+  if (!Object.keys(extracted).length) {
+    for (const prior of Object.values(priorById)) {
+      if (prior?.ok && prior.extracted) Object.assign(extracted, prior.extracted);
+    }
+  }
+  return extracted;
+}
+
+/**
+ * Prefer arguments the planner already filled. Only fall back to text-key
+ * filling when the plan left args empty. Then map prior outputs into any
+ * remaining placeholder / missing required fields.
+ */
+export function resolveTaskArgs(task, priorById, userMessage) {
+  let args = (task.arguments && typeof task.arguments === 'object') ? { ...task.arguments } : {};
+  const concrete = Object.entries(args).filter(([, v]) => !isPlaceholder(v));
+  if (!concrete.length) {
+    const filled = buildMcpArgs({ inputSchema: task.inputSchema }, task.segment || userMessage);
+    if (filled) args = { ...filled, ...Object.fromEntries(concrete) };
+  }
+  const extracted = collectedPriorFields(task, priorById);
+  for (const [k, v] of Object.entries(args)) {
+    if (isPlaceholder(v) && extracted[k] != null) args[k] = extracted[k];
+  }
+  if (args.latitude == null && extracted.latitude != null) args.latitude = extracted.latitude;
+  if (args.longitude == null && extracted.longitude != null) args.longitude = extracted.longitude;
+  if (isPlaceholder(args.city) && extracted.city) args.city = extracted.city;
+  if (isPlaceholder(args.query) && extracted.query) args.query = extracted.query;
+  return args;
 }
 
 /**
@@ -339,7 +437,7 @@ export function buildMcpArgs(tool, text) {
   return null;   // nothing text-shaped to fill — not callable blind
 }
 
-async function runOneTask(task, runners, userMessage, priorContext) {
+async function runOneTask(task, runners, userMessage, priorContext, priorSnippets = {}) {
   switch (task.kind) {
     case 'skill': {
       const input = { ...(task.input || {}), message: task.segment || userMessage, query: task.input?.query || task.segment || userMessage };
@@ -347,7 +445,6 @@ async function runOneTask(task, runners, userMessage, priorContext) {
     }
     case 'mcp': {
       const args = { ...(task.arguments || {}) };
-      // If prior stage produced useful text (e.g. product name refined), keep original query
       return runners.callMcp(task.tool, args);
     }
     case 'dataset': {
@@ -387,7 +484,7 @@ async function runOneTask(task, runners, userMessage, priorContext) {
   }
 }
 
-async function aggregateResults(userMessage, results, priorContext, runners) {
+async function aggregateResults(userMessage, results, priorContext, runners, plan = {}) {
   // Fast path: single successful text-like result
   if (results.length === 1 && results[0].ok) {
     const r = results[0];
@@ -419,7 +516,9 @@ async function aggregateResults(userMessage, results, priorContext, runners) {
     '- When a step searched the web and another asked for an image, include the facts AND a ready-to-use image prompt that embeds the key numbers (e.g. temperature).',
     '- If a specialist failed, work with what you have and note the gap briefly.',
     '- Do not invent tool results that were not provided.',
-  ].join('\n');
+    '- Cite forecast facts and tool outputs; never fabricate weather or place data.',
+    plan.synthesisNotes ? `- Synthesis guidance: ${String(plan.synthesisNotes).slice(0, 400)}` : '',
+  ].filter(Boolean).join('\n');
 
   const user = `User request:\n${userMessage}\n\nSpecialist results:\n${blocks}\n\nProduce the final answer now.`;
 

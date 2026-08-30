@@ -20,6 +20,7 @@
 
 import { spawn } from 'child_process';
 import { loadBuiltinPacks, listBuiltinCards } from './builtin-mcp/index.js';
+import { defaultHttpSpecs, defaultHttpSeedCards } from './default-mcp-servers.js';
 
 const PROTOCOL_VERSION = '2024-11-05';
 const CLIENT_INFO = { name: 'dai-miner', version: '1.0' };
@@ -38,6 +39,7 @@ class McpConnection {
     this._nextId = 1;
     this._pending = new Map();   // rpcId → { resolve, reject, timer }
     this._buf = '';
+    this._sessionId = null;
   }
 
   // ── JSON-RPC plumbing ──────────────────────────────────────────────────────
@@ -107,10 +109,13 @@ class McpConnection {
   // ── http (Streamable HTTP) transport ───────────────────────────────────────
   async _sendHttp(msg) {
     const headers = httpHeadersFromSpec(this.spec);
+    if (this._sessionId) headers['Mcp-Session-Id'] = this._sessionId;
     const res = await fetch(this.spec.url, {
       method: 'POST', headers, body: JSON.stringify(msg),
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
+    const sid = res.headers.get('mcp-session-id');
+    if (sid) this._sessionId = sid;
     if (msg.id == null) return; // notification — no response expected
     if (!res.ok) throw new Error(`MCP ${this.id}: HTTP ${res.status}`);
     const ct = res.headers.get('content-type') || '';
@@ -184,7 +189,12 @@ class McpConnection {
  * `spec.apiKey` still sets `Authorization: Bearer …` when Authorization is unset.
  */
 export function httpHeadersFromSpec(spec = {}) {
-  const headers = { 'Content-Type': 'application/json', 'Accept': 'application/json, text/event-stream' };
+  const headers = {
+    'Content-Type': 'application/json',
+    'Accept': 'application/json, text/event-stream',
+    'User-Agent': 'dai-miner/mcp',
+    'MCP-Protocol-Version': PROTOCOL_VERSION,
+  };
   if (spec.headers && typeof spec.headers === 'object' && !Array.isArray(spec.headers)) {
     for (const [k, v] of Object.entries(spec.headers)) {
       if (v == null || v === '') continue;
@@ -241,6 +251,22 @@ export class McpManager {
     return this.getConfig()?.mcpCatalog?.maxHotConnections || 16;
   }
 
+  _defaultHttpDisabled() {
+    return this.getConfig()?.mcpDefaultHttp?.disabled || [];
+  }
+
+  _defaultHttpEnabled() {
+    return this.getConfig()?.mcpDefaultHttp?.enabled !== false;
+  }
+
+  /** User mcpServers overlay the shipped no-auth HTTP defaults. User wins on id. */
+  _allServers() {
+    const user = this._normalize(this.getConfig()?.mcpServers);
+    if (!this._defaultHttpEnabled()) return user;
+    const defaults = defaultHttpSpecs({ disabled: this._defaultHttpDisabled() });
+    return { ...defaults, ...user };
+  }
+
   _attachBuiltins() {
     const cfg = this.getConfig() || {};
     if (cfg.mcpBuiltin?.enabled === false) return;
@@ -258,34 +284,40 @@ export class McpManager {
     if (this._connecting) return this._connecting;
     this._connecting = (async () => {
       this._attachBuiltins();
-      const servers = this._normalize(this.getConfig()?.mcpServers);
-      const ids = Object.keys(servers);
-      if (!ids.length) {
-        if (!this.connections.size) console.log('[MCP] No MCP servers configured.');
-        return;
+      const userServers = this._normalize(this.getConfig()?.mcpServers);
+      const userIds = Object.keys(userServers);
+      if (userIds.length) {
+        console.log(`[MCP] Connecting to ${userIds.length} user MCP server(s): ${userIds.join(', ')}`);
+        await Promise.allSettled(userIds.map(id => this._connectOne(id, userServers[id])));
+      } else if (!this.connections.size) {
+        console.log('[MCP] No user MCP servers configured.');
       }
-      console.log(`[MCP] Connecting to ${ids.length} user MCP server(s): ${ids.join(', ')}`);
-      await Promise.allSettled(ids.map(async id => {
-        if (servers[id].enabled === false || servers[id].disabled === true) return;
-        if (this.connections.get(id)?.transport === 'builtin') {
-          console.warn(`[MCP] skipping user server "${id}" — builtin id is reserved`);
-          return;
-        }
-        const conn = new McpConnection(id, servers[id]);
-        this.connections.set(id, conn);
-        this._lastUsed.set(id, Date.now());
-        try {
-          const tools = await conn.connect();
-          console.log(`[MCP] ✓ ${id} connected — ${tools.length} tool(s): ${tools.map(t => t.name).join(', ') || '(none)'}`);
-        } catch (err) {
-          console.warn(`[MCP] ✗ ${id} failed: ${err.message}`);
-        }
-      }));
+      // Shipped HTTP defaults stay catalog-seeded and connect on first call
+      // (ensure/callTool) so startup doesn't open 8 extra sockets.
     })();
     try { await this._connecting; } finally { this._connecting = null; }
   }
 
-  /** Connect a single user server on demand (catalog / overlay). */
+  async _connectOne(id, spec) {
+    if (!spec || spec.enabled === false || spec.disabled === true) return null;
+    if (this.connections.get(id)?.transport === 'builtin') {
+      console.warn(`[MCP] skipping server "${id}" — builtin id is reserved`);
+      return this.connections.get(id);
+    }
+    const conn = new McpConnection(id, spec);
+    this.connections.set(id, conn);
+    this._lastUsed.set(id, Date.now());
+    try {
+      const tools = await conn.connect();
+      console.log(`[MCP] ✓ ${id} connected — ${tools.length} tool(s): ${tools.map(t => t.name).join(', ') || '(none)'}`);
+      return conn;
+    } catch (err) {
+      console.warn(`[MCP] ✗ ${id} failed: ${err.message}`);
+      return null;
+    }
+  }
+
+  /** Connect a single user or shipped-default server on demand. */
   async ensure(id) {
     const existing = this.connections.get(id);
     if (existing?.connected) {
@@ -293,8 +325,7 @@ export class McpManager {
       return existing;
     }
     if (existing?.transport === 'builtin') return existing;
-    const servers = this._normalize(this.getConfig()?.mcpServers);
-    const spec = servers[id];
+    const spec = this._allServers()[id];
     if (!spec || spec.enabled === false || spec.disabled === true) {
       throw new Error(`unknown MCP server "${id}"`);
     }
@@ -348,10 +379,12 @@ export class McpManager {
     const cfg = this.getConfig() || {};
     const disabled = cfg.mcpBuiltin?.disabled || [];
     const builtin = (cfg.mcpBuiltin?.enabled === false) ? [] : listBuiltinCards({ disabled });
-    const user = [];
+    const live = [];
+    const liveMcpIds = new Set();
     for (const t of this.listTools()) {
       if (t.source === 'builtin') continue;
-      user.push({
+      liveMcpIds.add(t.server);
+      live.push({
         id: `${t.server}/${t.tool}`,
         mcpId: t.server,
         tool: t.tool,
@@ -360,12 +393,16 @@ export class McpManager {
         tags: [],
         triggers: [t.server, t.tool],
         tools: [t.tool],
-        source: 'user',
+        source: t.source || 'user',
       });
     }
+    const seed = this._defaultHttpEnabled()
+      ? defaultHttpSeedCards({ disabled: this._defaultHttpDisabled() }).filter(c => !liveMcpIds.has(c.mcpId))
+      : [];
     return [
       ...builtin.map(c => ({ ...c, source: 'builtin', qualified: `${c.mcpId}__${c.tool}` })),
-      ...user,
+      ...seed,
+      ...live,
     ];
   }
 
@@ -381,12 +418,20 @@ export class McpManager {
     const sep = qualifiedName.indexOf('__');
     if (sep >= 0) { serverId = qualifiedName.slice(0, sep); toolName = qualifiedName.slice(sep + 2); }
     else {
-      // bare name — find the (unique) server exposing it
+      // bare name — find the (unique) server exposing it (live or seed cards)
       const matches = this.listTools().filter(t => t.tool === qualifiedName);
-      if (matches.length !== 1) throw new Error(`ambiguous or unknown tool "${qualifiedName}"`);
-      serverId = matches[0].server; toolName = qualifiedName;
+      if (matches.length === 1) {
+        serverId = matches[0].server; toolName = qualifiedName;
+      } else {
+        const seeded = this.listCards().filter(c => c.tool === qualifiedName && c.source !== 'builtin');
+        if (seeded.length !== 1) throw new Error(`ambiguous or unknown tool "${qualifiedName}"`);
+        serverId = seeded[0].mcpId; toolName = qualifiedName;
+      }
     }
-    const conn = this.connections.get(serverId);
+    let conn = this.connections.get(serverId);
+    if (!conn?.connected) {
+      conn = await this.ensure(serverId);
+    }
     if (!conn) throw new Error(`unknown MCP server "${serverId}"`);
     this._lastUsed.set(serverId, Date.now());
     return conn.callTool(toolName, args);
@@ -414,4 +459,18 @@ export class McpManager {
     this.connections.clear();
     this._lastUsed.clear();
   }
+}
+
+/**
+ * True when the MCP rejection is a malformed call (missing required args,
+ * schema mismatch) rather than a peer/network failure. Those must not fall
+ * back to a second local attempt — that burns the work twice and disguises
+ * the cause as a dispersal problem.
+ */
+export function isMcpArgumentError(err) {
+  const m = String(err?.message || err || '').toLowerCase();
+  if (/\b(econn|etimedout|enotfound|socket|network|fetch failed|not connected|timed out|peer mcp http 5|http 5\d\d)\b/.test(m)) {
+    return false;
+  }
+  return /\b(required|missing (required )?(arg|argument|parameter|field)|invalid (arg|argument|parameter)|indexes required|schema validation|must be (a |an )?(string|number|array|object|boolean)|city or latitude)\b/.test(m);
 }

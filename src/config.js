@@ -207,8 +207,20 @@ export function getDefaultConfig() {
     mcpCatalog: {
       enabled: true,
       maxHotConnections: 16,
-      retrieveK: 8,
+      retrieveK: 12,
       disperse: true,
+      plannerEnabled: true,
+      maxTasks: 6,
+      maxStages: 3,
+      maxParallelPerStage: 4,
+      plannerTimeoutMs: 20000,
+    },
+
+    // Shipped no-auth HTTP MCPs (tandem, inside-ads, goji, atars, akari, ai-portal, airshelf).
+    // Not written into mcpServers — mute with enabled:false or disabled: ["goji"].
+    mcpDefaultHttp: {
+      enabled: true,
+      disabled: [],
     },
 
     // Blockchain chat history search — Meilisearch auto-starts with the node (mandatory).

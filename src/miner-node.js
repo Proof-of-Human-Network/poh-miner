@@ -80,11 +80,12 @@ import { EscrowManager, ESCROW_ADDRESS } from './p2p/escrow.js';
 import { ReferralStore } from './p2p/referral-store.js';
 import { PriceHistory } from './p2p/price-history.js';
 import { tryExternalProviders } from './ai/external-providers.js';
-import { McpManager } from './ai/mcp-client.js';
+import { McpManager, isMcpArgumentError } from './ai/mcp-client.js';
 import { pickToolsForMessage } from './ai/mcp-router.js';
 import { assignMcpToPeers, callPeerMcp } from './ai/mcp-disperse.js';
 import { searchCards } from './ai/mcp-catalog.js';
-import { planTaskCascade, executeTaskCascade } from './ai/task-cascade.js';
+import { executeTaskCascade } from './ai/task-cascade.js';
+import { planCatalogCascade } from './ai/mcp-planner.js';
 import {
   materializeAttachments, applyAttachmentsToMessages, MAX_ATTACHMENT_BYTES,
   DEFAULT_VISION_MODEL, isVisionModelName,
@@ -1086,7 +1087,7 @@ export class DAIMinerNode {
   // ordered stages of parallel tasks (see src/ai/task-cascade.js). Preserves
   // legacy single-skill / cascade / sequence / dataset / hf-model shapes for
   // the Electron UI while exposing a unified `tasks` plan for execution.
-  _routeMessage(message) {
+  async _routeMessage(message) {
     const allSkills = skillsManager.getAllSkills().filter(s => s.context && (s.status === 'active' || s.status === 'proposed'));
 
     // Enrich skill inputs with global address/username when present
@@ -1106,12 +1107,26 @@ export class DAIMinerNode {
     try { mcpTools = this.mcp?.listTools?.() || []; } catch { /* MCP not ready */ }
     try { catalogCards = this.mcp?.listCards?.() || []; } catch { /* MCP not ready */ }
 
-    const plan = planTaskCascade(message, {
+    const catalogCfg = this.config.mcpCatalog || {};
+    const planOpts = {
       skills: allSkills,
       mcpTools,
       catalogCards,
       brainDataDir: getBrainDataDir(),
-    });
+      plannerEnabled: catalogCfg.plannerEnabled !== false && catalogCfg.enabled !== false,
+      retrieveK: catalogCfg.retrieveK || 12,
+      maxTasks: catalogCfg.maxTasks || 6,
+      maxStages: catalogCfg.maxStages || 3,
+      maxParallelPerStage: catalogCfg.maxParallelPerStage || 4,
+      plannerTimeoutMs: catalogCfg.plannerTimeoutMs || 20_000,
+    };
+    if (planOpts.plannerEnabled) {
+      planOpts.llm = async (prompt) => this._llmChat(
+        [{ role: 'user', content: prompt }],
+        { model: catalogCfg.plannerModel || this.config.model, timeoutMs: planOpts.plannerTimeoutMs },
+      );
+    }
+    const plan = await planCatalogCascade(message, planOpts);
 
     // Stamp global inputs onto skill tasks (address/username extraction)
     if (plan.type === 'tasks') {
@@ -1136,7 +1151,7 @@ export class DAIMinerNode {
     }
 
     // Legacy UI shapes
-    if (plan.type === 'chat') return Promise.resolve({ type: 'chat' });
+    if (plan.type === 'chat') return { type: 'chat' };
 
     const flat = (plan.stages || []).flat();
     const onlySkills = flat.length > 0 && flat.every(t => t.kind === 'skill');
@@ -1146,46 +1161,46 @@ export class DAIMinerNode {
       const gen = plan.stages[0][0];
       const sk  = plan.stages[1][0];
       if (gen?.kind === 'llm-generate' && sk?.kind === 'skill') {
-        return Promise.resolve({
+        return {
           type: 'sequence',
           creationQuery: gen.query,
           skillId: sk.skillId,
           input: sk.input,
           skillContext: sk.skillContext,
           tasks: plan,
-        });
+        };
       }
     }
 
     if (onlySkills && flat.length === 1) {
       const t = flat[0];
-      return Promise.resolve({
+      return {
         type: 'skill', skillId: t.skillId, input: t.input, skillContext: t.skillContext,
         reason: plan.reason, tasks: plan,
-      });
+      };
     }
     if (onlySkills && flat.length > 1) {
-      return Promise.resolve({
+      return {
         type: 'cascade',
         jobs: flat.map(t => ({ skillId: t.skillId, input: t.input, skillContext: t.skillContext })),
         reason: plan.reason, tasks: plan,
-      });
+      };
     }
     if (flat.length === 1 && flat[0].kind === 'hf-model') {
-      return Promise.resolve({ type: 'hf-model', query: flat[0].query || message, tasks: plan });
+      return { type: 'hf-model', query: flat[0].query || message, tasks: plan };
     }
     if (flat.length === 1 && flat[0].kind === 'dataset') {
-      return Promise.resolve({ type: 'dataset', query: flat[0].query || message, tasks: plan });
+      return { type: 'dataset', query: flat[0].query || message, tasks: plan };
     }
 
     // Mixed cascade (skills + MCP + datasets + media) — new unified type
-    return Promise.resolve({
+    return {
       type: 'tasks',
       tasks: plan,
       reason: plan.reason,
       // Also expose a jobs[] of skill tasks for older UI progress labels
       jobs: flat.filter(t => t.kind === 'skill').map(t => ({ skillId: t.skillId, input: t.input, skillContext: t.skillContext })),
-    });
+    };
   }
 
   /** Run a task-cascade plan and return the aggregated reply. */
@@ -1234,6 +1249,10 @@ export class DAIMinerNode {
         const text = await callPeerMcp(peer, { server: serverId, tool: toolName, arguments: args });
         return typeof text === 'string' ? text : JSON.stringify(text);
       } catch (e) {
+        if (isMcpArgumentError(e)) {
+          console.warn(`[MCP] ${qualifiedName} rejected (bad arguments): ${e.message} — not retrying locally`);
+          throw e;
+        }
         console.warn(`[MCP] peer ${peer} failed for ${qualifiedName}: ${e.message} — local fallback`);
       }
     }
@@ -6626,9 +6645,12 @@ export class DAIMinerNode {
   }
 
   /**
-   * Chat with MCP tool use. The address-book picker selects 0–few tools so the
-   * 1.7B prompt never sees the whole builtin pack. Chosen tools may run on
-   * hashed peers (one mcpId per node when possible).
+   * Chat with MCP tool use. Fast path for simple single-tool turns: the
+   * address-book picker selects 0–few tools so the 1.7B prompt never sees the
+   * whole pack, and the model fills that tool's schema in the JSON loop.
+   * Multi-intent / multi-stage planning (city extraction, dependsOn, synthesis)
+   * is `_routeMessage` → planCatalogCascade, not this letter-pick path.
+   * Chosen tools may run on hashed peers (one mcpId per node when possible).
    */
   async _mcpChat(messages, { model, timeoutMs = 40_000 } = {}) {
     await this._initMcp();

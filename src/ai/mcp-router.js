@@ -4,11 +4,14 @@
  *
  * Order: conversational skip → exact "use X MCP" → trigger hit → retrieve top-K
  * → optional A/B/C/none letter pick → abstain.
+ *
+ * Fast path for simple single-tool chat. Multi-step argument extraction and
+ * stage planning live in planCatalogCascade (task-cascade / _routeMessage),
+ * not here — dumping a JSON plan into every chat turn is the wrong default
+ * for qwen3-1.7b. When several cards score close, this still letter-picks.
  */
 
-import { searchCards, isConversational } from './mcp-catalog.js';
-
-const USE_RE = /\b(?:use|ask|call|with)\s+([a-z0-9._/-]+)\s+mcp\b/i;
+import { retrieveCandidates, USE_MCP_RE } from './mcp-catalog.js';
 
 function namesFor(cards, tools) {
   const out = [];
@@ -32,31 +35,26 @@ export async function pickToolsForMessage(message, {
   retrieveK = 8,
 } = {}) {
   const text = String(message || '').trim();
-  if (!text || isConversational(text)) {
+  const retrieved = retrieveCandidates(text, { cards, retrieveK });
+  if (retrieved.reason === 'skip') {
     return { toolNames: [], cards: [], reason: 'skip' };
   }
 
-  const useM = text.match(USE_RE);
+  if (retrieved.exact.length) {
+    return { toolNames: namesFor(retrieved.exact, tools), cards: retrieved.exact, reason: 'exact' };
+  }
+  const useM = text.match(USE_MCP_RE);
   if (useM) {
     const id = useM[1].toLowerCase();
-    const matchCards = cards.filter(c =>
-      String(c.mcpId).toLowerCase() === id
-      || String(c.id).toLowerCase() === id
-      || String(c.tool).toLowerCase() === id
-      || String(c.qualified || '').toLowerCase().includes(id)
-    );
     const matchTools = (tools || []).filter(t =>
       t.server?.toLowerCase() === id || t.name?.toLowerCase().includes(id)
     );
-    if (matchCards.length) {
-      return { toolNames: namesFor(matchCards, tools), cards: matchCards, reason: 'exact' };
-    }
     if (matchTools.length) {
       return { toolNames: matchTools.map(t => t.name), cards: [], reason: 'exact-tool' };
     }
   }
 
-  const hits = searchCards(cards, text, retrieveK);
+  const hits = retrieved.cards;
   if (!hits.length) {
     if (sticky?.mcpId && Date.now() - (sticky.at || 0) < 10 * 60 * 1000) {
       const stickyCards = cards.filter(c => c.mcpId === sticky.mcpId);

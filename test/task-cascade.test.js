@@ -144,3 +144,14 @@ describe('executeTaskCascade', () => {
     expect(reply).toMatch(/18/);
   });
 });
+
+describe('planCatalogCascade (wired through heuristic fallback)', () => {
+  it('still plans web_search via the heuristic when no catalog cards and no LLM', async () => {
+    const { planCatalogCascade } = await import('../src/ai/mcp-planner.js');
+    const p = await planCatalogCascade('what was the weather yesterday in Tbilisi', {
+      skills: [webSearch], mcpTools: [], plannerEnabled: false,
+    });
+    expect(p.type).toBe('tasks');
+    expect(p.stages.flat().some(t => t.skillId === 'web_search')).toBe(true);
+  });
+});

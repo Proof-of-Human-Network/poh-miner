@@ -52,6 +52,8 @@ export function allCards({ disabled = [], tools = [] } = {}) {
   return [...builtin, ...overlayCardsFromTools(tools)];
 }
 
+export const USE_MCP_RE = /\b(?:use|ask|call|with)\s+([a-z0-9._/-]+)\s+mcp\b/i;
+
 export function searchCards(cards, query, k = 8) {
   const q = String(query || '').toLowerCase().trim();
   if (!q || !cards?.length) return [];
@@ -76,4 +78,59 @@ export function searchCards(cards, query, k = 8) {
 export function isConversational(message) {
   return /^(hi|hello|hey|thanks|thank you|ok|okay|yes|no|sure|great|cool|got it|makes sense|sounds good|nice|perfect|good|bye|see you|lol|haha|awesome|interesting|are you|what is your|what's your|how are you)\b/i
     .test(String(message || '').trim());
+}
+
+function scoreSkill(skill, segLower) {
+  let score = 0;
+  for (const t of (skill.triggers || [])) {
+    if (segLower.includes(String(t).toLowerCase())) score += String(t).trim().split(/\s+/).length;
+  }
+  return score;
+}
+
+/**
+ * Phase A retrieval: compact candidate list for the planner / router.
+ * Always includes exact "use X MCP" matches. No LLM.
+ */
+export function retrieveCandidates(message, { cards = [], skills = [], retrieveK = 12 } = {}) {
+  const text = String(message || '').trim();
+  if (!text || isConversational(text)) {
+    return { cards: [], skills: [], exact: [], reason: 'skip' };
+  }
+
+  const exact = [];
+  const useM = text.match(USE_MCP_RE);
+  if (useM) {
+    const id = useM[1].toLowerCase();
+    for (const c of cards) {
+      if (
+        String(c.mcpId).toLowerCase() === id
+        || String(c.id).toLowerCase() === id
+        || String(c.tool).toLowerCase() === id
+        || String(c.qualified || '').toLowerCase().includes(id)
+      ) exact.push(c);
+    }
+  }
+
+  const hits = searchCards(cards, text, retrieveK);
+  const byId = new Map();
+  for (const c of [...exact, ...hits]) {
+    if (c?.id && !byId.has(c.id)) byId.set(c.id, c);
+  }
+  const outCards = [...byId.values()].slice(0, retrieveK);
+
+  const segLower = text.toLowerCase();
+  const skillHits = (skills || [])
+    .map(s => ({ skill: s, score: scoreSkill(s, segLower) }))
+    .filter(h => h.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 6)
+    .map(h => h.skill);
+
+  return {
+    cards: outCards,
+    skills: skillHits,
+    exact,
+    reason: exact.length ? 'exact' : outCards.length || skillHits.length ? 'retrieve' : 'none',
+  };
 }
