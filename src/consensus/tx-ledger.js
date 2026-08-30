@@ -8,6 +8,7 @@
 import { DAITransaction } from '../core/transaction.js';
 import { Wallet, computeTxFieldsHash } from '../wallet/wallet.js';
 import { ESCROW_ADDRESS } from '../p2p/escrow.js';
+import { p2pTransitionKey } from '../p2p/transitions.js';
 import { normalizeCurrency, isKnownAsset, STABLE_TICKERS } from '../assets.js';
 
 export class TxLedgerState {
@@ -21,6 +22,8 @@ export class TxLedgerState {
     /** @type {Map<string, string>} */
     this.signingKeys = new Map();
     this.spentTxHashes = new Set();
+    /** @type {Set<string>} p2pTransitionKey values already applied (idempotent replay). */
+    this.appliedP2PKeys = new Set();
     this.totalMinted = 0;
     /** @type {Map<string, number>} ticker → total raw units minted (genesis allocations only) */
     this.totalMintedAssets = new Map();
@@ -35,6 +38,7 @@ export class TxLedgerState {
     copy.nonces = new Map(this.nonces);
     copy.signingKeys = new Map(this.signingKeys);
     copy.spentTxHashes = new Set(this.spentTxHashes);
+    copy.appliedP2PKeys = new Set(this.appliedP2PKeys);
     copy.totalMinted = this.totalMinted;
     copy.totalMintedAssets = new Map(this.totalMintedAssets);
     copy.coinbaseDust = this.coinbaseDust;
@@ -264,6 +268,8 @@ export class TxLedgerState {
   }
 
   applyP2PEscrowTransition(t) {
+    const key = p2pTransitionKey(t);
+    if (key && this.appliedP2PKeys.has(key)) return true;
     // Legacy transitions carry no baseAsset → DAI. New ones set it when non-DAI.
     const base = normalizeCurrency(t.baseAsset);
     if (t.type === 'p2p-order-created' && t.side === 'sell' && t.escrowLocked) {
@@ -300,6 +306,7 @@ export class TxLedgerState {
       this._credit(t.baseRecipient || t.taker, escrowNeeded - refFee, base);
       if (refFee > 0 && t.referrer) this._credit(t.referrer, refFee, base);
     }
+    if (key) this.appliedP2PKeys.add(key);
     return true;
   }
 

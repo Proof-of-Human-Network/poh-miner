@@ -20,7 +20,7 @@ import { replayChainLedger } from './consensus/tx-ledger.js';
 import { compareChains } from './consensus/chain-selection.js';
 import { createGenesisBlock } from './consensus/genesis.js';
 import { blocksOnTipPath } from './consensus/chain-path.js';
-import { FINALITY_DEPTH, signCheckpoint } from './consensus/finality.js';
+import { FINALITY_DEPTH, rewindTargetHeight, signCheckpoint } from './consensus/finality.js';
 import {
   verifyBrainEvent,
   verifyIpfsUpdate,
@@ -458,7 +458,7 @@ async function syncFromPeer(peerUrl) {
         );
         if (cmp > 0) {
           console.warn(`[Bootnode] Fork at #${peerHeight}: peer chain wins (work/hash) — rewinding to adopt it.`);
-          const rewindTo = Math.max(0, localHeight - FINALITY_DEPTH);
+          const rewindTo = rewindTargetHeight(localHeight, FINALITY_DEPTH);
           while (chain.length > 1 && (chain[chain.length - 1]?.height ?? 0) > rewindTo) chain.pop();
           chainStore.saveChain(chain);
           refreshTxLedger();
@@ -500,7 +500,7 @@ async function syncFromPeer(peerUrl) {
           // wipe. Rewind to a block the peer also has and let the next round
           // re-fetch from there instead.
           if (check.reason === 'previousHash mismatch' && block.height === from && !rewound) {
-            const rewindTo = Math.max(0, (chain[chain.length - 1]?.height ?? 0) - FINALITY_DEPTH);
+            const rewindTo = rewindTargetHeight(chain[chain.length - 1]?.height ?? 0, FINALITY_DEPTH);
             const before = chain[chain.length - 1]?.height ?? -1;
             while (chain.length > 1 && (chain[chain.length - 1]?.height ?? 0) > rewindTo) chain.pop();
             rewound = true;

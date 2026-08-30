@@ -38,6 +38,27 @@ export const FINALITY_DEPTH = (() => {
   return Number.isInteger(n) && n > 0 ? n : 100;
 })();
 
+/**
+ * On a chain shorter than FINALITY_DEPTH, a tip-hash disagreement used to
+ * rewind to genesis (`localHeight - 100` clamps to 0). Cap how far a young
+ * chain walks back so a one-block fork is a few-block re-fetch, not a wipe.
+ * Mature chains (`height >= FINALITY_DEPTH`) still rewind a full finality window.
+ */
+export const SHORT_CHAIN_REWIND_MAX = 8;
+
+/**
+ * Height of the last block to KEEP when adopting a peer's competing tip.
+ * Genesis (height 0) is never popped — callers already stop at chain.length > 1.
+ */
+export function rewindTargetHeight(localHeight, finalityDepth = FINALITY_DEPTH) {
+  const h = Number(localHeight);
+  if (!Number.isFinite(h) || h <= 0) return 0;
+  const depth = h >= finalityDepth
+    ? finalityDepth
+    : Math.min(h, SHORT_CHAIN_REWIND_MAX, Math.max(1, Math.floor(h / 2)));
+  return Math.max(0, h - depth);
+}
+
 /** Canonical bytes a checkpoint signature covers. */
 export function checkpointMessage({ height, hash }) {
   return JSON.stringify({ kind: 'dai-checkpoint', height, hash });

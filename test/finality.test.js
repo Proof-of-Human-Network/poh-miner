@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import {
   FINALITY_DEPTH,
+  SHORT_CHAIN_REWIND_MAX,
+  rewindTargetHeight,
   evaluateReorg,
   signCheckpoint,
   verifyCheckpoint,
@@ -62,6 +64,29 @@ describe('max-reorg-depth', () => {
 
   it('exports a sane default depth', () => {
     expect(FINALITY_DEPTH).toBeGreaterThan(0);
+  });
+});
+
+describe('rewindTargetHeight', () => {
+  const D = 100;
+
+  it('does not snap a young chain back to genesis on a tip fork', () => {
+    // height 11 used to rewind to 0 because 11 - 100 < 0
+    const keep = rewindTargetHeight(11, D);
+    expect(keep).toBeGreaterThan(0);
+    expect(11 - keep).toBeLessThanOrEqual(SHORT_CHAIN_REWIND_MAX);
+    expect(rewindTargetHeight(34, D)).toBeGreaterThan(0);
+  });
+
+  it('on a mature chain still rewinds a full finality window', () => {
+    expect(rewindTargetHeight(130, D)).toBe(30);
+    expect(rewindTargetHeight(100, D)).toBe(0);
+  });
+
+  it('never returns below genesis', () => {
+    expect(rewindTargetHeight(0, D)).toBe(0);
+    expect(rewindTargetHeight(-1, D)).toBe(0);
+    expect(rewindTargetHeight(1, D)).toBe(0);
   });
 });
 

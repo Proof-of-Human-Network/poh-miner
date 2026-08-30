@@ -47,6 +47,7 @@ import {
 } from './consensus/block-validator.js';
 import { replayChainLedger, replayChainLedgerAsync } from './consensus/tx-ledger.js';
 import { FINALITY_DEPTH, evaluateReorg, verifyCheckpoint, chainHonorsCheckpoint } from './consensus/finality.js';
+import { p2pTransitionKey, makeP2PAuth, verifyGossipedP2PTransition } from './p2p/transitions.js';
 import { autoForwardPort } from './net/port-forward.js';
 import { computeVerdictWithExistingDai } from './compute/dai-adapter.js';
 import { getBrain, getBrainDataDir, getQvacModels } from './compute/adapters/real-dai.js';
@@ -566,8 +567,8 @@ export class DAIMinerNode {
     // Durable, not just in-memory. A P2P escrow lock or release updates balances
     // immediately but only becomes real once a block carries its transition; the
     // ledger is replayed from the chain, so a transition lost to a restart makes
-    // the balance change silently revert. That is how a completed trade could
-    // pay out in memory and leave the taker with nothing after the next rebuild.
+    // the balance change silently revert. Signed `p2p-transition` gossip lets
+    // any miner include the object, so a non-mining origin still lands on chain.
     this.pendingBrainTransitions = this._loadPendingTransitions();
 
     // Skill staking: skillId → { total: number (μDAI), stakers: Map(address → amount) }
@@ -3969,9 +3970,8 @@ export class DAIMinerNode {
 
           result.order.escrowLocked = (orderFields.side === 'sell');
           this.p2pOrderStore._patchOrder(result.order.id, { escrowLocked: result.order.escrowLocked });
-          this._appliedP2PIds.add(`order-${result.order.id}`);
-          this.pendingBrainTransitions.push({ type: 'p2p-order-created', ...result.order });
-          this._persistPendingTransitions();
+          const createPayload = { address, timestamp, action: 'create-order', side: orderFields.side, daiAmount: orderFields.daiAmount };
+          this._queueP2PTransition({ type: 'p2p-order-created', ...result.order }, { auth: makeP2PAuth(body, createPayload) });
           this.gossip.publish('p2p-order', result.order).catch(() => {});
           return res.end(JSON.stringify(result));
         }).catch(e => { res.statusCode = 400; res.end(JSON.stringify({ error: e.message })); });
@@ -4007,9 +4007,8 @@ export class DAIMinerNode {
               this.p2pEscrow.release(this.walletManager, ownerAddress, orderDAIAmount, cancelBase);
             }
             // Refund escrow for buy orders where taker locked (handled in trade cancel)
-            this._appliedP2PIds.add(`order-cancel-${orderId}`);
-            this.pendingBrainTransitions.push({ type: 'p2p-order-cancelled', orderId, maker: ownerAddress, side: orderSide, escrowLocked: wasEscrowLocked, daiAmount: orderDAIAmount, ...(cancelBase !== 'DAI' ? { baseAsset: cancelBase } : {}), updatedAt: Date.now() });
-            this._persistPendingTransitions();
+            const cancelPayload = { address, timestamp, action: 'cancel-order', orderId };
+            this._queueP2PTransition({ type: 'p2p-order-cancelled', orderId, maker: ownerAddress, side: orderSide, escrowLocked: wasEscrowLocked, daiAmount: orderDAIAmount, ...(cancelBase !== 'DAI' ? { baseAsset: cancelBase } : {}), updatedAt: Date.now() }, { auth: makeP2PAuth(body, cancelPayload) });
             this.gossip.publish('p2p-order', result.order).catch(() => {});
             return res.end(JSON.stringify(result));
           }).catch(e => { res.statusCode = 400; res.end(JSON.stringify({ error: e.message })); });
@@ -4068,8 +4067,8 @@ export class DAIMinerNode {
                 referrer: referrer || null, referralFee,
                 updatedAt: Date.now(),
               };
-              this._appliedP2PIds.add(`swap-${tradeId}`);
-              this.pendingBrainTransitions.push(swapTransition);
+              const selectPayload = { address, timestamp, action: 'select-order', orderId, daiAmount, quoteAmount };
+              this._queueP2PTransition(swapTransition, { auth: makeP2PAuth(body, selectPayload) });
               this.gossip.publish('p2p-order', this.p2pOrderStore.getOrder(orderId)).catch(() => {});
               this.gossip.publish('p2p-trade', done.trade || result.trade).catch(() => {});
               return res.end(JSON.stringify({ ...done, atomic: true, referralFee }));
@@ -4088,9 +4087,8 @@ export class DAIMinerNode {
               res.statusCode = 400; return res.end(JSON.stringify(result));
             }
 
-            this._appliedP2PIds.add(`trade-${result.trade.id}`);
-            this.pendingBrainTransitions.push({ type: 'p2p-trade-created', ...result.trade, orderSide: order.side, ...(baseAsset !== 'DAI' ? { baseAsset } : {}) });
-            this._persistPendingTransitions();
+            const selectPayload = { address, timestamp, action: 'select-order', orderId, daiAmount, quoteAmount };
+            this._queueP2PTransition({ type: 'p2p-trade-created', ...result.trade, orderSide: order.side, ...(baseAsset !== 'DAI' ? { baseAsset } : {}) }, { auth: makeP2PAuth(body, selectPayload) });
             this.gossip.publish('p2p-order', this.p2pOrderStore.getOrder(orderId)).catch(() => {});
             this.gossip.publish('p2p-trade', result.trade).catch(() => {});
             return res.end(JSON.stringify(result));
@@ -4131,12 +4129,12 @@ export class DAIMinerNode {
           // that commits to it; fall back to the legacy payload (which does not)
           // so older clients keep working, but then DROP the reason rather than
           // recording unsigned text as something the user said.
-          let auth = verifyP2PAuth(address, signingPublicKey, signature,
-            { address, timestamp, action, tradeId, ...(reason !== undefined ? { reason } : {}) });
+          let authPayload = { address, timestamp, action, tradeId, ...(reason !== undefined ? { reason } : {}) };
+          let auth = verifyP2PAuth(address, signingPublicKey, signature, authPayload);
           let reasonSigned = !auth.error;
           if (auth.error && reason !== undefined) {
-            auth = verifyP2PAuth(address, signingPublicKey, signature,
-              { address, timestamp, action, tradeId });
+            authPayload = { address, timestamp, action, tradeId };
+            auth = verifyP2PAuth(address, signingPublicKey, signature, authPayload);
             reasonSigned = false;
           }
           if (auth.error) { res.statusCode = 401; return res.end(JSON.stringify(auth)); }
@@ -4155,9 +4153,7 @@ export class DAIMinerNode {
             if (!_isAddr(payer)) { res.statusCode = 403; return res.end(JSON.stringify({ error: 'not the payer' })); }
             const result = this.p2pOrderStore.markPaymentSent(tradeId);
             if (result.error) { res.statusCode = 400; return res.end(JSON.stringify(result)); }
-            this._appliedP2PIds.add(`trade-${tradeId}-payment-sent`);
-            this.pendingBrainTransitions.push({ type: 'p2p-trade-payment-sent', tradeId, updatedAt: Date.now() });
-            this._persistPendingTransitions();
+            this._queueP2PTransition({ type: 'p2p-trade-payment-sent', tradeId, updatedAt: Date.now() }, { auth: makeP2PAuth(body, authPayload) });
             this.gossip.publish('p2p-trade', result.trade).catch(() => {});
             return res.end(JSON.stringify(result));
           }
@@ -4184,9 +4180,7 @@ export class DAIMinerNode {
 
             const result = this.p2pOrderStore.completeTrade(tradeId);
             if (result.error) { res.statusCode = 400; return res.end(JSON.stringify(result)); }
-            this._appliedP2PIds.add(`trade-${tradeId}-release`);
-            this.pendingBrainTransitions.push({ type: 'p2p-trade-release', tradeId, recipient, daiAmount: releaseAmount, referrer: referrer || null, referralFee, ...(relBase !== 'DAI' ? { baseAsset: relBase } : {}), updatedAt: Date.now() });
-            this._persistPendingTransitions();
+            this._queueP2PTransition({ type: 'p2p-trade-release', tradeId, recipient, daiAmount: releaseAmount, referrer: referrer || null, referralFee, ...(relBase !== 'DAI' ? { baseAsset: relBase } : {}), updatedAt: Date.now() }, { auth: makeP2PAuth(body, authPayload) });
             this.gossip.publish('p2p-trade', result.trade).catch(() => {});
             this.gossip.publish('p2p-order', this.p2pOrderStore.getOrder(trade.orderId)).catch(() => {});
             return res.end(JSON.stringify({ ...result, referralFee }));
@@ -4208,9 +4202,7 @@ export class DAIMinerNode {
             }
             const result = this.p2pOrderStore.cancelTrade(tradeId);
             if (result.error) { res.statusCode = 400; return res.end(JSON.stringify(result)); }
-            this._appliedP2PIds.add(`trade-${tradeId}-cancel`);
-            this.pendingBrainTransitions.push({ type: 'p2p-trade-cancel', tradeId, locker, daiAmount: lockAmt, escrowLocked: hadEscrow, ...(cnclBase !== 'DAI' ? { baseAsset: cnclBase } : {}), updatedAt: Date.now() });
-            this._persistPendingTransitions();
+            this._queueP2PTransition({ type: 'p2p-trade-cancel', tradeId, locker, daiAmount: lockAmt, escrowLocked: hadEscrow, ...(cnclBase !== 'DAI' ? { baseAsset: cnclBase } : {}), updatedAt: Date.now() }, { auth: makeP2PAuth(body, authPayload) });
             this.gossip.publish('p2p-trade', result.trade).catch(() => {});
             this.gossip.publish('p2p-order', this.p2pOrderStore.getOrder(trade.orderId)).catch(() => {});
             return res.end(JSON.stringify(result));
@@ -4221,9 +4213,7 @@ export class DAIMinerNode {
             if (!canDispute) { res.statusCode = 403; return res.end(JSON.stringify({ error: 'not a trade participant' })); }
             const result = this.p2pOrderStore.disputeTrade(tradeId, { reason: signedReason });
             if (result.error) { res.statusCode = 400; return res.end(JSON.stringify(result)); }
-            this._appliedP2PIds.add(`trade-${tradeId}-dispute`);
-            this.pendingBrainTransitions.push({ type: 'p2p-trade-dispute', tradeId, reason: signedReason || '', updatedAt: Date.now() });
-            this._persistPendingTransitions();
+            this._queueP2PTransition({ type: 'p2p-trade-dispute', tradeId, reason: signedReason || '', updatedAt: Date.now() }, { auth: makeP2PAuth(body, authPayload) });
             this.gossip.publish('p2p-trade', result.trade).catch(() => {});
             return res.end(JSON.stringify(result));
           }
@@ -4656,7 +4646,7 @@ export class DAIMinerNode {
             const localHash  = localBlock?.blockHash || localBlock?.getHashSync();
             if (localHash && peerHash !== localHash) {
               isFork = true;
-              console.warn(`[DAI-Miner] Fork detected at block ${forkCheckHeight} (local: ${localHash.slice(0, 8)}… vs peer: ${peerHash.slice(0, 8)}…) — wiping local chain and resyncing`);
+              console.warn(`[DAI-Miner] Fork detected at block ${forkCheckHeight} (local: ${localHash.slice(0, 8)}… vs peer: ${peerHash.slice(0, 8)}…) — will bounded-reorg, not wipe`);
             }
           }
         }
@@ -5857,6 +5847,14 @@ export class DAIMinerNode {
     this.gossip.subscribe('p2p-trade', (trade) => {
       try { this.p2pOrderStore.ingestGossipTrade(trade); } catch { /* ignore malformed */ }
     });
+    // Signed escrow movements — any miner can include these in the next block.
+    // Do not apply RAM here: the origin already did, and everyone else applies
+    // from the block. Unverified objects are dropped (fund-theft otherwise).
+    this.gossip.subscribe('p2p-transition', (t) => {
+      const v = verifyGossipedP2PTransition(t);
+      if (!v.ok) return;
+      this._queueP2PTransition(t, { appliedLocally: false });
+    });
 
     // Layer 3: P2P block requests — serve block ranges to any peer that asks
     this.gossip.subscribe('block-request', ({ fromHeight, toHeight, requesterId }) => {
@@ -6089,6 +6087,7 @@ export class DAIMinerNode {
     this.txLedger.applyBlock(block, { strict: false });
     for (const t of (block.stateTransitions || [])) {
       this.txLedger.applyP2PEscrowTransition(t);
+      this._dropQueuedP2PTransition(t);
     }
     const newlySpent = [];
     for (const h of this.txLedger.spentTxHashes) {
@@ -7469,6 +7468,32 @@ export class DAIMinerNode {
     }
   }
 
+  /**
+   * Queue a P2P escrow transition for the next block, persist it, and gossip
+   * the signed object so a *different* miner can include it. `appliedLocally`
+   * means this node already moved RAM (the API path); gossip receivers leave
+   * RAM alone until the block lands.
+   */
+  _queueP2PTransition(transition, { auth = null, appliedLocally = true } = {}) {
+    if (!transition?.type) return false;
+    const t = auth ? { ...transition, _auth: auth } : { ...transition };
+    const key = p2pTransitionKey(t);
+    if (key && this.pendingBrainTransitions.some(x => p2pTransitionKey(x) === key)) return false;
+    if (appliedLocally && key) this._appliedP2PIds.add(key);
+    this.pendingBrainTransitions.push(t);
+    this._persistPendingTransitions();
+    if (appliedLocally) this.gossip?.publish?.('p2p-transition', t)?.catch?.(() => {});
+    return true;
+  }
+
+  _dropQueuedP2PTransition(t) {
+    const key = p2pTransitionKey(t);
+    if (!key) return;
+    const before = this.pendingBrainTransitions.length;
+    this.pendingBrainTransitions = this.pendingBrainTransitions.filter(x => p2pTransitionKey(x) !== key);
+    if (this.pendingBrainTransitions.length !== before) this._persistPendingTransitions();
+  }
+
   // ── Durable pending-reward queue ────────────────────────────────────────────
   _loadPendingResults() {
     try {
@@ -8627,7 +8652,8 @@ export class DAIMinerNode {
 
     if (newBlock.meetsDifficultySync()) {
       // PoW succeeded — now safe to consume the transitions we snapshotted above.
-      this.pendingBrainTransitions.splice(0, brainTransitions.filter(t => t.type !== 'brain-state-root').length);
+      const snapSet = new Set(brainTransitions.filter(t => t.type !== 'brain-state-root'));
+      this.pendingBrainTransitions = this.pendingBrainTransitions.filter(t => !snapSet.has(t));
       this._persistPendingTransitions();   // the queue shrank — record that before a restart can replay them
 
       // Sign the block with our identity key after PoW is solved
