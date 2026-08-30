@@ -24,6 +24,7 @@ describe('API security', () => {
 
   it('allows /gossip from remote but blocks wallet mutations', () => {
     expect(isPublicPostPath('/gossip')).toBe(true);
+    expect(isPublicPostPath('/api/mcp/execute')).toBe(true);
     const res = { statusCode: 200, end: () => {} };
     const remotePost = { method: 'POST', socket: { remoteAddress: '8.8.8.8' } };
     const blocked = rejectNonLocalStateChange(remotePost, res, '/api/tx/submit');

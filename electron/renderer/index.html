@@ -2018,13 +2018,19 @@
           <!-- MCP SERVERS -->
           <div class="settings-subpage" id="settings-sub-mcp">
             <div>
-              <div style="font-size:10px;color:#666;letter-spacing:0.1em;margin-bottom:8px;font-weight:600;">MCP SERVERS</div>
-              <div style="font-size:10px;color:#444;margin-bottom:8px;">Standard MCP config format — same as Claude Desktop / Cursor (<code style="color:#666;">mcpServers</code> with <code style="color:#666;">command</code>, <code style="color:#666;">args</code>, <code style="color:#666;">env</code>).</div>
+              <div style="font-size:10px;color:#666;letter-spacing:0.1em;margin-bottom:8px;font-weight:600;">INCLUDED BY DEFAULT</div>
+              <div id="mcp-builtin-list" style="font-size:10px;color:#666;margin-bottom:12px;">Loading builtin tools…</div>
+              <div style="font-size:10px;color:#666;letter-spacing:0.1em;margin-bottom:8px;font-weight:600;">INSTALLED MCP SERVERS</div>
+              <div style="font-size:10px;color:#444;margin-bottom:8px;">stdio: <code style="color:#666;">command</code> / <code style="color:#666;">args</code> / <code style="color:#666;">env</code>. HTTP: <code style="color:#666;">url</code> plus optional custom <code style="color:#666;">headers</code> (any header, not only Bearer).</div>
               <div id="mcp-servers-list" style="display:flex;flex-direction:column;gap:6px;margin-bottom:8px;"></div>
               <div style="background:#0a0a0a;border:1px solid #1a1a1a;border-radius:6px;padding:10px;display:flex;flex-direction:column;gap:6px;">
                 <input id="mcp-new-name" placeholder="Server id (e.g. filesystem)"
                        style="width:100%;padding:5px;background:#111;color:#ddd;border:1px solid #2a2a2a;border-radius:4px;font-family:monospace;font-size:11px;box-sizing:border-box;">
-                <input id="mcp-new-command" placeholder="command (e.g. npx)"
+                <input id="mcp-new-url" placeholder="HTTP url (optional, e.g. https://example/mcp)"
+                       style="width:100%;padding:5px;background:#111;color:#ddd;border:1px solid #2a2a2a;border-radius:4px;font-family:monospace;font-size:11px;box-sizing:border-box;">
+                <input id="mcp-new-headers" placeholder='headers JSON (optional, e.g. {"Authorization":"Api-Key xyz","X-User":"1"})'
+                       style="width:100%;padding:5px;background:#111;color:#ddd;border:1px solid #2a2a2a;border-radius:4px;font-family:monospace;font-size:11px;box-sizing:border-box;">
+                <input id="mcp-new-command" placeholder="command (e.g. npx) — skip if using url"
                        style="width:100%;padding:5px;background:#111;color:#ddd;border:1px solid #2a2a2a;border-radius:4px;font-family:monospace;font-size:11px;box-sizing:border-box;">
                 <input id="mcp-new-args" placeholder='args JSON (e.g. ["-y","@modelcontextprotocol/server-filesystem","/path"])'
                        style="width:100%;padding:5px;background:#111;color:#ddd;border:1px solid #2a2a2a;border-radius:4px;font-family:monospace;font-size:11px;box-sizing:border-box;">
@@ -2035,7 +2041,7 @@
               </div>
               <details style="margin-top:8px;font-size:10px;color:#555;">
                 <summary style="cursor:pointer;color:#666;">Paste full mcpServers JSON</summary>
-                <textarea id="mcp-json-paste" rows="6" placeholder='{"filesystem":{"command":"npx","args":["-y","@modelcontextprotocol/server-filesystem","/home/user/Desktop"]}}'
+                <textarea id="mcp-json-paste" rows="6" placeholder='{"my-http":{"url":"https://example/mcp","headers":{"X-Api-Key":"…"}}} '
                   style="width:100%;margin-top:6px;padding:6px;background:#111;color:#ddd;border:1px solid #2a2a2a;border-radius:4px;font-family:monospace;font-size:10px;box-sizing:border-box;"></textarea>
                 <button id="mcp-import-btn" style="margin-top:4px;padding:4px 8px;background:#1a1a1a;color:#9ca3af;border:1px solid #2a2a2a;border-radius:4px;cursor:pointer;font-size:10px;">Import JSON</button>
               </details>

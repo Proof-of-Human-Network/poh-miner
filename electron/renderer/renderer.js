@@ -1596,24 +1596,43 @@ async function initMcpServersUI() {
   const status = document.getElementById('mcp-status');
   if (!list || !addBtn || !window.daiMinerAPI?.mcp) return;
 
+  async function renderBuiltin() {
+    const el = document.getElementById('mcp-builtin-list');
+    if (!el) return;
+    const port = window._minerApiPort || 3456;
+    try {
+      const r = await fetch(`http://localhost:${port}/api/mcp/status`);
+      const data = r.ok ? await r.json() : {};
+      const tools = data.builtin?.tools || [];
+      const on = data.builtin?.enabled !== false;
+      el.textContent = on
+        ? `public-apis + onion-search (${tools.length} tools). Chat picks from this address book; they are not listed in Installed.`
+        : 'Builtin pack disabled in config (mcpBuiltin.enabled: false).';
+    } catch {
+      el.textContent = 'public-apis + onion-search ship with every node (weather, wiki, FX, onion search, …).';
+    }
+  }
+
   async function renderList() {
     let servers = [];
     try { servers = await window.daiMinerAPI.mcp.getServers(); } catch {}
+    renderBuiltin();
 
     list.innerHTML = '';
     if (!servers.length) {
-      list.innerHTML = '<div style="font-size:10px;color:#444;">No MCP servers configured. Add one below or paste standard mcpServers JSON.</div>';
+      list.innerHTML = '<div style="font-size:10px;color:#444;">No extra MCP servers. Add a stdio command or an HTTP url below.</div>';
       return;
     }
 
     for (const s of servers) {
       const cmdLine = [s.command, ...(s.args || [])].filter(Boolean).join(' ');
+      const headerKeys = s.headers && typeof s.headers === 'object' ? Object.keys(s.headers) : [];
       const row = document.createElement('div');
       row.style.cssText = 'background:#0a0a0a;border:1px solid #1a1a1a;border-radius:6px;padding:8px 10px;display:flex;align-items:center;justify-content:space-between;gap:8px;';
       row.innerHTML = `
         <div style="min-width:0;">
           <div style="font-size:11px;color:#ddd;">${s.name || s.id || '(unnamed)'} ${s.enabled ? '' : '<span style="color:#666;">(disabled)</span>'}</div>
-          <div style="font-size:10px;color:#666;font-family:monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${cmdLine || s.url || ''}</div>
+          <div style="font-size:10px;color:#666;font-family:monospace;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${s.url || cmdLine || ''}${headerKeys.length ? ' · headers: ' + headerKeys.join(', ') : ''}</div>
         </div>
         <div style="display:flex;gap:4px;flex-shrink:0;">
           <button data-action="toggle" style="padding:4px 8px;background:#1a1a1a;color:#9ca3af;border:none;border-radius:4px;cursor:pointer;font-size:10px;">${s.enabled ? 'Disable' : 'Enable'}</button>
@@ -1635,28 +1654,34 @@ async function initMcpServersUI() {
   addBtn.addEventListener('click', async () => {
     const name = document.getElementById('mcp-new-name').value.trim();
     const command = document.getElementById('mcp-new-command').value.trim();
+    const url = document.getElementById('mcp-new-url')?.value?.trim() || '';
     const argsRaw = document.getElementById('mcp-new-args').value.trim();
     const envRaw = document.getElementById('mcp-new-env').value.trim();
+    const headersRaw = document.getElementById('mcp-new-headers')?.value?.trim() || '';
 
-    if (!name || !command) {
-      status.textContent = 'Server id and command are required';
+    if (!name || (!command && !url)) {
+      status.textContent = 'Server id and command or url are required';
       status.style.color = '#f87171';
       return;
     }
 
     let args = [];
     let env = {};
+    let headers = {};
     try { if (argsRaw) args = JSON.parse(argsRaw); } catch { status.textContent = 'args must be valid JSON array'; status.style.color = '#f87171'; return; }
     try { if (envRaw) env = JSON.parse(envRaw); } catch { status.textContent = 'env must be valid JSON object'; status.style.color = '#f87171'; return; }
+    try { if (headersRaw) headers = JSON.parse(headersRaw); } catch { status.textContent = 'headers must be valid JSON object'; status.style.color = '#f87171'; return; }
 
     status.textContent = 'Adding...';
     status.style.color = '#888';
     try {
-      await window.daiMinerAPI.mcp.saveServer({ id: name, name, command, args, env, enabled: true });
+      await window.daiMinerAPI.mcp.saveServer({ id: name, name, command, args, env, url, headers, enabled: true });
       document.getElementById('mcp-new-name').value = '';
       document.getElementById('mcp-new-command').value = '';
       document.getElementById('mcp-new-args').value = '';
       document.getElementById('mcp-new-env').value = '';
+      if (document.getElementById('mcp-new-url')) document.getElementById('mcp-new-url').value = '';
+      if (document.getElementById('mcp-new-headers')) document.getElementById('mcp-new-headers').value = '';
       status.textContent = 'MCP server added';
       status.style.color = '#22c55e';
       renderList();

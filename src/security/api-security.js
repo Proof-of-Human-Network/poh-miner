@@ -5,7 +5,7 @@
 const LOCAL_ADDRS = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1']);
 
 /** POST paths reachable from remote peers (everything else is localhost-only). */
-const PUBLIC_POST_PATHS = new Set(['/gossip']);
+const PUBLIC_POST_PATHS = new Set(['/gossip', '/api/mcp/execute']);
 
 /**
  * Prefixes reachable from remote peers. Used where the path carries an id, so an

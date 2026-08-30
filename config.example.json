@@ -83,6 +83,10 @@
     "xlm": "https://horizon.stellar.org"
   },
   "etherscanApiKey": "YOUR_ETHERSCAN_KEY_HERE",
+  "_comment_mcp": "User-installed MCP servers overlay the builtin public-apis + onion-search packs. HTTP connectors accept arbitrary headers (not only Authorization: Bearer).",
+  "mcpServers": {},
+  "mcpBuiltin": { "enabled": true, "disabled": [] },
+  "mcpCatalog": { "enabled": true, "maxHotConnections": 16, "retrieveK": 8, "disperse": true },
   "daiWallet": "",
   "solanaAddress": "",
   "onboarded": false,

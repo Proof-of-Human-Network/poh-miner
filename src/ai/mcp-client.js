@@ -8,14 +8,18 @@
  * Transports:
  *   - stdio: { command, args, env }  → spawns the process, speaks newline-
  *     delimited JSON-RPC 2.0 over stdin/stdout (the MCP stdio transport).
- *   - http:  { url, apiKey? }        → Streamable HTTP: POST JSON-RPC, accept a
- *     JSON or single-event SSE response.
+ *   - http:  { url, apiKey?, headers? } → Streamable HTTP: POST JSON-RPC,
+ *     accept a JSON or single-event SSE response. `headers` is an object of
+ *     extra HTTP headers (Authorization, API keys, etc.) — not limited to
+ *     `Authorization: Bearer`.
+ *   - builtin: native tool packs shipped with the miner (public-apis, onion-search).
  *
  * Dependency-free (no @modelcontextprotocol/sdk) — the protocol surface we need
  * (initialize → tools/list → tools/call) is small and stable.
  */
 
 import { spawn } from 'child_process';
+import { loadBuiltinPacks, listBuiltinCards } from './builtin-mcp/index.js';
 
 const PROTOCOL_VERSION = '2024-11-05';
 const CLIENT_INFO = { name: 'dai-miner', version: '1.0' };
@@ -102,8 +106,7 @@ class McpConnection {
 
   // ── http (Streamable HTTP) transport ───────────────────────────────────────
   async _sendHttp(msg) {
-    const headers = { 'Content-Type': 'application/json', 'Accept': 'application/json, text/event-stream' };
-    if (this.spec.apiKey) headers['Authorization'] = `Bearer ${this.spec.apiKey}`;
+    const headers = httpHeadersFromSpec(this.spec);
     const res = await fetch(this.spec.url, {
       method: 'POST', headers, body: JSON.stringify(msg),
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
@@ -171,7 +174,56 @@ class McpConnection {
   close() {
     try { this.proc?.kill(); } catch { /* already gone */ }
     this.proc = null;
+    this.connected = false;
   }
+}
+
+/**
+ * Build HTTP headers for an MCP connector.
+ * `spec.headers` is the general case (any header name/value).
+ * `spec.apiKey` still sets `Authorization: Bearer …` when Authorization is unset.
+ */
+export function httpHeadersFromSpec(spec = {}) {
+  const headers = { 'Content-Type': 'application/json', 'Accept': 'application/json, text/event-stream' };
+  if (spec.headers && typeof spec.headers === 'object' && !Array.isArray(spec.headers)) {
+    for (const [k, v] of Object.entries(spec.headers)) {
+      if (v == null || v === '') continue;
+      headers[k] = String(v);
+    }
+  }
+  const hasAuth = Object.keys(headers).some(k => k.toLowerCase() === 'authorization');
+  if (spec.apiKey && !hasAuth) headers['Authorization'] = `Bearer ${spec.apiKey}`;
+  return headers;
+}
+
+/** In-process builtin pack — looks like an McpConnection to the manager. */
+class BuiltinConnection {
+  constructor(id, pack) {
+    this.id = id;
+    this.spec = { builtin: true };
+    this.transport = 'builtin';
+    this.tools = (pack.tools || []).map(t => ({
+      name: t.name,
+      description: t.description || '',
+      inputSchema: t.inputSchema || {},
+      run: t.run,
+    }));
+    this.connected = true;
+    this.error = null;
+    this.source = 'builtin';
+    this._pack = pack;
+  }
+
+  async connect() { return this.tools; }
+
+  async callTool(name, args) {
+    const tool = this.tools.find(t => t.name === name);
+    if (!tool) throw new Error(`MCP ${this.id}: unknown tool "${name}"`);
+    const out = await tool.run(args || {});
+    return typeof out === 'string' ? out : JSON.stringify(out);
+  }
+
+  close() { /* nothing to kill */ }
 }
 
 /**
@@ -180,22 +232,48 @@ class McpConnection {
 export class McpManager {
   constructor(getConfig) {
     this.getConfig = getConfig;          // () => config object
-    this.connections = new Map();        // id → McpConnection
+    this.connections = new Map();        // id → McpConnection | BuiltinConnection
     this._connecting = null;
+    this._lastUsed = new Map();          // id → ts (LRU for user HTTP/stdio)
+  }
+
+  _maxHot() {
+    return this.getConfig()?.mcpCatalog?.maxHotConnections || 16;
+  }
+
+  _attachBuiltins() {
+    const cfg = this.getConfig() || {};
+    if (cfg.mcpBuiltin?.enabled === false) return;
+    const disabled = cfg.mcpBuiltin?.disabled || [];
+    for (const pack of loadBuiltinPacks({ disabled })) {
+      // Never let a user server overwrite a builtin id.
+      if (this.connections.has(pack.id) && this.connections.get(pack.id).transport !== 'builtin') continue;
+      this.connections.set(pack.id, new BuiltinConnection(pack.id, pack));
+      console.log(`[MCP] ✓ builtin ${pack.id} — ${pack.tools.length} tool(s)`);
+    }
   }
 
   /** Connect to every server in config.mcpServers. Safe to call more than once. */
   async connectAll() {
     if (this._connecting) return this._connecting;
     this._connecting = (async () => {
+      this._attachBuiltins();
       const servers = this._normalize(this.getConfig()?.mcpServers);
       const ids = Object.keys(servers);
-      if (!ids.length) { console.log('[MCP] No MCP servers configured.'); return; }
-      console.log(`[MCP] Connecting to ${ids.length} MCP server(s): ${ids.join(', ')}`);
+      if (!ids.length) {
+        if (!this.connections.size) console.log('[MCP] No MCP servers configured.');
+        return;
+      }
+      console.log(`[MCP] Connecting to ${ids.length} user MCP server(s): ${ids.join(', ')}`);
       await Promise.allSettled(ids.map(async id => {
-        if (servers[id].enabled === false) return;
+        if (servers[id].enabled === false || servers[id].disabled === true) return;
+        if (this.connections.get(id)?.transport === 'builtin') {
+          console.warn(`[MCP] skipping user server "${id}" — builtin id is reserved`);
+          return;
+        }
         const conn = new McpConnection(id, servers[id]);
         this.connections.set(id, conn);
+        this._lastUsed.set(id, Date.now());
         try {
           const tools = await conn.connect();
           console.log(`[MCP] ✓ ${id} connected — ${tools.length} tool(s): ${tools.map(t => t.name).join(', ') || '(none)'}`);
@@ -205,6 +283,38 @@ export class McpManager {
       }));
     })();
     try { await this._connecting; } finally { this._connecting = null; }
+  }
+
+  /** Connect a single user server on demand (catalog / overlay). */
+  async ensure(id) {
+    const existing = this.connections.get(id);
+    if (existing?.connected) {
+      this._lastUsed.set(id, Date.now());
+      return existing;
+    }
+    if (existing?.transport === 'builtin') return existing;
+    const servers = this._normalize(this.getConfig()?.mcpServers);
+    const spec = servers[id];
+    if (!spec || spec.enabled === false || spec.disabled === true) {
+      throw new Error(`unknown MCP server "${id}"`);
+    }
+    this._evictHot();
+    const conn = new McpConnection(id, spec);
+    this.connections.set(id, conn);
+    this._lastUsed.set(id, Date.now());
+    await conn.connect();
+    return conn;
+  }
+
+  _evictHot() {
+    const hot = [...this.connections.entries()].filter(([, c]) => c.transport !== 'builtin' && c.connected);
+    const cap = this._maxHot();
+    if (hot.length < cap) return;
+    hot.sort((a, b) => (this._lastUsed.get(a[0]) || 0) - (this._lastUsed.get(b[0]) || 0));
+    const [id, conn] = hot[0];
+    try { conn.close(); } catch { /* ignore */ }
+    this.connections.delete(id);
+    this._lastUsed.delete(id);
   }
 
   /** Accept both the standard object map and a legacy array shape. */
@@ -223,11 +333,44 @@ export class McpManager {
     const out = [];
     for (const [id, conn] of this.connections) {
       if (!conn.connected) continue;
+      const source = conn.transport === 'builtin' ? 'builtin' : 'user';
       for (const t of conn.tools) {
-        out.push({ name: `${id}__${t.name}`, server: id, tool: t.name, description: t.description, inputSchema: t.inputSchema });
+        out.push({
+          name: `${id}__${t.name}`, server: id, tool: t.name,
+          description: t.description, inputSchema: t.inputSchema, source,
+        });
       }
     }
     return out;
+  }
+
+  listCards() {
+    const cfg = this.getConfig() || {};
+    const disabled = cfg.mcpBuiltin?.disabled || [];
+    const builtin = (cfg.mcpBuiltin?.enabled === false) ? [] : listBuiltinCards({ disabled });
+    const user = [];
+    for (const t of this.listTools()) {
+      if (t.source === 'builtin') continue;
+      user.push({
+        id: `${t.server}/${t.tool}`,
+        mcpId: t.server,
+        tool: t.tool,
+        qualified: t.name,
+        summary: (t.description || t.tool).slice(0, 180),
+        tags: [],
+        triggers: [t.server, t.tool],
+        tools: [t.tool],
+        source: 'user',
+      });
+    }
+    return [
+      ...builtin.map(c => ({ ...c, source: 'builtin', qualified: `${c.mcpId}__${c.tool}` })),
+      ...user,
+    ];
+  }
+
+  listServerIds() {
+    return [...this.connections.keys()];
   }
 
   hasTools() { return this.listTools().length > 0; }
@@ -245,6 +388,7 @@ export class McpManager {
     }
     const conn = this.connections.get(serverId);
     if (!conn) throw new Error(`unknown MCP server "${serverId}"`);
+    this._lastUsed.set(serverId, Date.now());
     return conn.callTool(toolName, args);
   }
 
@@ -252,8 +396,22 @@ export class McpManager {
     return [...this.connections.values()].map(c => ({
       id: c.id, transport: c.transport, connected: c.connected,
       error: c.error, tools: c.tools.map(t => t.name),
+      source: c.transport === 'builtin' ? 'builtin' : 'user',
     }));
   }
 
-  closeAll() { for (const c of this.connections.values()) c.close(); this.connections.clear(); }
+  builtinStatus() {
+    const cfg = this.getConfig() || {};
+    return {
+      enabled: cfg.mcpBuiltin?.enabled !== false,
+      disabled: cfg.mcpBuiltin?.disabled || [],
+      tools: this.listTools().filter(t => t.source === 'builtin').map(t => t.name),
+    };
+  }
+
+  closeAll() {
+    for (const c of this.connections.values()) c.close();
+    this.connections.clear();
+    this._lastUsed.clear();
+  }
 }

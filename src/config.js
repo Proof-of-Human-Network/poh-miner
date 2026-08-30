@@ -193,8 +193,23 @@ export function getDefaultConfig() {
     aiProviders: {},
 
     // === External MCP servers (standard MCP format) ===
-    // { "serverId": { "command": "npx", "args": ["-y", "pkg"], "env": {} } }
+    // { "serverId": { "command": "npx", "args": ["-y", "pkg"], "env": {}, "url": "https://…", "headers": { "X-Api-Key": "…" } } }
+    // HTTP connectors accept arbitrary `headers` — not only Authorization: Bearer.
     mcpServers: {},
+
+    // Builtin tool packs (public-apis, onion-search). On by default; not written into mcpServers.
+    mcpBuiltin: {
+      enabled: true,
+      disabled: [],
+    },
+
+    // Address-book catalog + peer dispersal for MCP/skill tools.
+    mcpCatalog: {
+      enabled: true,
+      maxHotConnections: 16,
+      retrieveK: 8,
+      disperse: true,
+    },
 
     // Blockchain chat history search — Meilisearch auto-starts with the node (mandatory).
     // Clients use GET /api/search/* on walletApiPort; Meilisearch stays on localhost:7700.

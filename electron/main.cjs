@@ -683,6 +683,8 @@ function _mcpListFromConfig(config) {
     args: Array.isArray(entry.args) ? entry.args : [],
     env: entry.env && typeof entry.env === 'object' ? entry.env : {},
     url: entry.url || '',
+    apiKey: entry.apiKey || '',
+    headers: entry.headers && typeof entry.headers === 'object' ? entry.headers : {},
     enabled: entry.disabled !== true,
   }));
 }
@@ -695,7 +697,7 @@ ipcMain.handle('mcp:get-servers', async () => {
   return _mcpListFromConfig(config);
 });
 
-ipcMain.handle('mcp:save-server', async (_event, { id, name, command, args, env, url, apiKey, enabled }) => {
+ipcMain.handle('mcp:save-server', async (_event, { id, name, command, args, env, url, apiKey, headers, enabled }) => {
   const fs = require('fs');
   const CONFIG_PATH = path.join(os.homedir(), '.dai-miner', 'config.json');
 
@@ -706,19 +708,21 @@ ipcMain.handle('mcp:save-server', async (_event, { id, name, command, args, env,
   const map = _normalizeMcpConfig(config.mcpServers);
   const serverId = (id || name || '').trim() || crypto.randomUUID();
   const entry = {
-    command: command || 'npx',
     args: Array.isArray(args) ? args : [],
     env: env && typeof env === 'object' ? env : {},
   };
+  if (command) entry.command = command;
+  else if (!url) entry.command = 'npx';
   if (url) entry.url = url;
-  if (apiKey) entry.env = { ...entry.env, API_KEY: apiKey };
+  if (apiKey) entry.apiKey = apiKey;
+  if (headers && typeof headers === 'object' && !Array.isArray(headers)) entry.headers = headers;
   if (enabled === false) entry.disabled = true;
   else delete entry.disabled;
   map[serverId] = entry;
   config.mcpServers = map;
 
   fs.writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2));
-  return { success: true, server: { id: serverId, name: serverId, command: entry.command, args: entry.args, env: entry.env, enabled: enabled !== false } };
+  return { success: true, server: { id: serverId, name: serverId, command: entry.command || '', args: entry.args, env: entry.env, url: entry.url || '', headers: entry.headers || {}, enabled: enabled !== false } };
 });
 
 ipcMain.handle('mcp:import-json', async (_event, jsonText) => {

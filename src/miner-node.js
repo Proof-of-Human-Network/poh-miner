@@ -32,7 +32,7 @@ import {
   SKILL_PROPOSE_FEE_DAI,
   SKILL_GRADUATION_THRESHOLD_DAI,
 } from './rewards/reward.js';
-import { computeChainWork, compareChainWork, getTipChainWork } from './consensus/chain-selection.js';
+import { computeChainWork, compareChains, getTipChainWork } from './consensus/chain-selection.js';
 import { createGenesisBlock, buildMigrationGenesis, loadSnapshot, defaultMigrationSnapshot, EXPECTED_GENESIS_HASH } from './consensus/genesis.js';
 import { blockId, blocksOnTipPath, selectPeerBlockOnTip } from './consensus/chain-path.js';
 import { TxIndex } from './consensus/tx-index.js';
@@ -81,6 +81,9 @@ import { ReferralStore } from './p2p/referral-store.js';
 import { PriceHistory } from './p2p/price-history.js';
 import { tryExternalProviders } from './ai/external-providers.js';
 import { McpManager } from './ai/mcp-client.js';
+import { pickToolsForMessage } from './ai/mcp-router.js';
+import { assignMcpToPeers, callPeerMcp } from './ai/mcp-disperse.js';
+import { searchCards } from './ai/mcp-catalog.js';
 import { planTaskCascade, executeTaskCascade } from './ai/task-cascade.js';
 import {
   materializeAttachments, applyAttachmentsToMessages, MAX_ATTACHMENT_BYTES,
@@ -1099,11 +1102,14 @@ export class DAIMinerNode {
     else if (handleMatch) globalInput.username = handleMatch[1].replace(/\.eth$/i, '');
 
     let mcpTools = [];
+    let catalogCards = [];
     try { mcpTools = this.mcp?.listTools?.() || []; } catch { /* MCP not ready */ }
+    try { catalogCards = this.mcp?.listCards?.() || []; } catch { /* MCP not ready */ }
 
     const plan = planTaskCascade(message, {
       skills: allSkills,
       mcpTools,
+      catalogCards,
       brainDataDir: getBrainDataDir(),
     });
 
@@ -1184,6 +1190,15 @@ export class DAIMinerNode {
 
   /** Run a task-cascade plan and return the aggregated reply. */
   async _runTaskCascade(plan, { model, message } = {}) {
+    const mcpIds = [...new Set((plan.stages || []).flat().filter(t => t.kind === 'mcp').map(t => t.server).filter(Boolean))];
+    let assignment = null;
+    if (mcpIds.length && this.config.mcpCatalog?.disperse !== false) {
+      const peers = await this._getComputePeers().catch(() => []);
+      assignment = assignMcpToPeers(mcpIds, peers);
+      this._mcpAssignment = assignment;
+    } else {
+      this._mcpAssignment = null;
+    }
     const runners = {
       model: model || this.config.model,
       getBrainDataDir,
@@ -1194,11 +1209,35 @@ export class DAIMinerNode {
       callMcp: async (toolName, args) => {
         if (!this.mcp?.callTool) throw new Error('MCP not initialized');
         await this._initMcp();
-        return this.mcp.callTool(toolName, args || {});
+        return this._dispatchMcp(toolName, args || {}, assignment);
       },
       llm: async (messages, opts = {}) => this._llmChat(messages, { model: opts.model || model, timeoutMs: opts.timeoutMs || 60_000 }),
     };
-    return executeTaskCascade(plan, runners, message);
+    try {
+      return await executeTaskCascade(plan, runners, message);
+    } finally {
+      this._mcpAssignment = null;
+    }
+  }
+
+  /**
+   * Run an MCP tool locally, or on a hashed peer when dispersal assigned one.
+   * Peer failures fall back to local so chat still answers.
+   */
+  async _dispatchMcp(qualifiedName, args, assignment) {
+    const sep = String(qualifiedName).indexOf('__');
+    const serverId = sep >= 0 ? qualifiedName.slice(0, sep) : null;
+    const toolName = sep >= 0 ? qualifiedName.slice(sep + 2) : qualifiedName;
+    const peer = serverId && assignment?.get?.(serverId);
+    if (peer && peer !== 'local') {
+      try {
+        const text = await callPeerMcp(peer, { server: serverId, tool: toolName, arguments: args });
+        return typeof text === 'string' ? text : JSON.stringify(text);
+      } catch (e) {
+        console.warn(`[MCP] peer ${peer} failed for ${qualifiedName}: ${e.message} — local fallback`);
+      }
+    }
+    return this.mcp.callTool(qualifiedName, args || {});
   }
 
   /** Sanitize model ids from clients (guards against UI bugs like model="model_used"). */
@@ -3560,7 +3599,55 @@ export class DAIMinerNode {
         return res.end(JSON.stringify({
           servers: this.mcp?.status?.() || [],
           tools: this.mcp?.listTools?.() || [],
+          builtin: this.mcp?.builtinStatus?.() || { enabled: this.config.mcpBuiltin?.enabled !== false, tools: [] },
         }));
+      }
+
+      // ── MCP catalog (address book) ──────────────────────────────────────────
+      {
+        const catMatch = url.pathname.match(/^\/api\/mcp\/catalog(?:\/(.+))?$/);
+        if (req.method === 'GET' && catMatch) {
+          const cards = this.mcp?.listCards?.() || [];
+          const id = catMatch[1] ? decodeURIComponent(catMatch[1]) : null;
+          if (id) {
+            const card = cards.find(c => c.id === id || c.qualified === id || `${c.mcpId}__${c.tool}` === id);
+            if (!card) { res.statusCode = 404; return res.end(JSON.stringify({ error: 'not found' })); }
+            return res.end(JSON.stringify({ card }));
+          }
+          const q = url.searchParams.get('q') || url.searchParams.get('query') || '';
+          const hits = q ? searchCards(cards, q, Number(url.searchParams.get('k')) || 20) : cards;
+          return res.end(JSON.stringify({ cards: hits, count: hits.length }));
+        }
+      }
+
+      // ── MCP execute (local or peer-dispersed builtin calls) ─────────────────
+      if (req.method === 'POST' && url.pathname === '/api/mcp/execute') {
+        let body = '';
+        req.on('data', c => body += c);
+        req.on('end', async () => {
+          try {
+            const payload = body ? JSON.parse(body) : {};
+            const server = payload.server;
+            const tool = payload.tool;
+            const args = payload.arguments || payload.args || {};
+            await this._initMcp();
+            const listed = (this.mcp?.listTools?.() || []).find(t =>
+              (server && t.server === server && t.tool === tool) || t.name === tool || t.name === `${server}__${tool}`
+            );
+            if (!listed) { res.statusCode = 404; return res.end(JSON.stringify({ error: 'unknown tool' })); }
+            const local = typeof isTrulyLocalRequest === 'function' && isTrulyLocalRequest(req);
+            if (payload._dispersed && listed.source !== 'builtin' && !local) {
+              res.statusCode = 403;
+              return res.end(JSON.stringify({ error: 'remote execution is limited to builtin tools' }));
+            }
+            const result = await this.mcp.callTool(listed.name, args);
+            return res.end(JSON.stringify({ result, via: listed.server, source: listed.source }));
+          } catch (e) {
+            res.statusCode = 400;
+            res.end(JSON.stringify({ error: e.message }));
+          }
+        });
+        return;
       }
 
       // ── Dataset serving (/api/dataset, /api/dataset/:file) ───────────────────
@@ -4501,6 +4588,7 @@ export class DAIMinerNode {
     let bestPeer   = null;
     let bestLabel  = null;
     let bestWork   = '0';
+    let bestHash   = '';
 
     await Promise.allSettled(candidates.map(async c => {
       const name = c.label ?? c.base;
@@ -4508,16 +4596,20 @@ export class DAIMinerNode {
         const tip = await c.get('/chain/tip', 15000);
         if (!tip) { console.log(`[DAI-Miner] [Sync] ${name} tip → no response`); return; }
         const work = tip.chainWork || '0';
-        console.log(`[DAI-Miner] [Sync] ${name} height=${tip.height} work=${work}`);
-        if (compareChainWork(work, bestWork) > 0) {
+        const hash = tip.hash || '';
+        console.log(`[DAI-Miner] [Sync] ${name} height=${tip.height} work=${work} hash=${String(hash).slice(0, 12)}`);
+        if (compareChains({ chainWork: work, hash }, { chainWork: bestWork, hash: bestHash }) > 0) {
           bestHeight = tip.height ?? -1;
           bestPeer   = c;
           bestLabel  = name;
           bestWork   = work;
+          bestHash   = hash;
         }
       } catch (e) { console.log(`[DAI-Miner] [Sync] ${name} tip fail: ${e.message}`); }
     }));
     const localWork = getTipChainWork(this.chain);
+    const localTip  = this.chain[this.chain.length - 1];
+    const peerTip   = { chainWork: bestWork, hash: bestHash };
     console.log(`[DAI-Miner] [Sync] best=${bestLabel} height=${bestHeight} work=${bestWork} | local work=${localWork}`);
 
     // 3b. Fork detection: compare our block at min(local, peer) height against the peer's.
@@ -4617,16 +4709,17 @@ export class DAIMinerNode {
     const CHUNK = 500;
     // Heaviest-chain rule: only sync if the best peer has strictly more chainWork.
     // Height alone is misleading — a fork with lower difficulty can have more blocks but less work.
-    if (compareChainWork(bestWork, localWork) <= 0 && !isFork) {
+    if (compareChains(peerTip, localTip) <= 0 && !isFork) {
       console.log(`[DAI-Miner] [Sync] local chain has equal or more chainWork — keeping`);
       return;
     }
 
-    // Fork against a heavier peer: heal it with a bounded reorg to the true common
-    // ancestor (within finality depth) BEFORE the partial-reorg / full-resync path
-    // below, which escalates a few-block miner fork into a genesis wipe that
-    // finality then rejects — leaving the node permanently stuck on its own fork.
-    if (isFork && bestPeer && compareChainWork(bestWork, localWork) > 0) {
+    // Fork against a heavier (or equal-work lower-hash) peer: heal it with a
+    // bounded reorg to the true common ancestor (within finality depth) BEFORE
+    // the partial-reorg / full-resync path below, which escalates a few-block
+    // miner fork into a genesis wipe that finality then rejects — leaving the
+    // node permanently stuck on its own fork.
+    if (isFork && bestPeer && compareChains(peerTip, localTip) > 0) {
       const healed = await this._tryBoundedReorg(bestPeer, bestHeight);
       if (healed) {
         console.log('[DAI-Miner] [Sync] Fork healed via bounded reorg — chains converged.');
@@ -4653,7 +4746,7 @@ export class DAIMinerNode {
     let anchorHeight = localHeight;
 
     // Nothing to do: peer not taller and not a fork
-    if (bestHeight <= localChainHeight && !isFork && compareChainWork(bestWork, localWork) <= 0) return;
+    if (bestHeight <= localChainHeight && !isFork && compareChains(peerTip, localTip) <= 0) return;
 
     const syncModeLabel = !isFreshStart ? '' : localHeight >= 0 ? ` [fork reorg from ${localHeight + 1}]` : ' [fresh start — replacing chain from 0]';
     console.log(`[DAI-Miner] Syncing from ${bestLabel} (peer height ${bestHeight}, local ${localChainHeight})${syncModeLabel}`);
@@ -4708,7 +4801,7 @@ export class DAIMinerNode {
                 `≠ local tip ${prevHash.slice(0, 8)}… at #${prev.height}`
               );
             }
-            if (!isFreshStart && compareChainWork(bestWork, localWork) > 0) {
+            if (!isFreshStart && compareChains(peerTip, localTip) > 0) {
               // Forked tip can't be appended incrementally. Try a cheap bounded reorg
               // (splice at the common ancestor within FINALITY_DEPTH) BEFORE escalating to a
               // full chain re-download — the full resync blocks the event loop across
@@ -5836,9 +5929,9 @@ export class DAIMinerNode {
       } else if (newBlock.height === currentHeight + 1 && newBlock.previousHash !== tipHash) {
         // ── Fork at same height: competing block ─────────────────────────────
         // Keep the block with more cumulative work (longest/heaviest chain rule)
-        const ourWork  = getTipChainWork(this.chain);
-        if (compareChainWork(newBlock.chainWork, ourWork) > 0) {
-          console.log(`[DAI-Miner] Fork: incoming block #${newBlock.height} has more chainWork — switching`);
+        const ourTip = this.chain[this.chain.length - 1];
+        if (compareChains(newBlock, ourTip) > 0) {
+          console.log(`[DAI-Miner] Fork: incoming block #${newBlock.height} wins work/hash tie-break — switching`);
           await this.reorgTo([newBlock]);
         } else {
           // Put in orphan pool; may become canonical if a longer chain follows
@@ -6245,11 +6338,11 @@ export class DAIMinerNode {
     if (!waiting?.length) return;
     this.orphanPool.delete(newTipHash);
 
-    // Sort by chainWork desc, pick heaviest (chainWork was recomputed at ingest when parent was known)
-    waiting.sort((a, b) => compareChainWork(b.chainWork, a.chainWork));
+    // Sort by work then hash (heaviest / lowest-hash first)
+    waiting.sort((a, b) => compareChains(b, a));
     for (const candidate of waiting) {
       const parent = this.chain[this.chain.length - 1];
-      if (compareChainWork(candidate.chainWork, getTipChainWork(this.chain)) > 0) {
+      if (compareChains(candidate, parent) > 0) {
         this._acceptBlock(candidate, 'orphan-pool').then(ok => {
           if (ok) this._drainOrphans(candidate.getHashSync());
         }).catch(() => {});
@@ -6308,8 +6401,8 @@ export class DAIMinerNode {
 
           // Check if incoming blocks represent a heavier chain (reorg needed)
           const incomingTip = incoming[incoming.length - 1];
-          const ourWork = getTipChainWork(this.chain);
-          if (incomingTip && compareChainWork(incomingTip.chainWork, ourWork) > 0) {
+          const ourTip = this.chain[this.chain.length - 1];
+          if (incomingTip && compareChains(incomingTip, ourTip) > 0) {
             const reorgDone = await this.reorgTo(incoming);
             if (reorgDone) return;
             // Common ancestor not in the fetched window — fetch enough history to
@@ -6533,15 +6626,33 @@ export class DAIMinerNode {
   }
 
   /**
-   * Chat with MCP tool use. When MCP servers expose tools, run a bounded
-   * JSON-tool-call loop: the model may emit {"tool":"<name>","arguments":{...}},
-   * we execute it via the MCP client, feed the result back, and repeat (max 3
-   * rounds) until it answers in prose. Falls back to a plain completion when no
-   * tools are available — so this is a safe drop-in for _llmChat on the chat path.
+   * Chat with MCP tool use. The address-book picker selects 0–few tools so the
+   * 1.7B prompt never sees the whole builtin pack. Chosen tools may run on
+   * hashed peers (one mcpId per node when possible).
    */
   async _mcpChat(messages, { model, timeoutMs = 40_000 } = {}) {
-    const tools = this.mcp?.listTools?.() || [];
+    await this._initMcp();
+    const allTools = this.mcp?.listTools?.() || [];
+    const userText = this._lastUserText(messages);
+    const pick = await pickToolsForMessage(userText, {
+      cards: this.mcp?.listCards?.() || [],
+      tools: allTools,
+      sticky: this._mcpSticky,
+      retrieveK: this.config.mcpCatalog?.retrieveK || 8,
+    });
+    let tools;
+    if (pick.toolNames.length) {
+      tools = allTools.filter(t => pick.toolNames.includes(t.name));
+      if (pick.cards[0]?.mcpId) this._mcpSticky = { mcpId: pick.cards[0].mcpId, at: Date.now() };
+    } else {
+      const overlay = allTools.filter(t => t.source !== 'builtin');
+      tools = overlay.length && overlay.length <= 8 ? overlay : [];
+    }
     if (!tools.length) return this._llmChat(messages, { model, timeoutMs });
+
+    const mcpIds = [...new Set(tools.map(t => t.server))];
+    const peers = this.config.mcpCatalog?.disperse === false ? [] : await this._getComputePeers().catch(() => []);
+    const assignment = assignMcpToPeers(mcpIds, peers);
 
     const toolList = tools.map(t =>
       `- ${t.name}: ${t.description || 'no description'}\n  input schema: ${JSON.stringify(t.inputSchema || {})}`
@@ -6554,6 +6665,7 @@ export class DAIMinerNode {
         '\n\nWhen a tool is needed, reply with ONLY a JSON object on a single line: ' +
         '{"tool":"<exact tool name>","arguments":{...}} and nothing else. ' +
         'After you receive the tool result, use it to answer the user in clear Markdown. ' +
+        'Cite the tool you used as `via <server id>`. ' +
         'If no tool is needed, answer directly without JSON.',
     };
 
@@ -6565,7 +6677,7 @@ export class DAIMinerNode {
       convo.push({ role: 'assistant', content: raw });
       let result;
       try {
-        result = await this.mcp.callTool(call.tool, call.arguments || {});
+        result = await this._dispatchMcp(call.tool, call.arguments || {}, assignment);
         console.log(`[MCP] tool "${call.tool}" invoked from chat`);
       } catch (e) {
         result = `Error calling tool "${call.tool}": ${e.message}`;
@@ -6573,11 +6685,21 @@ export class DAIMinerNode {
       const resultStr = typeof result === 'string' ? result : JSON.stringify(result);
       convo.push({
         role: 'user',
-        content: `Tool "${call.tool}" returned:\n${resultStr.slice(0, 6000)}\n\nNow answer my original question using this result. Do not call another tool unless strictly necessary.`,
+        content: `Tool "${call.tool}" returned:\n${resultStr.slice(0, 6000)}\n\nNow answer my original question using this result. Cite via the tool's server id. Do not call another tool unless strictly necessary.`,
       });
     }
     // Ran out of rounds — force a final prose answer.
     return this._llmChat([...convo, { role: 'user', content: 'Answer now in prose using what you have. Do not output JSON.' }], { model, timeoutMs });
+  }
+
+  _lastUserText(messages) {
+    for (let i = (messages || []).length - 1; i >= 0; i--) {
+      const m = messages[i];
+      if (m?.role !== 'user') continue;
+      if (typeof m.content === 'string') return m.content;
+      if (Array.isArray(m.content)) return m.content.map(p => p?.text || '').join(' ');
+    }
+    return '';
   }
 
   /** Extract a {tool, arguments} call from a model reply, or null if it's prose. */
@@ -8629,6 +8751,7 @@ export class DAIMinerNode {
       reputation: this.reputation,
       rewardMultiplier: (this.reputation || 1.0).toFixed(2),
       tflops: this.tflops || null,
+      mcpIds: this.mcp?.listServerIds?.() || [],
     };
   }
 

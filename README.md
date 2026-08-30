@@ -14,7 +14,7 @@ Inference runs in-process via **QVAC** (the `@qvac/sdk` dependency) — there's 
 separate engine to install. On first launch the model (default `qwen3-1.7b`) is
 downloaded and loaded automatically.
 
-The desktop app includes **Chat** (private sync / public async job queue, blockchain history autocomplete), **Explorer** (blocks, addresses, completed jobs), and **P2P** exchange tabs. MCP servers use the standard `mcpServers` JSON format (`command`, `args`, `env`) in Settings.
+The desktop app includes **Chat** (private sync / public async job queue, blockchain history autocomplete), **Explorer** (blocks, addresses, completed jobs), and **P2P** exchange tabs. Every node ships builtin MCP tools (public-apis + onion search); extra servers use the standard `mcpServers` JSON format (`command`, `args`, `env`, optional `url` + `headers`) in Settings.
 
 > **Model still downloading?** The miner still works — chat and skill queries fall back to peer miners on the network that already have the model.
 

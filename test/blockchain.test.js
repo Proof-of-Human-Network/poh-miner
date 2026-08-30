@@ -262,6 +262,24 @@ describe('Fix 3 — chainWork & Fork Resolution', () => {
     const hard = computeChainWork('0', 6);   // 2^6 = 64
     expect(compareChainWork(hard, easy)).toBeGreaterThan(0);
   });
+
+  it('compareChains prefers heavier work, then lower hash on a tie', async () => {
+    const { compareChains, compareChainWork } = await import('../src/consensus/chain-selection.js');
+    const heavy = { chainWork: '20', hash: 'fff' };
+    const light = { chainWork: '10', hash: '000' };
+    expect(compareChains(heavy, light)).toBeGreaterThan(0);
+    expect(compareChains(light, heavy)).toBeLessThan(0);
+
+    const low  = { chainWork: '10', hash: '00069a8afe4d98' };
+    const high = { chainWork: '10', hash: '0008a6a1dadf9b' };
+    expect(compareChainWork(low.chainWork, high.chainWork)).toBe(0);
+    expect(compareChains(low, high)).toBeGreaterThan(0); // lower hash wins
+    expect(compareChains(high, low)).toBeLessThan(0);
+    expect(compareChains(low, { chainWork: '10', hash: '00069a8afe4d98' })).toBe(0);
+
+    // Missing hashes: refuse to flip, same as first-seen.
+    expect(compareChains({ chainWork: '10' }, { chainWork: '10', hash: 'abc' })).toBe(0);
+  });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

@@ -509,12 +509,12 @@ run();</div>
           <h2 class="text-[32px] mb-6 neon" data-i18n="doc.mcp.title">Model Context Protocol (MCP)</h2>
 
           <p class="text-[#525252] text-[18px] mb-6" data-i18n="doc.mcp.intro">
-            Connect external MCP servers to add tools to chat and compute jobs. Configure servers via Electron Settings or <code>config.json</code>.
+            Every node ships a builtin pack (22 public-data tools + onion search). Chat picks from that address book instead of dumping every schema into the prompt. Extra servers overlay via Electron Settings or <code>config.json</code>. HTTP connectors accept arbitrary custom headers, not only <code>Authorization: Bearer</code>.
           </p>
 
           <div class="endpoint-card">
             <div class="mb-2"><span class="method method-get">GET</span> <code class="text-[#171717]">/api/mcp/status</code></div>
-            <p class="text-[#525252] text-[18px]" data-i18n-html="doc.mcp.status">List connected MCP servers and their available tools. Returns <code>{ servers: [{ name, status, toolCount, tools: [{ name, description }] }] }</code>.</p>
+            <p class="text-[#525252] text-[18px]" data-i18n-html="doc.mcp.status">List connected MCP servers and their available tools, plus the builtin pack. Returns <code>{ servers, tools, builtin }</code>.</p>
             <div class="code-block mt-3">{ "servers": [
   { "name": "web_search", "status": "connected", "tools": [
       { "name": "search", "description": "Web search query" }
@@ -523,9 +523,18 @@ run();</div>
 ] }</div>
           </div>
 
+          <div class="endpoint-card mt-4">
+            <div class="mb-2"><span class="method method-get">GET</span> <code class="text-[#171717]">/api/mcp/catalog?q=</code></div>
+            <p class="text-[#525252] text-[18px]">Search the address-book cards (builtin + overlay). Cards are names and one-liners, not full schemas.</p>
+          </div>
+          <div class="endpoint-card mt-4">
+            <div class="mb-2"><span class="method method-post">POST</span> <code class="text-[#171717]">/api/mcp/execute</code></div>
+            <p class="text-[#525252] text-[18px]">Run a tool. Peers may call this for builtin tools so picked MCPs disperse across nodes.</p>
+          </div>
+
           <div class="glass rounded-md p-5 mt-4 text-[17px] text-[#525252]" data-i18n-html="doc.mcp.chat">
             <strong class="text-[#525252]">MCP in chat</strong><br>
-            When you ask a question in <code>/chat/ask</code> or <code>/chat/route</code>, the miner can invoke MCP tools (up to 3 rounds). Tool results are fed back into the LLM for a final reply. Tool names are namespaced: <code>&lt;server&gt;__&lt;tool&gt;</code>.
+            When you ask a question in <code>/chat/ask</code> or <code>/chat/route</code>, the miner picks 0–few tools from the catalog (never the whole pack), may run each on a different peer, then synthesizes. Tool names are namespaced: <code>&lt;server&gt;__&lt;tool&gt;</code>.
           </div>
 
           <div class="mb-6 mt-8">
@@ -538,6 +547,10 @@ run();</div>
       "command": "node",
       "args": ["web-search-mcp/index.js"],
       "env": { "API_KEY": "..." }
+    },
+    "remote": {
+      "url": "https://example/mcp",
+      "headers": { "Authorization": "Api-Key xyz", "X-User": "1" }
     }
   }
 }</div>

@@ -26,7 +26,10 @@ describe('McpManager', () => {
   afterAll(() => { try { fs.unlinkSync(serverPath); } catch {} });
 
   it('connects to a stdio server, lists namespaced tools, and calls them', async () => {
-    const mgr = new McpManager(() => ({ mcpServers: { mock: { command: 'node', args: [serverPath] } } }));
+    const mgr = new McpManager(() => ({
+      mcpBuiltin: { enabled: false },
+      mcpServers: { mock: { command: 'node', args: [serverPath] } },
+    }));
     await mgr.connectAll();
 
     const status = mgr.status();
@@ -43,13 +46,27 @@ describe('McpManager', () => {
   });
 
   it('skips disabled servers and no-ops with none configured', async () => {
-    const mgr = new McpManager(() => ({ mcpServers: { off: { command: 'node', args: [serverPath], enabled: false } } }));
+    const mgr = new McpManager(() => ({
+      mcpBuiltin: { enabled: false },
+      mcpServers: { off: { command: 'node', args: [serverPath], enabled: false } },
+    }));
     await mgr.connectAll();
     expect(mgr.hasTools()).toBe(false);
     mgr.closeAll();
 
-    const empty = new McpManager(() => ({}));
+    const empty = new McpManager(() => ({ mcpBuiltin: { enabled: false } }));
     await empty.connectAll();
     expect(empty.listTools()).toEqual([]);
+  });
+
+  it('attaches builtin packs by default without user mcpServers', async () => {
+    const mgr = new McpManager(() => ({}));
+    await mgr.connectAll();
+    const names = mgr.listTools().map(t => t.name);
+    expect(names).toContain('public-apis__public_weather_forecast');
+    expect(names).toContain('onion-search__get_sources');
+    expect(mgr.listTools().filter(t => t.server === 'public-apis').length).toBe(22);
+    expect(mgr.listTools().filter(t => t.source === 'builtin').length).toBe(25);
+    mgr.closeAll();
   });
 });

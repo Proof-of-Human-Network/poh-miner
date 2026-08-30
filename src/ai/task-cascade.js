@@ -14,6 +14,9 @@
 import { needsDatasetLookup, searchDatasets, disambiguateDataset } from '../datasets/hf-dataset-search.js';
 import { needsHfModelLookup, searchModelsWithFallback, pickRelevantModels, formatModelSuggestions } from '../datasets/hf-model-search.js';
 import * as hfDatasetManager from '../datasets/hf-dataset-manager.js';
+import { searchCards } from './mcp-catalog.js';
+
+const MAX_MCP_FANOUT = 8;
 
 const SPLIT_RE = /\s*\b(?:and also|as well as|as well|and then|then|and|also|plus|additionally|, then)\b\s*[,;]?\s*/i;
 const CONVERSATIONAL_RE = /^(hi|hello|hey|thanks|thank you|ok|okay|yes|no|sure|great|cool|got it|makes sense|sounds good|nice|perfect|good|bye|see you|lol|haha|awesome|interesting|are you|what is your|what's your|how are you)\b/i;
@@ -54,6 +57,7 @@ function scoreSkill(skill, segLower) {
 export function planTaskCascade(message, ctx = {}) {
   const skills = ctx.skills || [];
   const mcpTools = ctx.mcpTools || [];
+  const catalogCards = ctx.catalogCards || [];
   const full = String(message || '').trim();
   if (!full) return { type: 'chat' };
 
@@ -76,9 +80,25 @@ export function planTaskCascade(message, ctx = {}) {
       .filter(h => h.score > 0)
       .sort((a, b) => b.score - a.score);
 
+    const cardHits = searchCards(catalogCards, segment, 3);
+    if (cardHits.length) {
+      for (const c of cardHits.slice(0, 2)) {
+        stage.push({
+          kind: 'mcp',
+          id: `mcp:${c.mcpId}__${c.tool}`,
+          server: c.mcpId,
+          tool: c.qualified || `${c.mcpId}__${c.tool}`,
+          bareTool: c.tool,
+          arguments: { query: segment, message: segment, q: segment },
+          segment,
+        });
+      }
+    }
+
     if (hits.length) {
       const best = hits.find(h => !usedSkillIds.has(h.skill.id))?.skill;
-      if (best) {
+      // Prefer a matching catalog/MCP card over generic web_search.
+      if (best && !(best.id === 'web_search' && cardHits.length)) {
         usedSkillIds.add(best.id);
         stage.push({
           kind: 'skill',
@@ -91,6 +111,7 @@ export function planTaskCascade(message, ctx = {}) {
       }
     } else if (webSearchSkill && !usedSkillIds.has('web_search')
                && !CONVERSATIONAL_RE.test(segment)
+               && !cardHits.length
                && segmentNeedsWebSearch(segment)) {
       usedSkillIds.add('web_search');
       stage.push({
@@ -131,15 +152,25 @@ export function planTaskCascade(message, ctx = {}) {
   }
 
   // ── Multi-MCP business intelligence (whole-message) ───────────────────────
-  // "where do I buy X" with N shop MCPs → fan-out every connected server in one stage.
+  // "where do I buy X" with N shop MCPs → fan-out relevant servers (capped),
+  // never the entire builtin catalog.
   if (mcpTools.length && (BUY_RE.test(full) || PRODUCT_RE.test(full))) {
+    const shopCards = searchCards(
+      catalogCards.filter(c => /shop|store|product|price|buy|commerce/i.test(`${c.summary} ${(c.tags || []).join(' ')} ${c.tool}`)),
+      full,
+      MAX_MCP_FANOUT,
+    );
     const byServer = new Map();
-    for (const t of mcpTools) {
+    const sourceTools = shopCards.length
+      ? mcpTools.filter(t => shopCards.some(c => c.mcpId === t.server))
+      : mcpTools;
+    for (const t of sourceTools) {
       if (!byServer.has(t.server)) byServer.set(t.server, []);
       byServer.get(t.server).push(t);
     }
     const mcpStage = [];
     for (const [server, tools] of byServer) {
+      if (mcpStage.length >= MAX_MCP_FANOUT) break;
       // Prefer a tool whose name/description smells like search/list/product/price
       const preferred = tools.find(t =>
         /search|find|list|product|item|price|catalog|query|lookup|get_/i.test(`${t.tool} ${t.description || ''}`)

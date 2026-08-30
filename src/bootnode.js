@@ -17,7 +17,7 @@ import { DAIBlock } from './core/block.js';
 import { ChainStore } from './storage/chain-store.js';
 import { validateBlockExtended } from './consensus/block-validator.js';
 import { replayChainLedger } from './consensus/tx-ledger.js';
-import { computeChainWork, compareChainWork } from './consensus/chain-selection.js';
+import { compareChains } from './consensus/chain-selection.js';
 import { createGenesisBlock } from './consensus/genesis.js';
 import { blocksOnTipPath } from './consensus/chain-path.js';
 import { FINALITY_DEPTH, signCheckpoint } from './consensus/finality.js';
@@ -452,20 +452,21 @@ async function syncFromPeer(peerUrl) {
       const localTipHash = chain[chain.length - 1]?.getHashSync?.();
       const peerTipHash = tip.hash || tip.block?.hash;
       if (peerHeight === localHeight && peerTipHash && localTipHash && peerTipHash !== localTipHash) {
-        const cmp = compareChainWork(tip.chainWork || '0', chain[chain.length - 1]?.chainWork || '0');
+        const cmp = compareChains(
+          { chainWork: tip.chainWork || '0', hash: peerTipHash },
+          { chainWork: chain[chain.length - 1]?.chainWork || '0', hash: localTipHash },
+        );
         if (cmp > 0) {
-          console.warn(`[Bootnode] Fork at #${peerHeight}: peer chain is heavier — rewinding to adopt it.`);
+          console.warn(`[Bootnode] Fork at #${peerHeight}: peer chain wins (work/hash) — rewinding to adopt it.`);
           const rewindTo = Math.max(0, localHeight - FINALITY_DEPTH);
           while (chain.length > 1 && (chain[chain.length - 1]?.height ?? 0) > rewindTo) chain.pop();
           chainStore.saveChain(chain);
           refreshTxLedger();
           // Fall through: the loop below now has a gap to fetch.
         } else {
-          // Equal work on two branches has no winner under the current rules, so
-          // neither side can converge on its own. Report it rather than claiming
-          // agreement; resolving it needs a deterministic tie-break in consensus.
+          // Local is heavier, or equal work with a lower (winning) hash.
           console.warn(`[Bootnode] Fork at #${peerHeight} with ${cmp === 0 ? 'equal' : 'less'} peer work ` +
-            `(local ${localTipHash.slice(0, 12)}… vs peer ${peerTipHash.slice(0, 12)}…) — not resolvable by chainWork alone.`);
+            `(local ${localTipHash.slice(0, 12)}… vs peer ${peerTipHash.slice(0, 12)}…) — keeping local tip.`);
           return;
         }
       } else {
