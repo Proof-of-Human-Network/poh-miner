@@ -4360,6 +4360,13 @@ export class DAIMinerNode {
     }
     // Reconcile wallets when the chain grew or was replaced (e.g. after scp/fork recovery).
     // Skip when already rebuilt for this tip — replaying 50k blocks inside Electron OOMs.
+    // The transaction index is rebuilt unconditionally: unlike the ledger replay
+    // below it verifies nothing and runs no crypto, so it is a cheap linear walk
+    // even over a long chain. Tying it to _needsBalanceRebuild() left it empty on
+    // every normal restart, since that check correctly skips the expensive replay
+    // when balances on disk are already current.
+    if (this.chain.length > 0) this.txIndex.rebuild(this.chain);
+
     if (this.chain.length > 0 && !this._balancesRebuiltThisSync && this._needsBalanceRebuild()) {
       await this._rebuildBalancesFromChain();
       this._balancesRebuiltThisSync = true;
