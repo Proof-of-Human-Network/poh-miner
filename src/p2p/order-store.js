@@ -89,8 +89,22 @@ export class OrderStore {
       return { error: 'at least one payment method required' };
     }
 
-    const now = Date.now();
+    // Trade limits have to be coherent before the order is published, or the
+    // limits shown to takers are decorative: an order with min above max can
+    // never be filled, and one whose max exceeds its own size promises more
+    // than it can settle.
     const divisor = baseDecimals != null ? 10 ** baseDecimals : (baseAsset === 'DAI' ? 1e9 : 100);
+    const orderValue = (daiAmount / divisor) * pricePerDAI;
+    const min = Number(minTrade) || 0;
+    const max = maxTrade == null ? orderValue : Number(maxTrade);
+    if (!Number.isFinite(min) || min < 0)     return { error: 'minTrade must be zero or more' };
+    if (!Number.isFinite(max) || !(max > 0))  return { error: 'maxTrade must be positive' };
+    if (min > max)                            return { error: `minTrade (${min}) cannot exceed maxTrade (${max})` };
+    // Tiny rounding slack so a max computed from the order's own size is not
+    // rejected by float error.
+    if (max > orderValue * (1 + 1e-9))        return { error: `maxTrade (${max}) exceeds the order's total value (${orderValue})` };
+
+    const now = Date.now();
     const order = {
       id: crypto.randomUUID(),
       maker,
@@ -99,8 +113,8 @@ export class OrderStore {
       ...(baseAsset !== 'DAI' ? { baseAsset } : {}),   // omitted for DAI — legacy orders unchanged
       quoteCurrency,
       pricePerDAI,      // quote units per 1 DISPLAY unit of baseAsset
-      minTrade,         // min quote amount per trade
-      maxTrade: maxTrade ?? ((daiAmount / divisor) * pricePerDAI),
+      minTrade: min,    // min quote amount per trade
+      maxTrade: max,
       paymentMethods: atomic ? [] : paymentMethods,   // [{ network, address, details }]
       status: 'open',
       escrowLocked: false,
@@ -232,6 +246,17 @@ export class OrderStore {
     if (!(daiAmount > 0))             return { error: 'daiAmount must be positive' };
     if (!(quoteAmount > 0))           return { error: 'quoteAmount must be positive' };
     if (daiAmount > order.daiAmount)  return { error: 'daiAmount exceeds order size' };
+
+    // Enforce the maker's advertised limits. The mobile wallet checks these
+    // before submitting, but a client-side check is a courtesy, not a control —
+    // any other client, or curl, can ignore it. This is where it has to hold.
+    const min = Number(order.minTrade) || 0;
+    if (quoteAmount < min) {
+      return { error: `below the minimum trade of ${min} ${order.quoteCurrency}` };
+    }
+    if (order.maxTrade != null && quoteAmount > Number(order.maxTrade)) {
+      return { error: `above the maximum trade of ${order.maxTrade} ${order.quoteCurrency}` };
+    }
 
     const now = Date.now();
     const payout = typeof takerPayoutAddress === 'string' ? takerPayoutAddress.trim() : '';

@@ -6212,6 +6212,27 @@ export class DAIMinerNode {
 
     try {
       const currentHeight = this.chain[this.chain.length - 1]?.height ?? this.chain.length - 1;
+
+      // `targetHeight` comes from a gossiped block, and gossip crosses chains: a
+      // node still on a pre-fork genesis announces its own tip, which has nothing
+      // to do with ours. Trusting it made us ask for a range like 125 → 10267
+      // every 30s forever. Clamp to what our own bootnodes actually hold — we can
+      // only ever sync what they can serve, so a foreign height is meaningless.
+      let networkTip = -1;
+      for (const bootnode of this.config.bootnodes) {
+        try {
+          const base = bootnode.endsWith('/') ? bootnode.slice(0, -1) : bootnode;
+          const tip = await fetch(`${base}/chain/tip`, { signal: AbortSignal.timeout(8000) })
+            .then(r => (r.ok ? r.json() : null)).catch(() => null);
+          if (typeof tip?.height === 'number' && tip.height > networkTip) networkTip = tip.height;
+        } catch { /* try the next bootnode */ }
+      }
+      if (networkTip >= 0 && targetHeight > networkTip) {
+        console.log(`[DAI-Miner] [Sync] Ignoring announced height ${targetHeight} — no bootnode has it (network tip ${networkTip}); likely a node on another chain.`);
+        targetHeight = networkTip;
+      }
+      if (targetHeight <= currentHeight) return;
+
       console.log(`[DAI-Miner] [Sync] Requesting blocks ${currentHeight + 1} → ${targetHeight} from bootnodes...`);
 
       for (const bootnode of this.config.bootnodes) {

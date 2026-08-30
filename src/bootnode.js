@@ -17,7 +17,7 @@ import { DAIBlock } from './core/block.js';
 import { ChainStore } from './storage/chain-store.js';
 import { validateBlockExtended } from './consensus/block-validator.js';
 import { replayChainLedger } from './consensus/tx-ledger.js';
-import { computeChainWork } from './consensus/chain-selection.js';
+import { computeChainWork, compareChainWork } from './consensus/chain-selection.js';
 import { createGenesisBlock } from './consensus/genesis.js';
 import { blocksOnTipPath } from './consensus/chain-path.js';
 import { FINALITY_DEPTH, signCheckpoint } from './consensus/finality.js';
@@ -444,12 +444,41 @@ async function syncFromPeer(peerUrl) {
     // in which case chain.length - 1 is NOT the block height.
     const localHeight = chain.length ? (chain[chain.length - 1].height ?? chain.length - 1) : -1;
     if (peerHeight <= localHeight) {
-      console.log(`[Bootnode] Peer at height ${peerHeight}, we have ${localHeight} — nothing to sync`);
-      return;
+      // Equal height is not the same as agreement. With more than one miner,
+      // each bootnode can accept a different block at the same height and sit
+      // on its own branch indefinitely, serving clients inconsistent chains
+      // while reporting "nothing to sync". Compare the tip itself, not just how
+      // far along it is.
+      const localTipHash = chain[chain.length - 1]?.getHashSync?.();
+      const peerTipHash = tip.hash || tip.block?.hash;
+      if (peerHeight === localHeight && peerTipHash && localTipHash && peerTipHash !== localTipHash) {
+        const cmp = compareChainWork(tip.chainWork || '0', chain[chain.length - 1]?.chainWork || '0');
+        if (cmp > 0) {
+          console.warn(`[Bootnode] Fork at #${peerHeight}: peer chain is heavier — rewinding to adopt it.`);
+          const rewindTo = Math.max(0, localHeight - FINALITY_DEPTH);
+          while (chain.length > 1 && (chain[chain.length - 1]?.height ?? 0) > rewindTo) chain.pop();
+          chainStore.saveChain(chain);
+          refreshTxLedger();
+          // Fall through: the loop below now has a gap to fetch.
+        } else {
+          // Equal work on two branches has no winner under the current rules, so
+          // neither side can converge on its own. Report it rather than claiming
+          // agreement; resolving it needs a deterministic tie-break in consensus.
+          console.warn(`[Bootnode] Fork at #${peerHeight} with ${cmp === 0 ? 'equal' : 'less'} peer work ` +
+            `(local ${localTipHash.slice(0, 12)}… vs peer ${peerTipHash.slice(0, 12)}…) — not resolvable by chainWork alone.`);
+          return;
+        }
+      } else {
+        console.log(`[Bootnode] Peer at height ${peerHeight}, we have ${localHeight} — nothing to sync`);
+        return;
+      }
     }
     console.log(`[Bootnode] Syncing chain from ${peerUrl} (peer height ${peerHeight}, local ${localHeight})…`);
     const BATCH = 200;
     let from = localHeight + 1;
+    // Rewind at most once per round, so a peer that disagrees about everything
+    // cannot walk us back to genesis in a single pass.
+    let rewound = false;
     while (from <= peerHeight) {
       const to = Math.min(from + BATCH - 1, peerHeight);
       const r = await fetch(`${peerUrl}/chain/blocks?from=${from}&to=${to}`, { signal: AbortSignal.timeout(30000) });
@@ -464,11 +493,25 @@ async function syncFromPeer(peerUrl) {
           parent, chainPrefix: chain, ledger: txLedger, strictTx: false,
         });
         if (!check.valid) {
+          // A previousHash mismatch on the first block of a batch means our tip
+          // sits on a branch the peer discarded. Appending can never succeed, so
+          // this used to strand the node forever with no remedy but a manual
+          // wipe. Rewind to a block the peer also has and let the next round
+          // re-fetch from there instead.
+          if (check.reason === 'previousHash mismatch' && block.height === from && !rewound) {
+            const rewindTo = Math.max(0, (chain[chain.length - 1]?.height ?? 0) - FINALITY_DEPTH);
+            const before = chain[chain.length - 1]?.height ?? -1;
+            while (chain.length > 1 && (chain[chain.length - 1]?.height ?? 0) > rewindTo) chain.pop();
+            rewound = true;
+            console.warn(`[Bootnode] Fork detected at #${block.height} — rewound ${before} → ${chain[chain.length - 1]?.height ?? -1} (bounded by finality) and retrying.`);
+            chainStore.saveChain(chain);
+            refreshTxLedger();
+            rejected = true;   // end this round; the next one re-fetches from the rewound tip
+            break;
+          }
           console.warn(`[Bootnode] Peer sync rejected block #${block.height} (${check.reason}) — aborting sync round`);
-          // A previousHash mismatch at the first fetched block means OUR tip is
-          // on a fork the peer doesn't have — appending can never succeed and
-          // the operator must rewind/wipe the local chain. Either way, skipping
-          // ahead would only produce a gapped chain, so stop the whole round.
+          // Anything else (bad PoW, bad signature) is the peer's problem, and
+          // skipping ahead would only produce a gapped chain.
           rejected = true;
           break;
         }
