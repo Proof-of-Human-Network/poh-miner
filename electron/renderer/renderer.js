@@ -5798,12 +5798,15 @@ async function p2pSubmitCreateOrder() {
   const baseMeta = _p2pAssetMeta(baseAsset);
   const daiAmountRaw = Math.round(daiAmt * 10 ** baseMeta.decimals);
   try {
-    // Apply referral code if provided (non-blocking)
+    // Apply referral code if provided. Must be signed — the bind pays out.
     if (refCode && window._localWallet) {
-      _p2pApiFetch('/api/p2p/referral/apply', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ address: window._localWallet, code: refCode }),
-      }).catch(() => {});
+      try {
+        const refAuth = await _p2pLocalAuth('apply-referral', { code: refCode });
+        await _p2pApiFetch('/api/p2p/referral/apply', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ...refAuth, code: refCode }),
+        });
+      } catch { /* already bound / invalid code — don't block the order */ }
     }
     const orderFields = { side: 'sell', daiAmount: daiAmountRaw, baseAsset, baseDecimals: baseMeta.decimals, quoteCurrency: currency, pricePerDAI: price, minTrade: minT||0, maxTrade: maxT||daiAmt*price, paymentMethods: atomic ? [] : methods };
     const auth = await _p2pLocalAuth('create-order', { side: 'sell', daiAmount: daiAmountRaw });

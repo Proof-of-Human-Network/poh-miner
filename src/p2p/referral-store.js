@@ -3,7 +3,12 @@ import path from 'path';
 import crypto from 'crypto';
 import os from 'os';
 
-const REFERRAL_FEE_BPS = 30; // 0.3% per completed trade
+export const REFERRAL_FEE_BPS = 30; // 0.3% per completed trade
+
+/** Same code on every node — gossip only needs to carry the referred-by map. */
+export function referralCodeFor(address) {
+  return crypto.createHash('sha256').update(`dai-p2p-ref:${address}`).digest('hex').slice(0, 8).toUpperCase();
+}
 
 export class ReferralStore {
   constructor(dataDir) {
@@ -14,8 +19,9 @@ export class ReferralStore {
   }
 
   _load() {
-    if (!fs.existsSync(this.file)) return { codes: {}, referred: {}, stats: {} };
-    try { return JSON.parse(fs.readFileSync(this.file, 'utf8')); } catch { return { codes: {}, referred: {}, stats: {} }; }
+    const empty = { codes: {}, referred: {}, stats: {}, credited: {} };
+    if (!fs.existsSync(this.file)) return empty;
+    try { return { ...empty, ...JSON.parse(fs.readFileSync(this.file, 'utf8')) }; } catch { return empty; }
   }
 
   _save() {
@@ -28,11 +34,11 @@ export class ReferralStore {
 
   // Get or create a referral code for an address (deterministic per address)
   getCode(address) {
-    const existing = Object.entries(this.data.codes).find(([, owner]) => owner === address);
-    if (existing) return existing[0];
-    const code = crypto.randomBytes(4).toString('hex').toUpperCase();
-    this.data.codes[code] = address;
-    this._save();
+    const code = referralCodeFor(address);
+    if (this.data.codes[code] !== address) {
+      this.data.codes[code] = address;
+      this._save();
+    }
     return code;
   }
 
@@ -55,18 +61,48 @@ export class ReferralStore {
     return this.data.referred[address] || null;
   }
 
+  /**
+   * Who earns the 0.3%. Prefer the DAI *buyer's* referrer (they received the
+   * coins); fall back to the seller's so a code entered on create-order still
+   * pays. One referrer per trade — never 0.6%.
+   */
+  referrerForTrade({ buyer, seller } = {}) {
+    return this.getReferrer(buyer) || this.getReferrer(seller) || null;
+  }
+
+  // Bind from gossip (already validated on the origin). No-op if set.
+  applyReferralFromGossip(address, referrer) {
+    if (!address || !referrer || address === referrer) return { error: 'invalid' };
+    if (this.data.referred[address]) return { referrer: this.data.referred[address] };
+    this.data.referred[address] = referrer;
+    this._save();
+    return { referrer };
+  }
+
   // Compute and record referral fee; returns µDAI credited (0 if no referrer or below min)
-  creditFee(referrer, daiAmount) {
+  creditFee(referrer, daiAmount, tradeId = null) {
+    if (tradeId && this.data.credited?.[tradeId] != null) return this.data.credited[tradeId];
     const fee = Math.floor((daiAmount * REFERRAL_FEE_BPS) / 10000);
     if (fee <= 0) return 0;
     this._recordFeeStats(referrer, fee);
+    if (tradeId) {
+      this.data.credited = this.data.credited || {};
+      this.data.credited[tradeId] = fee;
+      this._save();
+    }
     return fee;
   }
 
   // Record a pre-computed fee (used during block replay to avoid double-computation)
-  recordFee(referrer, fee) {
+  recordFee(referrer, fee, tradeId = null) {
     if (!referrer || fee <= 0) return;
+    if (tradeId && this.data.credited?.[tradeId] != null) return;
     this._recordFeeStats(referrer, fee);
+    if (tradeId) {
+      this.data.credited = this.data.credited || {};
+      this.data.credited[tradeId] = fee;
+      this._save();
+    }
   }
 
   _recordFeeStats(referrer, fee) {

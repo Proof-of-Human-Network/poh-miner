@@ -4047,8 +4047,8 @@ export class DAIMinerNode {
               const tradeId = result.trade.id;
 
               // Referral fee (0.3% of the base leg), same policy as manual release.
-              const referrer = this.p2pReferral.getReferrer(ownerAddress);
-              const referralFee = referrer ? this.p2pReferral.creditFee(referrer, daiAmount) : 0;
+              const referrer = this.p2pReferral.referrerForTrade({ buyer: ownerAddress, seller: order.maker });
+              const referralFee = referrer ? this.p2pReferral.creditFee(referrer, daiAmount, tradeId) : 0;
 
               // Move both legs locally (wallet files); the transition replays the
               // same movement on the canonical ledger everywhere else.
@@ -4166,9 +4166,11 @@ export class DAIMinerNode {
             const recipient = order?.side === 'sell' ? trade.taker : order?.maker;
             if (!_isAddr(releaser)) { res.statusCode = 403; return res.end(JSON.stringify({ error: 'not authorized to release' })); }
 
-            // Referral fee: deduct from escrow before releasing to buyer
-            const referrer = this.p2pReferral.getReferrer(recipient);
-            const referralFee = referrer ? this.p2pReferral.creditFee(referrer, trade.daiAmount) : 0;
+            // Referral fee: deduct from escrow before releasing to buyer.
+            // Prefer the DAI buyer's referrer; fall back to the seller's so a
+            // code entered on create-order still pays.
+            const referrer = this.p2pReferral.referrerForTrade({ buyer: recipient, seller: releaser });
+            const referralFee = referrer ? this.p2pReferral.creditFee(referrer, trade.daiAmount, tradeId) : 0;
             const releaseAmount = trade.daiAmount - referralFee;
 
             const relBase = order?.baseAsset || 'DAI';
@@ -4190,19 +4192,19 @@ export class DAIMinerNode {
             const canCancel = _isAddr(trade.taker) || (order && _isAddr(order.maker));
             if (!canCancel) { res.statusCode = 403; return res.end(JSON.stringify({ error: 'not a trade participant' })); }
 
-            // Refund escrow to the party who locked.
-            // Sell orders: maker locked at order creation (escrowLocked flag).
-            // Buy orders: taker locked at selectOrder time (no flag on order).
+            // Refund escrow only for BUY takes: the taker locked this trade's
+            // amount at select. Sell listings locked the full remaining size at
+            // create — cancelling the take must leave that escrow on the order.
             const locker = order?.side === 'sell' ? order?.maker : trade.taker;
             const lockAmt = trade.daiAmount;
             const cnclBase = order?.baseAsset || 'DAI';
-            const hadEscrow = order?.side === 'sell' ? !!order?.escrowLocked : true;
-            if (hadEscrow) {
+            const refundEscrow = order?.side === 'buy';
+            if (refundEscrow) {
               this.p2pEscrow.release(this.walletManager, locker, lockAmt, cnclBase);
             }
             const result = this.p2pOrderStore.cancelTrade(tradeId);
             if (result.error) { res.statusCode = 400; return res.end(JSON.stringify(result)); }
-            this._queueP2PTransition({ type: 'p2p-trade-cancel', tradeId, locker, daiAmount: lockAmt, escrowLocked: hadEscrow, ...(cnclBase !== 'DAI' ? { baseAsset: cnclBase } : {}), updatedAt: Date.now() }, { auth: makeP2PAuth(body, authPayload) });
+            this._queueP2PTransition({ type: 'p2p-trade-cancel', tradeId, locker, daiAmount: refundEscrow ? lockAmt : 0, escrowLocked: refundEscrow, ...(cnclBase !== 'DAI' ? { baseAsset: cnclBase } : {}), updatedAt: Date.now() }, { auth: makeP2PAuth(body, authPayload) });
             this.gossip.publish('p2p-trade', result.trade).catch(() => {});
             this.gossip.publish('p2p-order', this.p2pOrderStore.getOrder(trade.orderId)).catch(() => {});
             return res.end(JSON.stringify(result));
@@ -4245,6 +4247,7 @@ export class DAIMinerNode {
           if (auth.error) { res.statusCode = 401; return res.end(JSON.stringify(auth)); }
           const result = this.p2pReferral.applyReferral(auth.address, code);
           if (result.error) { res.statusCode = 400; return res.end(JSON.stringify(result)); }
+          this.gossip.publish('p2p-referral', { address: auth.address, referrer: result.referrer, code: String(code).toUpperCase() }).catch(() => {});
           return res.end(JSON.stringify(result));
         }).catch(e => { res.statusCode = 400; res.end(JSON.stringify({ error: e.message })); });
         return;
@@ -5846,6 +5849,10 @@ export class DAIMinerNode {
     });
     this.gossip.subscribe('p2p-trade', (trade) => {
       try { this.p2pOrderStore.ingestGossipTrade(trade); } catch { /* ignore malformed */ }
+    });
+    this.gossip.subscribe('p2p-referral', (m) => {
+      if (!m?.address || !m?.referrer) return;
+      try { this.p2pReferral.applyReferralFromGossip(m.address, m.referrer); } catch { /* ignore */ }
     });
     // Signed escrow movements — any miner can include these in the next block.
     // Do not apply RAM here: the origin already did, and everyone else applies
@@ -9021,7 +9028,7 @@ export class DAIMinerNode {
         this.p2pEscrow.release(this.walletManager, transition.recipient, transition.daiAmount, relBase);
         if (transition.referralFee > 0 && transition.referrer) {
           this.p2pEscrow.release(this.walletManager, transition.referrer, transition.referralFee, relBase);
-          this.p2pReferral.recordFee(transition.referrer, transition.referralFee);
+          this.p2pReferral.recordFee(transition.referrer, transition.referralFee, transition.tradeId);
         }
         this.p2pOrderStore.completeTrade(transition.tradeId);
       }
@@ -9054,7 +9061,7 @@ export class DAIMinerNode {
       this.p2pEscrow.release(this.walletManager, transition.baseRecipient || transition.taker, transition.baseAmount - refFee, base);
       if (refFee > 0 && transition.referrer) {
         this.p2pEscrow.release(this.walletManager, transition.referrer, refFee, base);
-        this.p2pReferral.recordFee(transition.referrer, refFee);
+        this.p2pReferral.recordFee(transition.referrer, refFee, transition.tradeId);
       }
       this.p2pOrderStore.completeTrade(transition.tradeId);
       return;

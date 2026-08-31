@@ -66,3 +66,67 @@ describe('P2P trade limits', () => {
     });
   });
 });
+
+describe('P2P partial fills', () => {
+  let store;
+  const base = { maker: 'daiMAKER', side: 'sell', daiAmount: 100_000_000, quoteCurrency: 'USDT-ERC20',
+                 pricePerDAI: 100, minTrade: 1, maxTrade: 10, paymentMethods: [{ network: 'erc20', address: '0x1' }] };
+  // 0.1 DAI at 100 USDT/DAI = 10 USDT of value.
+
+  beforeEach(() => {
+    store = new OrderStore(fs.mkdtempSync(path.join(os.tmpdir(), 'p2p-partial-')));
+  });
+
+  it('keeps leftover size open after a smaller take is released', () => {
+    const { order } = store.createOrder(base);
+    const { trade } = store.selectOrder(order.id, { taker: 'daiTAKER', daiAmount: 20_000_000, quoteAmount: 2 });
+    expect(store.getOrder(order.id).status).toBe('locked');
+    const done = store.completeTrade(trade.id);
+    expect(done.trade.status).toBe('completed');
+    const left = store.getOrder(order.id);
+    expect(left.status).toBe('open');
+    expect(left.daiAmount).toBe(80_000_000);
+    expect(left.escrowLocked).toBe(true);
+    expect(left.tradeId).toBeNull();
+    expect(left.maxTrade).toBeCloseTo(8, 6);
+  });
+
+  it('closes the order only when the last slice is filled', () => {
+    const { order } = store.createOrder(base);
+    const a = store.selectOrder(order.id, { taker: 'daiT1', daiAmount: 20_000_000, quoteAmount: 2 }).trade;
+    store.completeTrade(a.id);
+    const b = store.selectOrder(order.id, { taker: 'daiT2', daiAmount: 80_000_000, quoteAmount: 8 }).trade;
+    store.completeTrade(b.id);
+    expect(store.getOrder(order.id).status).toBe('completed');
+    expect(store.getOrder(order.id).daiAmount).toBe(0);
+  });
+
+  it('does not subtract twice when completeTrade is called again', () => {
+    const { order } = store.createOrder(base);
+    const { trade } = store.selectOrder(order.id, { taker: 'daiTAKER', daiAmount: 20_000_000, quoteAmount: 2 });
+    store.completeTrade(trade.id);
+    store.completeTrade(trade.id);
+    expect(store.getOrder(order.id).daiAmount).toBe(80_000_000);
+  });
+
+  it('reopens a sell take-cancel without clearing escrowLocked', () => {
+    const { order } = store.createOrder({ ...base, escrowLocked: true });
+    store._patchOrder(order.id, { escrowLocked: true });
+    const { trade } = store.selectOrder(order.id, { taker: 'daiTAKER', daiAmount: 20_000_000, quoteAmount: 2 });
+    store.cancelTrade(trade.id);
+    const left = store.getOrder(order.id);
+    expect(left.status).toBe('open');
+    expect(left.daiAmount).toBe(100_000_000);
+    expect(left.escrowLocked).toBe(true);
+  });
+
+  it('does not mark the whole order completed from trade gossip', () => {
+    const { order } = store.createOrder(base);
+    const { trade } = store.selectOrder(order.id, { taker: 'daiTAKER', daiAmount: 20_000_000, quoteAmount: 2 });
+    store.completeTrade(trade.id);
+    const leftover = store.getOrder(order.id);
+    store.ingestGossipTrade({ ...store.getTrade(trade.id), updatedAt: Date.now() + 1000 });
+    expect(store.getOrder(order.id).status).toBe('open');
+    expect(store.getOrder(order.id).daiAmount).toBe(leftover.daiAmount);
+  });
+});

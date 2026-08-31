@@ -229,6 +229,44 @@ export class OrderStore {
     return this.orders[id];
   }
 
+  _baseDivisor(order) {
+    return (order?.baseAsset || 'DAI') === 'DAI' ? 1e9 : 100;
+  }
+
+  _quoteValue(order, daiAmount) {
+    return (daiAmount / this._baseDivisor(order)) * (order.pricePerDAI || 0);
+  }
+
+  /**
+   * After a fill, keep leftover size on the order instead of closing it.
+   * Idempotent: a second call for an already-applied fill (open + no tradeId,
+   * or already completed) is a no-op so gossip cannot subtract twice.
+   */
+  _applyFillToOrder(orderId, filledDaiAmount) {
+    const order = this.orders[orderId];
+    if (!order) return null;
+    if (order.status === 'completed' || order.status === 'cancelled' || order.status === 'disputed') {
+      return order;
+    }
+    if (order.status === 'open' && !order.tradeId) return order;
+
+    const remaining = Math.max(0, (order.daiAmount || 0) - (filledDaiAmount || 0));
+    if (remaining <= 0) {
+      return this._patchOrder(orderId, { status: 'completed', escrowLocked: false, tradeId: null, daiAmount: 0 });
+    }
+    const remainingValue = this._quoteValue(order, remaining);
+    const min = Math.min(Number(order.minTrade) || 0, remainingValue);
+    const max = remainingValue;
+    return this._patchOrder(orderId, {
+      status: 'open',
+      daiAmount: remaining,
+      minTrade: min,
+      maxTrade: max,
+      tradeId: null,
+      escrowLocked: order.side === 'sell' ? true : false,
+    });
+  }
+
   cancelOrder(id) {
     const o = this.orders[id];
     if (!o) return { error: 'order not found' };
@@ -310,10 +348,11 @@ export class OrderStore {
   completeTrade(tradeId) {
     const t = this.trades[tradeId];
     if (!t) return { error: 'trade not found' };
+    if (t.status === 'completed') return { trade: t, order: this.orders[t.orderId] };
     if (!['selected', 'payment_sent'].includes(t.status)) return { error: `trade is ${t.status}` };
     this._patchTrade(tradeId, { status: 'completed' });
-    this._patchOrder(t.orderId, { status: 'completed', escrowLocked: false, tradeId: null });
-    return { trade: this.trades[tradeId] };
+    const order = this._applyFillToOrder(t.orderId, t.daiAmount);
+    return { trade: this.trades[tradeId], order };
   }
 
   cancelTrade(tradeId) {
@@ -321,9 +360,17 @@ export class OrderStore {
     if (!t) return { error: 'trade not found' };
     if (t.status === 'completed') return { error: 'trade already completed' };
     if (t.status === 'payment_sent') return { error: 'cannot cancel after payment sent; open a dispute instead' };
+    const order = this.orders[t.orderId];
     this._patchTrade(tradeId, { status: 'cancelled' });
-    this._patchOrder(t.orderId, { status: 'open', tradeId: null, escrowLocked: false });
-    return { trade: this.trades[tradeId] };
+    // Sell orders locked the FULL remaining size at create — cancelling the
+    // take must not refund escrow or the rest of the listing is unbacked.
+    // Buy takes lock only this trade's amount; that refund is the API's job.
+    this._patchOrder(t.orderId, {
+      status: 'open',
+      tradeId: null,
+      escrowLocked: order?.side === 'sell' ? true : false,
+    });
+    return { trade: this.trades[tradeId], order: this.orders[t.orderId] };
   }
 
   disputeTrade(tradeId, { reason = '' } = {}) {
@@ -352,11 +399,17 @@ export class OrderStore {
     if (!existing || trade.updatedAt > (existing.updatedAt || 0)) {
       this.trades[trade.id] = trade;
       this._saveTrades();
-      if (trade.orderId && this.orders[trade.orderId]) {
-        if (trade.status === 'completed') {
-          this._patchOrder(trade.orderId, { status: 'completed', escrowLocked: false });
-        } else if (trade.status === 'cancelled') {
-          this._patchOrder(trade.orderId, { status: 'open', tradeId: null, escrowLocked: false });
+      // Order remainder is owned by completeTrade / the gossiped order object.
+      // Do not force the whole listing to 'completed' here — a 0.02 fill of a
+      // 0.1 order would close the leftover 0.08 and leave it stuck in escrow.
+      if (trade.orderId && this.orders[trade.orderId] && trade.status === 'cancelled') {
+        const o = this.orders[trade.orderId];
+        if (o.status === 'locked' && o.tradeId === trade.id) {
+          this._patchOrder(trade.orderId, {
+            status: 'open',
+            tradeId: null,
+            escrowLocked: o.side === 'sell',
+          });
         }
       }
     }
