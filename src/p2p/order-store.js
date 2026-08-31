@@ -20,6 +20,17 @@ export const ONCHAIN_ASSETS = ['DAI', ...STABLE_TICKERS];
 export function isOnChainAsset(c) { return ONCHAIN_ASSETS.includes(c); }
 export function isValidQuote(c)   { return QUOTE_CURRENCIES.includes(c) || ONCHAIN_ASSETS.includes(c); }
 
+const DAI_ADDR = /^dai[0-9a-f]{40}$/i;
+
+/** First dai… address on the order's payment methods — where the seller receives an on-chain quote. */
+export function quotePayoutAddress(order) {
+  for (const m of order?.paymentMethods || []) {
+    const addr = typeof m === 'string' ? m : m?.address;
+    if (typeof addr === 'string' && DAI_ADDR.test(addr.trim())) return addr.trim();
+  }
+  return order?.maker || null;
+}
+
 // Wire pair id is BASE-QUOTE (WP5 `?pair=`). Quotes like USDT-TRC20 contain
 // hyphens — always parse with parsePair(), never split on the first '-'.
 export function pairId(baseAsset, quoteCurrency) {
@@ -82,11 +93,15 @@ export class OrderStore {
     if (baseAsset === quoteCurrency)                return { error: 'base and quote must differ' };
     if (!(daiAmount > 0))                           return { error: 'daiAmount must be positive' };
     if (!(pricePerDAI > 0))                         return { error: 'pricePerDAI must be positive' };
-    // Atomic on-chain/on-chain swaps settle automatically — no external payment
-    // rail is involved, so payment methods are waived for them.
+    // Payment methods are always required. Off-chain: USDT/bank rails the buyer
+    // pays. On-chain: a dai… address the seller receives the quote at — the
+    // buyer pays from their DAI wallet and gets the sold asset in that same wallet.
     const atomic = isOnChainAsset(quoteCurrency);
-    if (!atomic && (!Array.isArray(paymentMethods) || paymentMethods.length === 0)) {
+    if (!Array.isArray(paymentMethods) || paymentMethods.length === 0) {
       return { error: 'at least one payment method required' };
+    }
+    if (atomic && !quotePayoutAddress({ paymentMethods, maker: null })) {
+      return { error: 'on-chain payment method must be a dai… address (where you receive the quote)' };
     }
 
     // Trade limits have to be coherent before the order is published, or the
@@ -115,7 +130,7 @@ export class OrderStore {
       pricePerDAI,      // quote units per 1 DISPLAY unit of baseAsset
       minTrade: min,    // min quote amount per trade
       maxTrade: max,
-      paymentMethods: atomic ? [] : paymentMethods,   // [{ network, address, details }]
+      paymentMethods,   // [{ network, address, details }] — dai… addr required when quote is on-chain
       status: 'open',
       escrowLocked: false,
       tradeId: null,

@@ -1777,7 +1777,7 @@
           <div style="padding:0 12px 12px;display:flex;flex-direction:column;gap:10px;">
             <!-- Side: sell only -->
             <div style="padding:7px 10px;font-size:11px;font-family:monospace;background:#7f1d1d22;color:#fca5a5;border-radius:6px;border:1px solid #7f1d1d44;" id="p2p-create-hint">
-              You offer an asset for sale — it is locked in escrow. Off-chain payment: buyer pays, you release. On-chain payment (DAI/stablecoin): the swap settles atomically, no confirmation step.
+              You offer an asset for sale — it is locked in escrow. Add a payment method: the wallet that receives the quote. For on-chain DAI/stables the buyer pays from their DAI wallet and receives the sold asset in that same wallet.
             </div>
             <!-- Asset being sold -->
             <div>
@@ -1797,12 +1797,13 @@
             <div>
               <div style="font-size:10px;color:#444;margin-bottom:4px;letter-spacing:0.1em;">PAYMENT CURRENCY</div>
               <select id="p2p-form-currency"
+                      onchange="p2pOnQuoteChange(this.value)"
                       style="width:100%;background:#111;border:1px solid #252525;border-radius:4px;color:#e5e7eb;font-size:12px;font-family:monospace;padding:8px 10px;outline:none;box-sizing:border-box;">
               </select>
             </div>
             <!-- Price per DAI -->
             <div>
-              <div style="font-size:10px;color:#444;margin-bottom:4px;letter-spacing:0.1em;">PRICE PER DAI</div>
+              <div style="font-size:10px;color:#444;margin-bottom:4px;letter-spacing:0.1em;" id="p2p-form-price-label">PRICE PER DAI</div>
               <input id="p2p-form-price" type="number" min="0" step="any" placeholder="e.g. 0.01"
                      style="width:100%;background:#111;border:1px solid #252525;border-radius:4px;color:#e5e7eb;font-size:12px;font-family:monospace;padding:8px 10px;outline:none;box-sizing:border-box;" />
             </div>

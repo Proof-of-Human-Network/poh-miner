@@ -76,7 +76,7 @@ import { resolveRpcConfig } from './rpc/resolver.js';
 import crypto from 'crypto';
 import os from 'os';
 import { buildManifest, serveDataset, pullDataset } from './storage/dataset-sync.js';
-import { OrderStore, QUOTE_CURRENCIES, ONCHAIN_ASSETS, isOnChainAsset, parsePair } from './p2p/order-store.js';
+import { OrderStore, QUOTE_CURRENCIES, ONCHAIN_ASSETS, isOnChainAsset, parsePair, quotePayoutAddress } from './p2p/order-store.js';
 import { EscrowManager, ESCROW_ADDRESS } from './p2p/escrow.js';
 import { ReferralStore } from './p2p/referral-store.js';
 import { PriceHistory } from './p2p/price-history.js';
@@ -4031,8 +4031,9 @@ export class DAIMinerNode {
             // Sell order whose quote is another on-chain asset (e.g. KGST/aiBDT):
             // maker's base already sits in escrow; the taker's quote debits here.
             // Both legs settle in ONE p2p-swap-filled transition — no payment-sent
-            // step: the taker's own dai address receives the base, the maker's
-            // address receives the quote.
+            // step. The taker pays from their DAI wallet and receives the sold
+            // asset in that same wallet. The seller receives the quote at the
+            // dai… address on the order's payment method.
             if (order.side === 'sell' && isOnChainAsset(order.quoteCurrency)) {
               const quoteAsset = order.quoteCurrency;
               const takerQuoteBal = this._confirmedBalance(ownerAddress, quoteAsset);
@@ -4049,10 +4050,11 @@ export class DAIMinerNode {
               const referrer = this.p2pReferral.referrerForTrade({ buyer: ownerAddress, seller: order.maker });
               const referralFee = referrer ? this.p2pReferral.creditFee(referrer, daiAmount, tradeId) : 0;
 
-              // Move both legs locally (wallet files); the transition replays the
-              // same movement on the canonical ledger everywhere else.
+              // Buyer pays from ownerAddress and receives the base there.
+              // Seller receives the quote at the listed payment-method address.
+              const quoteRecipient = quotePayoutAddress(order) || order.maker;
               this.walletManager.debit(ownerAddress, quoteAmount, quoteAsset);
-              this.walletManager.credit(order.maker, quoteAmount, quoteAsset);
+              this.walletManager.credit(quoteRecipient, quoteAmount, quoteAsset);
               this.p2pEscrow.release(this.walletManager, ownerAddress, daiAmount - referralFee, baseAsset);
               if (referralFee > 0) this.p2pEscrow.release(this.walletManager, referrer, referralFee, baseAsset);
 
@@ -4062,7 +4064,7 @@ export class DAIMinerNode {
                 maker: order.maker, taker: ownerAddress,
                 ...(baseAsset !== 'DAI' ? { baseAsset } : {}),
                 baseAmount: daiAmount, quoteAsset, quoteAmount,
-                baseRecipient: ownerAddress, quoteRecipient: order.maker,
+                baseRecipient: ownerAddress, quoteRecipient,
                 referrer: referrer || null, referralFee,
                 updatedAt: Date.now(),
               };

@@ -4793,15 +4793,21 @@ window.onSendCurrencyChange = function(ticker) {
 
 async function _populateSendCurrencySelect() {
   const sel = document.getElementById('send-currency');
-  if (!sel || sel.options.length) return;
+  if (!sel) return;
   const reg = await loadAssetRegistry();
+  const tickers = Object.keys(reg);
+  // Rebuild if empty or we only cached DAI before /api/assets came up.
+  if (sel.options.length && sel.options.length === tickers.length) return;
+  const prev = sel.value || window._sendCurrency;
+  sel.innerHTML = '';
   for (const a of Object.values(reg)) {
     const opt = document.createElement('option');
     opt.value = a.ticker;
     opt.textContent = a.display + (a.sign ? ` (${a.sign})` : '');
     sel.appendChild(opt);
   }
-  sel.value = window._sendCurrency;
+  sel.value = [...sel.options].some(o => o.value === prev) ? prev : 'DAI';
+  window._sendCurrency = sel.value;
 }
 
 function syncSendWallet() {
@@ -5474,9 +5480,47 @@ function p2pShowDetail() {
 window.p2pOnBaseChange = function(base) {
   const lbl = document.getElementById('p2p-form-amount-label');
   if (lbl) lbl.textContent = `${_p2pAssetMeta(base).display} AMOUNT`;
+  const priceLbl = document.getElementById('p2p-form-price-label');
+  if (priceLbl) priceLbl.textContent = `PRICE PER ${_p2pAssetMeta(base).display}`;
   // Quote list must exclude the base itself
   _p2pPopulateQuoteSelect(base);
+  _p2pSyncOnchainPaymentMethod();
 };
+
+window.p2pOnQuoteChange = function() {
+  _p2pSyncOnchainPaymentMethod();
+};
+
+/** For an on-chain quote, the payment method is the dai… wallet that receives it.
+ *  Prefill with this node's wallet — same address the seller locked the base from. */
+function _p2pSyncOnchainPaymentMethod() {
+  const quote = document.getElementById('p2p-form-currency')?.value;
+  const netSel = document.getElementById('p2p-pm-network');
+  const addrEl = document.getElementById('p2p-pm-address');
+  const hint = document.getElementById('p2p-create-hint');
+  const onchain = P2P_ONCHAIN.includes(quote);
+  const qDisp = onchain ? _p2pAssetMeta(quote).display : quote;
+  if (hint) {
+    hint.textContent = onchain
+      ? `On-chain ${qDisp}: add a payment method — the dai… wallet that receives ${qDisp}. The buyer pays ${qDisp} from their DAI wallet and receives the sold asset in that same wallet.`
+      : 'You offer an asset for sale — it is locked in escrow. Buyer pays off-chain to your payment method, then you release.';
+  }
+  if (!onchain || !netSel) return;
+  if (![...netSel.options].some(o => o.value === quote)) {
+    const o = document.createElement('option');
+    o.value = quote;
+    o.textContent = `${qDisp} (DAI network)`;
+    netSel.appendChild(o);
+  }
+  netSel.value = quote;
+  if (addrEl && window._localWallet) addrEl.value = window._localWallet;
+  const mine = window._localWallet;
+  if (mine && !_p2pPaymentMethods.some(m => m.network === quote && m.address === mine)) {
+    _p2pPaymentMethods = _p2pPaymentMethods.filter(m => !P2P_ONCHAIN.includes(m.network));
+    _p2pPaymentMethods.unshift({ network: quote, address: mine });
+    _p2pRenderPaymentMethodList();
+  }
+}
 
 function _p2pPopulateQuoteSelect(base) {
   const currSel = document.getElementById('p2p-form-currency');
@@ -5502,6 +5546,7 @@ function p2pShowCreateOrder() {
       }
     }
     _p2pPopulateQuoteSelect(baseSel?.value || 'DAI');
+    _p2pSyncOnchainPaymentMethod();
   }).catch(() => {});
   _p2pPaymentMethods = [];
   _p2pRenderPaymentMethodList();
@@ -5635,7 +5680,7 @@ async function p2pOpenOrder(order) {
              style="width:100%;background:#111;border:1px solid #252525;border-radius:4px;color:#e5e7eb;font-size:12px;font-family:monospace;padding:8px 10px;outline:none;box-sizing:border-box;" />
       <div id="p2p-select-quote" style="font-size:10px;color:#555;font-family:monospace;margin-top:3px;"></div>
     </div>
-    ${atomic ? `<div style="font-size:10px;color:#22c55e;font-family:monospace;">⚡ Atomic on-chain swap — settles instantly to your wallet address, no payment step.</div>` : ''}
+    ${atomic ? `<div style="font-size:10px;color:#22c55e;font-family:monospace;">On-chain: you pay ${_p2pAssetMeta(order.quoteCurrency).display} from ${window._localWallet || 'your DAI wallet'}. ${baseMeta.display} is credited to that same wallet.</div>` : ''}
     <button onclick="p2pSelectOrder('${order.id}','${order.pricePerDAI}','${order.quoteCurrency}')"
             style="width:100%;padding:10px;border:none;background:#22c55e;color:#000;border-radius:4px;font-weight:600;cursor:pointer;font-size:12px;font-family:monospace;">${atomic ? 'SWAP' : `BUY ${baseMeta.display}`}</button>
     <div id="p2p-select-result" style="font-size:11px;display:none;padding:8px;border-radius:4px;font-family:monospace;"></div>`;
@@ -5790,9 +5835,11 @@ async function p2pSubmitCreateOrder() {
   if (!daiAmt || !currency || !price) {
     resultEl.style.display='block'; resultEl.style.color='#ef4444'; resultEl.textContent='Fill in amount, currency, and price.'; return;
   }
-  // Atomic on-chain swaps settle automatically — no payment method needed.
-  if (!atomic && !methods.length) {
+  if (!methods.length) {
     resultEl.style.display='block'; resultEl.style.color='#ef4444'; resultEl.textContent='Add at least one payment method.'; return;
+  }
+  if (atomic && !methods.some(m => /^dai[0-9a-f]{40}$/i.test(m.address || ''))) {
+    resultEl.style.display='block'; resultEl.style.color='#ef4444'; resultEl.textContent='On-chain payment method must be a dai… wallet address.'; return;
   }
   resultEl.style.display='block'; resultEl.style.color='#888'; resultEl.textContent='Posting order…';
   const baseMeta = _p2pAssetMeta(baseAsset);
@@ -5808,7 +5855,7 @@ async function p2pSubmitCreateOrder() {
         });
       } catch { /* already bound / invalid code — don't block the order */ }
     }
-    const orderFields = { side: 'sell', daiAmount: daiAmountRaw, baseAsset, baseDecimals: baseMeta.decimals, quoteCurrency: currency, pricePerDAI: price, minTrade: minT||0, maxTrade: maxT||daiAmt*price, paymentMethods: atomic ? [] : methods };
+    const orderFields = { side: 'sell', daiAmount: daiAmountRaw, baseAsset, baseDecimals: baseMeta.decimals, quoteCurrency: currency, pricePerDAI: price, minTrade: minT||0, maxTrade: maxT||daiAmt*price, paymentMethods: methods };
     const auth = await _p2pLocalAuth('create-order', { side: 'sell', daiAmount: daiAmountRaw });
     const data = await _p2pApiFetch('/api/p2p/orders', {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...auth, ...orderFields }),

@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import os from 'os';
 import path from 'path';
 import fs from 'fs';
-import { OrderStore } from '../src/p2p/order-store.js';
+import { OrderStore, quotePayoutAddress } from '../src/p2p/order-store.js';
 
 /** A maker's advertised min/max are a control, not a hint — the node must hold them. */
 describe('P2P trade limits', () => {
@@ -128,5 +128,58 @@ describe('P2P partial fills', () => {
     store.ingestGossipTrade({ ...store.getTrade(trade.id), updatedAt: Date.now() + 1000 });
     expect(store.getOrder(order.id).status).toBe('open');
     expect(store.getOrder(order.id).daiAmount).toBe(leftover.daiAmount);
+  });
+});
+
+describe('on-chain quote payout address', () => {
+  let store;
+  const payout = 'dai' + 'a'.repeat(40);
+  const other  = 'dai' + 'b'.repeat(40);
+  const atomic = {
+    maker: 'daiMAKER', side: 'sell', daiAmount: 100_000_000,
+    quoteCurrency: 'KGST', pricePerDAI: 1, minTrade: 0.01, maxTrade: 0.1,
+  };
+
+  beforeEach(() => {
+    store = new OrderStore(fs.mkdtempSync(path.join(os.tmpdir(), 'p2p-payout-')));
+  });
+
+  it('quotePayoutAddress returns the first dai… method, then maker', () => {
+    expect(quotePayoutAddress({
+      maker: 'daiMAKER',
+      paymentMethods: [
+        { network: 'USDT-TRC20', address: 'Txyz' },
+        { network: 'KGST', address: payout },
+      ],
+    })).toBe(payout);
+    expect(quotePayoutAddress({
+      maker: 'daiMAKER',
+      paymentMethods: [payout],
+    })).toBe(payout);
+    expect(quotePayoutAddress({ maker: 'daiMAKER', paymentMethods: [] })).toBe('daiMAKER');
+    expect(quotePayoutAddress({ paymentMethods: [{ address: '  ' + other + '  ' }] })).toBe(other);
+  });
+
+  it('rejects an on-chain quote with no payment method', () => {
+    expect(store.createOrder({ ...atomic, paymentMethods: [] }).error)
+      .toMatch(/at least one payment method required/);
+  });
+
+  it('rejects an on-chain quote whose method is not a dai… address', () => {
+    const r = store.createOrder({
+      ...atomic,
+      paymentMethods: [{ network: 'USDT-TRC20', address: 'Txyz' }],
+    });
+    expect(r.error).toMatch(/on-chain payment method must be a dai/);
+  });
+
+  it('keeps the dai… payout on an accepted on-chain sell', () => {
+    const { order, error } = store.createOrder({
+      ...atomic,
+      paymentMethods: [{ network: 'KGST', address: payout }],
+    });
+    expect(error).toBeUndefined();
+    expect(order.paymentMethods).toEqual([{ network: 'KGST', address: payout }]);
+    expect(quotePayoutAddress(order)).toBe(payout);
   });
 });

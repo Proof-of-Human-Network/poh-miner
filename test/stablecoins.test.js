@@ -157,6 +157,21 @@ describe('atomic p2p-swap-filled', () => {
     expect(l.getBalance(A, 'aiBDT')).toBe(0);
   });
 
+  it('credits quote to quoteRecipient when that is not the maker', () => {
+    const l = swapLedger();
+    const P = 'dai' + 'e'.repeat(40);
+    const ok = l.applyP2PEscrowTransition({
+      type: 'p2p-swap-filled', tradeId: 't1', orderId: 'o1', maker: A, taker: B,
+      baseAsset: 'KGST', baseAmount: 8_700, quoteAsset: 'aiBDT', quoteAmount: 270,
+      baseRecipient: B, quoteRecipient: P, referrer: null, referralFee: 0, updatedAt: 1,
+    });
+    expect(ok).toBe(true);
+    expect(l.getBalance(A, 'aiBDT')).toBe(0);
+    expect(l.getBalance(P, 'aiBDT')).toBe(270);
+    expect(l.getBalance(B, 'KGST')).toBe(8_700);
+    expect(l.checkSupplyInvariant().ok).toBe(true);
+  });
+
   it('referral fee comes out of the base leg', () => {
     const l = swapLedger();
     const R = 'dai' + 'd'.repeat(40);
