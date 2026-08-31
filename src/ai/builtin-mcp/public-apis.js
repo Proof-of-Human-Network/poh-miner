@@ -9,14 +9,51 @@ import { fetchJson, compact, num, str, UA } from './fetch.js';
 
 const GEO_HEADERS = { 'User-Agent': UA, Accept: 'application/json' };
 
-async function geoForward(query) {
-  const q = str(query);
-  if (!q) return null;
+/** Blind MCP calls pass the whole user sentence as city/query. Nominatim returns
+ *  [] for "weather in sao paulo" but finds the city once the fluff is stripped. */
+export function normalizePlaceQuery(query) {
+  let q = str(query);
+  if (!q) return '';
+  q = q.replace(/[?!.,]+$/g, '').trim();
+  q = q.replace(/^(?:please\s+)?(?:can you\s+|could you\s+)?(?:tell me\s+|give me\s+|show(?:\s+me)?\s+|get\s+)?(?:what(?:'s|s| is)\s+|how(?:'s|s| is)\s+)?(?:the\s+)?(?:current\s+)?(?:weather|forecast|temperature|temps?)\s+(?:like\s+)?(?:(?:right now|today|tomorrow|yesterday|this week|next week)\s+)?(?:in|for|at|of)\s+/i, '');
+  q = q.replace(/^(?:the\s+)?(?:current\s+)?(?:weather|forecast|temperature|temps?)\s+/i, '');
+  q = q.replace(/\s+(?:weather|forecast|temperature|temps?|right now|today|tomorrow)$/i, '');
+  return q.trim();
+}
+
+async function geoNominatim(q) {
   const url = `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(q)}`;
   const data = await fetchJson(url, { headers: GEO_HEADERS });
   const hit = Array.isArray(data) ? data[0] : null;
   if (!hit) return null;
   return { lat: num(hit.lat), lon: num(hit.lon), name: hit.display_name };
+}
+
+async function geoOpenMeteo(q) {
+  const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(q)}&count=1`;
+  const data = await fetchJson(url);
+  const hit = Array.isArray(data?.results) ? data.results[0] : null;
+  if (!hit) return null;
+  const name = [hit.name, hit.admin1, hit.country].filter(Boolean).join(', ');
+  return { lat: num(hit.latitude), lon: num(hit.longitude), name };
+}
+
+async function geoForward(query) {
+  const raw = str(query);
+  const cleaned = normalizePlaceQuery(raw) || raw;
+  if (!cleaned) return null;
+  const tries = cleaned === raw ? [cleaned] : [cleaned, raw];
+  for (const q of tries) {
+    try {
+      const g = await geoNominatim(q);
+      if (g) return g;
+    } catch { /* Nominatim rate-limits; Open-Meteo is the fallback */ }
+    try {
+      const g = await geoOpenMeteo(q);
+      if (g) return g;
+    } catch { /* next candidate */ }
+  }
+  return null;
 }
 
 function card(partial) {
@@ -148,7 +185,8 @@ export const PUBLIC_APIS_TOOLS = [
     inputSchema: schema({ query: { type: 'string' }, city: { type: 'string' }, q: { type: 'string' } }),
     cardId: 'public-apis/geo',
     async run(args) {
-      const q = str(args.query || args.city || args.q || args.location);
+      const raw = str(args.query || args.city || args.q || args.location);
+      const q = normalizePlaceQuery(raw) || raw;
       if (!q) throw new Error('query required');
       const url = `https://nominatim.openstreetmap.org/search?format=json&limit=5&q=${encodeURIComponent(q)}`;
       const data = await fetchJson(url, { headers: GEO_HEADERS });

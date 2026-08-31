@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { httpHeadersFromSpec, McpManager } from '../src/ai/mcp-client.js';
 import { loadBuiltinPacks, listBuiltinTools } from '../src/ai/builtin-mcp/index.js';
+import { normalizePlaceQuery } from '../src/ai/builtin-mcp/public-apis.js';
 import { searchCards, isConversational } from '../src/ai/mcp-catalog.js';
 import { pickToolsForMessage } from '../src/ai/mcp-router.js';
 import { assignMcpToPeers, replicasFor } from '../src/ai/mcp-disperse.js';
@@ -52,7 +53,7 @@ describe('builtin packs', () => {
       if (u.includes('nominatim')) {
         return { ok: true, json: async () => [{ lat: '41.7', lon: '44.8', display_name: 'Tbilisi' }] };
       }
-      if (u.includes('open-meteo')) {
+      if (u.includes('open-meteo.com/v1/forecast')) {
         return { ok: true, json: async () => ({ current_weather: { temperature: 18, windspeed: 2 } }) };
       }
       throw new Error('unexpected ' + u);
@@ -63,6 +64,45 @@ describe('builtin packs', () => {
       const out = JSON.parse(await tool.run({ city: 'Tbilisi' }));
       expect(out.place).toMatch(/Tbilisi/);
       expect(out.current_weather.temperature).toBe(18);
+    } finally {
+      globalThis.fetch = orig;
+    }
+  });
+
+  it('strips "weather in …" so a full-sentence city arg still geocodes', async () => {
+    expect(normalizePlaceQuery('weather in sao paulo')).toBe('sao paulo');
+    expect(normalizePlaceQuery('what is the weather in São Paulo')).toBe('São Paulo');
+    expect(normalizePlaceQuery('sao paulo weather')).toBe('sao paulo');
+    expect(normalizePlaceQuery('Tbilisi')).toBe('Tbilisi');
+
+    const orig = globalThis.fetch;
+    const seen = [];
+    globalThis.fetch = async (url) => {
+      const u = String(url);
+      seen.push(u);
+      if (u.includes('nominatim')) {
+        const q = new URL(u).searchParams.get('q');
+        if (q === 'weather in sao paulo') return { ok: true, json: async () => [] };
+        if (/sao paulo/i.test(q)) {
+          return { ok: true, json: async () => [{ lat: '-23.55', lon: '-46.63', display_name: 'São Paulo, Brazil' }] };
+        }
+        return { ok: true, json: async () => [] };
+      }
+      if (u.includes('geocoding-api.open-meteo')) {
+        return { ok: true, json: async () => ({ results: [{ name: 'São Paulo', latitude: -23.55, longitude: -46.63, country: 'Brazil' }] }) };
+      }
+      if (u.includes('open-meteo.com/v1/forecast')) {
+        return { ok: true, json: async () => ({ current_weather: { temperature: 21.7, weathercode: 2 } }) };
+      }
+      throw new Error('unexpected ' + u);
+    };
+    try {
+      const pack = loadBuiltinPacks().find(p => p.id === 'public-apis');
+      const tool = pack.tools.find(t => t.name === 'public_weather_forecast');
+      const out = JSON.parse(await tool.run({ query: 'weather in sao paulo' }));
+      expect(out.place).toMatch(/São Paulo/);
+      expect(out.current_weather.temperature).toBe(21.7);
+      expect(seen.some(u => u.includes('nominatim') && u.includes('sao'))).toBe(true);
     } finally {
       globalThis.fetch = orig;
     }
