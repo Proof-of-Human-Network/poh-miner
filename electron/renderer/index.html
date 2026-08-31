@@ -1777,7 +1777,7 @@
           <div style="padding:0 12px 12px;display:flex;flex-direction:column;gap:10px;">
             <!-- Side: sell only -->
             <div style="padding:7px 10px;font-size:11px;font-family:monospace;background:#7f1d1d22;color:#fca5a5;border-radius:6px;border:1px solid #7f1d1d44;" id="p2p-create-hint">
-              You offer an asset for sale — it is locked in escrow. Add a payment method: the wallet that receives the quote. For on-chain DAI/stables the buyer pays from their DAI wallet and receives the sold asset in that same wallet.
+              You offer an asset for sale — it is locked in escrow. The payment rail is the currency you pick. Enter the wallet that receives it.
             </div>
             <!-- Asset being sold -->
             <div>
@@ -1820,29 +1820,12 @@
                        style="width:100%;background:#111;border:1px solid #252525;border-radius:4px;color:#e5e7eb;font-size:12px;font-family:monospace;padding:8px 10px;outline:none;box-sizing:border-box;" />
               </div>
             </div>
-            <!-- Payment methods -->
+            <!-- Payment method: rail = payment currency. On-chain quotes lock to this node's dai… wallet. -->
             <div>
-              <div style="font-size:10px;color:#444;margin-bottom:4px;letter-spacing:0.1em;">PAYMENT METHODS</div>
-              <div id="p2p-pm-list" style="display:flex;flex-direction:column;gap:4px;margin-bottom:6px;"></div>
-              <div style="display:flex;gap:5px;align-items:stretch;">
-                <select id="p2p-pm-network" style="flex:1;min-width:0;background:#111;border:1px solid #252525;border-radius:4px;color:#e5e7eb;font-size:11px;font-family:monospace;padding:7px 8px;outline:none;">
-                  <option value="">Network / Type</option>
-                  <option>USDT-ERC20</option>
-                  <option>USDT-TRC20</option>
-                  <option>USDT-TON</option>
-                  <option>USDT-SOL</option>
-                  <option>USDT-BEP20</option>
-                  <option>USDC-ERC20</option>
-                  <option>BTC</option>
-                  <option>ETH</option>
-                  <option>SOL</option>
-                  <option>Bank Transfer</option>
-                  <option>PayPal</option>
-                </select>
-                <input id="p2p-pm-address" type="text" placeholder="Address / Account"
-                       style="flex:2;min-width:0;background:#111;border:1px solid #252525;border-radius:4px;color:#e5e7eb;font-size:11px;font-family:monospace;padding:7px 8px;outline:none;" />
-                <button onclick="p2pAddPaymentMethod()" style="padding:7px 11px;border:1px solid #22c55e44;background:#052e16;color:#22c55e;border-radius:4px;cursor:pointer;font-size:14px;font-family:monospace;flex-shrink:0;">+</button>
-              </div>
+              <div style="font-size:10px;color:#444;margin-bottom:4px;letter-spacing:0.1em;">PAYMENT METHOD</div>
+              <div id="p2p-pm-rail" style="font-size:11px;font-family:monospace;color:#22c55e;background:#0a0a0a;border:1px solid #1e1e1e;border-radius:4px;padding:7px 10px;margin-bottom:6px;">—</div>
+              <input id="p2p-pm-address" type="text" placeholder="Wallet to receive payment"
+                     style="width:100%;background:#111;border:1px solid #252525;border-radius:4px;color:#e5e7eb;font-size:11px;font-family:monospace;padding:8px 10px;outline:none;box-sizing:border-box;" />
             </div>
             <!-- Referral code (optional) -->
             <div style="margin-bottom:10px;">

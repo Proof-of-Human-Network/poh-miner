@@ -5365,7 +5365,7 @@ let _p2pCurrency = '';
 let _p2pOrders = [];
 let _p2pActivityTab = 'orders';
 let _p2pPollTimer = null;
-let _p2pPaymentMethods = [];
+let _p2pOffchainReceive = '';
 let _p2pBestUsdRate = null;
 
 function _p2pPort() { return window._minerApiPort || 3456; }
@@ -5418,35 +5418,19 @@ function _updateUsdBalanceDisplay() {
   }
 }
 
-function p2pAddPaymentMethod() {
-  const network = document.getElementById('p2p-pm-network')?.value;
-  const address = (document.getElementById('p2p-pm-address')?.value || '').trim();
-  if (!network || !address) return;
-  _p2pPaymentMethods.push({ network, address });
-  _p2pRenderPaymentMethodList();
-  document.getElementById('p2p-pm-network').value = '';
-  document.getElementById('p2p-pm-address').value = '';
+function _p2pQuoteIsOnchain(quote) {
+  return P2P_ONCHAIN.includes(quote);
 }
 
-function p2pRemovePaymentMethod(idx) {
-  _p2pPaymentMethods.splice(idx, 1);
-  _p2pRenderPaymentMethodList();
-}
-
-function _p2pRenderPaymentMethodList() {
-  const list = document.getElementById('p2p-pm-list');
-  if (!list) return;
-  list.innerHTML = '';
-  _p2pPaymentMethods.forEach((pm, i) => {
-    const row = document.createElement('div');
-    row.style.cssText = 'display:flex;align-items:center;gap:6px;background:#0a0a0a;border:1px solid #1e1e1e;border-radius:4px;padding:4px 8px;';
-    row.innerHTML = `
-      <span style="font-size:10px;color:#22c55e;font-family:monospace;white-space:nowrap;">${pm.network}</span>
-      <span style="font-size:10px;color:#888;font-family:monospace;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${pm.address}</span>
-      <button onclick="p2pRemovePaymentMethod(${i})" style="background:none;border:none;color:#555;cursor:pointer;font-size:12px;padding:0;line-height:1;">✕</button>
-    `;
-    list.appendChild(row);
-  });
+function _p2pCollectPaymentMethod() {
+  const quote = document.getElementById('p2p-form-currency')?.value;
+  if (!quote) return [];
+  const onchain = _p2pQuoteIsOnchain(quote);
+  const address = onchain
+    ? (window._localWallet || '')
+    : (document.getElementById('p2p-pm-address')?.value || '').trim();
+  if (!address) return [];
+  return [{ network: onchain ? 'DAI' : quote, address }];
 }
 
 function p2pInit() {
@@ -5484,41 +5468,53 @@ window.p2pOnBaseChange = function(base) {
   if (priceLbl) priceLbl.textContent = `PRICE PER ${_p2pAssetMeta(base).display}`;
   // Quote list must exclude the base itself
   _p2pPopulateQuoteSelect(base);
-  _p2pSyncOnchainPaymentMethod();
+  _p2pSyncPaymentMethod();
 };
 
 window.p2pOnQuoteChange = function() {
-  _p2pSyncOnchainPaymentMethod();
+  _p2pSyncPaymentMethod();
 };
 
-/** For an on-chain quote, the payment method is the dai… wallet that receives it.
- *  Prefill with this node's wallet — same address the seller locked the base from. */
-function _p2pSyncOnchainPaymentMethod() {
+/** Rail is the payment currency. On-chain quotes (DAI / DAI-network stables)
+ *  receive on the DAI network at this node's active dai… wallet. */
+function _p2pSyncPaymentMethod() {
   const quote = document.getElementById('p2p-form-currency')?.value;
-  const netSel = document.getElementById('p2p-pm-network');
+  const railEl = document.getElementById('p2p-pm-rail');
   const addrEl = document.getElementById('p2p-pm-address');
   const hint = document.getElementById('p2p-create-hint');
-  const onchain = P2P_ONCHAIN.includes(quote);
+  const onchain = _p2pQuoteIsOnchain(quote);
   const qDisp = onchain ? _p2pAssetMeta(quote).display : quote;
   if (hint) {
     hint.textContent = onchain
-      ? `On-chain ${qDisp}: add a payment method — the dai… wallet that receives ${qDisp}. The buyer pays ${qDisp} from their DAI wallet and receives the sold asset in that same wallet.`
-      : 'You offer an asset for sale — it is locked in escrow. Buyer pays off-chain to your payment method, then you release.';
+      ? `On-chain ${qDisp}: buyer pays ${qDisp} from their DAI wallet and receives the sold asset there. You receive ${qDisp} at this node's DAI wallet.`
+      : `You offer an asset for sale — it is locked in escrow. Buyer pays ${qDisp || 'the quote'} to the wallet below, then you release.`;
   }
-  if (!onchain || !netSel) return;
-  if (![...netSel.options].some(o => o.value === quote)) {
-    const o = document.createElement('option');
-    o.value = quote;
-    o.textContent = `${qDisp} (DAI network)`;
-    netSel.appendChild(o);
+  if (railEl) {
+    railEl.textContent = onchain
+      ? `DAI network · ${qDisp}`
+      : (quote || '—');
   }
-  netSel.value = quote;
-  if (addrEl && window._localWallet) addrEl.value = window._localWallet;
-  const mine = window._localWallet;
-  if (mine && !_p2pPaymentMethods.some(m => m.network === quote && m.address === mine)) {
-    _p2pPaymentMethods = _p2pPaymentMethods.filter(m => !P2P_ONCHAIN.includes(m.network));
-    _p2pPaymentMethods.unshift({ network: quote, address: mine });
-    _p2pRenderPaymentMethodList();
+  if (!addrEl) return;
+  if (onchain) {
+    const typed = (addrEl.value || '').trim();
+    if (typed && typed !== window._localWallet) _p2pOffchainReceive = typed;
+    addrEl.value = window._localWallet || '';
+    addrEl.readOnly = true;
+    addrEl.placeholder = 'This node\'s DAI wallet';
+    addrEl.style.color = '#9ca3af';
+    addrEl.style.background = '#0a0a0a';
+    addrEl.style.cursor = 'default';
+  } else {
+    addrEl.readOnly = false;
+    addrEl.placeholder = (quote === 'Bank Transfer' || quote === 'PayPal')
+      ? 'Account / details to receive payment'
+      : `Wallet to receive ${quote || 'payment'}`;
+    addrEl.style.color = '#e5e7eb';
+    addrEl.style.background = '#111';
+    addrEl.style.cursor = 'text';
+    if (!addrEl.value || addrEl.value === window._localWallet) {
+      addrEl.value = _p2pOffchainReceive;
+    }
   }
 }
 
@@ -5546,10 +5542,11 @@ function p2pShowCreateOrder() {
       }
     }
     _p2pPopulateQuoteSelect(baseSel?.value || 'DAI');
-    _p2pSyncOnchainPaymentMethod();
+    _p2pSyncPaymentMethod();
   }).catch(() => {});
-  _p2pPaymentMethods = [];
-  _p2pRenderPaymentMethodList();
+  _p2pOffchainReceive = '';
+  const addrEl = document.getElementById('p2p-pm-address');
+  if (addrEl) addrEl.value = '';
   document.getElementById('p2p-book-view').style.display = 'none';
   document.getElementById('p2p-detail-view').style.display = 'none';
   document.getElementById('p2p-create-view').style.display = 'flex';
@@ -5829,14 +5826,16 @@ async function p2pSubmitCreateOrder() {
   const minT      = parseFloat(document.getElementById('p2p-form-min')?.value || '0');
   const maxT      = parseFloat(document.getElementById('p2p-form-max')?.value || '0');
   const refCode   = (document.getElementById('p2p-form-referral')?.value || '').trim().toUpperCase();
-  const methods   = _p2pPaymentMethods;
+  const methods   = _p2pCollectPaymentMethod();
   const baseAsset = document.getElementById('p2p-form-base')?.value || 'DAI';
   const atomic    = P2P_ONCHAIN.includes(currency);
   if (!daiAmt || !currency || !price) {
     resultEl.style.display='block'; resultEl.style.color='#ef4444'; resultEl.textContent='Fill in amount, currency, and price.'; return;
   }
   if (!methods.length) {
-    resultEl.style.display='block'; resultEl.style.color='#ef4444'; resultEl.textContent='Add at least one payment method.'; return;
+    resultEl.style.display='block'; resultEl.style.color='#ef4444'; resultEl.textContent=atomic
+      ? 'This node\'s DAI wallet is not loaded yet.'
+      : 'Enter the wallet that receives payment.'; return;
   }
   if (atomic && !methods.some(m => /^dai[0-9a-f]{40}$/i.test(m.address || ''))) {
     resultEl.style.display='block'; resultEl.style.color='#ef4444'; resultEl.textContent='On-chain payment method must be a dai… wallet address.'; return;
@@ -5862,8 +5861,9 @@ async function p2pSubmitCreateOrder() {
     });
     if (data.error) throw new Error(data.error);
     resultEl.style.color='#22c55e'; resultEl.textContent='Order posted!';
-    ['p2p-form-amount','p2p-form-price','p2p-form-min','p2p-form-max','p2p-form-referral'].forEach(id => { const el = document.getElementById(id); if (el) el.value=''; });
-    _p2pPaymentMethods = []; _p2pRenderPaymentMethodList();
+    ['p2p-form-amount','p2p-form-price','p2p-form-min','p2p-form-max','p2p-form-referral','p2p-pm-address'].forEach(id => { const el = document.getElementById(id); if (el) el.value=''; });
+    _p2pOffchainReceive = '';
+    _p2pSyncPaymentMethod();
     setTimeout(() => { p2pShowBook(); p2pLoadOrders(true); }, 1200);
   } catch (e) { resultEl.style.display='block'; resultEl.style.color='#ef4444'; resultEl.textContent=e.message; }
 }
