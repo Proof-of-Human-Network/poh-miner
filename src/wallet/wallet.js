@@ -329,12 +329,15 @@ export class WalletManager {
     const raw = JSON.parse(fs.readFileSync(file, 'utf8'));
     const data = unsealWalletData(raw);
     const w = Wallet.fromJSON(data);
-    // Auto-upgrade old local wallets (created before signing keys existed, so they're
-    // missing BOTH halves) to have a signing keypair. Must check both — a wallet with
-    // only a signingPublicKey is an externally registered key (see /api/wallet/register-key):
-    // the node never holds that private key by design, so regenerating here would silently
-    // overwrite the registered public key and break signature verification for that wallet.
-    if (!w.signingPublicKey && !w.signingPrivateKey) {
+    // Auto-upgrade old *local* wallets (created before signing keys existed) that
+    // still hold a legacy privateKey. Must not mint keys for balance-only stubs —
+    // P2P escrow (`dai_p2p_escrow`) and remote-miner caches have no keys on purpose.
+    // Generating a keypair here rebinds the file to a random dai… address via
+    // ensureCanonicalAddress, so the original path then reads as 0 and release fails
+    // with "escrow insufficient: have 0".
+    // A wallet with only a signingPublicKey is an externally-registered key
+    // (see /api/wallet/register-key): never regenerate that either.
+    if (!w.signingPublicKey && !w.signingPrivateKey && w.privateKey) {
       w.ensureSigningKeys();
       this.saveWallet(w);
     }

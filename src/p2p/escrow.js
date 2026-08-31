@@ -20,10 +20,14 @@ export class EscrowManager {
   }
 
   // Release `amount` raw units of `currency` from escrow to `toAddress`.
+  // Read the escrow file without loadWallet — that path used to mint keys for the
+  // stub and migrate `dai_p2p_escrow` onto a random dai… address, after which this
+  // check saw 0 even though the ledger still held the lock.
   release(walletManager, toAddress, amount, currency = 'DAI') {
+    const snap = walletManager.rawBalanceNonce(ESCROW_ADDRESS);
     const escrowBal = currency === 'DAI'
-      ? walletManager.getBalance(ESCROW_ADDRESS)
-      : walletManager.getAssetBalance(ESCROW_ADDRESS, currency);
+      ? (snap.balance || 0)
+      : ((snap.assets || {})[currency] || 0);
     if (escrowBal < amount) {
       return { error: `escrow insufficient: have ${escrowBal} ${currency}, need ${amount} ${currency}` };
     }
