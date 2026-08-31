@@ -516,10 +516,9 @@ export class DAIMinerNode {
         console.warn('[DAI-Miner] Could not persist wallet to config:', e.message);
       }
     };
-    // Fresh-chain hard reset: if the on-disk genesis is stale, wipe chain + WALLETS +
-    // search BEFORE resolving the mining wallet, so this node starts completely clean on
-    // the new genesis (a brand-new wallet is minted just below).
-    this._hardResetIfGenesisStale();
+    // Stale-genesis handling is _migrateChainIfStale (after chain load): it wipes
+    // chain-derived state only. Never delete wallets here — genesis allocations
+    // are keyed by address, and a key wipe would make them unspendable.
 
     const candidateAddr = isNativeDAI(this.config.daiWallet) ? this.config.daiWallet
                         : isNativeDAI(this.config.wallet)    ? this.config.wallet

@@ -16,11 +16,11 @@ import { DAIBlock } from '../core/block.js';
 import { computeChainWork } from './chain-selection.js';
 
 // ── Active network genesis (migration pin) ───────────────────────────────────
-// After the balance-preserving hard fork, this is the canonical genesis hash.
-// A node whose on-disk chain has a DIFFERENT genesis is running the pre-fork
-// chain and auto-migrates to this one (see miner-node _migrateChainIfStale).
+// v0.4.30 hard fork: balances from height 749 plus $185,185 of every stablecoin
+// minted to daie86c4… (local miner wallet). A node whose on-disk chain has a
+// DIFFERENT genesis auto-migrates (see miner-node _migrateChainIfStale).
 // Set to null to disable the pin (dev / pre-migration builds).
-export const EXPECTED_GENESIS_HASH = '38d1e3381b282e20e9f86a5ef55cfad162021d1e0e9db11c5e98b08e800a6968';
+export const EXPECTED_GENESIS_HASH = '950fade83fe860ae852b745b5628282be25f0192702d825e3657d72f992cab5a';
 
 /** Path to the snapshot bundled with the app (ships in the build), or null. */
 export function defaultMigrationSnapshot() {

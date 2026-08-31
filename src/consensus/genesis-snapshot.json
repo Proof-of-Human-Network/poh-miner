@@ -1,20 +1,20 @@
 {
   "version": 1,
-  "sourceHeight": 499,
-  "tipHeight": 499,
-  "finalizedHeight": 399,
-  "snapshotHash": "de421588e78a6aa09bbd78fc06922208d407a4eee43de77bd7ed5a9d763111a2",
-  "totalMinted": 1384741075000,
+  "sourceHeight": 749,
+  "tipHeight": 750,
+  "finalizedHeight": 650,
+  "snapshotHash": "6235e078a3136273ac51846d280e0493d1d96a9c14fefc922994f4e4de495cbb",
+  "totalMinted": 1422191075000,
   "coinbaseDust": 0,
   "excludedBalance": 0,
   "excluded": [
     "daiaudit000000000000000000000000000000000001",
     "dai_p2p_escrow"
   ],
-  "sumBalances": 1384741075000,
-  "addressCount": 38,
-  "genesisTimestamp": 1788102390000,
-  "generatedAt": "2026-08-30T15:06:30.195Z",
+  "sumBalances": 1422191075000,
+  "addressCount": 40,
+  "genesisTimestamp": 1788147864086,
+  "generatedAt": "2026-08-31T03:44:24.256Z",
   "balances": {
     "dai11eedf721d3068feabafddfacb734a7cf0469ea0": {
       "balance": 10445000000,
@@ -26,6 +26,10 @@
     },
     "dai3099e0100531d9ef1dc50363eadefb67e5fe1489": {
       "balance": 115000000,
+      "nonce": 0
+    },
+    "dai363a0afc59cdf97871058371b0ad3767fd3ea384": {
+      "balance": 30000000,
       "nonce": 0
     },
     "dai384d7936c860b1517cfd58b96d73512c0ab01422": {
@@ -41,7 +45,7 @@
       "nonce": 0
     },
     "dai3d459b3bc9c48a6695cae6b2ea4bc8f454bf00da": {
-      "balance": 321829825000,
+      "balance": 359129825000,
       "nonce": 2
     },
     "dai40436108338303d415d89277bfa1768db88a8ebb": {
@@ -175,6 +179,26 @@
     "daidba45cab8f4cda3eafbd47eca8f89e15d3be0098": {
       "balance": 56400000000,
       "nonce": 0
+    },
+    "daie86c4b3cc2668d78f6ad206f33bdaf75a3158852": {
+      "balance": 120000000,
+      "nonce": 0,
+      "assets": {
+        "KGST": 1611109500,
+        "aiAOA": 16944427500,
+        "aiBDT": 2259257000,
+        "aiBTN": 1555554000,
+        "aiCUP": 7407400000,
+        "aiEGP": 888888000,
+        "aiETB": 2370368000,
+        "aiIQD": 24259235000,
+        "aiIRR": 18518500000000,
+        "aiLYD": 101851750,
+        "aiPKR": 5222217000,
+        "aiPYG": 135185050000,
+        "aiSDG": 48148100000,
+        "aiVES": 4629625000
+      }
     },
     "daieb9016fdc7527ea87b458a458db0108a306bb19e": {
       "balance": 45911250000,
