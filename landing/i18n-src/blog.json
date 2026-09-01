@@ -1,0 +1,146 @@
+{
+  "en": {
+    "nav.blog": "Blog",
+    "blog.eyebrow": "FROM THE NETWORK",
+    "blog.title": "Blog",
+    "blog.sub": "Release notes, network updates and plain-language explanations of what changed and why.",
+    "blog.read": "Read the post →",
+    "blog.back": "← Blog",
+    "blog.tag.release": "Release"
+  },
+  "ru": {
+    "nav.blog": "Блог",
+    "blog.eyebrow": "ИЗ СЕТИ",
+    "blog.title": "Блог",
+    "blog.sub": "Заметки о релизах, новости сети и простые объяснения того, что изменилось и почему.",
+    "blog.read": "Читать →",
+    "blog.back": "← Блог",
+    "blog.tag.release": "Релиз"
+  },
+  "ky": {
+    "nav.blog": "Блог",
+    "blog.eyebrow": "ТАРМАКТАН",
+    "blog.title": "Блог",
+    "blog.sub": "Релиз жазуулары, тармактын жаңылыктары жана эмне өзгөргөнүн жөнөкөй тил менен түшүндүрүү.",
+    "blog.read": "Окуу →",
+    "blog.back": "← Блог",
+    "blog.tag.release": "Релиз"
+  },
+  "cn": {
+    "nav.blog": "博客",
+    "blog.eyebrow": "来自网络",
+    "blog.title": "博客",
+    "blog.sub": "版本说明、网络动态，以及用通俗语言解释改了什么、为什么改。",
+    "blog.read": "阅读全文 →",
+    "blog.back": "← 博客",
+    "blog.tag.release": "版本"
+  },
+  "hk": {
+    "nav.blog": "網誌",
+    "blog.eyebrow": "來自網絡",
+    "blog.title": "網誌",
+    "blog.sub": "版本說明、網絡動態，以及用淺白語言解釋改咗乜、點解要改。",
+    "blog.read": "閱讀全文 →",
+    "blog.back": "← 網誌",
+    "blog.tag.release": "版本"
+  },
+  "es": {
+    "nav.blog": "Blog",
+    "blog.eyebrow": "DESDE LA RED",
+    "blog.title": "Blog",
+    "blog.sub": "Notas de versión, novedades de la red y explicaciones sencillas de qué cambió y por qué.",
+    "blog.read": "Leer la entrada →",
+    "blog.back": "← Blog",
+    "blog.tag.release": "Versión"
+  },
+  "de": {
+    "nav.blog": "Blog",
+    "blog.eyebrow": "AUS DEM NETZWERK",
+    "blog.title": "Blog",
+    "blog.sub": "Release-Notes, Netzwerk-Updates und einfache Erklärungen, was sich geändert hat und warum.",
+    "blog.read": "Beitrag lesen →",
+    "blog.back": "← Blog",
+    "blog.tag.release": "Release"
+  },
+  "arab": {
+    "nav.blog": "المدونة",
+    "blog.eyebrow": "من الشبكة",
+    "blog.title": "المدونة",
+    "blog.sub": "ملاحظات الإصدار وتحديثات الشبكة وشرح مبسّط لما تغيّر ولماذا.",
+    "blog.read": "اقرأ المقال ←",
+    "blog.back": "→ المدونة",
+    "blog.tag.release": "إصدار"
+  },
+  "farsi": {
+    "nav.blog": "وبلاگ",
+    "blog.eyebrow": "از شبکه",
+    "blog.title": "وبلاگ",
+    "blog.sub": "یادداشت‌های انتشار، به‌روزرسانی‌های شبکه و توضیح ساده اینکه چه چیزی تغییر کرده و چرا.",
+    "blog.read": "خواندن مطلب ←",
+    "blog.back": "→ وبلاگ",
+    "blog.tag.release": "انتشار"
+  },
+  "it": {
+    "nav.blog": "Blog",
+    "blog.eyebrow": "DALLA RETE",
+    "blog.title": "Blog",
+    "blog.sub": "Note di rilascio, aggiornamenti della rete e spiegazioni semplici di cosa è cambiato e perché.",
+    "blog.read": "Leggi l'articolo →",
+    "blog.back": "← Blog",
+    "blog.tag.release": "Rilascio"
+  },
+  "fr": {
+    "nav.blog": "Blog",
+    "blog.eyebrow": "DEPUIS LE RÉSEAU",
+    "blog.title": "Blog",
+    "blog.sub": "Notes de version, actualités du réseau et explications simples de ce qui a changé et pourquoi.",
+    "blog.read": "Lire l'article →",
+    "blog.back": "← Blog",
+    "blog.tag.release": "Version"
+  },
+  "bn": {
+    "nav.blog": "ব্লগ",
+    "blog.eyebrow": "নেটওয়ার্ক থেকে",
+    "blog.title": "ব্লগ",
+    "blog.sub": "রিলিজ নোট, নেটওয়ার্ক আপডেট এবং সহজ ভাষায় ব্যাখ্যা — কী বদলেছে আর কেন।",
+    "blog.read": "পোস্টটি পড়ুন →",
+    "blog.back": "← ব্লগ",
+    "blog.tag.release": "রিলিজ"
+  },
+  "ur": {
+    "nav.blog": "بلاگ",
+    "blog.eyebrow": "نیٹ ورک سے",
+    "blog.title": "بلاگ",
+    "blog.sub": "ریلیز نوٹس، نیٹ ورک اپ ڈیٹس اور سادہ زبان میں وضاحت کہ کیا بدلا اور کیوں۔",
+    "blog.read": "پوسٹ پڑھیں ←",
+    "blog.back": "→ بلاگ",
+    "blog.tag.release": "ریلیز"
+  },
+  "pt": {
+    "nav.blog": "Blog",
+    "blog.eyebrow": "DA REDE",
+    "blog.title": "Blog",
+    "blog.sub": "Notas de versão, novidades da rede e explicações simples do que mudou e por quê.",
+    "blog.read": "Ler o post →",
+    "blog.back": "← Blog",
+    "blog.tag.release": "Versão"
+  },
+  "am": {
+    "nav.blog": "ብሎግ",
+    "blog.eyebrow": "ከአውታረ መረቡ",
+    "blog.title": "ብሎግ",
+    "blog.sub": "የልቀት ማስታወሻዎች፣ የአውታረ መረብ ዝመናዎች እና ምን እንደተቀየረ እና ለምን በቀላል ቋንቋ ማብራሪያ።",
+    "blog.read": "ጽሑፉን ያንብቡ →",
+    "blog.back": "← ብሎግ",
+    "blog.tag.release": "ልቀት"
+  },
+  "dz": {
+    "nav.blog": "བློག།",
+    "blog.eyebrow": "ཡོངས་འབྲེལ་ལས།",
+    "blog.title": "བློག།",
+    "blog.sub": "འགྲེམ་སྤེལ་གྱི་དྲན་ཐོ། ཡོངས་འབྲེལ་གྱི་གསར་བཅོས། དེ་ལས་ག་ཅི་འགྱུར་བཅོས་བྱུང་ཡི་ག་དང་ག་ཅི་སྦེ་ཟེར་བའི་འགྲེལ་བཤད།",
+    "blog.read": "རྩོམ་ཡིག་ལྷག། →",
+    "blog.back": "← བློག།",
+    "blog.tag.release": "འགྲེམ་སྤེལ།"
+  }
+}

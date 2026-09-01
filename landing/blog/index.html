@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>DAI Explorer • Blocks, transactions and addresses on the DAI chain</title>
-  <meta name="description" content="Browse the DAI chain — recent blocks, transactions, addresses and completed AI compute jobs.">
+  <title>DAI Blog • Release notes and news from the DAI network</title>
+  <meta name="description" content="Release notes, network updates and news from DAI — Decentralized Artificial Intelligence.">
   <script src="https://cdn.tailwindcss.com"></script>
   <link href="https://fonts.googleapis.com/css2?family=Iceland&display=swap" rel="stylesheet">
   <link rel="icon" type="image/svg+xml" href="../dai-miner-on-light.svg">
@@ -15,7 +15,6 @@
     :root { --bg: #f5f6f2; --ink: #171717; --muted: #525252; --accent: #16a34a; --card: #ffffff; --line: #e4e6e0; }
     body { font-family: 'Iceland', sans-serif; background: var(--bg); color: var(--ink); line-height: 1.4; }
     h1, h2, h3, .font-display { font-family: 'Iceland', sans-serif; font-weight: 400; }
-    .glass { background: rgba(255,255,255,0.86); border: 1px solid var(--line); backdrop-filter: blur(20px); }
     .neon { color: #16a34a; }
     .muted { color: var(--muted); }
     html { font-size: 150%; }
@@ -45,27 +44,23 @@
     @media (min-width: 1024px) { .mobile-drawer { display: none !important; } }
     .dai-lang-select { background: #fff !important; color: #171717 !important; border: 1px solid #d4d6d0 !important; }
 
-    /* Explorer-specific */
-    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
-    .xcard { background: var(--card); border: 1px solid var(--line); border-radius: 8px; }
-    .xrow { transition: border-color .18s, transform .18s; }
-    .xrow:hover { border-color: rgba(22,163,74,0.5); transform: translateY(-1px); }
-    .xtab { border: 1px solid var(--line); background: #fff; color: var(--muted); cursor: pointer; }
-    .xtab.active { background: var(--accent); color: #fff; border-color: var(--accent); }
-    .xlink { color: var(--accent); cursor: pointer; word-break: break-all; }
-    .xlink:hover { text-decoration: underline; }
-    .kv { display: flex; justify-content: space-between; gap: 12px; padding: 6px 0; border-bottom: 1px solid var(--line); }
-    .kv:last-child { border-bottom: none; }
-    .kv dt { color: var(--muted); font-size: 0.9rem; white-space: nowrap; }
-    .kv dd { text-align: right; word-break: break-all; }
-    .scroll-x { overflow-x: auto; }
-    .spin { display: inline-block; width: 14px; height: 14px; border: 2px solid var(--line); border-top-color: var(--accent); border-radius: 50%; animation: sp .7s linear infinite; }
-    @keyframes sp { to { transform: rotate(360deg); } }
-    .badge { border: 1px solid var(--line); border-radius: 999px; padding: 1px 8px; font-size: 0.8rem; color: var(--muted); }
+    /* Blog-specific */
+    .post-card {
+      background: var(--card); border: 1px solid var(--line); border-radius: 8px;
+      transition: border-color .2s, transform .2s;
+      display: block; text-decoration: none; color: inherit;
+    }
+    .post-card:hover { border-color: rgba(22,163,74,0.55); transform: translateY(-3px); }
+    .meta { font-size: 0.92rem; letter-spacing: 1px; text-transform: uppercase; color: var(--muted); }
+    .tag {
+      display: inline-block; border: 1px solid var(--line); border-radius: 999px;
+      padding: 2px 12px; font-size: 0.9rem; color: var(--accent);
+      background: rgba(22,163,74,0.07);
+    }
   </style>
 </head>
-<body class="overflow-x-hidden">
-  <!-- Nav -->
+<body>
+
   <nav class="border-b border-black/10 bg-[#f5f6f2]/85 backdrop-blur-xl fixed w-full z-50">
     <div class="max-w-7xl mx-auto px-4 sm:px-8 h-16 sm:h-20 flex items-center justify-between">
       <a href="../index.html" class="flex items-center gap-2">
@@ -75,8 +70,8 @@
         <a href="../dai.html" class="hover:text-[#16a34a] transition whitespace-nowrap" data-i18n="nav.dai">DAI</a>
         <a href="../framework.html" class="hover:text-[#16a34a] transition whitespace-nowrap" data-i18n="nav.framework">Framework</a>
         <a href="../wallet/" class="hover:text-[#16a34a] transition whitespace-nowrap" data-i18n="nav.wallet">Wallet</a>
-        <a href="./" class="text-[#16a34a] transition whitespace-nowrap" data-i18n="nav.explorer">Explorer</a>
-        <a href="../blog/" class="hover:text-[#16a34a] transition whitespace-nowrap" data-i18n="nav.blog">Blog</a>
+        <a href="../explorer/" class="hover:text-[#16a34a] transition whitespace-nowrap" data-i18n="nav.explorer">Explorer</a>
+        <a href="./" class="text-[#16a34a] transition whitespace-nowrap" data-i18n="nav.blog">Blog</a>
         <a href="https://aist.exchange" target="_blank" rel="noopener" class="px-3 lg:px-5 py-2 rounded-[4px] border border-[#16a34a] text-[#16a34a] hover:bg-[#16a34a] hover:text-white transition whitespace-nowrap" data-i18n="nav.p2p">P2P</a>
         <a href="../miner.html#start" class="px-3 lg:px-5 py-2 rounded-[4px] bg-[#16a34a] text-white hover:bg-black transition whitespace-nowrap" data-i18n="nav.runminer">Run a miner</a>
         <div data-i18n-switch></div>
@@ -89,46 +84,44 @@
     <a href="../dai.html" data-i18n="nav.dai">DAI</a>
     <a href="../framework.html" data-i18n="nav.framework">Framework</a>
     <a href="../wallet/" data-i18n="nav.wallet">Wallet</a>
-    <a href="./" data-i18n="nav.explorer">Explorer</a>
-    <a href="../blog/" data-i18n="nav.blog">Blog</a>
+    <a href="../explorer/" data-i18n="nav.explorer">Explorer</a>
+    <a href="./" data-i18n="nav.blog">Blog</a>
     <a href="https://aist.exchange" target="_blank" rel="noopener" data-i18n="nav.p2p">P2P</a>
     <a href="../miner.html#start" data-i18n="nav.runminer">Run a miner</a>
     <div data-i18n-switch style="padding:14px 0"></div>
   </div>
 
-  <main class="pt-24 sm:pt-28 pb-20 max-w-6xl mx-auto px-4 sm:px-8">
-    <header class="mb-8">
-      <h1 class="font-display text-[40px] sm:text-[56px] leading-none" data-i18n="exp.title">Chain Explorer</h1>
-      <p class="muted mt-3 text-[16px] sm:text-[18px]" data-i18n="exp.sub">Blocks, transactions, addresses and completed AI compute jobs on the DAI chain.</p>
-    </header>
-
-    <!-- Network summary -->
-    <section class="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8" id="stats">
-      <div class="xcard p-4"><div class="muted text-[14px]" data-i18n="exp.stat.height">Chain height</div><div class="text-[26px] neon mono" id="stat-height">—</div></div>
-      <div class="xcard p-4"><div class="muted text-[14px]" data-i18n="exp.stat.peers">Peers</div><div class="text-[26px] mono" id="stat-peers">—</div></div>
-      <div class="xcard p-4"><div class="muted text-[14px]" data-i18n="exp.stat.supply">Circulating</div><div class="text-[26px] mono" id="stat-supply">—</div></div>
-      <div class="xcard p-4"><div class="muted text-[14px]" data-i18n="exp.stat.node">Node</div><div class="text-[17px] mono truncate" id="stat-node">—</div></div>
+  <main class="pt-16 sm:pt-20">
+    <section class="max-w-5xl mx-auto px-4 sm:px-8 pt-12 sm:pt-20 pb-8">
+      <div class="uppercase tracking-[3px] text-xs neon mb-4" data-i18n="blog.eyebrow">FROM THE NETWORK</div>
+      <h1 class="text-[52px] sm:text-[80px] leading-[0.95]" data-i18n="blog.title">Blog</h1>
+      <p class="mt-4 text-[20px] sm:text-[24px] muted max-w-2xl" data-i18n="blog.sub">
+        Release notes, network updates and plain-language explanations of what changed and why.
+      </p>
     </section>
 
-    <!-- Search -->
-    <section class="mb-6">
-      <div class="flex flex-col sm:flex-row gap-2">
-        <input id="q" type="search" autocomplete="off"
-               class="flex-1 mono text-[15px] px-4 py-3 rounded-[6px] border border-[#e4e6e0] bg-white outline-none focus:border-[#16a34a]"
-               data-i18n-ph="exp.search.ph" placeholder="Search by address, tx hash, or block height…" />
-        <button id="go" class="px-6 py-3 rounded-[6px] bg-[#16a34a] text-white hover:bg-black transition text-[17px]" data-i18n="exp.search.btn">Search</button>
+    <section class="max-w-5xl mx-auto px-4 sm:px-8 pb-20 sm:pb-28">
+      <div class="flex flex-col gap-6">
+
+        <a href="dai-0-4-34.html" class="post-card p-6 sm:p-9">
+          <div class="flex flex-wrap items-center gap-3 mb-4">
+            <span class="tag" data-i18n="blog.tag.release">Release</span>
+            <span class="meta">1 September 2026 · v0.4.34</span>
+          </div>
+          <h2 class="text-[34px] sm:text-[46px] leading-[1.02]">
+            We changed our name. And nearly <span class="neon">everything</span> underneath it.
+          </h2>
+          <p class="mt-4 text-[18px] sm:text-[21px] muted">
+            Proof of Human is now DAI — Decentralized Artificial Intelligence. Between 0.4.2 and 0.4.34 the
+            network also learned to run AI on any machine with no setup, pay miners for the work they
+            actually did, carry 14 local currencies, and connect nodes directly without a middleman.
+            Here are the five changes worth updating for.
+          </p>
+          <div class="mt-6 neon text-[20px]" data-i18n="blog.read">Read the post →</div>
+        </a>
+
       </div>
-      <p class="muted text-[14px] mt-2" data-i18n-html="exp.search.hint">Tip: paste a <span class="mono">dai…</span> address to see its balance, transfers and jobs.</p>
     </section>
-
-    <!-- Tabs -->
-    <div class="flex gap-2 mb-4">
-      <button class="xtab active px-4 py-2 rounded-[6px] text-[15px]" id="tab-blocks" data-i18n="exp.tab.blocks">Blocks</button>
-      <button class="xtab px-4 py-2 rounded-[6px] text-[15px]" id="tab-result" data-i18n="exp.tab.result">Result</button>
-    </div>
-
-    <section id="view-blocks"></section>
-    <section id="view-result" style="display:none"></section>
   </main>
 
   <footer class="border-t border-black/10 py-8 footer-text muted">
@@ -138,12 +131,19 @@
         <a href="../miner.html" class="hover:text-[#171717]" data-i18n="idx.foot.miner">DAI Miner</a>
         <a href="../wallet/" class="hover:text-[#171717]" data-i18n="nav.wallet">Wallet</a>
         <a href="../docs/" class="hover:text-[#171717]" data-i18n="idx.foot.docs">Docs</a>
-        <a href="./" class="hover:text-[#171717]" data-i18n="nav.explorer">Explorer</a>
-        <a href="../blog/" class="hover:text-[#171717]" data-i18n="nav.blog">Blog</a>
+        <a href="../explorer/" class="hover:text-[#171717]" data-i18n="nav.explorer">Explorer</a>
+        <a href="./" class="hover:text-[#171717]" data-i18n="nav.blog">Blog</a>
       </div>
     </div>
   </footer>
 
-  <script src="explorer.js" defer></script>
+  <script>
+    const hamburger = document.getElementById('hamburger');
+    const drawer = document.getElementById('mobile-drawer');
+    if (hamburger && drawer) {
+      hamburger.addEventListener('click', () => { hamburger.classList.toggle('open'); drawer.classList.toggle('open'); });
+      drawer.querySelectorAll('a').forEach(a => a.addEventListener('click', () => { hamburger.classList.remove('open'); drawer.classList.remove('open'); }));
+    }
+  </script>
 </body>
 </html>

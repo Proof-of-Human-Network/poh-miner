@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DAI 0.4.34 — we changed our name, and nearly everything underneath it</title>
+  <meta name="description" content="Proof of Human is now DAI — Decentralized Artificial Intelligence. The five biggest changes between 0.4.2 and 0.4.34, in plain language.">
+  <meta property="og:title" content="DAI 0.4.34 — we changed our name, and nearly everything underneath it">
+  <meta property="og:description" content="Proof of Human is now DAI — Decentralized Artificial Intelligence. The five biggest changes between 0.4.2 and 0.4.34, in plain language.">
+  <meta property="og:type" content="article">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Iceland&display=swap" rel="stylesheet">
+  <link rel="icon" type="image/svg+xml" href="../dai-miner-on-light.svg">
+  <link rel="icon" type="image/png" sizes="32x32" href="../favicon-32.png">
+  <link rel="shortcut icon" href="../favicon.ico">
+  <script src="../i18n.js" defer></script>
+  <style>
+    :root { --bg: #f5f6f2; --ink: #171717; --muted: #525252; --accent: #16a34a; --card: #ffffff; --line: #e4e6e0; }
+    body { font-family: 'Iceland', sans-serif; background: var(--bg); color: var(--ink); line-height: 1.4; }
+    h1, h2, h3, .font-display { font-family: 'Iceland', sans-serif; font-weight: 400; }
+    .neon { color: #16a34a; }
+    .muted { color: var(--muted); }
+    html { font-size: 150%; }
+    /* Widest-first: both match on a phone, and the later rule wins, so the
+       narrower breakpoint has to come last or it never applies. */
+    @media (max-width: 767px) { html { font-size: 110%; } }
+    @media (max-width: 639px) { html { font-size: 100%; } }
+    .footer-text { font-size: 1.25rem !important; }
+
+    .nav-links { display: none; }
+    @media (min-width: 1024px) { .nav-links { display: flex; } }
+    .hamburger { display: flex; flex-direction: column; gap: 5px; cursor: pointer; padding: 4px; }
+    .hamburger span { display: block; width: 22px; height: 2px; background: #171717; border-radius: 2px; transition: 0.25s; }
+    .hamburger.open span:nth-child(1) { transform: translateY(7px) rotate(45deg); }
+    .hamburger.open span:nth-child(2) { opacity: 0; }
+    .hamburger.open span:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
+    @media (min-width: 1024px) { .hamburger { display: none; } }
+    .mobile-drawer {
+      display: none; position: fixed; top: 64px; left: 0; right: 0; z-index: 49;
+      background: #f5f6f2; border-bottom: 1px solid var(--line);
+      flex-direction: column; padding: 16px 24px 24px;
+    }
+    @media (min-width: 640px) { .mobile-drawer { top: 80px; } }
+    .mobile-drawer.open { display: flex; }
+    .mobile-drawer a { padding: 14px 0; font-size: 22px; color: #171717; border-bottom: 1px solid var(--line); text-decoration: none; }
+    .mobile-drawer a:last-child { border-bottom: none; }
+    @media (min-width: 1024px) { .mobile-drawer { display: none !important; } }
+    .dai-lang-select { background: #fff !important; color: #171717 !important; border: 1px solid #d4d6d0 !important; }
+
+    /* Article */
+    .prose p { font-size: 1.18rem; line-height: 1.55; margin-bottom: 1rem; color: #262626; }
+    .prose p:last-child { margin-bottom: 0; }
+    .prose strong { color: var(--ink); }
+    .lede { font-size: 1.5rem !important; line-height: 1.4 !important; color: var(--ink) !important; }
+
+    .meta { font-size: 0.92rem; letter-spacing: 1px; text-transform: uppercase; color: var(--muted); }
+    .tag {
+      display: inline-block; border: 1px solid var(--line); border-radius: 999px;
+      padding: 2px 12px; font-size: 0.9rem; color: var(--accent);
+      background: rgba(22,163,74,0.07);
+    }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.86em; }
+
+    .jump { display: flex; align-items: baseline; flex-wrap: wrap; gap: 12px; }
+    .jump .from { font-size: 2rem; color: var(--muted); }
+    .jump .arrow { color: var(--accent); font-size: 1.4rem; }
+    .jump .to { font-size: 3.2rem; }
+
+    /* Numbered items */
+    .item { border-top: 1px solid var(--line); padding: 2.4rem 0; }
+    .item-head { display: flex; gap: 1.1rem; align-items: baseline; }
+    .rank { font-size: 3rem; line-height: 1; color: var(--accent); min-width: 2.6rem; }
+    .item h2 { font-size: 2.1rem; line-height: 1.05; }
+    .kicker { font-size: 0.85rem; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); margin-bottom: 4px; }
+    @media (min-width: 768px) { .item-body { padding-left: 3.7rem; } }
+    /* On phones the rank sits above the heading: a hanging number leaves the
+       wrapped second line indented against flush-left body copy. */
+    @media (max-width: 767px) {
+      .item-head { display: block; }
+      .rank { font-size: 2.2rem; margin-bottom: 2px; }
+    }
+
+    .facts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 1.2rem; }
+    .fact {
+      border: 1px solid var(--line); background: var(--card); border-radius: 4px;
+      padding: 5px 12px; font-size: 0.95rem; color: #333;
+    }
+    .fact b { color: var(--accent); font-weight: normal; }
+
+    .pull {
+      border-left: 3px solid var(--accent); padding-left: 1rem;
+      font-size: 1.35rem !important; line-height: 1.35 !important; color: var(--ink) !important;
+      margin: 1.3rem 0 !important;
+    }
+
+    /* Currency grid */
+    /* Separate tiles rather than 1px-gap cells: 14 coins never fill the last
+       row evenly, and a gap-coloured background makes the remainder read as a
+       broken grid at every column count. */
+    .coins {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+      gap: 8px;
+    }
+    .coin { background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: 12px 12px 10px; }
+    .coin .sign { font-size: 1.7rem; line-height: 1.15; color: var(--accent); }
+    .coin .tick { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.78rem; color: var(--ink); }
+    .coin .land { font-size: 0.95rem; color: var(--muted); line-height: 1.25; }
+
+    /* Also-shipped grid */
+    .grid-also {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 8px;
+    }
+    .cell { background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: 1.2rem 1.15rem; }
+    .cell h3 { font-size: 1.4rem; margin-bottom: 4px; }
+    .cell p { font-size: 1rem; line-height: 1.4; color: var(--muted); }
+
+    .notice {
+      border: 1px solid var(--accent); border-left-width: 4px;
+      background: rgba(22,163,74,0.07); border-radius: 4px; padding: 1.4rem 1.5rem;
+    }
+    .notice h3 { font-size: 1.6rem; margin-bottom: 8px; }
+
+    .cmd {
+      border: 1px solid var(--line); background: var(--card); border-radius: 4px;
+      padding: 12px 16px; overflow-x: auto; white-space: nowrap;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 0.92rem; color: #333;
+    }
+    .cmd .p { color: var(--accent); user-select: none; }
+  </style>
+</head>
+<body>
+
+  <nav class="border-b border-black/10 bg-[#f5f6f2]/85 backdrop-blur-xl fixed w-full z-50">
+    <div class="max-w-7xl mx-auto px-4 sm:px-8 h-16 sm:h-20 flex items-center justify-between">
+      <a href="../index.html" class="flex items-center gap-2">
+        <img src="../dai-miner-on-light.svg" alt="DAI Logo" width="36" height="36" class="sm:w-[48px] sm:h-[48px]" style="vertical-align: middle;" />
+      </a>
+      <div class="nav-links items-center gap-x-6 xl:gap-x-9 text-[17px] xl:text-[20px]">
+        <a href="../dai.html" class="hover:text-[#16a34a] transition whitespace-nowrap" data-i18n="nav.dai">DAI</a>
+        <a href="../framework.html" class="hover:text-[#16a34a] transition whitespace-nowrap" data-i18n="nav.framework">Framework</a>
+        <a href="../wallet/" class="hover:text-[#16a34a] transition whitespace-nowrap" data-i18n="nav.wallet">Wallet</a>
+        <a href="../explorer/" class="hover:text-[#16a34a] transition whitespace-nowrap" data-i18n="nav.explorer">Explorer</a>
+        <a href="./" class="text-[#16a34a] transition whitespace-nowrap" data-i18n="nav.blog">Blog</a>
+        <a href="https://aist.exchange" target="_blank" rel="noopener" class="px-3 lg:px-5 py-2 rounded-[4px] border border-[#16a34a] text-[#16a34a] hover:bg-[#16a34a] hover:text-white transition whitespace-nowrap" data-i18n="nav.p2p">P2P</a>
+        <a href="../miner.html#start" class="px-3 lg:px-5 py-2 rounded-[4px] bg-[#16a34a] text-white hover:bg-black transition whitespace-nowrap" data-i18n="nav.runminer">Run a miner</a>
+        <div data-i18n-switch></div>
+      </div>
+      <button class="hamburger" id="hamburger" aria-label="Open menu"><span></span><span></span><span></span></button>
+    </div>
+  </nav>
+
+  <div class="mobile-drawer" id="mobile-drawer">
+    <a href="../dai.html" data-i18n="nav.dai">DAI</a>
+    <a href="../framework.html" data-i18n="nav.framework">Framework</a>
+    <a href="../wallet/" data-i18n="nav.wallet">Wallet</a>
+    <a href="../explorer/" data-i18n="nav.explorer">Explorer</a>
+    <a href="./" data-i18n="nav.blog">Blog</a>
+    <a href="https://aist.exchange" target="_blank" rel="noopener" data-i18n="nav.p2p">P2P</a>
+    <a href="../miner.html#start" data-i18n="nav.runminer">Run a miner</a>
+    <div data-i18n-switch style="padding:14px 0"></div>
+  </div>
+
+  <main class="pt-16 sm:pt-20">
+
+    <!-- Header -->
+    <article class="max-w-3xl mx-auto px-4 sm:px-8">
+      <header class="pt-10 sm:pt-16 pb-6">
+        <a href="./" class="meta hover:text-[#16a34a]" data-i18n="blog.back">← Blog</a>
+        <div class="flex flex-wrap items-center gap-3 mt-6 mb-5">
+          <span class="tag" data-i18n="blog.tag.release">Release</span>
+          <span class="meta">1 September 2026 · v0.4.34</span>
+        </div>
+        <h1 class="text-[42px] sm:text-[64px] leading-[0.98]">
+          We changed our name. And nearly <span class="neon">everything</span> underneath it.
+        </h1>
+        <div class="prose mt-6">
+          <p class="lede">
+            Proof of Human is now <strong>DAI — Decentralized Artificial Intelligence</strong>.
+            Here are the five changes worth updating for.
+          </p>
+        </div>
+
+        <div class="jump mt-9 pt-6 border-t border-black/10">
+          <span class="from">0.4.2</span>
+          <span class="arrow">→</span>
+          <span class="to">0.4.34</span>
+          <span class="meta ml-auto" style="text-transform:none;letter-spacing:0.5px">
+            26 June – 31 August 2026 · 256 changes
+          </span>
+        </div>
+      </header>
+
+      <!-- 01 -->
+      <section class="item">
+        <div class="item-head">
+          <div class="rank">01</div>
+          <div>
+            <div class="kicker">The rebrand</div>
+            <h2>We're DAI now, and we live at iamai.kg</h2>
+          </div>
+        </div>
+        <div class="item-body prose mt-5">
+          <p><strong>Proof of Human</strong> became <strong>DAI</strong> — short for <em>Decentralized Artificial Intelligence</em>. The old name described how the network started. The new one describes what it actually is: a way to run AI that nobody owns.</p>
+          <p>The whole thing moved house. The site, the docs, the download page and the bootnodes all left <span class="mono">poh.ge</span> and <span class="mono">proofofhuman.ge</span>, and now live on <a href="https://iamai.kg" class="neon hover:underline">iamai.kg</a>. The coin changed ticker too — POH is DAI, and wallet addresses now start with <span class="mono">dai…</span>.</p>
+          <p>Nothing was taken from you in the move. Your wallet keys are the same keys, and balances were carried across to the new chain.</p>
+          <div class="facts">
+            <span class="fact">Site → <b>iamai.kg</b></span>
+            <span class="fact">Miner → <b>miner.iamai.kg</b></span>
+            <span class="fact">Exchange → <b>aist.exchange</b></span>
+          </div>
+        </div>
+      </section>
+
+      <!-- 02 -->
+      <section class="item">
+        <div class="item-head">
+          <div class="rank">02</div>
+          <div>
+            <div class="kicker">Local AI</div>
+            <h2>The AI runs on your machine — with no setup</h2>
+          </div>
+        </div>
+        <div class="item-body prose mt-5">
+          <p>The inference engine is now packed inside the app on <strong>Windows, macOS and Linux</strong>. No Python, no Docker, no separate model server to babysit. Open the app, and it downloads a model and starts answering.</p>
+          <p>You choose how big to go. The ladder runs from a 0.45 GB model that works on an old laptop all the way to a 62 GB flagship for a workstation — and the app reads your memory and graphics card first, so it only offers what your machine can really hold. On Windows it now recognises AMD and Intel GPUs too, not just NVIDIA.</p>
+          <p>Chat grew up as well. You can attach <strong>text files and pictures</strong>, and every node now ships with tools built in — 22 public data APIs plus onion search — so the AI can go and look something up instead of guessing at it.</p>
+          <div class="facts">
+            <span class="fact">8 models: <b>0.6B → 120B</b></span>
+            <span class="fact">Download <b>0.45 – 62.8 GB</b></span>
+            <span class="fact">CPU or GPU, <b>auto-detected</b></span>
+            <span class="fact">Attachments <b>up to 1 MB</b></span>
+          </div>
+        </div>
+      </section>
+
+      <!-- 03 -->
+      <section class="item">
+        <div class="item-head">
+          <div class="rank">03</div>
+          <div>
+            <div class="kicker">Rewards</div>
+            <h2>You get paid for the work you actually did</h2>
+          </div>
+        </div>
+        <div class="item-body prose mt-5">
+          <p>The old rule was simple and a bit unfair: whoever won the block took most of the coins, whether or not they had done any AI work.</p>
+          <p>The new rule pays the workers. The block reward is split between the nodes that actually completed AI jobs, weighted by how much compute each one delivered. The node that packages the block keeps about <strong>10%</strong> for its trouble.</p>
+          <p class="pull">If nobody asked the network for anything, a block mints a tiny keepalive instead of a whole coin. New DAI appears when there is real demand for it — not on a timer.</p>
+          <p>And the split is not something a node reports about itself. Every other node recalculates it from the block's own contents, so running twenty fake identities earns exactly what running one earns.</p>
+          <div class="facts">
+            <span class="fact">Workers take <b>~90%</b></span>
+            <span class="fact">Quiet block mints <b>0.05 DAI</b></span>
+            <span class="fact">Split <b>re-checked by every node</b></span>
+          </div>
+        </div>
+      </section>
+
+      <!-- 04 -->
+      <section class="item">
+        <div class="item-head">
+          <div class="rank">04</div>
+          <div>
+            <div class="kicker">Money</div>
+            <h2>Pay for AI in your own currency</h2>
+          </div>
+        </div>
+        <div class="item-body prose mt-5">
+          <p>The chain now carries <strong>14 regional currencies</strong> alongside DAI. Not a wrapper, not an IOU on somebody else's chain — real balances you can hold, send and spend on compute.</p>
+        </div>
+      </section>
+    </article>
+
+    <!-- Currency band -->
+    <div class="border-y border-black/10 bg-[#eceee8] py-8 sm:py-11 my-2">
+      <div class="max-w-5xl mx-auto px-4 sm:px-8">
+        <div class="kicker mb-4">On-chain currencies · minted once at genesis</div>
+        <div class="coins">
+          <div class="coin"><div class="sign">som</div><div class="tick">KGST</div><div class="land">Kyrgyzstan</div></div>
+          <div class="coin"><div class="sign">Br</div><div class="tick">aiETB</div><div class="land">Ethiopia</div></div>
+          <div class="coin"><div class="sign">Nu.</div><div class="tick">aiBTN</div><div class="land">Bhutan</div></div>
+          <div class="coin"><div class="sign">Bs.</div><div class="tick">aiVES</div><div class="land">Venezuela</div></div>
+          <div class="coin"><div class="sign">₲</div><div class="tick">aiPYG</div><div class="land">Paraguay</div></div>
+          <div class="coin"><div class="sign">৳</div><div class="tick">aiBDT</div><div class="land">Bangladesh</div></div>
+          <div class="coin"><div class="sign">₨</div><div class="tick">aiPKR</div><div class="land">Pakistan</div></div>
+          <div class="coin"><div class="sign">E£</div><div class="tick">aiEGP</div><div class="land">Egypt</div></div>
+          <div class="coin"><div class="sign">ع.د</div><div class="tick">aiIQD</div><div class="land">Iraq</div></div>
+          <div class="coin"><div class="sign">Kz</div><div class="tick">aiAOA</div><div class="land">Angola</div></div>
+          <div class="coin"><div class="sign">MN$</div><div class="tick">aiCUP</div><div class="land">Cuba</div></div>
+          <div class="coin"><div class="sign">ل.د</div><div class="tick">aiLYD</div><div class="land">Libya</div></div>
+          <div class="coin"><div class="sign">ج.س</div><div class="tick">aiSDG</div><div class="land">Sudan</div></div>
+          <div class="coin"><div class="sign">﷼</div><div class="tick">aiIRR</div><div class="land">Iran</div></div>
+        </div>
+      </div>
+    </div>
+
+    <article class="max-w-3xl mx-auto px-4 sm:px-8">
+      <section class="pt-8 pb-2">
+        <div class="item-body prose">
+          <p>Compute costs the same everywhere — roughly <strong>$0.05 for a million AI tokens</strong>. All that changes is which money you pay it in. And the miner is paid in exactly the currency the customer used: no conversion, no spread, no surprise.</p>
+          <p>To move between them there is a <strong>peer-to-peer exchange</strong> built into the app. Post an order, meet a counterparty, and the chain holds the funds in escrow until both sides are done. When both currencies live on the chain, the swap settles in a single step — nobody has to send first and hope.</p>
+          <div class="facts">
+            <span class="fact"><b>$0.05</b> per 1M tokens</span>
+            <span class="fact">Escrow <b>on-chain</b></span>
+            <span class="fact">On-chain pairs swap <b>in one step</b></span>
+            <span class="fact">Cash out by <b>bank or USDT</b></span>
+          </div>
+        </div>
+      </section>
+
+      <!-- 05 -->
+      <section class="item mt-8">
+        <div class="item-head">
+          <div class="rank">05</div>
+          <div>
+            <div class="kicker">Networking</div>
+            <h2>Nodes talk to each other directly at last</h2>
+          </div>
+        </div>
+        <div class="item-body prose mt-5">
+          <p>Here is a problem we had been quietly living with. Almost no home computer is reachable from the open internet — your router sees to that. So every message between two home miners had to be relayed through a bootnode. One server, carrying everyone's traffic, and a single thing to knock over.</p>
+          <p>Not any more. Nodes now find each other by <strong>public key</strong> on a distributed hash table, and punch a direct connection straight through the router. Two miners behind two home routers on opposite sides of the world now speak to each other with nothing in between. For the rare pair that genuinely cannot connect, it falls back to a relay on its own.</p>
+          <p class="pull">A node with no bootnode configured at all can now find the network by itself. That was always the point.</p>
+          <div class="facts">
+            <span class="fact">Direct <b>peer-to-peer</b></span>
+            <span class="fact">Works <b>behind home routers</b></span>
+            <span class="fact">No <b>single point of failure</b></span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Also -->
+      <section class="pt-10 pb-4">
+        <h2 class="text-[2.1rem] leading-tight">Also in this release</h2>
+        <p class="muted text-[1.1rem] mt-1 mb-6">Smaller things you will notice within a day of running it.</p>
+        <div class="grid-also">
+          <div class="cell">
+            <h3>Explorer on the web</h3>
+            <p>Blocks, addresses, transactions and completed jobs, browsable at <a href="../explorer/" class="neon hover:underline">/explorer</a> — not only inside the app.</p>
+          </div>
+          <div class="cell">
+            <h3>Honest wallet history</h3>
+            <p>Your transaction list is now read from the chain itself, so it says the same thing on every device you own.</p>
+          </div>
+          <div class="cell">
+            <h3>Sign from your phone</h3>
+            <p>Pair a website with your wallet by link or QR. Requests are shown in plain words, and your key never leaves your machine.</p>
+          </div>
+          <div class="cell">
+            <h3>16 languages</h3>
+            <p>The site and app now speak Kyrgyz, Amharic, Dzongkha, Bengali, Urdu, Farsi, Arabic, Chinese and more — with pages written for each country.</p>
+          </div>
+          <div class="cell">
+            <h3>Bring your own tools</h3>
+            <p>Add any MCP server in Settings and the AI can use it. Complex questions are planned across several tools before anything runs.</p>
+          </div>
+          <div class="cell">
+            <h3>Rate an answer, say why</h3>
+            <p>Star ratings now take a comment, and the comment is fed back into the reply instead of vanishing into a log.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- Notice -->
+      <section class="py-8">
+        <div class="notice">
+          <h3>Please update — this one is a hard fork</h3>
+          <div class="prose">
+            <p>The network switched to a fresh chain. Miners still running an old build are turned away by everyone else, so they sit there burning electricity and earning nothing. Updating is the whole fix.</p>
+            <p><strong>Your wallet keys are untouched by the update.</strong> It clears the chain data your node rebuilds anyway, and balances were carried over from a snapshot of the old chain.</p>
+          </div>
+        </div>
+      </section>
+
+      <!-- CTA -->
+      <section class="py-10 sm:py-14 border-t border-black/10">
+        <h2 class="text-[2.4rem] sm:text-[3rem] leading-[1.02]">Put an idle computer to work</h2>
+        <p class="muted text-[1.2rem] mt-3 max-w-xl">A Mac mini, an old gaming PC, a server with spare hours. Download it, pick a model, and it starts earning while you get on with your day.</p>
+        <div class="flex flex-wrap gap-3 mt-7 items-center">
+          <a href="../miner.html#start" class="px-6 py-3 rounded-[4px] bg-[#16a34a] text-white text-[1.25rem] hover:bg-black transition">Download DAI Miner →</a>
+          <a href="../docs/" class="px-6 py-3 rounded-[4px] border border-[#16a34a] text-[#16a34a] text-[1.25rem] hover:bg-[#16a34a] hover:text-white transition">Read the docs</a>
+        </div>
+        <div class="cmd mt-6"><span class="p">$</span> curl -fsSL https://miner.iamai.kg/scripts/easy-start.sh | bash</div>
+      </section>
+    </article>
+  </main>
+
+  <footer class="border-t border-black/10 py-8 footer-text muted">
+    <div class="max-w-7xl mx-auto px-4 sm:px-8 flex flex-col sm:flex-row gap-2 sm:justify-between">
+      <div data-i18n="idx.foot.tag">DAI — Decentralized AI compute, powered by local LLMs</div>
+      <div class="flex gap-x-4 gap-y-2 flex-wrap">
+        <a href="../miner.html" class="hover:text-[#171717]" data-i18n="idx.foot.miner">DAI Miner</a>
+        <a href="../wallet/" class="hover:text-[#171717]" data-i18n="nav.wallet">Wallet</a>
+        <a href="../docs/" class="hover:text-[#171717]" data-i18n="idx.foot.docs">Docs</a>
+        <a href="../explorer/" class="hover:text-[#171717]" data-i18n="nav.explorer">Explorer</a>
+        <a href="./" class="hover:text-[#171717]" data-i18n="nav.blog">Blog</a>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    const hamburger = document.getElementById('hamburger');
+    const drawer = document.getElementById('mobile-drawer');
+    if (hamburger && drawer) {
+      hamburger.addEventListener('click', () => { hamburger.classList.toggle('open'); drawer.classList.toggle('open'); });
+      drawer.querySelectorAll('a').forEach(a => a.addEventListener('click', () => { hamburger.classList.remove('open'); drawer.classList.remove('open'); }));
+    }
+  </script>
+</body>
+</html>
