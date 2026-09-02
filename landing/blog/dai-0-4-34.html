@@ -72,7 +72,7 @@
     .rank { font-size: 3rem; line-height: 1; color: var(--accent); min-width: 2.6rem; }
     .item h2 { font-size: 2.1rem; line-height: 1.05; }
     .kicker { font-size: 0.85rem; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); margin-bottom: 4px; }
-    @media (min-width: 768px) { .item-body { padding-left: 3.7rem; } }
+    @media (min-width: 768px) { .item-body { padding-inline-start: 3.7rem; } }
     /* On phones the rank sits above the heading: a hanging number leaves the
        wrapped second line indented against flush-left body copy. */
     @media (max-width: 767px) {
@@ -88,7 +88,7 @@
     .fact b { color: var(--accent); font-weight: normal; }
 
     .pull {
-      border-left: 3px solid var(--accent); padding-left: 1rem;
+      border-inline-start: 3px solid var(--accent); padding-inline-start: 1rem;
       font-size: 1.35rem !important; line-height: 1.35 !important; color: var(--ink) !important;
       margin: 1.3rem 0 !important;
     }
@@ -116,7 +116,7 @@
     .cell p { font-size: 1rem; line-height: 1.4; color: var(--muted); }
 
     .notice {
-      border: 1px solid var(--accent); border-left-width: 4px;
+      border: 1px solid var(--accent); border-inline-start-width: 4px;
       background: rgba(22,163,74,0.07); border-radius: 4px; padding: 1.4rem 1.5rem;
     }
     .notice h3 { font-size: 1.6rem; margin-bottom: 8px; }
@@ -170,13 +170,13 @@
         <a href="./" class="meta hover:text-[#16a34a]" data-i18n="blog.back">← Blog</a>
         <div class="flex flex-wrap items-center gap-3 mt-6 mb-5">
           <span class="tag" data-i18n="blog.tag.release">Release</span>
-          <span class="meta">1 September 2026 · v0.4.34</span>
+          <span class="meta" data-i18n="blog.p1.date">1 September 2026 · v0.4.34</span>
         </div>
-        <h1 class="text-[42px] sm:text-[64px] leading-[0.98]">
+        <h1 class="text-[42px] sm:text-[64px] leading-[0.98]" data-i18n-html="blog.p1.title">
           We changed our name. And nearly <span class="neon">everything</span> underneath it.
         </h1>
         <div class="prose mt-6">
-          <p class="lede">
+          <p class="lede" data-i18n-html="blog.post.lede">
             Proof of Human is now <strong>DAI — Decentralized Artificial Intelligence</strong>.
             Here are the five changes worth updating for.
           </p>
@@ -186,7 +186,7 @@
           <span class="from">0.4.2</span>
           <span class="arrow">→</span>
           <span class="to">0.4.34</span>
-          <span class="meta ml-auto" style="text-transform:none;letter-spacing:0.5px">
+          <span class="meta ml-auto" style="text-transform:none;letter-spacing:0.5px" data-i18n="blog.post.span">
             26 June – 31 August 2026 · 256 changes
           </span>
         </div>
@@ -197,18 +197,18 @@
         <div class="item-head">
           <div class="rank">01</div>
           <div>
-            <div class="kicker">The rebrand</div>
-            <h2>We're DAI now, and we live at iamai.kg</h2>
+            <div class="kicker" data-i18n="blog.s1.k">The rebrand</div>
+            <h2 data-i18n="blog.s1.h">We're DAI now, and we live at iamai.kg</h2>
           </div>
         </div>
         <div class="item-body prose mt-5">
-          <p><strong>Proof of Human</strong> became <strong>DAI</strong> — short for <em>Decentralized Artificial Intelligence</em>. The old name described how the network started. The new one describes what it actually is: a way to run AI that nobody owns.</p>
-          <p>The whole thing moved house. The site, the docs, the download page and the bootnodes all left <span class="mono">poh.ge</span> and <span class="mono">proofofhuman.ge</span>, and now live on <a href="https://iamai.kg" class="neon hover:underline">iamai.kg</a>. The coin changed ticker too — POH is DAI, and wallet addresses now start with <span class="mono">dai…</span>.</p>
-          <p>Nothing was taken from you in the move. Your wallet keys are the same keys, and balances were carried across to the new chain.</p>
+          <p data-i18n-html="blog.s1.p1"><strong>Proof of Human</strong> became <strong>DAI</strong> — short for <em>Decentralized Artificial Intelligence</em>. The old name described how the network started. The new one describes what it actually is: a way to run AI that nobody owns.</p>
+          <p data-i18n-html="blog.s1.p2">The whole thing moved house. The site, the docs, the download page and the bootnodes all left <span class="mono">poh.ge</span> and <span class="mono">proofofhuman.ge</span>, and now live on <a href="https://iamai.kg" class="neon hover:underline">iamai.kg</a>. The coin changed ticker too — POH is DAI, and wallet addresses now start with <span class="mono">dai…</span>.</p>
+          <p data-i18n="blog.s1.p3">Nothing was taken from you in the move. Your wallet keys are the same keys, and balances were carried across to the new chain.</p>
           <div class="facts">
-            <span class="fact">Site → <b>iamai.kg</b></span>
-            <span class="fact">Miner → <b>miner.iamai.kg</b></span>
-            <span class="fact">Exchange → <b>aist.exchange</b></span>
+            <span class="fact" data-i18n-html="blog.s1.f1">Site → <b>iamai.kg</b></span>
+            <span class="fact" data-i18n-html="blog.s1.f2">Miner → <b>miner.iamai.kg</b></span>
+            <span class="fact" data-i18n-html="blog.s1.f3">Exchange → <b>aist.exchange</b></span>
           </div>
         </div>
       </section>
@@ -218,19 +218,19 @@
         <div class="item-head">
           <div class="rank">02</div>
           <div>
-            <div class="kicker">Local AI</div>
-            <h2>The AI runs on your machine — with no setup</h2>
+            <div class="kicker" data-i18n="blog.s2.k">Local AI</div>
+            <h2 data-i18n="blog.s2.h">The AI runs on your machine — with no setup</h2>
           </div>
         </div>
         <div class="item-body prose mt-5">
-          <p>The inference engine is now packed inside the app on <strong>Windows, macOS and Linux</strong>. No Python, no Docker, no separate model server to babysit. Open the app, and it downloads a model and starts answering.</p>
-          <p>You choose how big to go. The ladder runs from a 0.45 GB model that works on an old laptop all the way to a 62 GB flagship for a workstation — and the app reads your memory and graphics card first, so it only offers what your machine can really hold. On Windows it now recognises AMD and Intel GPUs too, not just NVIDIA.</p>
-          <p>Chat grew up as well. You can attach <strong>text files and pictures</strong>, and every node now ships with tools built in — 22 public data APIs plus onion search — so the AI can go and look something up instead of guessing at it.</p>
+          <p data-i18n-html="blog.s2.p1">The inference engine is now packed inside the app on <strong>Windows, macOS and Linux</strong>. No Python, no Docker, no separate model server to babysit. Open the app, and it downloads a model and starts answering.</p>
+          <p data-i18n="blog.s2.p2">You choose how big to go. The ladder runs from a 0.45 GB model that works on an old laptop all the way to a 62 GB flagship for a workstation — and the app reads your memory and graphics card first, so it only offers what your machine can really hold. On Windows it now recognises AMD and Intel GPUs too, not just NVIDIA.</p>
+          <p data-i18n-html="blog.s2.p3">Chat grew up as well. You can attach <strong>text files and pictures</strong>, and every node now ships with tools built in — 22 public data APIs plus onion search — so the AI can go and look something up instead of guessing at it.</p>
           <div class="facts">
-            <span class="fact">8 models: <b>0.6B → 120B</b></span>
-            <span class="fact">Download <b>0.45 – 62.8 GB</b></span>
-            <span class="fact">CPU or GPU, <b>auto-detected</b></span>
-            <span class="fact">Attachments <b>up to 1 MB</b></span>
+            <span class="fact" data-i18n-html="blog.s2.f1">8 models: <b>0.6B → 120B</b></span>
+            <span class="fact" data-i18n-html="blog.s2.f2">Download <b>0.45 – 62.8 GB</b></span>
+            <span class="fact" data-i18n-html="blog.s2.f3">CPU or GPU, <b>auto-detected</b></span>
+            <span class="fact" data-i18n-html="blog.s2.f4">Attachments <b>up to 1 MB</b></span>
           </div>
         </div>
       </section>
@@ -240,19 +240,19 @@
         <div class="item-head">
           <div class="rank">03</div>
           <div>
-            <div class="kicker">Rewards</div>
-            <h2>You get paid for the work you actually did</h2>
+            <div class="kicker" data-i18n="blog.s3.k">Rewards</div>
+            <h2 data-i18n="blog.s3.h">You get paid for the work you actually did</h2>
           </div>
         </div>
         <div class="item-body prose mt-5">
-          <p>The old rule was simple and a bit unfair: whoever won the block took most of the coins, whether or not they had done any AI work.</p>
-          <p>The new rule pays the workers. The block reward is split between the nodes that actually completed AI jobs, weighted by how much compute each one delivered. The node that packages the block keeps about <strong>10%</strong> for its trouble.</p>
-          <p class="pull">If nobody asked the network for anything, a block mints a tiny keepalive instead of a whole coin. New DAI appears when there is real demand for it — not on a timer.</p>
-          <p>And the split is not something a node reports about itself. Every other node recalculates it from the block's own contents, so running twenty fake identities earns exactly what running one earns.</p>
+          <p data-i18n="blog.s3.p1">The old rule was simple and a bit unfair: whoever won the block took most of the coins, whether or not they had done any AI work.</p>
+          <p data-i18n-html="blog.s3.p2">The new rule pays the workers. The block reward is split between the nodes that actually completed AI jobs, weighted by how much compute each one delivered. The node that packages the block keeps about <strong>10%</strong> for its trouble.</p>
+          <p class="pull" data-i18n="blog.s3.pull">If nobody asked the network for anything, a block mints a tiny keepalive instead of a whole coin. New DAI appears when there is real demand for it — not on a timer.</p>
+          <p data-i18n="blog.s3.p3">And the split is not something a node reports about itself. Every other node recalculates it from the block's own contents, so running twenty fake identities earns exactly what running one earns.</p>
           <div class="facts">
-            <span class="fact">Workers take <b>~90%</b></span>
-            <span class="fact">Quiet block mints <b>0.05 DAI</b></span>
-            <span class="fact">Split <b>re-checked by every node</b></span>
+            <span class="fact" data-i18n-html="blog.s3.f1">Workers take <b>~90%</b></span>
+            <span class="fact" data-i18n-html="blog.s3.f2">Quiet block mints <b>0.05 DAI</b></span>
+            <span class="fact" data-i18n-html="blog.s3.f3">Split <b>re-checked by every node</b></span>
           </div>
         </div>
       </section>
@@ -262,12 +262,12 @@
         <div class="item-head">
           <div class="rank">04</div>
           <div>
-            <div class="kicker">Money</div>
-            <h2>Pay for AI in your own currency</h2>
+            <div class="kicker" data-i18n="blog.s4.k">Money</div>
+            <h2 data-i18n="blog.s4.h">Pay for AI in your own currency</h2>
           </div>
         </div>
         <div class="item-body prose mt-5">
-          <p>The chain now carries <strong>14 regional currencies</strong> alongside DAI. Not a wrapper, not an IOU on somebody else's chain — real balances you can hold, send and spend on compute.</p>
+          <p data-i18n-html="blog.s4.p1">The chain now carries <strong>14 regional currencies</strong> alongside DAI. Not a wrapper, not an IOU on somebody else's chain — real balances you can hold, send and spend on compute.</p>
         </div>
       </section>
     </article>
@@ -275,22 +275,22 @@
     <!-- Currency band -->
     <div class="border-y border-black/10 bg-[#eceee8] py-8 sm:py-11 my-2">
       <div class="max-w-5xl mx-auto px-4 sm:px-8">
-        <div class="kicker mb-4">On-chain currencies · minted once at genesis</div>
+        <div class="kicker mb-4" data-i18n="blog.coins.head">On-chain currencies · minted once at genesis</div>
         <div class="coins">
-          <div class="coin"><div class="sign">som</div><div class="tick">KGST</div><div class="land">Kyrgyzstan</div></div>
-          <div class="coin"><div class="sign">Br</div><div class="tick">aiETB</div><div class="land">Ethiopia</div></div>
-          <div class="coin"><div class="sign">Nu.</div><div class="tick">aiBTN</div><div class="land">Bhutan</div></div>
-          <div class="coin"><div class="sign">Bs.</div><div class="tick">aiVES</div><div class="land">Venezuela</div></div>
-          <div class="coin"><div class="sign">₲</div><div class="tick">aiPYG</div><div class="land">Paraguay</div></div>
-          <div class="coin"><div class="sign">৳</div><div class="tick">aiBDT</div><div class="land">Bangladesh</div></div>
-          <div class="coin"><div class="sign">₨</div><div class="tick">aiPKR</div><div class="land">Pakistan</div></div>
-          <div class="coin"><div class="sign">E£</div><div class="tick">aiEGP</div><div class="land">Egypt</div></div>
-          <div class="coin"><div class="sign">ع.د</div><div class="tick">aiIQD</div><div class="land">Iraq</div></div>
-          <div class="coin"><div class="sign">Kz</div><div class="tick">aiAOA</div><div class="land">Angola</div></div>
-          <div class="coin"><div class="sign">MN$</div><div class="tick">aiCUP</div><div class="land">Cuba</div></div>
-          <div class="coin"><div class="sign">ل.د</div><div class="tick">aiLYD</div><div class="land">Libya</div></div>
-          <div class="coin"><div class="sign">ج.س</div><div class="tick">aiSDG</div><div class="land">Sudan</div></div>
-          <div class="coin"><div class="sign">﷼</div><div class="tick">aiIRR</div><div class="land">Iran</div></div>
+          <div class="coin"><div class="sign">som</div><div class="tick">KGST</div><div class="land" data-i18n="blog.c.kg">Kyrgyzstan</div></div>
+          <div class="coin"><div class="sign">Br</div><div class="tick">aiETB</div><div class="land" data-i18n="blog.c.et">Ethiopia</div></div>
+          <div class="coin"><div class="sign">Nu.</div><div class="tick">aiBTN</div><div class="land" data-i18n="blog.c.bt">Bhutan</div></div>
+          <div class="coin"><div class="sign">Bs.</div><div class="tick">aiVES</div><div class="land" data-i18n="blog.c.ve">Venezuela</div></div>
+          <div class="coin"><div class="sign">₲</div><div class="tick">aiPYG</div><div class="land" data-i18n="blog.c.py">Paraguay</div></div>
+          <div class="coin"><div class="sign">৳</div><div class="tick">aiBDT</div><div class="land" data-i18n="blog.c.bd">Bangladesh</div></div>
+          <div class="coin"><div class="sign">₨</div><div class="tick">aiPKR</div><div class="land" data-i18n="blog.c.pk">Pakistan</div></div>
+          <div class="coin"><div class="sign">E£</div><div class="tick">aiEGP</div><div class="land" data-i18n="blog.c.eg">Egypt</div></div>
+          <div class="coin"><div class="sign">ع.د</div><div class="tick">aiIQD</div><div class="land" data-i18n="blog.c.iq">Iraq</div></div>
+          <div class="coin"><div class="sign">Kz</div><div class="tick">aiAOA</div><div class="land" data-i18n="blog.c.ao">Angola</div></div>
+          <div class="coin"><div class="sign">MN$</div><div class="tick">aiCUP</div><div class="land" data-i18n="blog.c.cu">Cuba</div></div>
+          <div class="coin"><div class="sign">ل.د</div><div class="tick">aiLYD</div><div class="land" data-i18n="blog.c.ly">Libya</div></div>
+          <div class="coin"><div class="sign">ج.س</div><div class="tick">aiSDG</div><div class="land" data-i18n="blog.c.sd">Sudan</div></div>
+          <div class="coin"><div class="sign">﷼</div><div class="tick">aiIRR</div><div class="land" data-i18n="blog.c.ir">Iran</div></div>
         </div>
       </div>
     </div>
@@ -298,13 +298,13 @@
     <article class="max-w-3xl mx-auto px-4 sm:px-8">
       <section class="pt-8 pb-2">
         <div class="item-body prose">
-          <p>Compute costs the same everywhere — roughly <strong>$0.05 for a million AI tokens</strong>. All that changes is which money you pay it in. And the miner is paid in exactly the currency the customer used: no conversion, no spread, no surprise.</p>
-          <p>To move between them there is a <strong>peer-to-peer exchange</strong> built into the app. Post an order, meet a counterparty, and the chain holds the funds in escrow until both sides are done. When both currencies live on the chain, the swap settles in a single step — nobody has to send first and hope.</p>
+          <p data-i18n-html="blog.s4.p2">Nobody sets the price of compute. Every operator names their own rate, and what a DAI is worth is whatever the <strong>open market</strong> says — the best live bid and ask between real people, not an oracle and not a number we picked. All that changes between countries is which money you pay in. And the miner is paid in exactly the currency the customer used: no conversion, no spread, no surprise.</p>
+          <p data-i18n-html="blog.s4.p3">To move between them there is a <strong>peer-to-peer exchange</strong> built into the app. Post an order, meet a counterparty, and the chain holds the funds in escrow until both sides are done. When both currencies live on the chain, the swap settles in a single step — nobody has to send first and hope.</p>
           <div class="facts">
-            <span class="fact"><b>$0.05</b> per 1M tokens</span>
-            <span class="fact">Escrow <b>on-chain</b></span>
-            <span class="fact">On-chain pairs swap <b>in one step</b></span>
-            <span class="fact">Cash out by <b>bank or USDT</b></span>
+            <span class="fact" data-i18n-html="blog.s4.f1">Price set by <b>the open market</b></span>
+            <span class="fact" data-i18n-html="blog.s4.f2">Escrow <b>on-chain</b></span>
+            <span class="fact" data-i18n-html="blog.s4.f3">On-chain pairs swap <b>in one step</b></span>
+            <span class="fact" data-i18n-html="blog.s4.f4">Cash out by <b>bank or USDT</b></span>
           </div>
         </div>
       </section>
@@ -314,50 +314,50 @@
         <div class="item-head">
           <div class="rank">05</div>
           <div>
-            <div class="kicker">Networking</div>
-            <h2>Nodes talk to each other directly at last</h2>
+            <div class="kicker" data-i18n="blog.s5.k">Networking</div>
+            <h2 data-i18n="blog.s5.h">Nodes talk to each other directly at last</h2>
           </div>
         </div>
         <div class="item-body prose mt-5">
-          <p>Here is a problem we had been quietly living with. Almost no home computer is reachable from the open internet — your router sees to that. So every message between two home miners had to be relayed through a bootnode. One server, carrying everyone's traffic, and a single thing to knock over.</p>
-          <p>Not any more. Nodes now find each other by <strong>public key</strong> on a distributed hash table, and punch a direct connection straight through the router. Two miners behind two home routers on opposite sides of the world now speak to each other with nothing in between. For the rare pair that genuinely cannot connect, it falls back to a relay on its own.</p>
-          <p class="pull">A node with no bootnode configured at all can now find the network by itself. That was always the point.</p>
+          <p data-i18n="blog.s5.p1">Here is a problem we had been quietly living with. Almost no home computer is reachable from the open internet — your router sees to that. So every message between two home miners had to be relayed through a bootnode. One server, carrying everyone's traffic, and a single thing to knock over.</p>
+          <p data-i18n-html="blog.s5.p2">Not any more. Nodes now find each other by <strong>public key</strong> on a distributed hash table, and punch a direct connection straight through the router. Two miners behind two home routers on opposite sides of the world now speak to each other with nothing in between. For the rare pair that genuinely cannot connect, it falls back to a relay on its own.</p>
+          <p class="pull" data-i18n="blog.s5.pull">A node with no bootnode configured at all can now find the network by itself. That was always the point.</p>
           <div class="facts">
-            <span class="fact">Direct <b>peer-to-peer</b></span>
-            <span class="fact">Works <b>behind home routers</b></span>
-            <span class="fact">No <b>single point of failure</b></span>
+            <span class="fact" data-i18n-html="blog.s5.f1">Direct <b>peer-to-peer</b></span>
+            <span class="fact" data-i18n-html="blog.s5.f2">Works <b>behind home routers</b></span>
+            <span class="fact" data-i18n-html="blog.s5.f3">No <b>single point of failure</b></span>
           </div>
         </div>
       </section>
 
       <!-- Also -->
       <section class="pt-10 pb-4">
-        <h2 class="text-[2.1rem] leading-tight">Also in this release</h2>
-        <p class="muted text-[1.1rem] mt-1 mb-6">Smaller things you will notice within a day of running it.</p>
+        <h2 class="text-[2.1rem] leading-tight" data-i18n="blog.also.h">Also in this release</h2>
+        <p class="muted text-[1.1rem] mt-1 mb-6" data-i18n="blog.also.sub">Smaller things you will notice within a day of running it.</p>
         <div class="grid-also">
           <div class="cell">
-            <h3>Explorer on the web</h3>
-            <p>Blocks, addresses, transactions and completed jobs, browsable at <a href="../explorer/" class="neon hover:underline">/explorer</a> — not only inside the app.</p>
+            <h3 data-i18n="blog.a1.h">Explorer on the web</h3>
+            <p data-i18n-html="blog.a1.p">Blocks, addresses, transactions and completed jobs, browsable at <a href="../explorer/" class="neon hover:underline">/explorer</a> — not only inside the app.</p>
           </div>
           <div class="cell">
-            <h3>Honest wallet history</h3>
-            <p>Your transaction list is now read from the chain itself, so it says the same thing on every device you own.</p>
+            <h3 data-i18n="blog.a2.h">Honest wallet history</h3>
+            <p data-i18n="blog.a2.p">Your transaction list is now read from the chain itself, so it says the same thing on every device you own.</p>
           </div>
           <div class="cell">
-            <h3>Sign from your phone</h3>
-            <p>Pair a website with your wallet by link or QR. Requests are shown in plain words, and your key never leaves your machine.</p>
+            <h3 data-i18n="blog.a3.h">Sign from your phone</h3>
+            <p data-i18n="blog.a3.p">Pair a website with your wallet by link or QR. Requests are shown in plain words, and your key never leaves your machine.</p>
           </div>
           <div class="cell">
-            <h3>16 languages</h3>
-            <p>The site and app now speak Kyrgyz, Amharic, Dzongkha, Bengali, Urdu, Farsi, Arabic, Chinese and more — with pages written for each country.</p>
+            <h3 data-i18n="blog.a4.h">16 languages</h3>
+            <p data-i18n="blog.a4.p">The site and app now speak Kyrgyz, Amharic, Dzongkha, Bengali, Urdu, Farsi, Arabic, Chinese and more — with pages written for each country.</p>
           </div>
           <div class="cell">
-            <h3>Bring your own tools</h3>
-            <p>Add any MCP server in Settings and the AI can use it. Complex questions are planned across several tools before anything runs.</p>
+            <h3 data-i18n="blog.a5.h">Bring your own tools</h3>
+            <p data-i18n="blog.a5.p">Add any MCP server in Settings and the AI can use it. Complex questions are planned across several tools before anything runs.</p>
           </div>
           <div class="cell">
-            <h3>Rate an answer, say why</h3>
-            <p>Star ratings now take a comment, and the comment is fed back into the reply instead of vanishing into a log.</p>
+            <h3 data-i18n="blog.a6.h">Rate an answer, say why</h3>
+            <p data-i18n="blog.a6.p">Star ratings now take a comment, and the comment is fed back into the reply instead of vanishing into a log.</p>
           </div>
         </div>
       </section>
@@ -365,21 +365,21 @@
       <!-- Notice -->
       <section class="py-8">
         <div class="notice">
-          <h3>Please update — this one is a hard fork</h3>
+          <h3 data-i18n="blog.note.h">Please update — this one is a hard fork</h3>
           <div class="prose">
-            <p>The network switched to a fresh chain. Miners still running an old build are turned away by everyone else, so they sit there burning electricity and earning nothing. Updating is the whole fix.</p>
-            <p><strong>Your wallet keys are untouched by the update.</strong> It clears the chain data your node rebuilds anyway, and balances were carried over from a snapshot of the old chain.</p>
+            <p data-i18n="blog.note.p1">The network switched to a fresh chain. Miners still running an old build are turned away by everyone else, so they sit there burning electricity and earning nothing. Updating is the whole fix.</p>
+            <p data-i18n-html="blog.note.p2"><strong>Your wallet keys are untouched by the update.</strong> It clears the chain data your node rebuilds anyway, and balances were carried over from a snapshot of the old chain.</p>
           </div>
         </div>
       </section>
 
       <!-- CTA -->
       <section class="py-10 sm:py-14 border-t border-black/10">
-        <h2 class="text-[2.4rem] sm:text-[3rem] leading-[1.02]">Put an idle computer to work</h2>
-        <p class="muted text-[1.2rem] mt-3 max-w-xl">A Mac mini, an old gaming PC, a server with spare hours. Download it, pick a model, and it starts earning while you get on with your day.</p>
+        <h2 class="text-[2.4rem] sm:text-[3rem] leading-[1.02]" data-i18n="blog.cta.h">Put an idle computer to work</h2>
+        <p class="muted text-[1.2rem] mt-3 max-w-xl" data-i18n="blog.cta.p">A Mac mini, an old gaming PC, a server with spare hours. Download it, pick a model, and it starts earning while you get on with your day.</p>
         <div class="flex flex-wrap gap-3 mt-7 items-center">
-          <a href="../miner.html#start" class="px-6 py-3 rounded-[4px] bg-[#16a34a] text-white text-[1.25rem] hover:bg-black transition">Download DAI Miner →</a>
-          <a href="../docs/" class="px-6 py-3 rounded-[4px] border border-[#16a34a] text-[#16a34a] text-[1.25rem] hover:bg-[#16a34a] hover:text-white transition">Read the docs</a>
+          <a href="../miner.html#start" class="px-6 py-3 rounded-[4px] bg-[#16a34a] text-white text-[1.25rem] hover:bg-black transition" data-i18n="blog.cta.b1">Download DAI Miner →</a>
+          <a href="../docs/" class="px-6 py-3 rounded-[4px] border border-[#16a34a] text-[#16a34a] text-[1.25rem] hover:bg-[#16a34a] hover:text-white transition" data-i18n="blog.cta.b2">Read the docs</a>
         </div>
         <div class="cmd mt-6"><span class="p">$</span> curl -fsSL https://miner.iamai.kg/scripts/easy-start.sh | bash</div>
       </section>
