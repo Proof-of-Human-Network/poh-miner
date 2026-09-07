@@ -21,6 +21,7 @@
  */
 import fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
 import { SKILL_CONTEXT_MAX } from '../../src/skills/limits.js';
 
 /** references/foo-bar.md -> "foo bar reference (not bundled)" */
@@ -101,8 +102,10 @@ export function convertFrontmatter(raw, { id, triggers = [], version = '1.0.0' }
 }
 
 // ── CLI ──────────────────────────────────────────────────────────────────────
+// Only when run directly — this module is also imported by import-upstream.mjs.
+const isMain = process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1]);
 const args = process.argv.slice(2);
-const mode = args[0];
+const mode = isMain ? args[0] : null;
 
 if (mode === '--fix') {
   const files = args.slice(1);
@@ -135,7 +138,7 @@ if (mode === '--fix') {
     console.error(`[adapt] WARNING ${args[1]}: context ${ctx.length} > ${SKILL_CONTEXT_MAX} — split it`);
   }
   process.stdout.write(out);
-} else {
+} else if (isMain) {
   console.error('usage: adapt-skill.mjs --fix <files...> | --from <SKILL.md> [--id x] [--triggers a,b]');
   process.exit(1);
 }
