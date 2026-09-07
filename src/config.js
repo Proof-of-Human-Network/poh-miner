@@ -216,7 +216,11 @@ export function getDefaultConfig() {
       plannerTimeoutMs: 20000,
     },
 
-    // Shipped no-auth HTTP MCPs (tandem, inside-ads, goji, atars, akari, ai-portal, airshelf).
+    // Shipped no-auth HTTP MCPs — none require a key, login or OAuth, and each
+    // connects lazily on first use. Partner set: tandem, inside-ads, goji,
+    // akari-trust, akari, ai-portal, airshelf. Public knowledge/docs set: deepwiki,
+    // context7, gitmcp, microsoft-learn, aws-knowledge, cloudflare-docs, solana,
+    // huggingface.
     // Not written into mcpServers — mute with enabled:false or disabled: ["goji"].
     mcpDefaultHttp: {
       enabled: true,

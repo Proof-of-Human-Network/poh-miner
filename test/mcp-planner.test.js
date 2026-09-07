@@ -8,7 +8,7 @@ import {
 import { retrieveCandidates } from '../src/ai/mcp-catalog.js';
 import { extractUsefulFields, resolveTaskArgs, executeTaskCascade } from '../src/ai/task-cascade.js';
 import { isMcpArgumentError } from '../src/ai/mcp-client.js';
-import { DEFAULT_HTTP_MCPS, defaultHttpSeedCards } from '../src/ai/default-mcp-servers.js';
+import { DEFAULT_HTTP_MCPS, defaultHttpSeedCards, defaultHttpSpecs } from '../src/ai/default-mcp-servers.js';
 import { McpManager } from '../src/ai/mcp-client.js';
 
 const weatherCard = {
@@ -237,11 +237,38 @@ describe('isMcpArgumentError', () => {
 describe('default HTTP MCPs', () => {
   it('ships the unauthenticated servers as catalog seed cards', () => {
     expect(Object.keys(DEFAULT_HTTP_MCPS).sort()).toEqual([
-      'ai-portal', 'airshelf', 'akari', 'akari-trust', 'atars', 'goji', 'inside-ads', 'tandem',
+      'ai-portal', 'airshelf', 'akari', 'akari-trust', 'aws-knowledge',
+      'cloudflare-docs', 'context7', 'deepwiki', 'gitmcp', 'goji',
+      'huggingface', 'inside-ads', 'microsoft-learn', 'solana', 'tandem',
     ]);
     const cards = defaultHttpSeedCards();
     expect(cards.some(c => c.mcpId === 'tandem' && c.tool === 'search_docs')).toBe(true);
     expect(cards.some(c => c.mcpId === 'airshelf')).toBe(true);
+    expect(cards.some(c => c.mcpId === 'deepwiki' && c.tool === 'ask_question')).toBe(true);
+    expect(cards.some(c => c.mcpId === 'huggingface' && c.tool === 'hub_repo_search')).toBe(true);
+  });
+
+  it('every shipped default is anonymous — no key, token or auth header', () => {
+    for (const [id, spec] of Object.entries(DEFAULT_HTTP_MCPS)) {
+      expect(spec.url, `${id} must be a remote HTTP MCP`).toMatch(/^https:\/\//);
+      // A shipped default must never carry credentials; users add those in mcpServers.
+      expect(spec, `${id} must not ship credentials`).not.toHaveProperty('apiKey');
+      expect(spec, `${id} must not ship credentials`).not.toHaveProperty('headers');
+      expect(spec, `${id} must not spawn a process`).not.toHaveProperty('command');
+    }
+    // defaultHttpSpecs hands the manager a bare url — nothing else.
+    for (const [id, spec] of Object.entries(defaultHttpSpecs())) {
+      expect(Object.keys(spec), `${id} spec is url-only`).toEqual(['url']);
+    }
+  });
+
+  it('routes docs/model questions to the public knowledge MCPs', () => {
+    const cards = defaultHttpSeedCards();
+    const hits = q => retrieveCandidates(q, { cards, retrieveK: 12 }).cards.map(c => c.mcpId);
+    expect(hits('find a gguf model on hugging face')).toContain('huggingface');
+    expect(hits('how do solana PDAs work')).toContain('solana');
+    expect(hits('search the azure documentation')).toContain('microsoft-learn');
+    expect(hits('explain this repo on deepwiki')).toContain('deepwiki');
   });
 
   it('listCards includes seed cards without connecting, and mute works', async () => {

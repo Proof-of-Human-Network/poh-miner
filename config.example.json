@@ -86,7 +86,7 @@
   "_comment_mcp": "User-installed MCP servers overlay the builtin public-apis + onion-search packs. HTTP connectors accept arbitrary headers (not only Authorization: Bearer).",
   "mcpServers": {},
   "mcpBuiltin": { "enabled": true, "disabled": [] },
-  "_comment_mcpDefaultHttp": "Shipped no-auth HTTP MCPs (tandem, inside-ads, goji, atars, akari-trust, akari, ai-portal, airshelf). Not written into mcpServers. Mute with enabled:false or disabled: [\"goji\"].",
+  "_comment_mcpDefaultHttp": "Shipped no-auth HTTP MCPs. Partner set: tandem, inside-ads, goji, akari-trust, akari, ai-portal, airshelf. Public knowledge/docs set: deepwiki, context7, gitmcp, microsoft-learn, aws-knowledge, cloudflare-docs, solana, huggingface. None need a key or login; all connect lazily on first use. Not written into mcpServers. Mute with enabled:false or disabled: [\"goji\"].",
   "mcpDefaultHttp": { "enabled": true, "disabled": [] },
   "mcpCatalog": {
     "enabled": true,
