@@ -112,13 +112,13 @@ const sdk = new BrowserSDK({
 
 For detailed implementation patterns, read these files:
 
-- [references/react-sdk.md](references/react-sdk.md) — Complete React SDK reference (hooks, components, theming)
-- [references/react-native-sdk.md](references/react-native-sdk.md) — Mobile setup, Expo config, deep links
-- [references/browser-sdk.md](references/browser-sdk.md) — Vanilla JS patterns, events, wallet discovery
-- [references/transactions.md](references/transactions.md) — Solana transaction patterns (SOL, SPL tokens)
-- [references/payments.md](references/payments.md) — Crypto payment flows (SOL, USDC, backend verification)
-- [references/token-gating.md](references/token-gating.md) — Token-gated access (client-side, server-side, NFT)
-- [references/nft-minting.md](references/nft-minting.md) — NFT mint pages, Metaplex Core, compressed NFTs
+- `react sdk` (reference not bundled) — Complete React SDK reference (hooks, components, theming)
+- `react native sdk` (reference not bundled) — Mobile setup, Expo config, deep links
+- `browser sdk` (reference not bundled) — Vanilla JS patterns, events, wallet discovery
+- `transactions` (reference not bundled) — Solana transaction patterns (SOL, SPL tokens)
+- `payments` (reference not bundled) — Crypto payment flows (SOL, USDC, backend verification)
+- `token gating` (reference not bundled) — Token-gated access (client-side, server-side, NFT)
+- `nft minting` (reference not bundled) — NFT mint pages, Metaplex Core, compressed NFTs
 
 ## Common Issues
 

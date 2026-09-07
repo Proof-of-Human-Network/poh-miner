@@ -45,7 +45,7 @@ triggers:
 | Uniswap Universal Router (V4) | Router | `0x66a9893cc07d91d95644aedd05d03f95e1dba8af` |
 | Aave V3 Pool | Pool | `0x87870Bca3F3fD6335C3F4ce8392D69350B4fA4E2` |
 
-See `addresses/SKILL.md` for complete multi-chain address list including L2-native protocols (Aerodrome, GMX, Pendle, Velodrome, Camelot, SyncSwap, Morpho).
+See `eth_addresses` skill for complete multi-chain address list including L2-native protocols (Aerodrome, GMX, Pendle, Velodrome, Camelot, SyncSwap, Morpho).
 
 ## Uniswap V4 Hooks (New)
 

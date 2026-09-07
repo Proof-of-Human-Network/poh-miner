@@ -27,9 +27,9 @@ triggers:
 
 **You put too much onchain.** Solidity is for ownership, transfers, and commitments. It's not a database. It's not an API. It's not a backend. If it doesn't involve trustless value transfer or a permanent commitment, it doesn't belong in a smart contract.
 
-**You skip chain selection.** Mainnet is cheaper than you think — an ETH transfer costs ~$0.004, a swap ~$0.04. The "Ethereum is expensive" narrative is outdated. But that doesn't mean everything belongs on mainnet. L2s aren't just "cheaper Ethereum" — each one has a unique superpower (Base has Coinbase distribution + smart wallets, Arbitrum has the deepest DeFi liquidity, Optimism has retroPGF + the Superchain). If your app needs high-frequency interactions or fits what makes an L2 special, build there. If you just need cheap and secure, mainnet works. Choose deliberately. Fetch `l2s/SKILL.md` and `gas/SKILL.md` for the full picture. Not sure Ethereum is the right chain at all? Fetch `why/SKILL.md`.
+**You skip chain selection.** Mainnet is cheaper than you think — an ETH transfer costs ~$0.004, a swap ~$0.04. The "Ethereum is expensive" narrative is outdated. But that doesn't mean everything belongs on mainnet. L2s aren't just "cheaper Ethereum" — each one has a unique superpower (Base has Coinbase distribution + smart wallets, Arbitrum has the deepest DeFi liquidity, Optimism has retroPGF + the Superchain). If your app needs high-frequency interactions or fits what makes an L2 special, build there. If you just need cheap and secure, mainnet works. Choose deliberately. Fetch `eth_l2s` skill and `eth_gas` skill for the full picture. Not sure Ethereum is the right chain at all? Fetch `eth_why` skill.
 
-**You forget nothing is automatic.** Smart contracts don't run themselves. Every state transition needs a caller who pays gas and a reason to do it. If you can't answer "who calls this and why?" for every function, your contract has dead code. Fetch `concepts/SKILL.md` for the full mental model.
+**You forget nothing is automatic.** Smart contracts don't run themselves. Every state transition needs a caller who pays gas and a reason to do it. If you can't answer "who calls this and why?" for every function, your contract has dead code. Fetch `eth_concepts` skill for the full mental model.
 
 ---
 
@@ -55,7 +55,7 @@ Keep it offchain if it involves:
 
 **Judgment calls:**
 - Reputation scores → offchain compute, onchain commitments (hashes or attestations)
-- Activity feeds → offchain indexing of onchain events (fetch `indexing/SKILL.md`)
+- Activity feeds → offchain indexing of onchain events (fetch `eth_indexing` skill)
 - Price data → offchain oracles writing onchain (Chainlink)
 - Game state → depends on stakes. Poker with real money? Onchain. Leaderboard? Offchain.
 
@@ -86,7 +86,7 @@ What if nobody calls it? ____________
 Does it need gas incentives? ____________
 ```
 
-If "what if nobody calls it?" breaks your system, you have a design problem. Fix it before writing code. See `concepts/SKILL.md` for incentive design patterns.
+If "what if nobody calls it?" breaks your system, you have a design problem. Fix it before writing code. See `eth_concepts` skill for incentive design patterns.
 
 ### Chain Selection
 
@@ -102,7 +102,7 @@ If "what if nobody calls it?" breaks your system, you have a design problem. Fix
 
 **Don't pick an L2 because "mainnet is expensive." Pick an L2 because its superpower fits your app.**
 
-Fetch `l2s/SKILL.md` and `gas/SKILL.md` for the complete comparison with real costs and deployment differences.
+Fetch `eth_l2s` skill and `eth_gas` skill for the complete comparison with real costs and deployment differences.
 
 ---
 
@@ -123,7 +123,7 @@ Find your archetype below. Each tells you exactly how many contracts you need, w
 - No initial liquidity plan (deploying a token nobody can buy)
 - Fee-on-transfer mechanics that break DEX integrations
 
-**Fetch sequence:** `standards/SKILL.md` → `security/SKILL.md` → `testing/SKILL.md` → `gas/SKILL.md`
+**Fetch sequence:** `eth_standards` skill → `eth_security` skill → `eth_testing` skill → `eth_gas` skill
 
 ### 2. NFT Collection (1 contract)
 
@@ -137,7 +137,7 @@ Find your archetype below. Each tells you exactly how many contracts you need, w
 - No max supply cap (unlimited minting destroys value)
 - Complex whitelist logic when a simple Merkle root works
 
-**Fetch sequence:** `standards/SKILL.md` → `security/SKILL.md` → `testing/SKILL.md` → `frontend-ux/SKILL.md`
+**Fetch sequence:** `eth_standards` skill → `eth_security` skill → `eth_testing` skill → `eth_frontend_ux` skill
 
 ### 3. Marketplace / Exchange (0-2 contracts)
 
@@ -150,10 +150,10 @@ Find your archetype below. Each tells you exactly how many contracts you need, w
 
 **Common mistakes:**
 - Building a DEX from scratch when Uniswap V4 hooks can do it
-- Ignoring MEV (fetch `security/SKILL.md` for sandwich attack protection)
+- Ignoring MEV (fetch `eth_security` skill for sandwich attack protection)
 - Centralized order matching (defeats the purpose)
 
-**Fetch sequence:** `building-blocks/SKILL.md` → `addresses/SKILL.md` → `security/SKILL.md` → `testing/SKILL.md`
+**Fetch sequence:** `eth_building_blocks` skill → `eth_addresses` skill → `eth_security` skill → `eth_testing` skill
 
 ### 4. Lending / Vault / Yield (0-1 contracts)
 
@@ -163,11 +163,11 @@ Find your archetype below. Each tells you exactly how many contracts you need, w
 - `MyVault.sol` — ERC-4626 vault wrapping a yield source
 
 **Common mistakes:**
-- Ignoring vault inflation attack (fetch `security/SKILL.md`)
+- Ignoring vault inflation attack (fetch `eth_security` skill)
 - Not using ERC-4626 standard (breaks composability)
 - Hardcoding token decimals (USDC is 6, not 18)
 
-**Fetch sequence:** `building-blocks/SKILL.md` → `standards/SKILL.md` → `security/SKILL.md` → `testing/SKILL.md`
+**Fetch sequence:** `eth_building_blocks` skill → `eth_standards` skill → `eth_security` skill → `eth_testing` skill
 
 ### 5. DAO / Governance (1-3 contracts)
 

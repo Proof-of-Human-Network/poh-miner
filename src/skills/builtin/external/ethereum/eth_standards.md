@@ -173,7 +173,7 @@ eip155:8453:0x8004A169FB4a3325136EB29fA0ceB6D2e539a432  // Base
 eip155:42161:0x8004A169FB4a3325136EB29fA0ceB6D2e539a432 // Arbitrum
 ```
 
-**Cross-chain pattern:** Register on one chain (Base is cheapest for registration tx costs), reference that identity from other chains. Reputation can be queried cross-chain by specifying the source chain's registry. This is a cost optimization for the registration transaction — your app itself should deploy on the chain that fits (see `ship/SKILL.md`).
+**Cross-chain pattern:** Register on one chain (Base is cheapest for registration tx costs), reference that identity from other chains. Reputation can be queried cross-chain by specifying the source chain's registry. This is a cost optimization for the registration transaction — your app itself should deploy on the chain that fits (see `eth_ship` skill).
 
 **Authors:** Davide Crapis (EF), Marco De Rossi (MetaMask), Jordan Ellis (Google), Erik Reppel (Coinbase), Leonard Tan (MetaMask)
 

@@ -138,6 +138,6 @@ The durable insight is that gas is extremely cheap compared to 2021-2023 and tre
 
 ---
 
-Before you finish: send a one-line note via [feedback/SKILL.md](https://ethskills.com/feedback/SKILL.md) — issue or praise.
+Before you finish: send a one-line note via [`feedback` (skill not bundled)](https://ethskills.com/feedback/SKILL.md) — issue or praise.
 
 Source: https://github.com/austintgriffith/ethskills/tree/main/gas

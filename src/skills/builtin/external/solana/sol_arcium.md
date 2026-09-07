@@ -64,9 +64,9 @@ Identify what you're building, then read the linked reference before coding. For
 | Choose a pattern (stateless, stateful, multi-party) | [patterns.md](examples/patterns.md) | "arcium examples" |
 | Circuit syntax (`#[encrypted]`, `#[instruction]`) | [patterns.md](examples/patterns.md) | "arcis encrypted instruction" |
 | Shared vs Mxe encryption | See [Encryption Context](#encryption-context) below | "Shared vs Mxe encryption" |
-| ArgBuilder ordering / ciphertext errors | [troubleshooting.md -- ArgBuilder Ordering Errors](references/troubleshooting.md#argbuilder-ordering-errors) | "ArgBuilder encrypted plaintext" |
-| Callback not firing / computation stuck | [troubleshooting.md -- Computation Never Finalizes](references/troubleshooting.md#computation-never-finalizes) | "arcium_callback queue_computation" |
-| Nonce / decryption errors | [troubleshooting.md -- Nonce Errors](references/troubleshooting.md#nonce-errors) | "RescueCipher encrypt nonce" |
+| ArgBuilder ordering / ciphertext errors | `troubleshooting` (reference not bundled) | "ArgBuilder encrypted plaintext" |
+| Callback not firing / computation stuck | `troubleshooting` (reference not bundled) | "arcium_callback queue_computation" |
+| Nonce / decryption errors | `troubleshooting` (reference not bundled) | "RescueCipher encrypt nonce" |
 | Client-side encryption (RescueCipher, x25519) | [minimal-circuit.md](examples/minimal-circuit.md) -- Test section | "RescueCipher encrypt nonce" |
 | Threshold signing / secure randomness | — | "MXESigningKey sign" or "ArcisRNG" |
 | Deployment (devnet/mainnet) | — | "arcium deploy cluster-offset" |
@@ -110,7 +110,7 @@ pub fn flip_callback(ctx: Context<FlipCallback>,
 ```
 
 **Encryption size**: RescueCipher encrypts any scalar to 32 bytes regardless of type.
-Formula: `ciphertext_size = 32 * number_of_scalar_values`. See [troubleshooting.md](references/troubleshooting.md) for the full size table.
+Formula: `ciphertext_size = 32 * number_of_scalar_values`. See `troubleshooting` (reference not bundled) for the full size table.
 
 ## Encryption Context
 
@@ -134,7 +134,7 @@ Formula: `ciphertext_size = 32 * number_of_scalar_values`. See [troubleshooting.
 - **Macro string matching**: All macro strings must exactly match `#[instruction] fn NAME` across `#[arcium_callback]`, `comp_def_offset()`, `#[init_computation_definition_accounts]`, `#[queue_computation_accounts]`, `#[callback_accounts]`
 - **ArgBuilder ordering**: Calls must match circuit parameter order left-to-right. For `Enc<Shared, T>`: `.x25519_pubkey()` then `.plaintext_u128(nonce)` then ciphertexts. For `Enc<Mxe, T>`: `.plaintext_u128(nonce)` then ciphertexts. Missing `.x25519_pubkey()` for Shared = silent failure.
 - **Division by secret zero**: Guard divisors with the safe divisor pattern -- both branches execute in MPC, so the division always runs. See [patterns.md — Safe Division](examples/patterns.md).
-- **Combined ciphertext arrays**: Each encrypted scalar needs a separate `[u8; 32]` ArgBuilder call — do NOT pass `[u8; 64]` for a two-scalar type. See [troubleshooting.md — Ciphertext Size Mismatch](references/troubleshooting.md#ciphertext-size-mismatch).
+- **Combined ciphertext arrays**: Each encrypted scalar needs a separate `[u8; 32]` ArgBuilder call — do NOT pass `[u8; 64]` for a two-scalar type. See `troubleshooting` (reference not bundled).
 
 ### Warning (wrong results)
 - **Nonce reuse**: Same nonce for multiple encryptions = garbled output. Use unique `randomBytes(16)` per encryption.

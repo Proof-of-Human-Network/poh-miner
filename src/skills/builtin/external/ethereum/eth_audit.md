@@ -28,7 +28,7 @@ A full audit system for any EVM contract. Runs parallel specialist agents agains
 20 specialized skills covering every major vulnerability domain. Fetch the master index first:
 
 ```
-https://raw.githubusercontent.com/austintgriffith/evm-audit-skills/main/evm-audit-master/SKILL.md
+https://raw.githubusercontent.com/austintgriffith/evm-audit-skills/main/evm-`audit_master` (skill not bundled)
 ```
 
 The master index contains:
@@ -38,7 +38,7 @@ The master index contains:
 
 All 20 skill checklists are at:
 ```
-https://raw.githubusercontent.com/austintgriffith/evm-audit-skills/main/<skill-name>/references/checklist.md
+https://raw.githubusercontent.com/austintgriffith/evm-audit-skills/main/<skill-name>/`checklist` (reference not bundled)
 ```
 
 ## Skills Available
@@ -79,7 +79,7 @@ https://raw.githubusercontent.com/austintgriffith/evm-audit-skills/main/<skill-n
 
 ```
 Audit this contract and file issues: https://github.com/owner/repo/blob/main/contracts/Foo.sol
-Checklists: https://raw.githubusercontent.com/austintgriffith/evm-audit-skills/main/evm-audit-master/SKILL.md
+Checklists: https://raw.githubusercontent.com/austintgriffith/evm-audit-skills/main/evm-`audit_master` (skill not bundled)
 ```
 
 ## Sources

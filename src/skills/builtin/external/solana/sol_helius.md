@@ -47,39 +47,39 @@ Identify what the user is building, then read the relevant reference files befor
 
 | Intent | Route |
 |--------|-------|
-| transaction history (parsed) | `references/enhanced-transactions.md` |
-| transaction history (balance deltas) | `references/wallet-api.md` |
-| transaction triggers | `references/webhooks.md` |
-| real-time (WebSocket) | `references/websockets.md` |
-| real-time (gRPC/indexing) | `references/laserstream.md` |
-| monitor wallet (notifications) | `references/webhooks.md` |
-| monitor wallet (live UI) | `references/websockets.md` |
-| monitor wallet (past activity) | `references/wallet-api.md` |
+| transaction history (parsed) | `enhanced transactions` (reference not bundled) |
+| transaction history (balance deltas) | `wallet api` (reference not bundled) |
+| transaction triggers | `webhooks` (reference not bundled) |
+| real-time (WebSocket) | `websockets` (reference not bundled) |
+| real-time (gRPC/indexing) | `laserstream` (reference not bundled) |
+| monitor wallet (notifications) | `webhooks` (reference not bundled) |
+| monitor wallet (live UI) | `websockets` (reference not bundled) |
+| monitor wallet (past activity) | `wallet api` (reference not bundled) |
 | Solana internals | MCP: `getSIMD`, `searchSolanaDocs`, `fetchHeliusBlog` |
 
 ### Transaction Sending & Swaps
-**Read**: `references/sender.md`, `references/priority-fees.md`
+**See** `sender` (reference not bundled), `priority fees` (reference not bundled)
 **MCP tools**: `getPriorityFeeEstimate`, `getSenderInfo`, `parseTransactions`, `transferSol`, `transferToken`
 **When**: sending SOL/SPL tokens, sending transactions, swap APIs (DFlow, Jupiter, Titan), trading bots, swap interfaces, transaction optimization
 
 ### Asset & NFT Queries
-**Read**: `references/das.md`
+**See** `das` (reference not bundled)
 **MCP tools**: `getAssetsByOwner`, `getAsset`, `searchAssets`, `getAssetsByGroup`, `getAssetProof`, `getAssetProofBatch`, `getSignaturesForAsset`, `getNftEditions`
 **When**: NFT/cNFT/token queries, marketplaces, galleries, launchpads, collection/creator/authority search, Merkle proofs
 
 ### Real-Time Streaming
-**Read**: `references/laserstream.md` OR `references/websockets.md`
+**See** `laserstream` (reference not bundled) OR `websockets` (reference not bundled)
 **MCP tools**: `transactionSubscribe`, `accountSubscribe`, `laserstreamSubscribe`
 **When**: real-time monitoring, live dashboards, alerting, trading apps, block/slot streaming, indexing, program/account tracking
 Enhanced WebSockets (Business+) for most needs; Laserstream gRPC (Professional) for lowest latency and replay.
 
 ### Event Pipelines (Webhooks)
-**Read**: `references/webhooks.md`
+**See** `webhooks` (reference not bundled)
 **MCP tools**: `createWebhook`, `getAllWebhooks`, `getWebhookByID`, `updateWebhook`, `deleteWebhook`, `getWebhookGuide`
 **When**: on-chain event notifications, event-driven backends, address monitoring (transfers, swaps, NFT sales), Telegram/Discord alerts
 
 ### Wallet Analysis
-**Read**: `references/wallet-api.md`
+**See** `wallet api` (reference not bundled)
 **MCP tools**: `getWalletIdentity`, `batchWalletIdentity`, `getWalletBalances`, `getWalletHistory`, `getWalletTransfers`, `getWalletFundedBy`
 **When**: wallet identity lookup, portfolio/balance breakdowns, fund flow tracing, wallet analytics, tax reporting, investigation tools
 
@@ -88,12 +88,12 @@ Enhanced WebSockets (Business+) for most needs; Laserstream gRPC (Professional) 
 **When**: balance checks, account inspection, token holder distributions, block/network queries. No reference file needed.
 
 ### Transaction History & Parsing
-**Read**: `references/enhanced-transactions.md`
+**See** `enhanced transactions` (reference not bundled)
 **MCP tools**: `parseTransactions`, `getTransactionHistory`
 **When**: human-readable tx data, transaction explorers, swap/transfer/NFT sale analysis, history filtering by type/time/slot
 
 ### Getting Started / Onboarding
-**Read**: `references/onboarding.md`
+**See** `onboarding` (reference not bundled)
 **MCP tools**: `setHeliusApiKey`, `generateKeypair`, `checkSignupBalance`, `agenticSignup`, `getAccountStatus`, `previewUpgrade`, `upgradePlan`, `payRenewal`
 **When**: account creation, API key management, plan/credits/usage checks, billing
 

@@ -198,6 +198,6 @@ Never show raw base units like `1500000000000000000`.
 
 ---
 
-Before you finish: send a one-line note via [feedback/SKILL.md](https://ethskills.com/feedback/SKILL.md) — issue or praise.
+Before you finish: send a one-line note via [`feedback` (skill not bundled)](https://ethskills.com/feedback/SKILL.md) — issue or praise.
 
 Source: https://github.com/austintgriffith/ethskills/tree/main/frontend-ux

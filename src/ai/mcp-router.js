@@ -95,11 +95,46 @@ async function letterPick(question, hits, llm) {
     'No explanation.',
   ].join('\n');
   try {
-    const raw = String(await llm(prompt) || '').trim().toUpperCase();
-    if (!raw || /\bNONE\b/.test(raw)) return [];
-    const letters = [...raw.matchAll(/\b([A-H])\b/g)].map(m => m[1].charCodeAt(0) - 65);
-    return [...new Set(letters)].filter(i => i >= 0 && i < hits.length);
+    const raw = String(await llm(prompt) || '');
+    return parseLetterPick(raw, hits.length);
   } catch {
-    return [0];
+    // Abstain. Returning the top hit here would turn "the model failed to
+    // answer" into "the model confidently chose A" -- the picker is only
+    // consulted when scores are close, so hits[0] is not a safe default.
+    return [];
   }
+}
+
+/**
+ * Parse a letter-pick reply. Small local models (gemma, qwen3-1.7b) do not
+ * reliably obey "reply with ONLY the letter": they emit <think> blocks, echo
+ * the question, or answer in prose. A bare /\b[A-H]\b/ over the whole reply
+ * matches stray capitals in that prose and silently picks the wrong card, so
+ * we only trust a line that is *just* letters.
+ *
+ * @param {string} raw   model reply
+ * @param {number} count number of candidate cards
+ * @returns {number[]} zero-based indices, empty to abstain
+ */
+export function parseLetterPick(raw, count) {
+  let text = String(raw || '');
+  // qwen3-style reasoning traces are not the answer.
+  text = text.replace(/<think>[\s\S]*?<\/think>/gi, '')
+             .replace(/<\/?[a-z_]+>/gi, ' ')
+             .toUpperCase();
+  const lines = text.split(/[\r\n]+/).map(l => l.trim()).filter(Boolean);
+  if (!lines.length) return [];
+
+  // Prefer the last answer-shaped line; models often reason first, answer last.
+  for (const line of [...lines].reverse()) {
+    if (/^NONE\b/.test(line)) return [];
+    // Answer-shaped: only letters, separators and light punctuation.
+    if (!/^[A-H](\s*[,/&+ ]\s*[A-H])*[.]?$/.test(line)) continue;
+    const idx = [...line.matchAll(/[A-H]/g)]
+      .map(m => m[0].charCodeAt(0) - 65)
+      .filter(i => i >= 0 && i < count);
+    if (idx.length) return [...new Set(idx)];
+  }
+  // Nothing answer-shaped -- treat a lone "none" anywhere as abstain, else abstain anyway.
+  return [];
 }

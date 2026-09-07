@@ -56,7 +56,7 @@ These topics appear in multiple files — route carefully:
 
 ### Compilation Pipeline
 
-**Read**: `references/compilation.md`
+**See** `compilation` (reference not bundled)
 **MCP tools**: `fetchHeliusBlog`, `readSolanaSourceFile`, `searchSolanaDocs`
 
 Use this when the user asks about:
@@ -67,7 +67,7 @@ Use this when the user asks about:
 
 ### Program Deployment
 
-**Read**: `references/programs.md`
+**See** `programs` (reference not bundled)
 **MCP tools**: `fetchHeliusBlog`, `readSolanaSourceFile`, `searchSolanaDocs`
 
 Use this when the user asks about:
@@ -78,7 +78,7 @@ Use this when the user asks about:
 
 ### Execution Engine
 
-**Read**: `references/execution.md`
+**See** `execution` (reference not bundled)
 **MCP tools**: `fetchHeliusBlog`, `readSolanaSourceFile`, `searchSolanaDocs`
 
 Use this when the user asks about:
@@ -89,7 +89,7 @@ Use this when the user asks about:
 
 ### Account Model & Programming Model
 
-**Read**: `references/accounts.md`
+**See** `accounts` (reference not bundled)
 **MCP tools**: `fetchHeliusBlog`, `searchSolanaDocs`, `readSolanaSourceFile`
 
 Use this when the user asks about:
@@ -100,7 +100,7 @@ Use this when the user asks about:
 
 ### Transactions & Local Fee Markets
 
-**Read**: `references/transactions.md`
+**See** `transactions` (reference not bundled)
 **MCP tools**: `fetchHeliusBlog`, `getSIMD`, `searchSolanaDocs`
 
 Use this when the user asks about:
@@ -112,7 +112,7 @@ Use this when the user asks about:
 
 ### Consensus
 
-**Read**: `references/consensus.md`
+**See** `consensus` (reference not bundled)
 **MCP tools**: `fetchHeliusBlog`, `getSIMD`, `readSolanaSourceFile`
 
 Use this when the user asks about:
@@ -124,7 +124,7 @@ Use this when the user asks about:
 
 ### Validator Economics
 
-**Read**: `references/validators.md`
+**See** `validators` (reference not bundled)
 **MCP tools**: `fetchHeliusBlog`, `getSIMD`, `searchSolanaDocs`
 
 Use this when the user asks about:
@@ -135,7 +135,7 @@ Use this when the user asks about:
 
 ### Data Layer
 
-**Read**: `references/data.md`
+**See** `data` (reference not bundled)
 **MCP tools**: `fetchHeliusBlog`, `searchSolanaDocs`, `readSolanaSourceFile`
 
 Use this when the user asks about:
@@ -146,7 +146,7 @@ Use this when the user asks about:
 
 ### Program Development
 
-**Read**: `references/development.md`
+**See** `development` (reference not bundled)
 **MCP tools**: `fetchHeliusBlog`, `searchSolanaDocs`, `readSolanaSourceFile`
 
 Use this when the user asks about:
@@ -157,7 +157,7 @@ Use this when the user asks about:
 
 ### Token Extensions & DeFi Primitives
 
-**Read**: `references/tokens.md`
+**See** `tokens` (reference not bundled)
 **MCP tools**: `fetchHeliusBlog`, `searchSolanaDocs`, `readSolanaSourceFile`
 
 Use this when the user asks about:

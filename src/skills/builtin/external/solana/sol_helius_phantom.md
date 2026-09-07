@@ -37,7 +37,7 @@ Then restart Claude so the tools become available.
 
 ### 2. API Key
 
-**Helius**: If any Helius MCP tool returns an "API key not configured" error, read `references/helius-onboarding.md` for setup paths (existing key, agentic signup, or CLI).
+**Helius**: If any Helius MCP tool returns an "API key not configured" error, See `helius onboarding` (reference not bundled) for setup paths (existing key, agentic signup, or CLI).
 
 ### 3. Phantom Portal
 
@@ -60,7 +60,7 @@ When users have multiple skills installed, route by environment:
 - **"query blockchain data" (no browser context)** → `/helius` skill
 
 ### Wallet Connection — React
-**Read**: `references/react-sdk.md`
+**See** `react sdk` (reference not bundled)
 **MCP tools**: None (browser-only)
 
 Use this when the user wants to:
@@ -71,7 +71,7 @@ Use this when the user wants to:
 - Sign messages or transactions with `useSolana`
 
 ### Wallet Connection — Browser SDK
-**Read**: `references/browser-sdk.md`
+**See** `browser sdk` (reference not bundled)
 **MCP tools**: None (browser-only)
 
 Use this when the user wants to:
@@ -81,7 +81,7 @@ Use this when the user wants to:
 - Handle events (`connect`, `disconnect`, `connect_error`)
 
 ### Wallet Connection — React Native
-**Read**: `references/react-native-sdk.md`
+**See** `react native sdk` (reference not bundled)
 **MCP tools**: None (mobile-only)
 
 Use this when the user wants to:
@@ -91,7 +91,7 @@ Use this when the user wants to:
 - Use social login on mobile (Google/Apple)
 
 ### Transactions
-**Read**: `references/transactions.md`, `references/helius-sender.md`
+**See** `transactions` (reference not bundled), `helius sender` (reference not bundled)
 **MCP tools**: Helius (`getPriorityFeeEstimate`, `getSenderInfo`)
 
 Use this when the user wants to:
@@ -102,7 +102,7 @@ Use this when the user wants to:
 - Handle the sign → submit → confirm flow
 
 ### Token Gating
-**Read**: `references/token-gating.md`, `references/helius-das.md`
+**See** `token gating` (reference not bundled), `helius das` (reference not bundled)
 **MCP tools**: Helius (`getAssetsByOwner`, `searchAssets`, `getAsset`)
 
 Use this when the user wants to:
@@ -112,7 +112,7 @@ Use this when the user wants to:
 - Build server-side access control based on on-chain state
 
 ### NFT Minting
-**Read**: `references/nft-minting.md`, `references/helius-sender.md`
+**See** `nft minting` (reference not bundled), `helius sender` (reference not bundled)
 **MCP tools**: Helius (`getAsset`, `getPriorityFeeEstimate`)
 
 Use this when the user wants to:
@@ -122,7 +122,7 @@ Use this when the user wants to:
 - Implement allowlist minting
 
 ### Crypto Payments
-**Read**: `references/payments.md`, `references/helius-sender.md`, `references/helius-enhanced-transactions.md`
+**See** `payments` (reference not bundled), `helius sender` (reference not bundled), `helius enhanced transactions` (reference not bundled)
 **MCP tools**: Helius (`parseTransactions`, `getPriorityFeeEstimate`)
 
 Use this when the user wants to:
@@ -132,7 +132,7 @@ Use this when the user wants to:
 - Display live price conversions
 
 ### Frontend Security
-**Read**: `references/frontend-security.md`
+**See** `frontend security` (reference not bundled)
 
 Use this when the user wants to:
 - Proxy Helius API calls through a backend
@@ -143,7 +143,7 @@ Use this when the user wants to:
 - Rate limit their API proxy
 
 ### Portfolio & Asset Display
-**Read**: `references/helius-das.md`, `references/helius-wallet-api.md`
+**See** `helius das` (reference not bundled), `helius wallet api` (reference not bundled)
 **MCP tools**: Helius (`getAssetsByOwner`, `getAsset`, `searchAssets`, `getWalletBalances`, `getWalletHistory`, `getTokenBalances`)
 
 Use this when the user wants to:
@@ -153,7 +153,7 @@ Use this when the user wants to:
 - Query token metadata or NFT details
 
 ### Real-Time Updates
-**Read**: `references/helius-websockets.md`
+**See** `helius websockets` (reference not bundled)
 **MCP tools**: Helius (`transactionSubscribe`, `accountSubscribe`, `getEnhancedWebSocketInfo`)
 
 Use this when the user wants to:
@@ -162,10 +162,10 @@ Use this when the user wants to:
 - Monitor account changes after a transaction
 - Stream transaction data to a dashboard
 
-**IMPORTANT**: WebSocket connections from the browser expose the API key in the URL. Always use a server relay pattern — see `references/frontend-security.md`.
+**IMPORTANT**: WebSocket connections from the browser expose the API key in the URL. Always use a server relay pattern — see `frontend security` (reference not bundled).
 
 ### Transaction History
-**Read**: `references/helius-enhanced-transactions.md`
+**See** `helius enhanced transactions` (reference not bundled)
 **MCP tools**: Helius (`parseTransactions`, `getTransactionHistory`)
 
 Use this when the user wants to:
@@ -174,7 +174,7 @@ Use this when the user wants to:
 - Display recent activity with types and descriptions
 
 ### Transaction Submission
-**Read**: `references/helius-sender.md`, `references/helius-priority-fees.md`
+**See** `helius sender` (reference not bundled), `helius priority fees` (reference not bundled)
 **MCP tools**: Helius (`getPriorityFeeEstimate`, `getSenderInfo`)
 
 Use this when the user wants to:
@@ -193,7 +193,7 @@ Use this when the user wants to:
 These are straightforward data lookups. No reference file needed — just use the MCP tools directly.
 
 ### Getting Started / Onboarding
-**Read**: `references/helius-onboarding.md`
+**See** `helius onboarding` (reference not bundled)
 **MCP tools**: Helius (`setHeliusApiKey`, `generateKeypair`, `checkSignupBalance`, `agenticSignup`, `getAccountStatus`)
 
 Use this when the user wants to:

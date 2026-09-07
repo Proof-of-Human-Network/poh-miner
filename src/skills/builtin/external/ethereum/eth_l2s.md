@@ -62,7 +62,7 @@ triggers:
 
 ## Cost Comparison (Real Examples, Early 2026)
 
-> Mainnet costs at ~0.1 gwei base fee, ~$2,000 ETH. L2 costs are approximate. All fluctuate — see `gas/SKILL.md` for methodology.
+> Mainnet costs at ~0.1 gwei base fee, ~$2,000 ETH. L2 costs are approximate. All fluctuate — see `eth_gas` skill for methodology.
 
 | Action | Mainnet | Arbitrum | Base | zkSync | Scroll |
 |--------|---------|----------|------|--------|--------|
@@ -73,7 +73,7 @@ triggers:
 
 ## L2 Selection Guide
 
-> **Before choosing an L2:** Mainnet is ~$0.004/transfer, ~$0.04/swap at current gas — cheap enough for most apps. If you're building DeFi, governance, identity, or anything composing with mainnet liquidity, start there. See `ship/SKILL.md` and `gas/SKILL.md` for the full chain selection framework.
+> **Before choosing an L2:** Mainnet is ~$0.004/transfer, ~$0.04/swap at current gas — cheap enough for most apps. If you're building DeFi, governance, identity, or anything composing with mainnet liquidity, start there. See `eth_ship` skill and `eth_gas` skill for the full chain selection framework.
 
 | Need | Choose | Why |
 |------|--------|-----|
@@ -118,7 +118,7 @@ triggers:
 | Arbitrum | Camelot + GMX | Native DEX + perps | Camelot for spot, GMX for perps |
 | zkSync | SyncSwap | Classic AMM | Largest native DEX on zkSync |
 
-See `addresses/SKILL.md` for verified contract addresses for all these protocols.
+See `eth_addresses` skill for verified contract addresses for all these protocols.
 
 ## The Superchain (OP Stack)
 

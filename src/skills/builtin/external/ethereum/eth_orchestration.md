@@ -44,14 +44,14 @@ yarn fork --network base  # Terminal 1: fork of real chain (or mainnet, your tar
 yarn deploy               # Terminal 2: deploy contracts
 ```
 
-> **Always fork, never `yarn chain`.** `yarn fork` does everything `yarn chain` does AND gives you real protocol state — Uniswap, USDC, Aave, whale balances, everything already deployed (verified addresses: `addresses/SKILL.md`). `yarn chain` gives you an empty chain that tempts you into writing mock contracts you don't need. Don't mock what already exists onchain — just fork it.
+> **Always fork, never `yarn chain`.** `yarn fork` does everything `yarn chain` does AND gives you real protocol state — Uniswap, USDC, Aave, whale balances, everything already deployed (verified addresses: `eth_addresses` skill). `yarn chain` gives you an empty chain that tempts you into writing mock contracts you don't need. Don't mock what already exists onchain — just fork it.
 
 **Critical steps:**
 1. Write contracts in `packages/foundry/contracts/` (or `packages/hardhat/contracts/`)
 2. Write deploy script
 3. Add ALL external contracts to `packages/nextjs/contracts/externalContracts.ts` — BEFORE Phase 1.2
 4. Write tests (≥90% coverage)
-5. Audit contracts before moving to frontend — fetch [audit/SKILL.md](https://ethskills.com/audit/SKILL.md) and run through it
+5. Audit contracts before moving to frontend — fetch [`eth_audit` skill](https://ethskills.com/`eth_audit` skill) and run through it
 
 **Validate:** `yarn deploy` succeeds. `deployedContracts.ts` auto-generated. Tests pass.
 
@@ -159,7 +159,7 @@ node_modules/
 
 **SE2 handles deployer keys by default** — `yarn generate` creates a `.env` with the deployer key, and `.gitignore` excludes it. **Don't override this pattern.** Don't copy keys into scripts, config files, or deploy logs. This includes RPC keys, API keys, and any credential — not just wallet keys.
 
-See `wallets/SKILL.md` for full key safety guide, what to do if you've already leaked a key, and safe patterns for deployment.
+See `eth_wallets` skill for full key safety guide, what to do if you've already leaked a key, and safe patterns for deployment.
 
 ## Phase 2: Live Contracts + Local UI
 
@@ -182,7 +182,7 @@ See `wallets/SKILL.md` for full key safety guide, what to do if you've already l
 - `burnerWalletMode: "localNetworksOnly"` in scaffold.config.ts (prevents burner wallet on prod)
 - Update metadata (title, description, OG image 1200x630px)
 - Restore any test values to production values
-- Run a full frontend QA audit — fetch [qa/SKILL.md](https://ethskills.com/qa/SKILL.md) and give it to a separate agent before deploying
+- Run a full frontend QA audit — fetch [`eth_qa` skill](https://ethskills.com/`eth_qa` skill) and give it to a separate agent before deploying
 
 ### Deploy
 

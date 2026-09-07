@@ -57,7 +57,7 @@ It can also be installed by running the command `claude mcp add --transport http
 
 ### 3. API Keys
 
-**Helius**: If any Helius MCP tool returns an "API key not configured" error, read `references/helius-onboarding.md` for setup paths (existing key, agentic signup, or CLI).
+**Helius**: If any Helius MCP tool returns an "API key not configured" error, See `helius onboarding` (reference not bundled) for setup paths (existing key, agentic signup, or CLI).
 
 **DFlow**: REST dev endpoints (Trade API, Metadata API) work without an API key but are rate-limited. DFlow WebSockets always require a key. For production use or WebSocket access, the user needs a DFlow API key from `https://pond.dflow.net/build/api-key`.
 
@@ -69,18 +69,18 @@ Identify what the user is building, then read the relevant reference files befor
 
 These intents overlap across DFlow and Helius. Route them correctly:
 
-- **"swap" / "trade" / "exchange tokens"** — DFlow spot trading + Helius Sender: `references/dflow-spot-trading.md` + `references/helius-sender.md` + `references/integration-patterns.md`. For priority fee control, also read `references/helius-priority-fees.md`.
-- **"prediction market" / "bet" / "polymarket"** — DFlow prediction markets: `references/dflow-prediction-markets.md` + `references/dflow-proof-kyc.md` + `references/helius-sender.md` + `references/integration-patterns.md`.
-- **"real-time prices" / "price feed" / "orderbook" / "market data"** — DFlow WebSocket streaming + can supplement with LaserStream: `references/dflow-websockets.md` + `references/helius-laserstream.md`.
-- **"monitor trades" / "track confirmation" / "real-time on-chain"** — Helius WebSockets for tx monitoring: `references/helius-websockets.md`. For shred-level latency: `references/helius-laserstream.md`.
-- **"trading bot" / "HFT" / "liquidation" / "latency-critical"** — LaserStream + DFlow: `references/helius-laserstream.md` + `references/dflow-spot-trading.md` + `references/helius-sender.md` + `references/integration-patterns.md`.
-- **"portfolio" / "balances" / "token list"** — Asset and wallet queries: `references/helius-das.md` + `references/helius-wallet-api.md`.
-- **"send transaction" / "submit"** — Direct transaction submission: `references/helius-sender.md` + `references/helius-priority-fees.md`.
-- **"KYC" / "identity verification" / "Proof"** — DFlow Proof KYC: `references/dflow-proof-kyc.md`.
-- **"onboarding" / "API key" / "setup"** — Account setup: `references/helius-onboarding.md` + `references/dflow-spot-trading.md`.
+- **"swap" / "trade" / "exchange tokens"** — DFlow spot trading + Helius Sender: `dflow spot trading` (reference not bundled) + `helius sender` (reference not bundled) + `integration patterns` (reference not bundled). For priority fee control, also See `helius priority fees` (reference not bundled).
+- **"prediction market" / "bet" / "polymarket"** — DFlow prediction markets: `dflow prediction markets` (reference not bundled) + `dflow proof kyc` (reference not bundled) + `helius sender` (reference not bundled) + `integration patterns` (reference not bundled).
+- **"real-time prices" / "price feed" / "orderbook" / "market data"** — DFlow WebSocket streaming + can supplement with LaserStream: `dflow websockets` (reference not bundled) + `helius laserstream` (reference not bundled).
+- **"monitor trades" / "track confirmation" / "real-time on-chain"** — Helius WebSockets for tx monitoring: `helius websockets` (reference not bundled). For shred-level latency: `helius laserstream` (reference not bundled).
+- **"trading bot" / "HFT" / "liquidation" / "latency-critical"** — LaserStream + DFlow: `helius laserstream` (reference not bundled) + `dflow spot trading` (reference not bundled) + `helius sender` (reference not bundled) + `integration patterns` (reference not bundled).
+- **"portfolio" / "balances" / "token list"** — Asset and wallet queries: `helius das` (reference not bundled) + `helius wallet api` (reference not bundled).
+- **"send transaction" / "submit"** — Direct transaction submission: `helius sender` (reference not bundled) + `helius priority fees` (reference not bundled).
+- **"KYC" / "identity verification" / "Proof"** — DFlow Proof KYC: `dflow proof kyc` (reference not bundled).
+- **"onboarding" / "API key" / "setup"** — Account setup: `helius onboarding` (reference not bundled) + `dflow spot trading` (reference not bundled).
 
 ### Spot Crypto Swaps
-**Read**: `references/dflow-spot-trading.md`, `references/helius-sender.md`, `references/helius-priority-fees.md`, `references/integration-patterns.md`
+**See** `dflow spot trading` (reference not bundled), `helius sender` (reference not bundled), `helius priority fees` (reference not bundled), `integration patterns` (reference not bundled)
 **MCP tools**: Helius (`getPriorityFeeEstimate`, `getSenderInfo`, `parseTransactions`)
 
 Use this when the user wants to:
@@ -90,7 +90,7 @@ Use this when the user wants to:
 - Execute trades with optimal landing rates
 
 ### Prediction Markets
-**Read**: `references/dflow-prediction-markets.md`, `references/dflow-proof-kyc.md`, `references/helius-sender.md`, `references/integration-patterns.md`
+**See** `dflow prediction markets` (reference not bundled), `dflow proof kyc` (reference not bundled), `helius sender` (reference not bundled), `integration patterns` (reference not bundled)
 **MCP tools**: Helius (`getPriorityFeeEstimate`, `parseTransactions`)
 
 Use this when the user wants to:
@@ -101,7 +101,7 @@ Use this when the user wants to:
 - Integrate KYC verification for prediction market access
 
 ### Real-Time Market Data (DFlow)
-**Read**: `references/dflow-websockets.md`, `references/helius-laserstream.md`
+**See** `dflow websockets` (reference not bundled), `helius laserstream` (reference not bundled)
 
 Use this when the user wants to:
 - Stream real-time prediction market prices
@@ -112,7 +112,7 @@ Use this when the user wants to:
 DFlow WebSockets provide market-level data (prices, orderbooks, trades). LaserStream can supplement this with shred-level on-chain data for lower-latency use cases.
 
 ### Real-Time On-Chain Monitoring (Helius)
-**Read**: `references/helius-websockets.md` OR `references/helius-laserstream.md`
+**See** `helius websockets` (reference not bundled) OR `helius laserstream` (reference not bundled)
 **MCP tools**: Helius (`transactionSubscribe`, `accountSubscribe`, `getEnhancedWebSocketInfo`, `laserstreamSubscribe`, `getLaserstreamInfo`, `getLatencyComparison`)
 
 Use this when the user wants to:
@@ -127,7 +127,7 @@ Use this when the user wants to:
 - Use `getLatencyComparison` MCP tool to show the user the tradeoffs
 
 ### Low-Latency Trading (LaserStream)
-**Read**: `references/helius-laserstream.md`, `references/integration-patterns.md`
+**See** `helius laserstream` (reference not bundled), `integration patterns` (reference not bundled)
 **MCP tools**: Helius (`laserstreamSubscribe`, `getLaserstreamInfo`)
 
 Use this when the user wants to:
@@ -140,7 +140,7 @@ Use this when the user wants to:
 DFlow themselves use LaserStream for improved quote speeds and transaction confirmations.
 
 ### Portfolio & Token Discovery
-**Read**: `references/helius-das.md`, `references/helius-wallet-api.md`
+**See** `helius das` (reference not bundled), `helius wallet api` (reference not bundled)
 **MCP tools**: Helius (`getAssetsByOwner`, `getAsset`, `searchAssets`, `getWalletBalances`, `getWalletHistory`, `getWalletIdentity`)
 
 Use this when the user wants to:
@@ -150,7 +150,7 @@ Use this when the user wants to:
 - Analyze wallet activity and fund flows
 
 ### Transaction Submission
-**Read**: `references/helius-sender.md`, `references/helius-priority-fees.md`
+**See** `helius sender` (reference not bundled), `helius priority fees` (reference not bundled)
 **MCP tools**: Helius (`getPriorityFeeEstimate`, `getSenderInfo`)
 
 Use this when the user wants to:

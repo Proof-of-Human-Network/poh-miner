@@ -70,7 +70,7 @@ Restart or reload the MCP client after changing config so the server starts.
 
 ## 3. Agent registration (ERC-8004)
 
-1. Register the agent on-chain with the MCP tool **`register_erc8004_agent`** (see [references/erc8004-tools-reference.md](references/erc8004-tools-reference.md)).
+1. Register the agent on-chain with the MCP tool **`register_erc8004_agent`** (see `erc8004 tools reference` (reference not bundled)).
 2. Owners can then check registration on 8004scan (mainnet) or 8004scan (testnet).
 
 ---
@@ -117,10 +117,10 @@ For **parameter names, examples, and detailed usage** of each tool, use:
 
 | Reference | Content |
 |-----------|---------|
-| [references/evm-tools-reference.md](references/evm-tools-reference.md) | Blocks, transactions, network, wallet, contracts, tokens, NFT — all EVM tools |
-| [references/erc8004-tools-reference.md](references/erc8004-tools-reference.md) | register_erc8004_agent, set_erc8004_agent_uri, get_erc8004_agent, get_erc8004_agent_wallet |
-| [references/greenfield-tools-reference.md](references/greenfield-tools-reference.md) | Buckets, objects, folders, payment accounts — all Greenfield tools |
-| [references/prompts-reference.md](references/prompts-reference.md) | All MCP prompts and when to use them |
+| `evm tools reference` (reference not bundled) | Blocks, transactions, network, wallet, contracts, tokens, NFT — all EVM tools |
+| `erc8004 tools reference` (reference not bundled) | register_erc8004_agent, set_erc8004_agent_uri, get_erc8004_agent, get_erc8004_agent_wallet |
+| `greenfield tools reference` (reference not bundled) | Buckets, objects, folders, payment accounts — all Greenfield tools |
+| `prompts reference` (reference not bundled) | All MCP prompts and when to use them |
 
 ---
 
