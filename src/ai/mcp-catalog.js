@@ -80,11 +80,35 @@ export function isConversational(message) {
     .test(String(message || '').trim());
 }
 
+// Words that match everything and therefore discriminate nothing.
+const STOP = new Set(['the','a','an','and','or','of','to','in','for','on','with','is','are',
+  'do','does','how','what','why','when','can','i','my','me','you','it','this','that','use',
+  'using','get','make','build','write','create','need','want','help','please','about']);
+
+/**
+ * Score a skill against the message.
+ *
+ * Triggers are the strong signal and stay dominant. Description overlap is a
+ * weak secondary signal, and it exists because triggers used to be the *only*
+ * signal: a skill whose description matched the question perfectly scored zero
+ * and was never surfaced, so every skill needed a hand-authored trigger list
+ * covering every phrasing a user might pick. Weighting description below any
+ * single trigger keeps curated triggers authoritative while giving unphrased
+ * questions a way through.
+ */
 function scoreSkill(skill, segLower) {
   let score = 0;
   for (const t of (skill.triggers || [])) {
     if (segLower.includes(String(t).toLowerCase())) score += String(t).trim().split(/\s+/).length;
   }
+  const terms = segLower.split(/[^a-z0-9]+/i).filter(t => t.length > 2 && !STOP.has(t));
+  if (!terms.length) return score;
+  const blob = `${skill.id || ''} ${skill.description || ''} ${(skill.triggers || []).join(' ')}`.toLowerCase();
+  let overlap = 0;
+  for (const t of new Set(terms)) if (blob.includes(t)) overlap++;
+  // Capped well under a single 1-word trigger hit so it can break a tie or
+  // rescue a miss, but never outrank a curated trigger.
+  if (overlap >= 2) score += Math.min(overlap, 4) * 0.2;
   return score;
 }
 

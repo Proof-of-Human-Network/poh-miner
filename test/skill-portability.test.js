@@ -17,6 +17,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { parseSkillFile } from '../src/skills/loader.js';
 import { SKILL_CONTEXT_MAX } from '../src/skills/limits.js';
+import { retrieveCandidates } from '../src/ai/mcp-catalog.js';
 
 const BUILTIN = fileURLToPath(new URL('../src/skills/builtin', import.meta.url));
 
@@ -85,5 +86,28 @@ describe('skill portability', () => {
     // upstream file before it ever lands here.
     const keyed = FILES.filter(f => REQUIRES_KEY.test(parseSkillFile(f)?.context || '')).map(rel);
     expect(Array.isArray(keyed)).toBe(true);
+  });
+});
+
+describe('skill retrieval without curated triggers', () => {
+  // Triggers used to be the only signal, which made them a hard prefilter:
+  // a question phrased outside the list scored zero and the router abstained.
+  const skills = FILES.map(f => parseSkillFile(f)).filter(Boolean).map(p => ({
+    id: p.manifest.id, triggers: p.manifest.triggers, description: p.manifest.description,
+  }));
+
+  it('finds a skill from its description alone', () => {
+    const hit = q => retrieveCandidates(q, { cards: [], skills, retrieveK: 8 }).skills.map(s => s.id);
+    expect(hit('help me with conversation history and streaming text generation')).toContain('ritual_llm');
+    expect(hit('cross-platform mobile with dart')).toContain('mmx_flutter_dev');
+  });
+
+  it('still lets a curated trigger outrank description overlap', () => {
+    const r = retrieveCandidates('ritual scheduler', { cards: [], skills, retrieveK: 8 });
+    expect(r.skills[0].id).toBe('ritual_scheduler');
+  });
+
+  it('stays quiet on conversational messages', () => {
+    expect(retrieveCandidates('thanks, that makes sense', { cards: [], skills }).reason).toBe('skip');
   });
 });
