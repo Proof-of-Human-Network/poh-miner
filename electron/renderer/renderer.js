@@ -5562,19 +5562,110 @@ function p2pShowMyActivity() {
   p2pLoadActivity();
 }
 
-function p2pBuildCurrencyPills() {
+// Currency selection is a searchable modal, not a pill strip. At 15 currencies
+// the strip was fine; at 153 it is a wrapped block of tiny buttons with no way
+// to find Bhutan without already knowing it is aiBTN. Mirrors the wallet's
+// picker so both surfaces behave alike.
+const P2P_PICKER_BATCH = 40;
+
+function _p2pCurrencyRows() {
+  const reg = window._assetRegistry || {};
+  const codes = [...P2P_ONCHAIN.filter(c => c !== 'DAI'), ...QUOTE_CURRENCIES];
+  return codes.map(code => {
+    const a = reg[code];
+    const title = a?.display || code;
+    const subtitle = a ? [a.name, a.country].filter(Boolean).join(' · ') : 'Payment method';
+    return {
+      code, title, subtitle,
+      // ticker, ISO, name and country all match.
+      haystack: [code, title, a?.iso, a?.name, a?.country].filter(Boolean).join(' ').toLowerCase(),
+    };
+  });
+}
+
+function _p2pCurrencyLabel() {
+  if (!_p2pCurrency) return 'All currencies';
+  return (window._assetRegistry || {})[_p2pCurrency]?.display || _p2pCurrency;
+}
+
+function p2pBuildCurrencyPicker() {
   const container = document.getElementById('p2p-currency-pills');
   if (!container) return;
   container.innerHTML = '';
-  const all = ['', ...P2P_ONCHAIN.filter(c => c !== 'DAI'), ...QUOTE_CURRENCIES];
-  all.forEach(c => {
-    const btn = document.createElement('button');
-    btn.textContent = c || 'ALL';
-    const active = _p2pCurrency === c;
-    btn.style.cssText = `font-size:9px;padding:2px 7px;border-radius:10px;border:1px solid ${active ? '#22c55e' : '#2a2a2a'};background:${active ? '#052e16' : '#0a0a0a'};color:${active ? '#22c55e' : '#555'};cursor:pointer;font-family:monospace;`;
-    btn.onclick = () => { _p2pCurrency = c; p2pBuildCurrencyPills(); p2pRenderOrders(); };
-    container.appendChild(btn);
+  const btn = document.createElement('button');
+  btn.textContent = `${_p2pCurrencyLabel()} ▾`;
+  btn.style.cssText = 'font-size:10px;padding:3px 9px;border-radius:10px;border:1px solid #2a2a2a;background:#0a0a0a;color:#22c55e;cursor:pointer;font-family:monospace;';
+  btn.onclick = p2pOpenCurrencyModal;
+  container.appendChild(btn);
+}
+
+function p2pOpenCurrencyModal() {
+  const rows = _p2pCurrencyRows();
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.82);z-index:9999;display:flex;align-items:flex-start;justify-content:center;padding-top:8vh;';
+
+  const panel = document.createElement('div');
+  panel.style.cssText = 'width:min(420px,92vw);max-height:72vh;display:flex;flex-direction:column;background:#0a0a0a;border:1px solid #222;border-radius:10px;overflow:hidden;';
+
+  const input = document.createElement('input');
+  input.placeholder = 'Search currency, code or country';
+  input.style.cssText = 'border:0;border-bottom:1px solid #222;background:#0a0a0a;color:#eee;padding:11px 13px;font-family:monospace;font-size:12px;outline:none;';
+
+  const list = document.createElement('div');
+  list.style.cssText = 'overflow-y:auto;flex:1;';
+
+  const close = () => overlay.remove();
+  overlay.onclick = e => { if (e.target === overlay) close(); };
+  document.addEventListener('keydown', function esc(e) {
+    if (e.key === 'Escape') { close(); document.removeEventListener('keydown', esc); }
   });
+
+  let shown = 0, filtered = rows;
+  const rowEl = (code, title, subtitle) => {
+    const d = document.createElement('div');
+    const active = _p2pCurrency === code;
+    d.style.cssText = `padding:8px 13px;cursor:pointer;border-bottom:1px solid #141414;background:${active ? '#052e16' : 'transparent'};`;
+    // RTL signs would otherwise reorder the rest of the line.
+    d.innerHTML = `<div style="font-family:monospace;font-size:12px;color:${active ? '#22c55e' : '#ddd'};direction:ltr;">${title}</div>` +
+                  `<div style="font-family:monospace;font-size:10px;color:#666;direction:ltr;">${subtitle}</div>`;
+    d.onclick = () => { _p2pCurrency = code; close(); p2pBuildCurrencyPicker(); p2pRenderOrders(); };
+    return d;
+  };
+
+  // Render in batches on scroll rather than all 153 at once, so the list stays
+  // cheap as the currency set grows.
+  function renderMore() {
+    const slice = filtered.slice(shown, shown + P2P_PICKER_BATCH);
+    for (const r of slice) list.appendChild(rowEl(r.code, r.title, r.subtitle));
+    shown += slice.length;
+  }
+  function reset() {
+    const q = input.value.trim().toLowerCase();
+    filtered = q ? rows.filter(r => r.haystack.includes(q)) : rows;
+    list.innerHTML = '';
+    shown = 0;
+    if (!q) list.appendChild(rowEl('', 'All currencies', 'No filter'));
+    renderMore();
+    list.scrollTop = 0;   // a stale offset on a shorter list shows blank
+    if (!filtered.length) {
+      const e = document.createElement('div');
+      e.style.cssText = 'padding:18px;color:#555;font-family:monospace;font-size:11px;text-align:center;';
+      e.textContent = 'No currency matches that.';
+      list.appendChild(e);
+    }
+  }
+  list.onscroll = () => {
+    if (shown < filtered.length && list.scrollTop + list.clientHeight >= list.scrollHeight - 40) renderMore();
+  };
+
+  let t = null;
+  input.oninput = () => { clearTimeout(t); t = setTimeout(reset, 120); };
+
+  panel.appendChild(input); panel.appendChild(list);
+  overlay.appendChild(panel);
+  document.body.appendChild(overlay);
+  reset();
+  input.focus();
 }
 
 async function p2pLoadOrders(silent = false) {
@@ -5595,7 +5686,7 @@ async function p2pLoadOrders(silent = false) {
     ? Math.max(...stableOrders.map(o => parseFloat(o.pricePerDAI) || 0))
     : null;
   _updateUsdBalanceDisplay();
-  p2pBuildCurrencyPills();
+  p2pBuildCurrencyPicker();
   p2pRenderOrders();
 }
 

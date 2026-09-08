@@ -91,7 +91,7 @@ const esc = s => String(s).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
 const pad = (s, n) => String(s).padEnd(n);
 const lines = out.map(a => {
   const note = a.launched ? '' : (MANAGED.has(a.iso) ? '  // official rate — NEEDS REVIEW' : '');
-  return `  ${pad(a.ticker + ':', 9)}{ ticker: '${a.ticker}', decimals: 2, display: '${a.display}', sign: '${esc(a.sign)}', iso: '${a.iso}', country: '${esc(a.countries)}', fxPerUSD: ${a.fx} },${note}`;
+  return `  ${pad(a.ticker + ':', 9)}{ ticker: '${a.ticker}', decimals: 2, display: '${a.display}', sign: '${esc(a.sign)}', iso: '${a.iso}', name: '${esc(a.name)}', country: '${esc(a.countries)}', fxPerUSD: ${a.fx} },${note}`;
 });
 
 const file = `/**
