@@ -14,6 +14,11 @@
 import { ASSETS, STABLE_TICKERS } from '../assets.js';
 
 export const USD_PER_1M_TOKENS = 0.05;
+// SUPERSEDED for quoting a job's fee: src/jobs/gas-price.js prices tokens off
+// the live P2P book (forex second) and reports pairs nobody makes a market in,
+// rather than answering from a shipped table. This map remains as the static
+// reference used by budget/output-cap maths and by tests.
+//
 // Derived from ASSETS[t].fxPerUSD rather than hand-listed. The table used to be
 // 14 literals kept in step with assets.js by hand; at 153 currencies that is a
 // drift bug waiting to happen, and the formula below is exactly what the old

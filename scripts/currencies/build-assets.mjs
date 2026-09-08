@@ -42,11 +42,23 @@ const LAUNCHED = {
   IRR: 1000000,   // parallel — official is ~42,000
 };
 
+/**
+ * Rates no public feed carries, sourced by hand. Both are required on-chain, so
+ * omitting them is not an option; each records what the number actually is.
+ *   CUC — pegged 1:1 to USD by Cuba's central bank. Withdrawn from circulation
+ *         on 2021-01-01, so the peg is the only rate that exists.
+ *   KPW — state-fixed at 900/USD. The parallel market runs near 8,000+, and the
+ *         official rate bears no relation to it, so KPW is flagged for review.
+ * Sourced 2026-09-08.
+ */
+const MANUAL_RATES = { CUC: 1, KPW: 900 };
+
 // Managed / multiple-rate / active parallel market. Official feed rate is not
 // what people transact at, so these need a human before launch.
 const MANAGED = new Set([
   'ARS', 'LBP', 'SYP', 'ZWG', 'ZWL', 'MMK', 'BOB', 'NGN', 'ETB', 'AOA',
   'VES', 'IRR', 'SDG', 'CUP', 'YER', 'AFN', 'SSP', 'HTG', 'LRD', 'CDF',
+  'KPW',
 ]);
 
 const tickerFor = iso => (iso === 'KGS' ? 'KGST' : `ai${iso}`);
@@ -70,11 +82,11 @@ const asOf = rates.time_last_update_utc;
 const rows = readTable();
 if (rows.length !== 155) console.warn(`[assets] expected 155 rows, table has ${rows.length}`);
 
-const missing = [], review = [], drift = [];
+const missing = [], review = [], drift = [], manual = [];
 const out = [];
 for (const r of rows) {
   const launched = LAUNCHED[r.iso];
-  const official = rates.rates[r.iso];
+  const official = rates.rates[r.iso] ?? MANUAL_RATES[r.iso];
   let fx = launched ?? official;
   if (fx == null) { missing.push(r.iso); continue; }
   // Keep launched precision; round feed rates so the file stays readable.
@@ -84,6 +96,7 @@ for (const r of rows) {
     if (ratio > 1.15 || ratio < 0.87) drift.push(`${r.iso}: on-chain ${launched} vs official ${official.toFixed(2)}`);
   }
   if (launched == null && MANAGED.has(r.iso)) review.push(r.iso);
+  if (MANUAL_RATES[r.iso] != null && rates.rates[r.iso] == null) manual.push(r.iso);
   out.push({ ...r, ticker: tickerFor(r.iso), display: displayFor(r.iso), fx, launched: launched != null });
 }
 
@@ -154,5 +167,6 @@ fs.writeFileSync(OUT, file + '\n' + keep);
 
 console.log(`assets.js: ${out.length} stablecoins + DAI, rates as of ${asOf}`);
 if (missing.length) console.log(`  no rate (omitted): ${missing.join(', ')}`);
+if (manual.length) console.log(`  hand-sourced (no public feed): ${manual.join(', ')}`);
 console.log(`  NEEDS REVIEW (${review.length}): ${review.join(', ')}`);
 if (drift.length) { console.log('  on-chain rates that have drifted from official:'); drift.forEach(d => console.log(`    ${d}`)); }

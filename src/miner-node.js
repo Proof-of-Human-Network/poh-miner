@@ -64,8 +64,9 @@ import { WalletManager, Wallet } from './wallet/wallet.js';
 import { RewardClaimStore } from './storage/reward-claim-store.js';
 import { skillsManager } from './skills/manager.js';
 import { SKILL_CONTEXT_MAX, SKILL_JOB_CONTEXT_MAX } from './skills/limits.js';
+import { feeForLive } from './jobs/gas-price.js';
 import { loadAllSkills, writeSkillFile } from './skills/loader.js';
-import { estimateTokens, estimateChatTokens, outputTokenCap, settleFee, timeoutFee, GAS, gasPriceFor } from './jobs/gas-estimator.js';
+import { estimateTokens, estimateChatTokens, outputTokenCap, settleFee, timeoutFee, GAS } from './jobs/gas-estimator.js';
 import { ASSETS, STABLE_TICKERS, normalizeCurrency, isKnownAsset, decimalsOf, listAssets, fromRaw as assetFromRaw } from './assets.js';
 import { feedbackStore } from './jobs/feedback-store.js';
 
@@ -1325,8 +1326,16 @@ export class DAIMinerNode {
 
       // Asset registry — tickers, decimals, display names for every on-chain asset.
       if (url.pathname === '/api/assets') {
-        return res.end(JSON.stringify({ assets: listAssets(), gasPrices: Object.fromEntries(
-          Object.keys(ASSETS).map(t => [t, gasPriceFor(t, this.config)])) }));
+        // Gas prices are quoted live off the P2P book (forex second), so a
+        // currency nobody makes a market in is reported as unavailable rather
+        // than carrying a stale shipped number.
+        const gasPrices = {}, gasUnavailable = [];
+        for (const t of Object.keys(ASSETS)) {
+          const q = feeForLive(1e9, t, { orderStore: this.p2pOrderStore, config: this.config });
+          if (q.unavailable) { gasUnavailable.push(t); continue; }
+          gasPrices[t] = { perDAI: q.display, source: q.source, ...(q.via ? { via: q.via } : {}) };
+        }
+        return res.end(JSON.stringify({ assets: listAssets(), gasPrices, gasUnavailable }));
       }
 
       if (url.pathname === '/api/wallet/balance') {
@@ -1751,11 +1760,18 @@ export class DAIMinerNode {
               // Fee floor: the escrowed budget must cover at least the AI tokens this job
               // will use, priced per currency (config.gasPrices overridable). A job can
               // never be settled for less than the tokens it consumes.
-              const gasPrice = job.currency === 'DAI'
-                ? (this.config.gasPrice || GAS.DEFAULT_GAS_PRICE)
-                : gasPriceFor(job.currency, this.config);
               const minTokens = estimateTokens(0, job.payload?.address);
-              const minFee = Math.max(1, Math.ceil(minTokens * gasPrice));
+              // Priced off the live P2P book; forex only if nobody quotes it.
+              // The floor is the anchor: a job can never settle for less than
+              // the AI tokens it consumes, which is `minTokens` μDAI.
+              const quote = job.currency === 'DAI'
+                ? { raw: Math.max(1, Math.ceil(minTokens * (this.config.gasPrice || GAS.DEFAULT_GAS_PRICE))) }
+                : feeForLive(minTokens, job.currency, { orderStore: this.p2pOrderStore, config: this.config });
+              if (quote.unavailable) {
+                res.statusCode = 402;
+                return res.end(JSON.stringify({ error: quote.message, currency: quote.currency, pairUnavailable: true }));
+              }
+              const minFee = quote.raw;
               if (job.maxBudget < minFee) {
                 res.statusCode = 402;
                 return res.end(JSON.stringify({
@@ -8335,7 +8351,7 @@ export class DAIMinerNode {
       maxWait:           job.maxWait,
       gasPrice:          cur === 'DAI'
         ? (this.config.gasPrice || GAS.DEFAULT_GAS_PRICE)
-        : gasPriceFor(cur, this.config),
+        : (feeForLive(1e9, cur, { orderStore: this.p2pOrderStore, config: this.config }).display ?? null),
       estimatedTokens:   estTokens,
       paymentTxHash:     paymentTxHash || null,
       unverified:        unverified || false,

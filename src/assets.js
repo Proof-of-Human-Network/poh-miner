@@ -5,7 +5,7 @@
  * wallet mirrors this file, and the drift between two hand-maintained copies is
  * exactly how ten currencies ended up formatted at the wrong decimals.
  *
- * DAI is the native asset (9 decimals, mined). The 153 regional stablecoins
+ * DAI is the native asset (9 decimals, mined). The 155 regional stablecoins
  * (2 decimals, fiat-style) are minted once at genesis to the treasury address;
  * future supply changes happen via coordinated network upgrades — there is NO
  * runtime mint transition.
@@ -70,6 +70,7 @@ export const ASSETS = {
   aiCNY:   { ticker: 'aiCNY', decimals: 2, display: 'αιCNY', sign: 'CN¥', iso: 'CNY', name: 'Chinese Yuan', country: 'China', fxPerUSD: 6.72843 },
   aiCOP:   { ticker: 'aiCOP', decimals: 2, display: 'αιCOP', sign: '$', iso: 'COP', name: 'Colombian Peso', country: 'Colombia', fxPerUSD: 3132 },
   aiCRC:   { ticker: 'aiCRC', decimals: 2, display: 'αιCRC', sign: '₡', iso: 'CRC', name: 'Costa Rican Colón', country: 'Costa Rica', fxPerUSD: 453.79 },
+  aiCUC:   { ticker: 'aiCUC', decimals: 2, display: 'αιCUC', sign: '', iso: 'CUC', name: 'Cuban Convertible Peso', country: 'Cuba', fxPerUSD: 1 },
   aiCUP:   { ticker: 'aiCUP', decimals: 2, display: 'αιCUP', sign: '$', iso: 'CUP', name: 'Cuban Peso', country: 'Cuba', fxPerUSD: 400 },
   aiCVE:   { ticker: 'aiCVE', decimals: 2, display: 'αιCVE', sign: '​', iso: 'CVE', name: 'Cape Verdean Escudo', country: 'Cape Verde', fxPerUSD: 94.8616 },
   aiCZK:   { ticker: 'aiCZK', decimals: 2, display: 'αιCZK', sign: 'Kč', iso: 'CZK', name: 'Czech Koruna', country: 'Czechia', fxPerUSD: 20.8137 },
@@ -109,6 +110,7 @@ export const ASSETS = {
   KGST:    { ticker: 'KGST', decimals: 2, display: 'KGST', sign: 'сом', iso: 'KGS', name: 'Kyrgystani Som', country: 'Kyrgyzstan', fxPerUSD: 87 },
   aiKHR:   { ticker: 'aiKHR', decimals: 2, display: 'αιKHR', sign: '៛', iso: 'KHR', name: 'Cambodian Riel', country: 'Cambodia', fxPerUSD: 4038 },
   aiKMF:   { ticker: 'aiKMF', decimals: 2, display: 'αιKMF', sign: 'CF', iso: 'KMF', name: 'Comorian Franc', country: 'Comoros', fxPerUSD: 423.243 },
+  aiKPW:   { ticker: 'aiKPW', decimals: 2, display: 'αιKPW', sign: '', iso: 'KPW', name: 'North Korean Won', country: 'North Korea', fxPerUSD: 900 },  // official rate — NEEDS REVIEW
   aiKRW:   { ticker: 'aiKRW', decimals: 2, display: 'αιKRW', sign: '₩', iso: 'KRW', name: 'South Korean Won', country: 'South Korea', fxPerUSD: 1345 },
   aiKWD:   { ticker: 'aiKWD', decimals: 2, display: 'αιKWD', sign: 'د.ك.‏', iso: 'KWD', name: 'Kuwaiti Dinar', country: 'Kuwait', fxPerUSD: 0.308639 },
   aiKYD:   { ticker: 'aiKYD', decimals: 2, display: 'αιKYD', sign: '$', iso: 'KYD', name: 'Cayman Islands Dollar', country: 'Cayman Islands', fxPerUSD: 0.833333 },
@@ -200,7 +202,7 @@ export const STABLE_TICKERS = Object.keys(ASSETS).filter(t => t !== 'DAI');
  * people transact at. Emitted with the official rate so the chain is complete;
  * a human must confirm or replace each before the genesis snapshot is built.
  */
-export const FX_NEEDS_REVIEW = ["AFN","ARS","BOB","CDF","HTG","LBP","LRD","MMK","NGN","SSP","SYP","YER"];
+export const FX_NEEDS_REVIEW = ["AFN","ARS","BOB","CDF","HTG","KPW","LBP","LRD","MMK","NGN","SSP","SYP","YER"];
 
 // ── Genesis supply ──────────────────────────────────────────────────────────
 // The treasury receives the entire initial stablecoin supply in the migration
