@@ -202,39 +202,113 @@ export class OrderStore {
     return out;
   }
 
-  // Every listed BASE-QUOTE pair plus last (book mid). change24h is filled in
-  // by PriceHistory when the HTTP handler has a sampler.
-  listMarkets({ pair } = {}) {
-    let pairs;
+  /* Open orders bucketed by pair, built once.
+     _priceFor() re-filters every order in the store, which is fine for one pair
+     and quadratic across the whole market list. At 15 on-chain currencies that
+     was 360 scans; at 155 it is 25,420, and the list endpoint becomes the
+     slowest thing the node does. One pass, then O(1) per market. */
+  _openBookIndex() {
+    const now = Date.now();
+    const idx = new Map();
+    for (const o of Object.values(this.orders)) {
+      if (o.status !== 'open') continue;
+      if (o.expiresAt < now) continue;
+      const key = pairId(o.baseAsset || 'DAI', o.quoteCurrency);
+      let bucket = idx.get(key);
+      if (!bucket) { bucket = { bestBid: null, bestAsk: null }; idx.set(key, bucket); }
+      if (o.side === 'buy') {
+        if (!bucket.bestBid || o.pricePerDAI > bucket.bestBid.pricePerDAI) bucket.bestBid = o;
+      } else if (!bucket.bestAsk || o.pricePerDAI < bucket.bestAsk.pricePerDAI) {
+        bucket.bestAsk = o;
+      }
+    }
+    return idx;
+  }
+
+  _marketRow(baseAsset, quoteCurrency, idx) {
+    const b = idx.get(pairId(baseAsset, quoteCurrency));
+    const bestBid = b && b.bestBid, bestAsk = b && b.bestAsk;
+    const last = (bestBid && bestAsk) ? (bestBid.pricePerDAI + bestAsk.pricePerDAI) / 2
+               : bestAsk ? bestAsk.pricePerDAI
+               : bestBid ? bestBid.pricePerDAI : null;
+    return {
+      pair: pairId(baseAsset, quoteCurrency),
+      base: baseAsset,
+      quote: quoteCurrency,
+      last,
+      change24h: null,
+      bestBid: bestBid ? bestBid.pricePerDAI : null,
+      bestAsk: bestAsk ? bestAsk.pricePerDAI : null,
+      source: last == null ? 'none' : 'p2p-best-order',
+      onchainQuote: isOnChainAsset(quoteCurrency),
+    };
+  }
+
+  /**
+   * Every listed BASE-QUOTE pair plus last (book mid). change24h is filled in
+   * by PriceHistory when the HTTP handler has a sampler.
+   *
+   * Paged, because the pair count is the product of the currency list with
+   * itself: 15 on-chain currencies give 360 markets and a 54 KB response, and
+   * 155 give 25,420 and roughly 3.8 MB. Nobody renders 25,000 rows, and no
+   * client should have to download them to show the first screenful.
+   *
+   * `cursor` is a position in the deterministic base×quote walk, not an offset
+   * into the filtered result — so it stays valid whatever the filters are. It
+   * is only stable while the currency list is, which changes at a hard fork and
+   * never between two requests.
+   *
+   * @param pair      one market, unpaged (unchanged behaviour)
+   * @param base      only markets with this base asset
+   * @param quote     only markets with this quote
+   * @param hasBook   only markets with at least one open order
+   * @param limit     page size, default 500, max 1000
+   * @param cursor    resume token from a previous call's `nextCursor`
+   */
+  listMarkets({ pair, base, quote, hasBook, limit, cursor } = {}) {
+    const idx = this._openBookIndex();
+
     if (pair) {
       const parsed = parsePair(pair);
       if (!parsed) return { error: `unknown pair: ${pair}` };
-      pairs = [parsed];
-    } else {
-      pairs = [];
-      for (const baseAsset of ONCHAIN_ASSETS) {
-        for (const quoteCurrency of [...QUOTE_CURRENCIES, ...ONCHAIN_ASSETS]) {
-          if (quoteCurrency === baseAsset) continue;
-          pairs.push({ baseAsset, quoteCurrency });
+      return { markets: [this._marketRow(parsed.baseAsset, parsed.quoteCurrency, idx)] };
+    }
+    if (base && !isOnChainAsset(base)) return { error: `unknown base asset: ${base}` };
+    if (quote && !isValidQuote(quote)) return { error: `unknown quote currency: ${quote}` };
+
+    const size = Math.min(Math.max(parseInt(limit, 10) || 500, 1), 1000);
+    const quotes = [...QUOTE_CURRENCIES, ...ONCHAIN_ASSETS];
+
+    let bi = 0, qi = 0;
+    if (cursor) {
+      const m = /^(\d+):(\d+)$/.exec(String(cursor));
+      if (!m) return { error: `bad cursor: ${cursor}` };
+      bi = Number(m[1]); qi = Number(m[2]);
+    }
+
+    const markets = [];
+    let total = 0;          // matching markets across the whole walk
+    let nextCursor = null;
+    for (let b = 0; b < ONCHAIN_ASSETS.length; b++) {
+      const baseAsset = ONCHAIN_ASSETS[b];
+      if (base && baseAsset !== base) continue;
+      for (let q = 0; q < quotes.length; q++) {
+        const quoteCurrency = quotes[q];
+        if (quoteCurrency === baseAsset) continue;
+        if (quote && quoteCurrency !== quote) continue;
+        if (hasBook && !idx.has(pairId(baseAsset, quoteCurrency))) continue;
+        total++;
+        // Counting continues past the page so `total` is honest; only rows at
+        // or after the cursor, and only `size` of them, are built.
+        if (b < bi || (b === bi && q < qi)) continue;
+        if (markets.length === size) {
+          if (!nextCursor) nextCursor = `${b}:${q}`;
+          continue;
         }
+        markets.push(this._marketRow(baseAsset, quoteCurrency, idx));
       }
     }
-    return {
-      markets: pairs.map(({ baseAsset, quoteCurrency }) => {
-        const ref = this._priceFor(quoteCurrency, baseAsset);
-        return {
-          pair: pairId(baseAsset, quoteCurrency),
-          base: baseAsset,
-          quote: quoteCurrency,
-          last: ref.price,
-          change24h: null,
-          bestBid: ref.bestBid ? ref.bestBid.price : null,
-          bestAsk: ref.bestAsk ? ref.bestAsk.price : null,
-          source: ref.source,
-          onchainQuote: isOnChainAsset(quoteCurrency),
-        };
-      }),
-    };
+    return { markets, total, nextCursor };
   }
 
   _patchOrder(id, patch) {
