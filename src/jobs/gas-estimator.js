@@ -11,23 +11,18 @@
 // operators can override any entry with config.gasPrices = { aiETB: <n>, ... }.
 // NOT consensus: the accepting miner enforces its own floor; settlement pays
 // whatever was escrowed in exactly the currency paid.
+import { ASSETS, STABLE_TICKERS } from '../assets.js';
+
 export const USD_PER_1M_TOKENS = 0.05;
+// Derived from ASSETS[t].fxPerUSD rather than hand-listed. The table used to be
+// 14 literals kept in step with assets.js by hand; at 153 currencies that is a
+// drift bug waiting to happen, and the formula below is exactly what the old
+// literals encoded (verified against every one of them before this changed).
 export const GAS_PRICES = {
-  DAI:   1,          // μDAI / token
-  KGST:  4.35e-4,    // 4.35 som / 1M tokens (fx 87)
-  aiETB: 6.4e-4,     // Br 6.40 / 1M tokens (fx 128)
-  aiBTN: 4.2e-4,     // Nu. 4.20 / 1M tokens (fx 84)
-  aiVES: 1.25e-3,    // Bs. 12.50 / 1M tokens (fx 250)
-  aiPYG: 3.65e-2,    // ₲ 365 / 1M tokens (fx 7300)
-  aiBDT: 6.1e-4,     // ৳ 6.10 / 1M tokens (fx 122)
-  aiPKR: 1.41e-3,    // ₨ 14.10 / 1M tokens (fx 282)
-  aiEGP: 2.4e-4,     // E£ 2.40 / 1M tokens (fx 48)
-  aiIQD: 6.55e-3,    // ع.د 65.50 / 1M tokens (fx 1310)
-  aiAOA: 4.575e-3,   // Kz 45.75 / 1M tokens (fx 915)
-  aiCUP: 2.0e-3,     // MN$ 20.00 / 1M tokens (fx 400)
-  aiLYD: 2.75e-5,    // ل.د 0.275 / 1M tokens (fx 5.5)
-  aiSDG: 1.3e-2,     // ج.س 130 / 1M tokens (fx 2600)
-  aiIRR: 5.0,        // ﷼ 50,000 / 1M tokens (fx 1,000,000)
+  DAI: 1,          // μDAI / token — its own economy, not derived from fx
+  ...Object.fromEntries(
+    STABLE_TICKERS.map(t => [t, USD_PER_1M_TOKENS * ASSETS[t].fxPerUSD * 100 / 1e6]),
+  ),
 };
 
 /** Effective per-token gas price for a currency, honouring config.gasPrices overrides. */
