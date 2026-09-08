@@ -63,6 +63,7 @@ import { ChainStore } from './storage/chain-store.js';
 import { WalletManager, Wallet } from './wallet/wallet.js';
 import { RewardClaimStore } from './storage/reward-claim-store.js';
 import { skillsManager } from './skills/manager.js';
+import { SKILL_CONTEXT_MAX, SKILL_JOB_CONTEXT_MAX } from './skills/limits.js';
 import { loadAllSkills, writeSkillFile } from './skills/loader.js';
 import { estimateTokens, estimateChatTokens, outputTokenCap, settleFee, timeoutFee, GAS, gasPriceFor } from './jobs/gas-estimator.js';
 import { ASSETS, STABLE_TICKERS, normalizeCurrency, isKnownAsset, decimalsOf, listAssets, fromRaw as assetFromRaw } from './assets.js';
@@ -2927,7 +2928,7 @@ export class DAIMinerNode {
                     'Answer the user\'s question using the reference material below. Be specific and practical.',
                     'Write in clear, human-readable Markdown. Do not mention tools or MCP servers you don\'t actually have access to —',
                     'if the material references one, explain the underlying concept instead.',
-                    `\nReference documentation (${route.skillId}):\n${skillEntry.context.slice(0, 8000)}`,
+                    `\nReference documentation (${route.skillId}):\n${skillEntry.context.slice(0, SKILL_CONTEXT_MAX)}`,
                   ].join('\n');
                   const llmReply = (await this._llmChat(
                     [{ role: 'system', content: systemContent }, { role: 'user', content: message }],
@@ -2970,7 +2971,7 @@ export class DAIMinerNode {
                 const systemContent = [
                   'You are a helpful assistant with access to specialized reference documentation.',
                   'Use the reference material below to analyze the content that was just generated. Be specific and practical.',
-                  `\nReference documentation (${route.skillId}):\n${(skillEntry?.context || '').slice(0, 8000)}`,
+                  `\nReference documentation (${route.skillId}):\n${(skillEntry?.context || '').slice(0, SKILL_CONTEXT_MAX)}`,
                 ].join('\n');
                 const userContent = `Generated content:\n${generated}\n\nTask: ${route.input?.query || route.input?.message || message}`;
                 const analysis  = (await this._llmChat(
@@ -3122,7 +3123,7 @@ export class DAIMinerNode {
                 route.jobs.map(async job => {
                   const entry = skillsManager.getSkill(job.skillId);
                   if (!entry?.code && entry?.context) {
-                    return { skillId: job.skillId, output: { reference: entry.context.slice(0, 3000) } };
+                    return { skillId: job.skillId, output: { reference: entry.context.slice(0, SKILL_JOB_CONTEXT_MAX) } };
                   }
                   const { output } = await skillsManager.runSkill(job.skillId, job.input, this.config);
                   return { skillId: job.skillId, output };
@@ -3848,7 +3849,14 @@ export class DAIMinerNode {
       // Optional ?pair=BASE-QUOTE (e.g. KGST-USDT-TRC20).
       if (req.method === 'GET' && url.pathname === '/api/p2p/markets') {
         const pair = url.searchParams.get('pair') || undefined;
-        const result = this.p2pOrderStore.listMarkets({ pair });
+        const result = this.p2pOrderStore.listMarkets({
+          pair,
+          base: url.searchParams.get('base') || undefined,
+          quote: url.searchParams.get('quote') || undefined,
+          hasBook: url.searchParams.get('hasBook') === '1',
+          limit: url.searchParams.get('limit') || undefined,
+          cursor: url.searchParams.get('cursor') || undefined,
+        });
         if (result.error) { res.statusCode = 400; return res.end(JSON.stringify(result)); }
         if (this.p2pPriceHistory && result.markets) {
           for (const m of result.markets) {
@@ -3939,8 +3947,31 @@ export class DAIMinerNode {
       if (req.method === 'POST' && url.pathname === '/api/p2p/orders') {
         readBody().then(body => {
           const { address, signingPublicKey, signature, timestamp, ...orderFields } = body;
-          const auth = verifyP2PAuth(address, signingPublicKey, signature,
-            { address, timestamp, action: 'create-order', side: orderFields.side, daiAmount: orderFields.daiAmount });
+          /* Every field that defines the deal is signed.
+             Until 0.4.35 only `side` and `daiAmount` were, so `pricePerDAI`,
+             `quoteCurrency`, `baseAsset` and `paymentMethods` travelled
+             unauthenticated: anything sitting between the maker and this node
+             could rewrite the price, or swap the payout address in
+             paymentMethods for its own, and the signature still verified. The
+             maker had signed "sell 100 DAI" and nothing about what for or to
+             whom.
+
+             BREAKING: a client that signs the old two-field payload is now
+             rejected. There is deliberately no legacy fallback — accepting one
+             would leave the same forgery path open, since the attacker tampers
+             with a request the victim signed. Wallet and SDK must ship the new
+             payload in the same release. Key order matters: the signer builds
+             { address, timestamp, action, ...fields } and re-serialises, so
+             this object must list fields in exactly the order clients send. */
+          const auth = verifyP2PAuth(address, signingPublicKey, signature, {
+            address, timestamp, action: 'create-order',
+            side: orderFields.side,
+            baseAsset: orderFields.baseAsset || 'DAI',
+            quoteCurrency: orderFields.quoteCurrency,
+            daiAmount: orderFields.daiAmount,
+            pricePerDAI: orderFields.pricePerDAI,
+            paymentMethods: orderFields.paymentMethods || [],
+          });
           if (auth.error) { res.statusCode = 401; return res.end(JSON.stringify(auth)); }
           const ownerAddress = auth.address;
 
@@ -3969,7 +4000,15 @@ export class DAIMinerNode {
 
           result.order.escrowLocked = (orderFields.side === 'sell');
           this.p2pOrderStore._patchOrder(result.order.id, { escrowLocked: result.order.escrowLocked });
-          const createPayload = { address, timestamp, action: 'create-order', side: orderFields.side, daiAmount: orderFields.daiAmount };
+          const createPayload = {
+            address, timestamp, action: 'create-order',
+            side: orderFields.side,
+            baseAsset: orderFields.baseAsset || 'DAI',
+            quoteCurrency: orderFields.quoteCurrency,
+            daiAmount: orderFields.daiAmount,
+            pricePerDAI: orderFields.pricePerDAI,
+            paymentMethods: orderFields.paymentMethods || [],
+          };
           this._queueP2PTransition({ type: 'p2p-order-created', ...result.order }, { auth: makeP2PAuth(body, createPayload) });
           this.gossip.publish('p2p-order', result.order).catch(() => {});
           return res.end(JSON.stringify(result));
@@ -4018,8 +4057,12 @@ export class DAIMinerNode {
         if (action === 'select') {
           readBody().then(body => {
             const { address, signingPublicKey, signature, timestamp, daiAmount, quoteAmount, takerPayoutAddress } = body;
+            /* takerPayoutAddress decides where the taker's funds land and was
+               not signed before 0.4.35 — a tampered request could redirect the
+               payout while the taker's signature still verified. */
             const auth = verifyP2PAuth(address, signingPublicKey, signature,
-              { address, timestamp, action: 'select-order', orderId, daiAmount, quoteAmount });
+              { address, timestamp, action: 'select-order', orderId, daiAmount, quoteAmount,
+                takerPayoutAddress: takerPayoutAddress || null });
             if (auth.error) { res.statusCode = 401; return res.end(JSON.stringify(auth)); }
             const ownerAddress = auth.address;
 
@@ -4068,7 +4111,8 @@ export class DAIMinerNode {
                 referrer: referrer || null, referralFee,
                 updatedAt: Date.now(),
               };
-              const selectPayload = { address, timestamp, action: 'select-order', orderId, daiAmount, quoteAmount };
+              const selectPayload = { address, timestamp, action: 'select-order', orderId, daiAmount, quoteAmount,
+                takerPayoutAddress: takerPayoutAddress || null };
               this._queueP2PTransition(swapTransition, { auth: makeP2PAuth(body, selectPayload) });
               this.gossip.publish('p2p-order', this.p2pOrderStore.getOrder(orderId)).catch(() => {});
               this.gossip.publish('p2p-trade', done.trade || result.trade).catch(() => {});
@@ -4088,7 +4132,8 @@ export class DAIMinerNode {
               res.statusCode = 400; return res.end(JSON.stringify(result));
             }
 
-            const selectPayload = { address, timestamp, action: 'select-order', orderId, daiAmount, quoteAmount };
+            const selectPayload = { address, timestamp, action: 'select-order', orderId, daiAmount, quoteAmount,
+              takerPayoutAddress: takerPayoutAddress || null };
             this._queueP2PTransition({ type: 'p2p-trade-created', ...result.trade, orderSide: order.side, ...(baseAsset !== 'DAI' ? { baseAsset } : {}) }, { auth: makeP2PAuth(body, selectPayload) });
             this.gossip.publish('p2p-order', this.p2pOrderStore.getOrder(orderId)).catch(() => {});
             this.gossip.publish('p2p-trade', result.trade).catch(() => {});
@@ -7602,7 +7647,7 @@ export class DAIMinerNode {
         const systemContent = [
           'You are a helpful assistant with access to specialized reference documentation.',
           'Answer using the reference material below. Be specific and practical. Write clear Markdown.',
-          `\nReference documentation (${route.skillId}):\n${skillEntry.context.slice(0, 8000)}`,
+          `\nReference documentation (${route.skillId}):\n${skillEntry.context.slice(0, SKILL_CONTEXT_MAX)}`,
         ].join('\n');
         const reply = (await this._llmChat(
           [{ role: 'system', content: systemContent }, { role: 'user', content: prompt }],
