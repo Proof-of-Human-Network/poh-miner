@@ -2492,11 +2492,21 @@ export class DAIMinerNode {
                 res.statusCode = 200;
                 res.setHeader('Content-Type', 'application/x-ndjson');
                 const line = (obj) => { try { res.write(JSON.stringify(obj) + '\n'); } catch { /* client gone */ } };
+                // Count what actually reached the client, so a run that streamed
+                // and then died is not reported as "produced no output" -- that
+                // sent people looking at QVAC when the model had in fact
+                // generated for 90 seconds and been cut off.
+                let streamed = 0;
                 const reply = await qvac.chat(messages, {
                   model, timeLimit: 90_000,
-                  onToken: (t) => line({ model, message: { role: 'assistant', content: t }, done: false }),
+                  onToken: (t) => { streamed++; line({ model, message: { role: 'assistant', content: t }, done: false }); },
                 });
-                if (reply == null) { line({ error: `Model "${model}" produced no output (QVAC unavailable)` }); return res.end(); }
+                if (reply == null) {
+                  line({ error: streamed > 0
+                    ? `Model "${model}" started generating (${streamed} tokens) but did not finish — it was cut off by the time limit or the runtime stopped. Try a shorter prompt or a smaller model.`
+                    : `Model "${model}" produced no output (QVAC unavailable)` });
+                  return res.end();
+                }
                 line({ model, created_at: new Date().toISOString(), message: { role: 'assistant', content: '' }, done: true });
                 return res.end();
               }

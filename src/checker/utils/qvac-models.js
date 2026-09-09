@@ -420,6 +420,29 @@ function estimateMessagesTokens(messages, systemPrompt) {
   return estimatePromptTokens(rows);
 }
 
+/**
+ * Does this model treat `/no_think` as a control token rather than as text?
+ * True for the Qwen3 instruct line only -- deliberately not qwen3.5-* or
+ * qwen3vl-*, which share the prefix but not the behaviour.
+ */
+/**
+ * Remove chain-of-thought from a completion.
+ *
+ * The dangling case is the one that bit us: when generation is cut off
+ * mid-thought there is no </think>, the non-greedy match fails, and the raw
+ * reasoning gets handed to the user as if it were the answer.
+ */
+function stripThinking(text) {
+  return String(text || '')
+    .replace(/<think>[\s\S]*?<\/think>/gi, '')
+    .replace(/<think>[\s\S]*$/i, '')
+    .trim();
+}
+
+function supportsNoThink(model) {
+  return /^qwen3-/i.test(String(model || ''));
+}
+
 // ── Chat completion (generic messages[] interface) ──────────────────────────
 // messages: [{ role: 'system'|'user'|'assistant', content: string }, ...]
 // Returns the assistant text, or null when QVAC is disabled/unavailable so
@@ -430,10 +453,10 @@ async function chat(messages, opts = {}) {
 
   const {
     model,
-    maxTokens = 512,          // reserved; token cap enforced by ctx + stream length
+    maxTokens = 512,          // hard ceiling on OUTPUT tokens for this call
     timeLimit = 120000,
     jsonMode = false,
-    noThink = true,           // Qwen3: suppress chain-of-thought tokens
+    noThink = true,           // suppress chain-of-thought, where the model supports it
     systemPrompt,
     withUsage = false,        // when true, return { text, promptTokens, completionTokens, totalTokens }
     hardTokenCap = 0,         // stop generation after this many OUTPUT tokens (0 = uncapped)
@@ -472,14 +495,25 @@ async function chat(messages, opts = {}) {
         }
       }
       // Append /no_think to the last user turn for Qwen3 fast responses.
-      if (noThink) {
+      //
+      // Only where it is an actual control token. Qwen3 recognises it; qwen3.5
+      // and qwen3vl do not, and there it arrives as literal text in the user's
+      // message -- the model then reasons ABOUT the string ("Constraint:
+      // '/no_think' suggests the user wants a direct answer...") and burns the
+      // context deliberating over a switch that was meant to save tokens.
+      if (noThink && supportsNoThink(model)) {
         for (let i = history.length - 1; i >= 0; i--) {
           if (history[i].role === 'user') { history[i] = { ...history[i], content: history[i].content + '\n/no_think' }; break; }
         }
       }
 
+      // Both caps are ceilings; the tighter one wins. 0 means "not set".
+      const caps = [maxTokens, hardTokenCap].filter(n => Number(n) > 0);
+      const effectiveCap = caps.length ? Math.min(...caps) : 0;
+
       const run = sdk.completion({ modelId, history, stream: true });
       let text = '';
+      let truncated = false;
       let completionTokens = 0;           // exact: one stream chunk == one output token
       for await (const token of run.tokenStream) {
         text += token;
@@ -488,15 +522,25 @@ async function chat(messages, opts = {}) {
         // Cooperative cancel: a peer already published the winning result, so stop
         // burning compute on a job we've lost (see miner-node first-result-wins).
         if (shouldStop) { let stop = false; try { stop = !!shouldStop(); } catch { /* ignore */ } if (stop) { try { run.cancel?.(); } catch { /* */ } break; } }
-        // No-refund hard cap: budget bounds output, so stop once we've generated
+        // Stop at the tightest cap that applies.
+        //
+        // hardTokenCap is the no-refund budget bound: stop once we've generated
         // every token the requester paid for (see gas-estimator.outputTokenCap).
-        if (hardTokenCap > 0 && completionTokens >= hardTokenCap) {
+        // maxTokens is the unconditional ceiling, and it matters most when
+        // hardTokenCap is 0 (free chat) -- without it a model that degenerates
+        // into a repetition loop generates until the runtime falls over, which
+        // surfaces to the user as "produced no output" after a long stall.
+        if (effectiveCap > 0 && completionTokens >= effectiveCap) {
+          truncated = true;
           try { run.cancel?.(); } catch { /* best-effort — loop break is enough */ }
           break;
         }
       }
 
-      text = text.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+      // A closed block first, then a dangling one: if generation was cut off
+      // mid-thought there is no </think>, the non-greedy match fails, and the
+      // raw reasoning would otherwise be handed to the user as the answer.
+      text = stripThinking(text);
       _failures = 0;
       _backendFault = null;
       if (withUsage) {
@@ -591,6 +635,8 @@ function status() {
 
 module.exports = {
   chat,
+  supportsNoThink,
+  stripThinking,
   complete,
   backendFault,
   listModels,
