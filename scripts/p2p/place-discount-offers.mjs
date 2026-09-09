@@ -28,6 +28,14 @@
 import { ASSETS, STABLE_TICKERS } from '../../src/assets.js';
 import { identityFromWallet, registerKey } from '../pair-signer.js';
 import crypto from 'node:crypto';
+import { createRequire } from 'node:module';
+
+// pair-signer exposes the identity's secretKey but keeps its signer private, so
+// sign here with the same vendored nacl it uses — one implementation of the
+// signature, not two.
+const nacl = createRequire(import.meta.url)('../vendor/nacl-fast.cjs');
+const signString = (str, secretKey) =>
+  Buffer.from(nacl.sign.detached(new TextEncoder().encode(str), secretKey)).toString('base64');
 
 const arg = (k, d) => {
   const i = process.argv.indexOf(k);
@@ -147,7 +155,7 @@ for (const o of plan) {
     side: 'sell', baseAsset: o.ticker, quoteCurrency: o.quote,
     daiAmount: o.amount, pricePerDAI: o.price, paymentMethods: o.paymentMethods,
   };
-  const signature = id.sign(JSON.stringify(payload));
+  const signature = signString(JSON.stringify(payload), id.secretKey);
   const res = await j(`${NODE}/api/p2p/orders`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
