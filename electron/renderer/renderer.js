@@ -2401,6 +2401,7 @@ async function loadAssetRegistry() {
     }
     sel.value = window._feeCurrency;
   }
+  _attachCurrencyPicker('chat-fee-currency');
   return window._assetRegistry;
 }
 
@@ -5518,6 +5519,51 @@ function _p2pSyncPaymentMethod() {
   }
 }
 
+/**
+ * Replace a currency <select> with a searchable trigger.
+ *
+ * The <select> stays in the DOM as the value holder -- hidden, still carrying
+ * options and still the thing code reads .value from -- so this is additive and
+ * no caller changes. A native select does work at 156 options, but its
+ * type-ahead only matches the display ticker, so "Bhutan" finds nothing.
+ */
+function _attachCurrencyPicker(selectId) {
+  const sel = document.getElementById(selectId);
+  if (!sel || sel.dataset.pickerAttached) return;
+  sel.dataset.pickerAttached = '1';
+  sel.style.display = 'none';
+
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.style.cssText = 'font-size:11px;padding:4px 9px;border-radius:6px;border:1px solid #2a2a2a;background:#0a0a0a;color:#ddd;cursor:pointer;font-family:monospace;min-width:120px;text-align:left;';
+  const label = () => {
+    const opt = sel.options[sel.selectedIndex];
+    btn.textContent = `${opt ? opt.textContent : (sel.value || 'Select')} ▾`;
+  };
+  btn.onclick = () => _openCurrencyModal({
+    rows: [...sel.options].map(o => {
+      const a = (window._assetRegistry || {})[o.value] || {};
+      const subtitle = [a.name, a.country].filter(Boolean).join(' · ') || 'Payment method';
+      return {
+        code: o.value,
+        title: o.textContent,
+        subtitle,
+        haystack: [o.value, o.textContent, a.iso, a.name, a.country].filter(Boolean).join(' ').toLowerCase(),
+      };
+    }),
+    current: sel.value,
+    onPick: code => {
+      sel.value = code;
+      label();
+      // Existing handlers listen on the select, not the button.
+      sel.dispatchEvent(new Event('change', { bubbles: true }));
+    },
+  });
+  sel.insertAdjacentElement('afterend', btn);
+  sel._syncPickerLabel = label;
+  label();
+}
+
 function _p2pPopulateQuoteSelect(base) {
   const currSel = document.getElementById('p2p-form-currency');
   if (!currSel) return;
@@ -5531,6 +5577,8 @@ function _p2pPopulateQuoteSelect(base) {
     currSel.appendChild(o);
   }
   if ([...currSel.options].some(op => op.value === prev)) currSel.value = prev;
+  _attachCurrencyPicker('p2p-form-currency');
+  currSel._syncPickerLabel?.();
 }
 
 function p2pShowCreateOrder() {
@@ -5541,6 +5589,7 @@ function p2pShowCreateOrder() {
         const o = document.createElement('option'); o.value = c; o.textContent = _p2pAssetMeta(c).display; baseSel.appendChild(o);
       }
     }
+    _attachCurrencyPicker('p2p-form-base');
     _p2pPopulateQuoteSelect(baseSel?.value || 'DAI');
     _p2pSyncPaymentMethod();
   }).catch(() => {});
@@ -5595,12 +5644,22 @@ function p2pBuildCurrencyPicker() {
   const btn = document.createElement('button');
   btn.textContent = `${_p2pCurrencyLabel()} ▾`;
   btn.style.cssText = 'font-size:10px;padding:3px 9px;border-radius:10px;border:1px solid #2a2a2a;background:#0a0a0a;color:#22c55e;cursor:pointer;font-family:monospace;';
-  btn.onclick = p2pOpenCurrencyModal;
+  btn.onclick = () => _openCurrencyModal({
+    rows: _p2pCurrencyRows(),
+    current: _p2pCurrency,
+    includeAll: true,
+    onPick: code => { _p2pCurrency = code; p2pBuildCurrencyPicker(); p2pRenderOrders(); },
+  });
   container.appendChild(btn);
 }
 
-function p2pOpenCurrencyModal() {
-  const rows = _p2pCurrencyRows();
+/**
+ * Shared searchable currency modal.
+ * `rows` are {code,title,subtitle,haystack}; `onPick` receives the chosen code.
+ * Used by the P2P filter and by every currency <select> in the app, so all of
+ * them search on name and country rather than only ticker type-ahead.
+ */
+function _openCurrencyModal({ rows, current = '', includeAll = false, allLabel = 'All currencies', onPick }) {
   const overlay = document.createElement('div');
   overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.82);z-index:9999;display:flex;align-items:flex-start;justify-content:center;padding-top:8vh;';
 
@@ -5623,12 +5682,12 @@ function p2pOpenCurrencyModal() {
   let shown = 0, filtered = rows;
   const rowEl = (code, title, subtitle) => {
     const d = document.createElement('div');
-    const active = _p2pCurrency === code;
+    const active = current === code;
     d.style.cssText = `padding:8px 13px;cursor:pointer;border-bottom:1px solid #141414;background:${active ? '#052e16' : 'transparent'};`;
     // RTL signs would otherwise reorder the rest of the line.
     d.innerHTML = `<div style="font-family:monospace;font-size:12px;color:${active ? '#22c55e' : '#ddd'};direction:ltr;">${title}</div>` +
                   `<div style="font-family:monospace;font-size:10px;color:#666;direction:ltr;">${subtitle}</div>`;
-    d.onclick = () => { _p2pCurrency = code; close(); p2pBuildCurrencyPicker(); p2pRenderOrders(); };
+    d.onclick = () => { close(); onPick(code); };
     return d;
   };
 
@@ -5644,7 +5703,7 @@ function p2pOpenCurrencyModal() {
     filtered = q ? rows.filter(r => r.haystack.includes(q)) : rows;
     list.innerHTML = '';
     shown = 0;
-    if (!q) list.appendChild(rowEl('', 'All currencies', 'No filter'));
+    if (!q && includeAll) list.appendChild(rowEl('', allLabel, 'No filter'));
     renderMore();
     list.scrollTop = 0;   // a stale offset on a shorter list shows blank
     if (!filtered.length) {
