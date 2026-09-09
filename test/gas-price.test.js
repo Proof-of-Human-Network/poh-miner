@@ -4,7 +4,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import { feeForLive, daiPriceIn, TOKENS_PER_DAI, MAJORS } from '../src/jobs/gas-price.js';
-import { ASSETS } from '../src/assets.js';
+import { ASSETS, FX_NO_MARKET } from '../src/assets.js';
 
 /** Minimal order-store stand-in: a map of "base|quote" -> price. */
 const book = pairs => ({
@@ -81,5 +81,27 @@ describe('daiPriceIn', () => {
     // multiply a BTC rate by fxPerUSD.
     expect(daiPriceIn('aiETB', { orderStore: book({ 'DAI|BTC': 0.00001 }) })).toBeNull();
     expect(MAJORS).toContain('BTC');
+  });
+});
+
+describe('currencies shipped without a rate', () => {
+  it('refuses to quote a fee, even when the forex bridge is available', () => {
+    // A USD price for DAI exists, so the forex path is reachable — but these
+    // currencies have no fxPerUSD to convert with, and inventing one is the
+    // whole thing we are avoiding.
+    const usdBook = book({ 'DAI|USDT-ERC20': 0.5 });
+    for (const iso of FX_NO_MARKET) {
+      const ticker = iso === 'KGS' ? 'KGST' : `ai${iso}`;
+      if (!ASSETS[ticker]) continue;
+      expect(ASSETS[ticker].fxPerUSD, `${ticker} must ship no rate`).toBeNull();
+      const q = feeForLive(1e9, ticker, { orderStore: usdBook });
+      expect(q.unavailable, `${ticker} must not be priced`).toBe(true);
+      expect(q.message).toMatch(/first to place an order/i);
+    }
+  });
+
+  it('prices normally as soon as the first order exists', () => {
+    const q = feeForLive(1e9, 'aiCUC', { orderStore: book({ 'DAI|aiCUC': 7 }) });
+    expect(q).toMatchObject({ source: 'p2p-direct', display: 7, raw: 700 });
   });
 });

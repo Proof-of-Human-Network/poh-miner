@@ -43,15 +43,38 @@ const LAUNCHED = {
 };
 
 /**
- * Rates no public feed carries, sourced by hand. Both are required on-chain, so
- * omitting them is not an option; each records what the number actually is.
- *   CUC — pegged 1:1 to USD by Cuba's central bank. Withdrawn from circulation
- *         on 2021-01-01, so the peg is the only rate that exists.
- *   KPW — state-fixed at 900/USD. The parallel market runs near 8,000+, and the
- *         official rate bears no relation to it, so KPW is flagged for review.
- * Sourced 2026-09-08.
+ * Currencies we deliberately ship with NO rate.
+ *
+ * Every number here would be a claim about a price, and for these there is no
+ * traded price to claim. CUC was abolished in 2021 and has only its old peg;
+ * KPW's official 900/USD is roughly 9x from the street. The unrecognised
+ * currencies below are not quoted by any feed at all.
+ *
+ * fxPerUSD is null for these, which means the forex fallback in
+ * jobs/gas-price.js never fires and a fee quote returns "no market -- be the
+ * first to place an order". The rate arrives when someone opens the book.
  */
-const MANUAL_RATES = { CUC: 1, KPW: 900 };
+const NO_MARKET_RATE = new Set(['CUC', 'KPW', 'PRB', 'SLS', 'APS', 'KID', 'TVD', 'FOK']);
+
+/**
+ * Currencies with no ISO 4217 code, so absent from the CLDR tender table.
+ *
+ * The first three are issued by unrecognised states and genuinely circulate at
+ * their own rate. The last three are 1:1 local issues of a currency already in
+ * the set (AUD, AUD, DKK) -- included because they are asked for by name, but
+ * they are the same money under a local design, not a separate float.
+ *
+ * Codes are the widely-used unofficial ones; none of them can collide with ISO
+ * 4217, which never assigns these.
+ */
+const EXTRA_CURRENCIES = [
+  { iso: 'PRB', sign: 'р.',  name: 'Transnistrian Ruble',  countries: 'Transnistria' },
+  { iso: 'SLS', sign: 'Sl',  name: 'Somaliland Shilling',  countries: 'Somaliland' },
+  { iso: 'APS', sign: 'ა',   name: 'Abkhazian Apsar',      countries: 'Abkhazia' },
+  { iso: 'KID', sign: '$',   name: 'Kiribati Dollar',      countries: 'Kiribati' },
+  { iso: 'TVD', sign: '$',   name: 'Tuvaluan Dollar',      countries: 'Tuvalu' },
+  { iso: 'FOK', sign: 'kr',  name: 'Faroese Króna',        countries: 'Faroe Islands' },
+];
 
 // Managed / multiple-rate / active parallel market. Official feed rate is not
 // what people transact at, so these need a human before launch.
@@ -79,32 +102,36 @@ const rates = await (await fetch('https://open.er-api.com/v6/latest/USD', { sign
 if (rates.result !== 'success') throw new Error('FX feed failed');
 const asOf = rates.time_last_update_utc;
 
-const rows = readTable();
-if (rows.length !== 155) console.warn(`[assets] expected 155 rows, table has ${rows.length}`);
+const rows = [...readTable(), ...EXTRA_CURRENCIES];
+const EXPECTED = 155 + EXTRA_CURRENCIES.length;
+if (rows.length !== EXPECTED) console.warn(`[assets] expected ${EXPECTED} rows, table has ${rows.length}`);
 
-const missing = [], review = [], drift = [], manual = [];
+const missing = [], review = [], drift = [], noRate = [];
 const out = [];
 for (const r of rows) {
   const launched = LAUNCHED[r.iso];
-  const official = rates.rates[r.iso] ?? MANUAL_RATES[r.iso];
+  const official = NO_MARKET_RATE.has(r.iso) ? null : rates.rates[r.iso];
   let fx = launched ?? official;
-  if (fx == null) { missing.push(r.iso); continue; }
+  // No rate is a deliberate state, not a failure: the currency still ships and
+  // its price comes from the first orders on its book.
+  if (fx == null && !NO_MARKET_RATE.has(r.iso)) { missing.push(r.iso); continue; }
+  if (fx == null) noRate.push(r.iso);
   // Keep launched precision; round feed rates so the file stays readable.
-  if (launched == null) fx = fx >= 1000 ? Math.round(fx) : Number(fx.toPrecision(6));
+  if (launched == null && fx != null) fx = fx >= 1000 ? Math.round(fx) : Number(fx.toPrecision(6));
   if (launched != null && official != null) {
     const ratio = official / launched;
     if (ratio > 1.15 || ratio < 0.87) drift.push(`${r.iso}: on-chain ${launched} vs official ${official.toFixed(2)}`);
   }
-  if (launched == null && MANAGED.has(r.iso)) review.push(r.iso);
-  if (MANUAL_RATES[r.iso] != null && rates.rates[r.iso] == null) manual.push(r.iso);
+  if (launched == null && fx != null && MANAGED.has(r.iso)) review.push(r.iso);
   out.push({ ...r, ticker: tickerFor(r.iso), display: displayFor(r.iso), fx, launched: launched != null });
 }
 
 const esc = s => String(s).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
 const pad = (s, n) => String(s).padEnd(n);
 const lines = out.map(a => {
-  const note = a.launched ? '' : (MANAGED.has(a.iso) ? '  // official rate — NEEDS REVIEW' : '');
-  return `  ${pad(a.ticker + ':', 9)}{ ticker: '${a.ticker}', decimals: 2, display: '${a.display}', sign: '${esc(a.sign)}', iso: '${a.iso}', name: '${esc(a.name)}', country: '${esc(a.countries)}', fxPerUSD: ${a.fx} },${note}`;
+  const note = a.fx == null ? '  // no market yet — price comes from the first orders'
+             : (a.launched ? '' : (MANAGED.has(a.iso) ? '  // official rate — NEEDS REVIEW' : ''));
+  return `  ${pad(a.ticker + ':', 9)}{ ticker: '${a.ticker}', decimals: 2, display: '${a.display}', sign: '${esc(a.sign)}', iso: '${a.iso}', name: '${esc(a.name)}', country: '${esc(a.countries)}', fxPerUSD: ${a.fx == null ? 'null' : a.fx} },${note}`;
 });
 
 const file = `/**
@@ -141,6 +168,9 @@ const file = `/**
  *   • Rows marked NEEDS REVIEW are managed or run a parallel market, so the
  *     official rate is a placeholder. See FX_NEEDS_REVIEW — sign these off
  *     before the fork.
+ *   • fxPerUSD null means there is no traded price to ship. The forex fallback
+ *     never fires for these and a fee quote says so, inviting the first order.
+ *     See FX_NO_MARKET.
  *
  * These move. Re-check before launch and override per node with config.gasPrices.
  */
@@ -158,6 +188,13 @@ export const STABLE_TICKERS = Object.keys(ASSETS).filter(t => t !== 'DAI');
  * a human must confirm or replace each before the genesis snapshot is built.
  */
 export const FX_NEEDS_REVIEW = ${JSON.stringify(review)};
+
+/**
+ * Currencies shipped with no rate. Their price is discovered from the first
+ * P2P orders; until then a fee quote in one of these reports no market rather
+ * than converting through an invented number.
+ */
+export const FX_NO_MARKET = ${JSON.stringify(noRate)};
 `;
 
 const tail = fs.readFileSync(OUT, 'utf8');
@@ -167,6 +204,6 @@ fs.writeFileSync(OUT, file + '\n' + keep);
 
 console.log(`assets.js: ${out.length} stablecoins + DAI, rates as of ${asOf}`);
 if (missing.length) console.log(`  no rate (omitted): ${missing.join(', ')}`);
-if (manual.length) console.log(`  hand-sourced (no public feed): ${manual.join(', ')}`);
+if (noRate.length) console.log(`  no rate by design (${noRate.length}), price from first orders: ${noRate.join(', ')}`);
 console.log(`  NEEDS REVIEW (${review.length}): ${review.join(', ')}`);
 if (drift.length) { console.log('  on-chain rates that have drifted from official:'); drift.forEach(d => console.log(`    ${d}`)); }

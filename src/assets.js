@@ -5,7 +5,7 @@
  * wallet mirrors this file, and the drift between two hand-maintained copies is
  * exactly how ten currencies ended up formatted at the wrong decimals.
  *
- * DAI is the native asset (9 decimals, mined). The 155 regional stablecoins
+ * DAI is the native asset (9 decimals, mined). The 161 regional stablecoins
  * (2 decimals, fiat-style) are minted once at genesis to the treasury address;
  * future supply changes happen via coordinated network upgrades — there is NO
  * runtime mint transition.
@@ -28,10 +28,13 @@
  *     is far from what people transact at, and pricing gas off the peg would
  *     badly misprice compute.
  *   • Everything else is the official USD rate from open.er-api.com as of
- *     Tue, 08 Sep 2026 00:02:31 +0000.
+ *     Wed, 09 Sep 2026 00:02:31 +0000.
  *   • Rows marked NEEDS REVIEW are managed or run a parallel market, so the
  *     official rate is a placeholder. See FX_NEEDS_REVIEW — sign these off
  *     before the fork.
+ *   • fxPerUSD null means there is no traded price to ship. The forex fallback
+ *     never fires for these and a fee quote says so, inviting the first order.
+ *     See FX_NO_MARKET.
  *
  * These move. Re-check before launch and override per node with config.gasPrices.
  */
@@ -39,160 +42,166 @@
 export const ASSETS = {
   DAI:     { ticker: 'DAI',   decimals: 9, display: 'DAI',   sign: '',    native: true },
   aiAED:   { ticker: 'aiAED', decimals: 2, display: 'αιAED', sign: 'د.إ.‏', iso: 'AED', name: 'United Arab Emirates Dirham', country: 'United Arab Emirates', fxPerUSD: 3.6725 },
-  aiAFN:   { ticker: 'aiAFN', decimals: 2, display: 'αιAFN', sign: '؋', iso: 'AFN', name: 'Afghan Afghani', country: 'Afghanistan', fxPerUSD: 64.8122 },  // official rate — NEEDS REVIEW
-  aiALL:   { ticker: 'aiALL', decimals: 2, display: 'αιALL', sign: 'Lekë', iso: 'ALL', name: 'Albanian Lek', country: 'Albania', fxPerUSD: 79.3239 },
-  aiAMD:   { ticker: 'aiAMD', decimals: 2, display: 'αιAMD', sign: '֏', iso: 'AMD', name: 'Armenian Dram', country: 'Armenia', fxPerUSD: 363.786 },
+  aiAFN:   { ticker: 'aiAFN', decimals: 2, display: 'αιAFN', sign: '؋', iso: 'AFN', name: 'Afghan Afghani', country: 'Afghanistan', fxPerUSD: 64.779 },  // official rate — NEEDS REVIEW
+  aiALL:   { ticker: 'aiALL', decimals: 2, display: 'αιALL', sign: 'Lekë', iso: 'ALL', name: 'Albanian Lek', country: 'Albania', fxPerUSD: 79.3171 },
+  aiAMD:   { ticker: 'aiAMD', decimals: 2, display: 'αιAMD', sign: '֏', iso: 'AMD', name: 'Armenian Dram', country: 'Armenia', fxPerUSD: 363.667 },
   aiANG:   { ticker: 'aiANG', decimals: 2, display: 'αιANG', sign: 'NAf.', iso: 'ANG', name: 'Netherlands Antillean Guilder', country: 'Curaçao, Sint Maarten', fxPerUSD: 1.79 },
   aiAOA:   { ticker: 'aiAOA', decimals: 2, display: 'αιAOA', sign: 'Kz', iso: 'AOA', name: 'Angolan Kwanza', country: 'Angola', fxPerUSD: 915 },
-  aiARS:   { ticker: 'aiARS', decimals: 2, display: 'αιARS', sign: '$', iso: 'ARS', name: 'Argentine Peso', country: 'Argentina', fxPerUSD: 1511 },  // official rate — NEEDS REVIEW
-  aiAUD:   { ticker: 'aiAUD', decimals: 2, display: 'αιAUD', sign: 'A$', iso: 'AUD', name: 'Australian Dollar', country: 'Australia, Cocos (Keeling) Islands, Christmas Island, Heard & McDonald Islands, Kiribati, Norfolk Island, Nauru, Tuvalu', fxPerUSD: 1.38532 },
+  aiARS:   { ticker: 'aiARS', decimals: 2, display: 'αιARS', sign: '$', iso: 'ARS', name: 'Argentine Peso', country: 'Argentina', fxPerUSD: 1510 },  // official rate — NEEDS REVIEW
+  aiAUD:   { ticker: 'aiAUD', decimals: 2, display: 'αιAUD', sign: 'A$', iso: 'AUD', name: 'Australian Dollar', country: 'Australia, Cocos (Keeling) Islands, Christmas Island, Heard & McDonald Islands, Kiribati, Norfolk Island, Nauru, Tuvalu', fxPerUSD: 1.38542 },
   aiAWG:   { ticker: 'aiAWG', decimals: 2, display: 'αιAWG', sign: 'Afl.', iso: 'AWG', name: 'Aruban Florin', country: 'Aruba', fxPerUSD: 1.79 },
-  aiAZN:   { ticker: 'aiAZN', decimals: 2, display: 'αιAZN', sign: '₼', iso: 'AZN', name: 'Azerbaijani Manat', country: 'Azerbaijan', fxPerUSD: 1.70002 },
-  aiBAM:   { ticker: 'aiBAM', decimals: 2, display: 'αιBAM', sign: 'KM', iso: 'BAM', name: 'Bosnia-Herzegovina Convertible Mark', country: 'Bosnia & Herzegovina', fxPerUSD: 1.68261 },
+  aiAZN:   { ticker: 'aiAZN', decimals: 2, display: 'αιAZN', sign: '₼', iso: 'AZN', name: 'Azerbaijani Manat', country: 'Azerbaijan', fxPerUSD: 1.69964 },
+  aiBAM:   { ticker: 'aiBAM', decimals: 2, display: 'αιBAM', sign: 'KM', iso: 'BAM', name: 'Bosnia-Herzegovina Convertible Mark', country: 'Bosnia & Herzegovina', fxPerUSD: 1.68252 },
   aiBBD:   { ticker: 'aiBBD', decimals: 2, display: 'αιBBD', sign: '$', iso: 'BBD', name: 'Barbadian Dollar', country: 'Barbados', fxPerUSD: 2 },
   aiBDT:   { ticker: 'aiBDT', decimals: 2, display: 'αιBDT', sign: '৳', iso: 'BDT', name: 'Bangladeshi Taka', country: 'Bangladesh', fxPerUSD: 122 },
-  aiBGN:   { ticker: 'aiBGN', decimals: 2, display: 'αιBGN', sign: 'лв.', iso: 'BGN', name: 'Bulgarian Lev', country: 'Bulgaria', fxPerUSD: 1.68261 },
+  aiBGN:   { ticker: 'aiBGN', decimals: 2, display: 'αιBGN', sign: 'лв.', iso: 'BGN', name: 'Bulgarian Lev', country: 'Bulgaria', fxPerUSD: 1.68252 },
   aiBHD:   { ticker: 'aiBHD', decimals: 2, display: 'αιBHD', sign: 'د.ب.‏', iso: 'BHD', name: 'Bahraini Dinar', country: 'Bahrain', fxPerUSD: 0.376 },
-  aiBIF:   { ticker: 'aiBIF', decimals: 2, display: 'αιBIF', sign: 'FBu', iso: 'BIF', name: 'Burundian Franc', country: 'Burundi', fxPerUSD: 2992 },
+  aiBIF:   { ticker: 'aiBIF', decimals: 2, display: 'αιBIF', sign: 'FBu', iso: 'BIF', name: 'Burundian Franc', country: 'Burundi', fxPerUSD: 3006 },
   aiBMD:   { ticker: 'aiBMD', decimals: 2, display: 'αιBMD', sign: '$', iso: 'BMD', name: 'Bermudan Dollar', country: 'Bermuda', fxPerUSD: 1 },
-  aiBND:   { ticker: 'aiBND', decimals: 2, display: 'αιBND', sign: '$', iso: 'BND', name: 'Brunei Dollar', country: 'Brunei', fxPerUSD: 1.26582 },
-  aiBOB:   { ticker: 'aiBOB', decimals: 2, display: 'αιBOB', sign: 'Bs', iso: 'BOB', name: 'Bolivian Boliviano', country: 'Bolivia', fxPerUSD: 12.4061 },  // official rate — NEEDS REVIEW
-  aiBRL:   { ticker: 'aiBRL', decimals: 2, display: 'αιBRL', sign: 'R$', iso: 'BRL', name: 'Brazilian Real', country: 'Brazil', fxPerUSD: 5.12619 },
+  aiBND:   { ticker: 'aiBND', decimals: 2, display: 'αιBND', sign: '$', iso: 'BND', name: 'Brunei Dollar', country: 'Brunei', fxPerUSD: 1.26493 },
+  aiBOB:   { ticker: 'aiBOB', decimals: 2, display: 'αιBOB', sign: 'Bs', iso: 'BOB', name: 'Bolivian Boliviano', country: 'Bolivia', fxPerUSD: 12.4259 },  // official rate — NEEDS REVIEW
+  aiBRL:   { ticker: 'aiBRL', decimals: 2, display: 'αιBRL', sign: 'R$', iso: 'BRL', name: 'Brazilian Real', country: 'Brazil', fxPerUSD: 5.10208 },
   aiBSD:   { ticker: 'aiBSD', decimals: 2, display: 'αιBSD', sign: '$', iso: 'BSD', name: 'Bahamian Dollar', country: 'Bahamas', fxPerUSD: 1 },
   aiBTN:   { ticker: 'aiBTN', decimals: 2, display: 'αιBTN', sign: 'Nu.', iso: 'BTN', name: 'Bhutanese Ngultrum', country: 'Bhutan', fxPerUSD: 84 },
-  aiBWP:   { ticker: 'aiBWP', decimals: 2, display: 'αιBWP', sign: 'P', iso: 'BWP', name: 'Botswanan Pula', country: 'Botswana', fxPerUSD: 13.7702 },
-  aiBYN:   { ticker: 'aiBYN', decimals: 2, display: 'αιBYN', sign: 'Br', iso: 'BYN', name: 'Belarusian Ruble', country: 'Belarus', fxPerUSD: 3.07763 },
+  aiBWP:   { ticker: 'aiBWP', decimals: 2, display: 'αιBWP', sign: 'P', iso: 'BWP', name: 'Botswanan Pula', country: 'Botswana', fxPerUSD: 13.7836 },
+  aiBYN:   { ticker: 'aiBYN', decimals: 2, display: 'αιBYN', sign: 'Br', iso: 'BYN', name: 'Belarusian Ruble', country: 'Belarus', fxPerUSD: 3.08436 },
   aiBZD:   { ticker: 'aiBZD', decimals: 2, display: 'αιBZD', sign: '$', iso: 'BZD', name: 'Belize Dollar', country: 'Belize', fxPerUSD: 2 },
-  aiCAD:   { ticker: 'aiCAD', decimals: 2, display: 'αιCAD', sign: 'CA$', iso: 'CAD', name: 'Canadian Dollar', country: 'Canada', fxPerUSD: 1.38116 },
-  aiCDF:   { ticker: 'aiCDF', decimals: 2, display: 'αιCDF', sign: 'FC', iso: 'CDF', name: 'Congolese Franc', country: 'Congo - Kinshasa', fxPerUSD: 2297 },  // official rate — NEEDS REVIEW
-  aiCHF:   { ticker: 'aiCHF', decimals: 2, display: 'αιCHF', sign: '', iso: 'CHF', name: 'Swiss Franc', country: 'Switzerland, Liechtenstein', fxPerUSD: 0.809244 },
-  aiCLP:   { ticker: 'aiCLP', decimals: 2, display: 'αιCLP', sign: '$', iso: 'CLP', name: 'Chilean Peso', country: 'Chile', fxPerUSD: 933.491 },
-  aiCNY:   { ticker: 'aiCNY', decimals: 2, display: 'αιCNY', sign: 'CN¥', iso: 'CNY', name: 'Chinese Yuan', country: 'China', fxPerUSD: 6.72843 },
-  aiCOP:   { ticker: 'aiCOP', decimals: 2, display: 'αιCOP', sign: '$', iso: 'COP', name: 'Colombian Peso', country: 'Colombia', fxPerUSD: 3132 },
-  aiCRC:   { ticker: 'aiCRC', decimals: 2, display: 'αιCRC', sign: '₡', iso: 'CRC', name: 'Costa Rican Colón', country: 'Costa Rica', fxPerUSD: 453.79 },
-  aiCUC:   { ticker: 'aiCUC', decimals: 2, display: 'αιCUC', sign: '', iso: 'CUC', name: 'Cuban Convertible Peso', country: 'Cuba', fxPerUSD: 1 },
+  aiCAD:   { ticker: 'aiCAD', decimals: 2, display: 'αιCAD', sign: 'CA$', iso: 'CAD', name: 'Canadian Dollar', country: 'Canada', fxPerUSD: 1.37847 },
+  aiCDF:   { ticker: 'aiCDF', decimals: 2, display: 'αιCDF', sign: 'FC', iso: 'CDF', name: 'Congolese Franc', country: 'Congo - Kinshasa', fxPerUSD: 2302 },  // official rate — NEEDS REVIEW
+  aiCHF:   { ticker: 'aiCHF', decimals: 2, display: 'αιCHF', sign: '', iso: 'CHF', name: 'Swiss Franc', country: 'Switzerland, Liechtenstein', fxPerUSD: 0.80961 },
+  aiCLP:   { ticker: 'aiCLP', decimals: 2, display: 'αιCLP', sign: '$', iso: 'CLP', name: 'Chilean Peso', country: 'Chile', fxPerUSD: 934.212 },
+  aiCNY:   { ticker: 'aiCNY', decimals: 2, display: 'αιCNY', sign: 'CN¥', iso: 'CNY', name: 'Chinese Yuan', country: 'China', fxPerUSD: 6.72825 },
+  aiCOP:   { ticker: 'aiCOP', decimals: 2, display: 'αιCOP', sign: '$', iso: 'COP', name: 'Colombian Peso', country: 'Colombia', fxPerUSD: 3127 },
+  aiCRC:   { ticker: 'aiCRC', decimals: 2, display: 'αιCRC', sign: '₡', iso: 'CRC', name: 'Costa Rican Colón', country: 'Costa Rica', fxPerUSD: 453.555 },
+  aiCUC:   { ticker: 'aiCUC', decimals: 2, display: 'αιCUC', sign: '', iso: 'CUC', name: 'Cuban Convertible Peso', country: 'Cuba', fxPerUSD: null },  // no market yet — price comes from the first orders
   aiCUP:   { ticker: 'aiCUP', decimals: 2, display: 'αιCUP', sign: '$', iso: 'CUP', name: 'Cuban Peso', country: 'Cuba', fxPerUSD: 400 },
-  aiCVE:   { ticker: 'aiCVE', decimals: 2, display: 'αιCVE', sign: '​', iso: 'CVE', name: 'Cape Verdean Escudo', country: 'Cape Verde', fxPerUSD: 94.8616 },
-  aiCZK:   { ticker: 'aiCZK', decimals: 2, display: 'αιCZK', sign: 'Kč', iso: 'CZK', name: 'Czech Koruna', country: 'Czechia', fxPerUSD: 20.8137 },
+  aiCVE:   { ticker: 'aiCVE', decimals: 2, display: 'αιCVE', sign: '​', iso: 'CVE', name: 'Cape Verdean Escudo', country: 'Cape Verde', fxPerUSD: 94.8562 },
+  aiCZK:   { ticker: 'aiCZK', decimals: 2, display: 'αιCZK', sign: 'Kč', iso: 'CZK', name: 'Czech Koruna', country: 'Czechia', fxPerUSD: 20.8173 },
   aiDJF:   { ticker: 'aiDJF', decimals: 2, display: 'αιDJF', sign: 'Fdj', iso: 'DJF', name: 'Djiboutian Franc', country: 'Djibouti', fxPerUSD: 177.721 },
-  aiDKK:   { ticker: 'aiDKK', decimals: 2, display: 'αιDKK', sign: 'kr.', iso: 'DKK', name: 'Danish Krone', country: 'Denmark, Faroe Islands, Greenland', fxPerUSD: 6.43128 },
-  aiDOP:   { ticker: 'aiDOP', decimals: 2, display: 'αιDOP', sign: 'RD$', iso: 'DOP', name: 'Dominican Peso', country: 'Dominican Republic', fxPerUSD: 59.1933 },
-  aiDZD:   { ticker: 'aiDZD', decimals: 2, display: 'αιDZD', sign: 'DA', iso: 'DZD', name: 'Algerian Dinar', country: 'Algeria', fxPerUSD: 133.246 },
+  aiDKK:   { ticker: 'aiDKK', decimals: 2, display: 'αιDKK', sign: 'kr.', iso: 'DKK', name: 'Danish Krone', country: 'Denmark, Faroe Islands, Greenland', fxPerUSD: 6.43479 },
+  aiDOP:   { ticker: 'aiDOP', decimals: 2, display: 'αιDOP', sign: 'RD$', iso: 'DOP', name: 'Dominican Peso', country: 'Dominican Republic', fxPerUSD: 59.1749 },
+  aiDZD:   { ticker: 'aiDZD', decimals: 2, display: 'αιDZD', sign: 'DA', iso: 'DZD', name: 'Algerian Dinar', country: 'Algeria', fxPerUSD: 133.145 },
   aiEGP:   { ticker: 'aiEGP', decimals: 2, display: 'αιEGP', sign: 'ج.م.‏', iso: 'EGP', name: 'Egyptian Pound', country: 'Egypt', fxPerUSD: 48 },
   aiERN:   { ticker: 'aiERN', decimals: 2, display: 'αιERN', sign: 'Nfk', iso: 'ERN', name: 'Eritrean Nakfa', country: 'Eritrea', fxPerUSD: 15 },
   aiETB:   { ticker: 'aiETB', decimals: 2, display: 'αιETB', sign: 'Br', iso: 'ETB', name: 'Ethiopian Birr', country: 'Ethiopia', fxPerUSD: 128 },
-  aiEUR:   { ticker: 'aiEUR', decimals: 2, display: 'αιEUR', sign: '€', iso: 'EUR', name: 'Euro', country: 'Andorra, Austria, Åland Islands, Belgium, St. Barthélemy, Cyprus, Germany, Ceuta & Melilla, Estonia, Spain, European Union, Finland, France, French Guiana, Guadeloupe, Greece, Canary Islands, Ireland, Italy, Lithuania, Luxembourg, Latvia, Monaco, Montenegro, St. Martin, Martinique, Malta, Netherlands, St. Pierre & Miquelon, Portugal, Réunion, Slovenia, Slovakia, San Marino, French Southern Territories, Vatican City, Kosovo, Mayotte', fxPerUSD: 0.860364 },
-  aiFJD:   { ticker: 'aiFJD', decimals: 2, display: 'αιFJD', sign: '$', iso: 'FJD', name: 'Fijian Dollar', country: 'Fiji', fxPerUSD: 2.21781 },
-  aiFKP:   { ticker: 'aiFKP', decimals: 2, display: 'αιFKP', sign: '£', iso: 'FKP', name: 'Falkland Islands Pound', country: 'Falkland Islands', fxPerUSD: 0.7386 },
-  aiGBP:   { ticker: 'aiGBP', decimals: 2, display: 'αιGBP', sign: '£', iso: 'GBP', name: 'British Pound', country: 'United Kingdom, Guernsey, South Georgia & South Sandwich Islands, Isle of Man, Jersey, Tristan da Cunha', fxPerUSD: 0.738631 },
-  aiGEL:   { ticker: 'aiGEL', decimals: 2, display: 'αιGEL', sign: '₾', iso: 'GEL', name: 'Georgian Lari', country: 'Georgia', fxPerUSD: 2.61111 },
-  aiGHS:   { ticker: 'aiGHS', decimals: 2, display: 'αιGHS', sign: 'GH₵', iso: 'GHS', name: 'Ghanaian Cedi', country: 'Ghana', fxPerUSD: 11.405 },
-  aiGIP:   { ticker: 'aiGIP', decimals: 2, display: 'αιGIP', sign: '£', iso: 'GIP', name: 'Gibraltar Pound', country: 'Gibraltar', fxPerUSD: 0.7386 },
-  aiGMD:   { ticker: 'aiGMD', decimals: 2, display: 'αιGMD', sign: 'D', iso: 'GMD', name: 'Gambian Dalasi', country: 'Gambia', fxPerUSD: 74.6595 },
-  aiGNF:   { ticker: 'aiGNF', decimals: 2, display: 'αιGNF', sign: 'FG', iso: 'GNF', name: 'Guinean Franc', country: 'Guinea', fxPerUSD: 8785 },
-  aiGTQ:   { ticker: 'aiGTQ', decimals: 2, display: 'αιGTQ', sign: 'Q', iso: 'GTQ', name: 'Guatemalan Quetzal', country: 'Guatemala', fxPerUSD: 7.63368 },
-  aiGYD:   { ticker: 'aiGYD', decimals: 2, display: 'αιGYD', sign: '$', iso: 'GYD', name: 'Guyanaese Dollar', country: 'Guyana', fxPerUSD: 209.171 },
-  aiHKD:   { ticker: 'aiHKD', decimals: 2, display: 'αιHKD', sign: 'HK$', iso: 'HKD', name: 'Hong Kong Dollar', country: 'Hong Kong SAR China', fxPerUSD: 7.84027 },
-  aiHNL:   { ticker: 'aiHNL', decimals: 2, display: 'αιHNL', sign: 'L', iso: 'HNL', name: 'Honduran Lempira', country: 'Honduras', fxPerUSD: 26.8353 },
-  aiHRK:   { ticker: 'aiHRK', decimals: 2, display: 'αιHRK', sign: 'kn', iso: 'HRK', name: 'Croatian Kuna', country: 'Croatia', fxPerUSD: 6.48198 },
-  aiHTG:   { ticker: 'aiHTG', decimals: 2, display: 'αιHTG', sign: 'G', iso: 'HTG', name: 'Haitian Gourde', country: 'Haiti', fxPerUSD: 130.79 },  // official rate — NEEDS REVIEW
-  aiHUF:   { ticker: 'aiHUF', decimals: 2, display: 'αιHUF', sign: 'Ft', iso: 'HUF', name: 'Hungarian Forint', country: 'Hungary', fxPerUSD: 312.33 },
-  aiIDR:   { ticker: 'aiIDR', decimals: 2, display: 'αιIDR', sign: 'Rp', iso: 'IDR', name: 'Indonesian Rupiah', country: 'Indonesia', fxPerUSD: 17654 },
-  aiILS:   { ticker: 'aiILS', decimals: 2, display: 'αιILS', sign: '₪', iso: 'ILS', name: 'Israeli New Shekel', country: 'Israel, Palestinian Territories', fxPerUSD: 3.01382 },
-  aiINR:   { ticker: 'aiINR', decimals: 2, display: 'αιINR', sign: '₹', iso: 'INR', name: 'Indian Rupee', country: 'Bhutan, India', fxPerUSD: 94.5441 },
+  aiEUR:   { ticker: 'aiEUR', decimals: 2, display: 'αιEUR', sign: '€', iso: 'EUR', name: 'Euro', country: 'Andorra, Austria, Åland Islands, Belgium, St. Barthélemy, Cyprus, Germany, Ceuta & Melilla, Estonia, Spain, European Union, Finland, France, French Guiana, Guadeloupe, Greece, Canary Islands, Ireland, Italy, Lithuania, Luxembourg, Latvia, Monaco, Montenegro, St. Martin, Martinique, Malta, Netherlands, St. Pierre & Miquelon, Portugal, Réunion, Slovenia, Slovakia, San Marino, French Southern Territories, Vatican City, Kosovo, Mayotte', fxPerUSD: 0.860279 },
+  aiFJD:   { ticker: 'aiFJD', decimals: 2, display: 'αιFJD', sign: '$', iso: 'FJD', name: 'Fijian Dollar', country: 'Fiji', fxPerUSD: 2.19631 },
+  aiFKP:   { ticker: 'aiFKP', decimals: 2, display: 'αιFKP', sign: '£', iso: 'FKP', name: 'Falkland Islands Pound', country: 'Falkland Islands', fxPerUSD: 0.738491 },
+  aiGBP:   { ticker: 'aiGBP', decimals: 2, display: 'αιGBP', sign: '£', iso: 'GBP', name: 'British Pound', country: 'United Kingdom, Guernsey, South Georgia & South Sandwich Islands, Isle of Man, Jersey, Tristan da Cunha', fxPerUSD: 0.738452 },
+  aiGEL:   { ticker: 'aiGEL', decimals: 2, display: 'αιGEL', sign: '₾', iso: 'GEL', name: 'Georgian Lari', country: 'Georgia', fxPerUSD: 2.60925 },
+  aiGHS:   { ticker: 'aiGHS', decimals: 2, display: 'αιGHS', sign: 'GH₵', iso: 'GHS', name: 'Ghanaian Cedi', country: 'Ghana', fxPerUSD: 11.4074 },
+  aiGIP:   { ticker: 'aiGIP', decimals: 2, display: 'αιGIP', sign: '£', iso: 'GIP', name: 'Gibraltar Pound', country: 'Gibraltar', fxPerUSD: 0.738491 },
+  aiGMD:   { ticker: 'aiGMD', decimals: 2, display: 'αιGMD', sign: 'D', iso: 'GMD', name: 'Gambian Dalasi', country: 'Gambia', fxPerUSD: 74.5477 },
+  aiGNF:   { ticker: 'aiGNF', decimals: 2, display: 'αιGNF', sign: 'FG', iso: 'GNF', name: 'Guinean Franc', country: 'Guinea', fxPerUSD: 8784 },
+  aiGTQ:   { ticker: 'aiGTQ', decimals: 2, display: 'αιGTQ', sign: 'Q', iso: 'GTQ', name: 'Guatemalan Quetzal', country: 'Guatemala', fxPerUSD: 7.63744 },
+  aiGYD:   { ticker: 'aiGYD', decimals: 2, display: 'αιGYD', sign: '$', iso: 'GYD', name: 'Guyanaese Dollar', country: 'Guyana', fxPerUSD: 209.175 },
+  aiHKD:   { ticker: 'aiHKD', decimals: 2, display: 'αιHKD', sign: 'HK$', iso: 'HKD', name: 'Hong Kong Dollar', country: 'Hong Kong SAR China', fxPerUSD: 7.84129 },
+  aiHNL:   { ticker: 'aiHNL', decimals: 2, display: 'αιHNL', sign: 'L', iso: 'HNL', name: 'Honduran Lempira', country: 'Honduras', fxPerUSD: 26.8274 },
+  aiHRK:   { ticker: 'aiHRK', decimals: 2, display: 'αιHRK', sign: 'kn', iso: 'HRK', name: 'Croatian Kuna', country: 'Croatia', fxPerUSD: 6.48161 },
+  aiHTG:   { ticker: 'aiHTG', decimals: 2, display: 'αιHTG', sign: 'G', iso: 'HTG', name: 'Haitian Gourde', country: 'Haiti', fxPerUSD: 130.695 },  // official rate — NEEDS REVIEW
+  aiHUF:   { ticker: 'aiHUF', decimals: 2, display: 'αιHUF', sign: 'Ft', iso: 'HUF', name: 'Hungarian Forint', country: 'Hungary', fxPerUSD: 312.77 },
+  aiIDR:   { ticker: 'aiIDR', decimals: 2, display: 'αιIDR', sign: 'Rp', iso: 'IDR', name: 'Indonesian Rupiah', country: 'Indonesia', fxPerUSD: 17629 },
+  aiILS:   { ticker: 'aiILS', decimals: 2, display: 'αιILS', sign: '₪', iso: 'ILS', name: 'Israeli New Shekel', country: 'Israel, Palestinian Territories', fxPerUSD: 3.01823 },
+  aiINR:   { ticker: 'aiINR', decimals: 2, display: 'αιINR', sign: '₹', iso: 'INR', name: 'Indian Rupee', country: 'Bhutan, India', fxPerUSD: 94.8432 },
   aiIQD:   { ticker: 'aiIQD', decimals: 2, display: 'αιIQD', sign: 'د.ع.‏', iso: 'IQD', name: 'Iraqi Dinar', country: 'Iraq', fxPerUSD: 1310 },
   aiIRR:   { ticker: 'aiIRR', decimals: 2, display: 'αιIRR', sign: 'ریال', iso: 'IRR', name: 'Iranian Rial', country: 'Iran', fxPerUSD: 1000000 },
-  aiISK:   { ticker: 'aiISK', decimals: 2, display: 'αιISK', sign: '', iso: 'ISK', name: 'Icelandic Króna', country: 'Iceland', fxPerUSD: 121.152 },
-  aiJMD:   { ticker: 'aiJMD', decimals: 2, display: 'αιJMD', sign: '$', iso: 'JMD', name: 'Jamaican Dollar', country: 'Jamaica', fxPerUSD: 158.309 },
+  aiISK:   { ticker: 'aiISK', decimals: 2, display: 'αιISK', sign: '', iso: 'ISK', name: 'Icelandic Króna', country: 'Iceland', fxPerUSD: 120.818 },
+  aiJMD:   { ticker: 'aiJMD', decimals: 2, display: 'αιJMD', sign: '$', iso: 'JMD', name: 'Jamaican Dollar', country: 'Jamaica', fxPerUSD: 158.339 },
   aiJOD:   { ticker: 'aiJOD', decimals: 2, display: 'αιJOD', sign: 'د.أ.‏', iso: 'JOD', name: 'Jordanian Dinar', country: 'Jordan, Palestinian Territories', fxPerUSD: 0.709 },
-  aiJPY:   { ticker: 'aiJPY', decimals: 2, display: 'αιJPY', sign: '¥', iso: 'JPY', name: 'Japanese Yen', country: 'Japan', fxPerUSD: 154.415 },
-  aiKES:   { ticker: 'aiKES', decimals: 2, display: 'αιKES', sign: 'Ksh', iso: 'KES', name: 'Kenyan Shilling', country: 'Kenya', fxPerUSD: 129.447 },
+  aiJPY:   { ticker: 'aiJPY', decimals: 2, display: 'αιJPY', sign: '¥', iso: 'JPY', name: 'Japanese Yen', country: 'Japan', fxPerUSD: 153.818 },
+  aiKES:   { ticker: 'aiKES', decimals: 2, display: 'αιKES', sign: 'Ksh', iso: 'KES', name: 'Kenyan Shilling', country: 'Kenya', fxPerUSD: 129.437 },
   KGST:    { ticker: 'KGST', decimals: 2, display: 'KGST', sign: 'сом', iso: 'KGS', name: 'Kyrgystani Som', country: 'Kyrgyzstan', fxPerUSD: 87 },
-  aiKHR:   { ticker: 'aiKHR', decimals: 2, display: 'αιKHR', sign: '៛', iso: 'KHR', name: 'Cambodian Riel', country: 'Cambodia', fxPerUSD: 4038 },
-  aiKMF:   { ticker: 'aiKMF', decimals: 2, display: 'αιKMF', sign: 'CF', iso: 'KMF', name: 'Comorian Franc', country: 'Comoros', fxPerUSD: 423.243 },
-  aiKPW:   { ticker: 'aiKPW', decimals: 2, display: 'αιKPW', sign: '', iso: 'KPW', name: 'North Korean Won', country: 'North Korea', fxPerUSD: 900 },  // official rate — NEEDS REVIEW
-  aiKRW:   { ticker: 'aiKRW', decimals: 2, display: 'αιKRW', sign: '₩', iso: 'KRW', name: 'South Korean Won', country: 'South Korea', fxPerUSD: 1345 },
-  aiKWD:   { ticker: 'aiKWD', decimals: 2, display: 'αιKWD', sign: 'د.ك.‏', iso: 'KWD', name: 'Kuwaiti Dinar', country: 'Kuwait', fxPerUSD: 0.308639 },
+  aiKHR:   { ticker: 'aiKHR', decimals: 2, display: 'αιKHR', sign: '៛', iso: 'KHR', name: 'Cambodian Riel', country: 'Cambodia', fxPerUSD: 4035 },
+  aiKMF:   { ticker: 'aiKMF', decimals: 2, display: 'αιKMF', sign: 'CF', iso: 'KMF', name: 'Comorian Franc', country: 'Comoros', fxPerUSD: 423.219 },
+  aiKPW:   { ticker: 'aiKPW', decimals: 2, display: 'αιKPW', sign: '', iso: 'KPW', name: 'North Korean Won', country: 'North Korea', fxPerUSD: null },  // no market yet — price comes from the first orders
+  aiKRW:   { ticker: 'aiKRW', decimals: 2, display: 'αιKRW', sign: '₩', iso: 'KRW', name: 'South Korean Won', country: 'South Korea', fxPerUSD: 1341 },
+  aiKWD:   { ticker: 'aiKWD', decimals: 2, display: 'αιKWD', sign: 'د.ك.‏', iso: 'KWD', name: 'Kuwaiti Dinar', country: 'Kuwait', fxPerUSD: 0.308568 },
   aiKYD:   { ticker: 'aiKYD', decimals: 2, display: 'αιKYD', sign: '$', iso: 'KYD', name: 'Cayman Islands Dollar', country: 'Cayman Islands', fxPerUSD: 0.833333 },
-  aiKZT:   { ticker: 'aiKZT', decimals: 2, display: 'αιKZT', sign: '₸', iso: 'KZT', name: 'Kazakhstani Tenge', country: 'Kazakhstan', fxPerUSD: 454.178 },
-  aiLAK:   { ticker: 'aiLAK', decimals: 2, display: 'αιLAK', sign: '₭', iso: 'LAK', name: 'Laotian Kip', country: 'Laos', fxPerUSD: 22261 },
+  aiKZT:   { ticker: 'aiKZT', decimals: 2, display: 'αιKZT', sign: '₸', iso: 'KZT', name: 'Kazakhstani Tenge', country: 'Kazakhstan', fxPerUSD: 454.227 },
+  aiLAK:   { ticker: 'aiLAK', decimals: 2, display: 'αιLAK', sign: '₭', iso: 'LAK', name: 'Laotian Kip', country: 'Laos', fxPerUSD: 22212 },
   aiLBP:   { ticker: 'aiLBP', decimals: 2, display: 'αιLBP', sign: 'ل.ل.‏', iso: 'LBP', name: 'Lebanese Pound', country: 'Lebanon', fxPerUSD: 89500 },  // official rate — NEEDS REVIEW
-  aiLKR:   { ticker: 'aiLKR', decimals: 2, display: 'αιLKR', sign: 'Rs.', iso: 'LKR', name: 'Sri Lankan Rupee', country: 'Sri Lanka', fxPerUSD: 328.08 },
-  aiLRD:   { ticker: 'aiLRD', decimals: 2, display: 'αιLRD', sign: '$', iso: 'LRD', name: 'Liberian Dollar', country: 'Liberia', fxPerUSD: 175.031 },  // official rate — NEEDS REVIEW
-  aiLSL:   { ticker: 'aiLSL', decimals: 2, display: 'αιLSL', sign: '', iso: 'LSL', name: 'Lesotho Loti', country: 'Lesotho', fxPerUSD: 15.9865 },
+  aiLKR:   { ticker: 'aiLKR', decimals: 2, display: 'αιLKR', sign: 'Rs.', iso: 'LKR', name: 'Sri Lankan Rupee', country: 'Sri Lanka', fxPerUSD: 328.311 },
+  aiLRD:   { ticker: 'aiLRD', decimals: 2, display: 'αιLRD', sign: '$', iso: 'LRD', name: 'Liberian Dollar', country: 'Liberia', fxPerUSD: 174.941 },  // official rate — NEEDS REVIEW
+  aiLSL:   { ticker: 'aiLSL', decimals: 2, display: 'αιLSL', sign: '', iso: 'LSL', name: 'Lesotho Loti', country: 'Lesotho', fxPerUSD: 15.9987 },
   aiLYD:   { ticker: 'aiLYD', decimals: 2, display: 'αιLYD', sign: 'د.ل.‏', iso: 'LYD', name: 'Libyan Dinar', country: 'Libya', fxPerUSD: 5.5 },
-  aiMAD:   { ticker: 'aiMAD', decimals: 2, display: 'αιMAD', sign: 'د.م.‏', iso: 'MAD', name: 'Moroccan Dirham', country: 'Western Sahara, Morocco', fxPerUSD: 9.38721 },
-  aiMDL:   { ticker: 'aiMDL', decimals: 2, display: 'αιMDL', sign: 'L', iso: 'MDL', name: 'Moldovan Leu', country: 'Moldova', fxPerUSD: 17.2199 },
-  aiMGA:   { ticker: 'aiMGA', decimals: 2, display: 'αιMGA', sign: 'Ar', iso: 'MGA', name: 'Malagasy Ariary', country: 'Madagascar', fxPerUSD: 4321 },
+  aiMAD:   { ticker: 'aiMAD', decimals: 2, display: 'αιMAD', sign: 'د.م.‏', iso: 'MAD', name: 'Moroccan Dirham', country: 'Western Sahara, Morocco', fxPerUSD: 9.38754 },
+  aiMDL:   { ticker: 'aiMDL', decimals: 2, display: 'αιMDL', sign: 'L', iso: 'MDL', name: 'Moldovan Leu', country: 'Moldova', fxPerUSD: 17.2407 },
+  aiMGA:   { ticker: 'aiMGA', decimals: 2, display: 'αιMGA', sign: 'Ar', iso: 'MGA', name: 'Malagasy Ariary', country: 'Madagascar', fxPerUSD: 4319 },
   aiMKD:   { ticker: 'aiMKD', decimals: 2, display: 'αιMKD', sign: 'den', iso: 'MKD', name: 'Macedonian Denar', country: 'North Macedonia', fxPerUSD: 53.1505 },
-  aiMMK:   { ticker: 'aiMMK', decimals: 2, display: 'αιMMK', sign: 'K', iso: 'MMK', name: 'Myanmar Kyat', country: 'Myanmar (Burma)', fxPerUSD: 2100 },  // official rate — NEEDS REVIEW
-  aiMNT:   { ticker: 'aiMNT', decimals: 2, display: 'αιMNT', sign: '₮', iso: 'MNT', name: 'Mongolian Tugrik', country: 'Mongolia', fxPerUSD: 3629 },
-  aiMOP:   { ticker: 'aiMOP', decimals: 2, display: 'αιMOP', sign: 'MOP$', iso: 'MOP', name: 'Macanese Pataca', country: 'Macao SAR China', fxPerUSD: 8.07541 },
-  aiMRU:   { ticker: 'aiMRU', decimals: 2, display: 'αιMRU', sign: 'UM', iso: 'MRU', name: 'Mauritanian Ouguiya', country: 'Mauritania', fxPerUSD: 40.2097 },
-  aiMUR:   { ticker: 'aiMUR', decimals: 2, display: 'αιMUR', sign: 'Rs', iso: 'MUR', name: 'Mauritian Rupee', country: 'Mauritius', fxPerUSD: 46.8765 },
-  aiMVR:   { ticker: 'aiMVR', decimals: 2, display: 'αιMVR', sign: 'Rf', iso: 'MVR', name: 'Maldivian Rufiyaa', country: 'Maldives', fxPerUSD: 15.4454 },
+  aiMMK:   { ticker: 'aiMMK', decimals: 2, display: 'αιMMK', sign: 'K', iso: 'MMK', name: 'Myanmar Kyat', country: 'Myanmar (Burma)', fxPerUSD: 2099 },  // official rate — NEEDS REVIEW
+  aiMNT:   { ticker: 'aiMNT', decimals: 2, display: 'αιMNT', sign: '₮', iso: 'MNT', name: 'Mongolian Tugrik', country: 'Mongolia', fxPerUSD: 3620 },
+  aiMOP:   { ticker: 'aiMOP', decimals: 2, display: 'αιMOP', sign: 'MOP$', iso: 'MOP', name: 'Macanese Pataca', country: 'Macao SAR China', fxPerUSD: 8.07647 },
+  aiMRU:   { ticker: 'aiMRU', decimals: 2, display: 'αιMRU', sign: 'UM', iso: 'MRU', name: 'Mauritanian Ouguiya', country: 'Mauritania', fxPerUSD: 40.2107 },
+  aiMUR:   { ticker: 'aiMUR', decimals: 2, display: 'αιMUR', sign: 'Rs', iso: 'MUR', name: 'Mauritian Rupee', country: 'Mauritius', fxPerUSD: 46.9595 },
+  aiMVR:   { ticker: 'aiMVR', decimals: 2, display: 'αιMVR', sign: 'Rf', iso: 'MVR', name: 'Maldivian Rufiyaa', country: 'Maldives', fxPerUSD: 15.4445 },
   aiMWK:   { ticker: 'aiMWK', decimals: 2, display: 'αιMWK', sign: 'MK', iso: 'MWK', name: 'Malawian Kwacha', country: 'Malawi', fxPerUSD: 1746 },
-  aiMXN:   { ticker: 'aiMXN', decimals: 2, display: 'αιMXN', sign: 'MX$', iso: 'MXN', name: 'Mexican Peso', country: 'Mexico', fxPerUSD: 16.9329 },
-  aiMYR:   { ticker: 'aiMYR', decimals: 2, display: 'αιMYR', sign: 'RM', iso: 'MYR', name: 'Malaysian Ringgit', country: 'Malaysia', fxPerUSD: 4.04563 },
-  aiMZN:   { ticker: 'aiMZN', decimals: 2, display: 'αιMZN', sign: 'MTn', iso: 'MZN', name: 'Mozambican Metical', country: 'Mozambique', fxPerUSD: 63.7698 },
-  aiNAD:   { ticker: 'aiNAD', decimals: 2, display: 'αιNAD', sign: '$', iso: 'NAD', name: 'Namibian Dollar', country: 'Namibia', fxPerUSD: 15.9865 },
-  aiNGN:   { ticker: 'aiNGN', decimals: 2, display: 'αιNGN', sign: '₦', iso: 'NGN', name: 'Nigerian Naira', country: 'Nigeria', fxPerUSD: 1321 },  // official rate — NEEDS REVIEW
-  aiNIO:   { ticker: 'aiNIO', decimals: 2, display: 'αιNIO', sign: 'C$', iso: 'NIO', name: 'Nicaraguan Córdoba', country: 'Nicaragua', fxPerUSD: 36.8036 },
-  aiNOK:   { ticker: 'aiNOK', decimals: 2, display: 'αιNOK', sign: 'kr', iso: 'NOK', name: 'Norwegian Krone', country: 'Bouvet Island, Norway, Svalbard & Jan Mayen', fxPerUSD: 9.26963 },
-  aiNPR:   { ticker: 'aiNPR', decimals: 2, display: 'αιNPR', sign: 'नेरू', iso: 'NPR', name: 'Nepalese Rupee', country: 'Nepal', fxPerUSD: 151.277 },
-  aiNZD:   { ticker: 'aiNZD', decimals: 2, display: 'αιNZD', sign: 'NZ$', iso: 'NZD', name: 'New Zealand Dollar', country: 'Cook Islands, Niue, New Zealand, Pitcairn Islands, Tokelau', fxPerUSD: 1.70027 },
+  aiMXN:   { ticker: 'aiMXN', decimals: 2, display: 'αιMXN', sign: 'MX$', iso: 'MXN', name: 'Mexican Peso', country: 'Mexico', fxPerUSD: 16.9252 },
+  aiMYR:   { ticker: 'aiMYR', decimals: 2, display: 'αιMYR', sign: 'RM', iso: 'MYR', name: 'Malaysian Ringgit', country: 'Malaysia', fxPerUSD: 4.06113 },
+  aiMZN:   { ticker: 'aiMZN', decimals: 2, display: 'αιMZN', sign: 'MTn', iso: 'MZN', name: 'Mozambican Metical', country: 'Mozambique', fxPerUSD: 63.7904 },
+  aiNAD:   { ticker: 'aiNAD', decimals: 2, display: 'αιNAD', sign: '$', iso: 'NAD', name: 'Namibian Dollar', country: 'Namibia', fxPerUSD: 15.9987 },
+  aiNGN:   { ticker: 'aiNGN', decimals: 2, display: 'αιNGN', sign: '₦', iso: 'NGN', name: 'Nigerian Naira', country: 'Nigeria', fxPerUSD: 1322 },  // official rate — NEEDS REVIEW
+  aiNIO:   { ticker: 'aiNIO', decimals: 2, display: 'αιNIO', sign: 'C$', iso: 'NIO', name: 'Nicaraguan Córdoba', country: 'Nicaragua', fxPerUSD: 36.7858 },
+  aiNOK:   { ticker: 'aiNOK', decimals: 2, display: 'αιNOK', sign: 'kr', iso: 'NOK', name: 'Norwegian Krone', country: 'Bouvet Island, Norway, Svalbard & Jan Mayen', fxPerUSD: 9.24448 },
+  aiNPR:   { ticker: 'aiNPR', decimals: 2, display: 'αιNPR', sign: 'नेरू', iso: 'NPR', name: 'Nepalese Rupee', country: 'Nepal', fxPerUSD: 151.731 },
+  aiNZD:   { ticker: 'aiNZD', decimals: 2, display: 'αιNZD', sign: 'NZ$', iso: 'NZD', name: 'New Zealand Dollar', country: 'Cook Islands, Niue, New Zealand, Pitcairn Islands, Tokelau', fxPerUSD: 1.70801 },
   aiOMR:   { ticker: 'aiOMR', decimals: 2, display: 'αιOMR', sign: 'ر.ع.‏', iso: 'OMR', name: 'Omani Rial', country: 'Oman', fxPerUSD: 0.384497 },
   aiPAB:   { ticker: 'aiPAB', decimals: 2, display: 'αιPAB', sign: 'B/.', iso: 'PAB', name: 'Panamanian Balboa', country: 'Panama', fxPerUSD: 1 },
-  aiPEN:   { ticker: 'aiPEN', decimals: 2, display: 'αιPEN', sign: 'S/', iso: 'PEN', name: 'Peruvian Sol', country: 'Peru', fxPerUSD: 3.35523 },
-  aiPGK:   { ticker: 'aiPGK', decimals: 2, display: 'αιPGK', sign: 'K', iso: 'PGK', name: 'Papua New Guinean Kina', country: 'Papua New Guinea', fxPerUSD: 4.45402 },
-  aiPHP:   { ticker: 'aiPHP', decimals: 2, display: 'αιPHP', sign: '₱', iso: 'PHP', name: 'Philippine Peso', country: 'Philippines', fxPerUSD: 62.6862 },
+  aiPEN:   { ticker: 'aiPEN', decimals: 2, display: 'αιPEN', sign: 'S/', iso: 'PEN', name: 'Peruvian Sol', country: 'Peru', fxPerUSD: 3.35432 },
+  aiPGK:   { ticker: 'aiPGK', decimals: 2, display: 'αιPGK', sign: 'K', iso: 'PGK', name: 'Papua New Guinean Kina', country: 'Papua New Guinea', fxPerUSD: 4.4326 },
+  aiPHP:   { ticker: 'aiPHP', decimals: 2, display: 'αιPHP', sign: '₱', iso: 'PHP', name: 'Philippine Peso', country: 'Philippines', fxPerUSD: 62.5436 },
   aiPKR:   { ticker: 'aiPKR', decimals: 2, display: 'αιPKR', sign: 'ر', iso: 'PKR', name: 'Pakistani Rupee', country: 'Pakistan', fxPerUSD: 282 },
-  aiPLN:   { ticker: 'aiPLN', decimals: 2, display: 'αιPLN', sign: 'zł', iso: 'PLN', name: 'Polish Zloty', country: 'Poland', fxPerUSD: 3.70819 },
+  aiPLN:   { ticker: 'aiPLN', decimals: 2, display: 'αιPLN', sign: 'zł', iso: 'PLN', name: 'Polish Zloty', country: 'Poland', fxPerUSD: 3.7115 },
   aiPYG:   { ticker: 'aiPYG', decimals: 2, display: 'αιPYG', sign: 'Gs.', iso: 'PYG', name: 'Paraguayan Guarani', country: 'Paraguay', fxPerUSD: 7300 },
   aiQAR:   { ticker: 'aiQAR', decimals: 2, display: 'αιQAR', sign: 'ر.ق.‏', iso: 'QAR', name: 'Qatari Rial', country: 'Qatar', fxPerUSD: 3.64 },
-  aiRON:   { ticker: 'aiRON', decimals: 2, display: 'αιRON', sign: '', iso: 'RON', name: 'Romanian Leu', country: 'Romania', fxPerUSD: 4.51963 },
-  aiRSD:   { ticker: 'aiRSD', decimals: 2, display: 'αιRSD', sign: '', iso: 'RSD', name: 'Serbian Dinar', country: 'Serbia', fxPerUSD: 100.958 },
-  aiRUB:   { ticker: 'aiRUB', decimals: 2, display: 'αιRUB', sign: '₽', iso: 'RUB', name: 'Russian Ruble', country: 'Russia', fxPerUSD: 86.2389 },
-  aiRWF:   { ticker: 'aiRWF', decimals: 2, display: 'αιRWF', sign: 'RF', iso: 'RWF', name: 'Rwandan Franc', country: 'Rwanda', fxPerUSD: 1474 },
+  aiRON:   { ticker: 'aiRON', decimals: 2, display: 'αιRON', sign: '', iso: 'RON', name: 'Romanian Leu', country: 'Romania', fxPerUSD: 4.51951 },
+  aiRSD:   { ticker: 'aiRSD', decimals: 2, display: 'αιRSD', sign: '', iso: 'RSD', name: 'Serbian Dinar', country: 'Serbia', fxPerUSD: 100.976 },
+  aiRUB:   { ticker: 'aiRUB', decimals: 2, display: 'αιRUB', sign: '₽', iso: 'RUB', name: 'Russian Ruble', country: 'Russia', fxPerUSD: 86.4198 },
+  aiRWF:   { ticker: 'aiRWF', decimals: 2, display: 'αιRWF', sign: 'RF', iso: 'RWF', name: 'Rwandan Franc', country: 'Rwanda', fxPerUSD: 1475 },
   aiSAR:   { ticker: 'aiSAR', decimals: 2, display: 'αιSAR', sign: 'ر.س.‏', iso: 'SAR', name: 'Saudi Riyal', country: 'Saudi Arabia', fxPerUSD: 3.75 },
-  aiSBD:   { ticker: 'aiSBD', decimals: 2, display: 'αιSBD', sign: '$', iso: 'SBD', name: 'Solomon Islands Dollar', country: 'Solomon Islands', fxPerUSD: 7.88543 },
-  aiSCR:   { ticker: 'aiSCR', decimals: 2, display: 'αιSCR', sign: 'SR', iso: 'SCR', name: 'Seychellois Rupee', country: 'Seychelles', fxPerUSD: 13.8811 },
+  aiSBD:   { ticker: 'aiSBD', decimals: 2, display: 'αιSBD', sign: '$', iso: 'SBD', name: 'Solomon Islands Dollar', country: 'Solomon Islands', fxPerUSD: 7.88609 },
+  aiSCR:   { ticker: 'aiSCR', decimals: 2, display: 'αιSCR', sign: 'SR', iso: 'SCR', name: 'Seychellois Rupee', country: 'Seychelles', fxPerUSD: 14.0499 },
   aiSDG:   { ticker: 'aiSDG', decimals: 2, display: 'αιSDG', sign: 'ج.س.', iso: 'SDG', name: 'Sudanese Pound', country: 'Sudan', fxPerUSD: 2600 },
-  aiSEK:   { ticker: 'aiSEK', decimals: 2, display: 'αιSEK', sign: 'kr', iso: 'SEK', name: 'Swedish Krona', country: 'Sweden', fxPerUSD: 9.59633 },
-  aiSGD:   { ticker: 'aiSGD', decimals: 2, display: 'αιSGD', sign: '$', iso: 'SGD', name: 'Singapore Dollar', country: 'Singapore', fxPerUSD: 1.26581 },
-  aiSHP:   { ticker: 'aiSHP', decimals: 2, display: 'αιSHP', sign: '£', iso: 'SHP', name: 'St. Helena Pound', country: 'Ascension Island, St. Helena', fxPerUSD: 0.7386 },
+  aiSEK:   { ticker: 'aiSEK', decimals: 2, display: 'αιSEK', sign: 'kr', iso: 'SEK', name: 'Swedish Krona', country: 'Sweden', fxPerUSD: 9.58895 },
+  aiSGD:   { ticker: 'aiSGD', decimals: 2, display: 'αιSGD', sign: '$', iso: 'SGD', name: 'Singapore Dollar', country: 'Singapore', fxPerUSD: 1.2649 },
+  aiSHP:   { ticker: 'aiSHP', decimals: 2, display: 'αιSHP', sign: '£', iso: 'SHP', name: 'St. Helena Pound', country: 'Ascension Island, St. Helena', fxPerUSD: 0.738491 },
   aiSLL:   { ticker: 'aiSLL', decimals: 2, display: 'αιSLL', sign: 'Le', iso: 'SLL', name: 'Sierra Leonean Leone', country: 'Sierra Leone', fxPerUSD: 24709 },
-  aiSOS:   { ticker: 'aiSOS', decimals: 2, display: 'αιSOS', sign: 'S', iso: 'SOS', name: 'Somali Shilling', country: 'Somalia', fxPerUSD: 571.419 },
-  aiSRD:   { ticker: 'aiSRD', decimals: 2, display: 'αιSRD', sign: '$', iso: 'SRD', name: 'Surinamese Dollar', country: 'Suriname', fxPerUSD: 37.9855 },
+  aiSOS:   { ticker: 'aiSOS', decimals: 2, display: 'αιSOS', sign: 'S', iso: 'SOS', name: 'Somali Shilling', country: 'Somalia', fxPerUSD: 571.049 },
+  aiSRD:   { ticker: 'aiSRD', decimals: 2, display: 'αιSRD', sign: '$', iso: 'SRD', name: 'Surinamese Dollar', country: 'Suriname', fxPerUSD: 37.9827 },
   aiSSP:   { ticker: 'aiSSP', decimals: 2, display: 'αιSSP', sign: '£', iso: 'SSP', name: 'South Sudanese Pound', country: 'South Sudan', fxPerUSD: 5651 },  // official rate — NEEDS REVIEW
-  aiSTN:   { ticker: 'aiSTN', decimals: 2, display: 'αιSTN', sign: 'Db', iso: 'STN', name: 'São Tomé & Príncipe Dobra', country: 'São Tomé & Príncipe', fxPerUSD: 21.0775 },
-  aiSYP:   { ticker: 'aiSYP', decimals: 2, display: 'αιSYP', sign: 'ل.س.‏', iso: 'SYP', name: 'Syrian Pound', country: 'Syria', fxPerUSD: 121.754 },  // official rate — NEEDS REVIEW
-  aiSZL:   { ticker: 'aiSZL', decimals: 2, display: 'αιSZL', sign: 'E', iso: 'SZL', name: 'Swazi Lilangeni', country: 'Eswatini', fxPerUSD: 15.9865 },
-  aiTHB:   { ticker: 'aiTHB', decimals: 2, display: 'αιTHB', sign: '฿', iso: 'THB', name: 'Thai Baht', country: 'Thailand', fxPerUSD: 32.8808 },
-  aiTJS:   { ticker: 'aiTJS', decimals: 2, display: 'αιTJS', sign: '', iso: 'TJS', name: 'Tajikistani Somoni', country: 'Tajikistan', fxPerUSD: 9.23798 },
-  aiTMT:   { ticker: 'aiTMT', decimals: 2, display: 'αιTMT', sign: '', iso: 'TMT', name: 'Turkmenistani Manat', country: 'Turkmenistan', fxPerUSD: 3.50011 },
-  aiTND:   { ticker: 'aiTND', decimals: 2, display: 'αιTND', sign: 'د.ت.‏', iso: 'TND', name: 'Tunisian Dinar', country: 'Tunisia', fxPerUSD: 2.90682 },
-  aiTOP:   { ticker: 'aiTOP', decimals: 2, display: 'αιTOP', sign: 'T$', iso: 'TOP', name: 'Tongan Paʻanga', country: 'Tonga', fxPerUSD: 2.36581 },
-  aiTRY:   { ticker: 'aiTRY', decimals: 2, display: 'αιTRY', sign: '₺', iso: 'TRY', name: 'Turkish Lira', country: 'Turkey', fxPerUSD: 48.458 },
-  aiTTD:   { ticker: 'aiTTD', decimals: 2, display: 'αιTTD', sign: '$', iso: 'TTD', name: 'Trinidad & Tobago Dollar', country: 'Trinidad & Tobago', fxPerUSD: 6.76588 },
-  aiTWD:   { ticker: 'aiTWD', decimals: 2, display: 'αιTWD', sign: 'NT$', iso: 'TWD', name: 'New Taiwan Dollar', country: 'Taiwan', fxPerUSD: 31.5382 },
-  aiTZS:   { ticker: 'aiTZS', decimals: 2, display: 'αιTZS', sign: 'TSh', iso: 'TZS', name: 'Tanzanian Shilling', country: 'Tanzania', fxPerUSD: 2644 },
-  aiUAH:   { ticker: 'aiUAH', decimals: 2, display: 'αιUAH', sign: '₴', iso: 'UAH', name: 'Ukrainian Hryvnia', country: 'Ukraine', fxPerUSD: 44.4863 },
-  aiUGX:   { ticker: 'aiUGX', decimals: 2, display: 'αιUGX', sign: 'USh', iso: 'UGX', name: 'Ugandan Shilling', country: 'Uganda', fxPerUSD: 3738 },
+  aiSTN:   { ticker: 'aiSTN', decimals: 2, display: 'αιSTN', sign: 'Db', iso: 'STN', name: 'São Tomé & Príncipe Dobra', country: 'São Tomé & Príncipe', fxPerUSD: 21.0763 },
+  aiSYP:   { ticker: 'aiSYP', decimals: 2, display: 'αιSYP', sign: 'ل.س.‏', iso: 'SYP', name: 'Syrian Pound', country: 'Syria', fxPerUSD: 121.703 },  // official rate — NEEDS REVIEW
+  aiSZL:   { ticker: 'aiSZL', decimals: 2, display: 'αιSZL', sign: 'E', iso: 'SZL', name: 'Swazi Lilangeni', country: 'Eswatini', fxPerUSD: 15.9987 },
+  aiTHB:   { ticker: 'aiTHB', decimals: 2, display: 'αιTHB', sign: '฿', iso: 'THB', name: 'Thai Baht', country: 'Thailand', fxPerUSD: 32.9003 },
+  aiTJS:   { ticker: 'aiTJS', decimals: 2, display: 'αιTJS', sign: '', iso: 'TJS', name: 'Tajikistani Somoni', country: 'Tajikistan', fxPerUSD: 9.23223 },
+  aiTMT:   { ticker: 'aiTMT', decimals: 2, display: 'αιTMT', sign: '', iso: 'TMT', name: 'Turkmenistani Manat', country: 'Turkmenistan', fxPerUSD: 3.50005 },
+  aiTND:   { ticker: 'aiTND', decimals: 2, display: 'αιTND', sign: 'د.ت.‏', iso: 'TND', name: 'Tunisian Dinar', country: 'Tunisia', fxPerUSD: 2.90435 },
+  aiTOP:   { ticker: 'aiTOP', decimals: 2, display: 'αιTOP', sign: 'T$', iso: 'TOP', name: 'Tongan Paʻanga', country: 'Tonga', fxPerUSD: 2.36432 },
+  aiTRY:   { ticker: 'aiTRY', decimals: 2, display: 'αιTRY', sign: '₺', iso: 'TRY', name: 'Turkish Lira', country: 'Turkey', fxPerUSD: 48.4688 },
+  aiTTD:   { ticker: 'aiTTD', decimals: 2, display: 'αιTTD', sign: '$', iso: 'TTD', name: 'Trinidad & Tobago Dollar', country: 'Trinidad & Tobago', fxPerUSD: 6.75811 },
+  aiTWD:   { ticker: 'aiTWD', decimals: 2, display: 'αιTWD', sign: 'NT$', iso: 'TWD', name: 'New Taiwan Dollar', country: 'Taiwan', fxPerUSD: 31.5009 },
+  aiTZS:   { ticker: 'aiTZS', decimals: 2, display: 'αιTZS', sign: 'TSh', iso: 'TZS', name: 'Tanzanian Shilling', country: 'Tanzania', fxPerUSD: 2645 },
+  aiUAH:   { ticker: 'aiUAH', decimals: 2, display: 'αιUAH', sign: '₴', iso: 'UAH', name: 'Ukrainian Hryvnia', country: 'Ukraine', fxPerUSD: 44.45 },
+  aiUGX:   { ticker: 'aiUGX', decimals: 2, display: 'αιUGX', sign: 'USh', iso: 'UGX', name: 'Ugandan Shilling', country: 'Uganda', fxPerUSD: 3744 },
   aiUSD:   { ticker: 'aiUSD', decimals: 2, display: 'αιUSD', sign: '$', iso: 'USD', name: 'US Dollar', country: 'American Samoa, Caribbean Netherlands, Diego Garcia, Ecuador, Micronesia, Guam, Haiti, British Indian Ocean Territory, Marshall Islands, Northern Mariana Islands, Panama, Puerto Rico, Palau, El Salvador, Turks & Caicos Islands, Timor-Leste, U.S. Outlying Islands, United States, British Virgin Islands, U.S. Virgin Islands, Zimbabwe', fxPerUSD: 1 },
-  aiUYU:   { ticker: 'aiUYU', decimals: 2, display: 'αιUYU', sign: '$', iso: 'UYU', name: 'Uruguayan Peso', country: 'Uruguay', fxPerUSD: 40.2563 },
-  aiUZS:   { ticker: 'aiUZS', decimals: 2, display: 'αιUZS', sign: 'сўм', iso: 'UZS', name: 'Uzbekistani Som', country: 'Uzbekistan', fxPerUSD: 11787 },
+  aiUYU:   { ticker: 'aiUYU', decimals: 2, display: 'αιUYU', sign: '$', iso: 'UYU', name: 'Uruguayan Peso', country: 'Uruguay', fxPerUSD: 40.2355 },
+  aiUZS:   { ticker: 'aiUZS', decimals: 2, display: 'αιUZS', sign: 'сўм', iso: 'UZS', name: 'Uzbekistani Som', country: 'Uzbekistan', fxPerUSD: 11802 },
   aiVES:   { ticker: 'aiVES', decimals: 2, display: 'αιVES', sign: 'Bs.S', iso: 'VES', name: 'Venezuelan Bolívar', country: 'Venezuela', fxPerUSD: 250 },
-  aiVND:   { ticker: 'aiVND', decimals: 2, display: 'αιVND', sign: '₫', iso: 'VND', name: 'Vietnamese Dong', country: 'Vietnam', fxPerUSD: 25969 },
-  aiVUV:   { ticker: 'aiVUV', decimals: 2, display: 'αιVUV', sign: 'VT', iso: 'VUV', name: 'Vanuatu Vatu', country: 'Vanuatu', fxPerUSD: 117.786 },
-  aiWST:   { ticker: 'aiWST', decimals: 2, display: 'αιWST', sign: 'WS$', iso: 'WST', name: 'Samoan Tala', country: 'Samoa', fxPerUSD: 2.68341 },
-  aiXAF:   { ticker: 'aiXAF', decimals: 2, display: 'αιXAF', sign: 'FCFA', iso: 'XAF', name: 'Central African CFA Franc', country: 'Central African Republic, Congo - Brazzaville, Cameroon, Gabon, Equatorial Guinea, Chad', fxPerUSD: 564.324 },
+  aiVND:   { ticker: 'aiVND', decimals: 2, display: 'αιVND', sign: '₫', iso: 'VND', name: 'Vietnamese Dong', country: 'Vietnam', fxPerUSD: 25933 },
+  aiVUV:   { ticker: 'aiVUV', decimals: 2, display: 'αιVUV', sign: 'VT', iso: 'VUV', name: 'Vanuatu Vatu', country: 'Vanuatu', fxPerUSD: 117.176 },
+  aiWST:   { ticker: 'aiWST', decimals: 2, display: 'αιWST', sign: 'WS$', iso: 'WST', name: 'Samoan Tala', country: 'Samoa', fxPerUSD: 2.681 },
+  aiXAF:   { ticker: 'aiXAF', decimals: 2, display: 'αιXAF', sign: 'FCFA', iso: 'XAF', name: 'Central African CFA Franc', country: 'Central African Republic, Congo - Brazzaville, Cameroon, Gabon, Equatorial Guinea, Chad', fxPerUSD: 564.292 },
   aiXCD:   { ticker: 'aiXCD', decimals: 2, display: 'αιXCD', sign: 'EC$', iso: 'XCD', name: 'East Caribbean Dollar', country: 'Antigua & Barbuda, Anguilla, Dominica, Grenada, St. Kitts & Nevis, St. Lucia, Montserrat, St. Vincent & Grenadines', fxPerUSD: 2.7 },
-  aiXOF:   { ticker: 'aiXOF', decimals: 2, display: 'αιXOF', sign: 'F CFA', iso: 'XOF', name: 'West African CFA Franc', country: 'Burkina Faso, Benin, Côte d’Ivoire, Guinea-Bissau, Mali, Niger, Senegal, Togo', fxPerUSD: 564.324 },
-  aiXPF:   { ticker: 'aiXPF', decimals: 2, display: 'αιXPF', sign: 'CFPF', iso: 'XPF', name: 'CFP Franc', country: 'New Caledonia, French Polynesia, Wallis & Futuna', fxPerUSD: 102.662 },
-  aiYER:   { ticker: 'aiYER', decimals: 2, display: 'αιYER', sign: 'ر.ي.‏', iso: 'YER', name: 'Yemeni Rial', country: 'Yemen', fxPerUSD: 236.997 },  // official rate — NEEDS REVIEW
-  aiZAR:   { ticker: 'aiZAR', decimals: 2, display: 'αιZAR', sign: 'R', iso: 'ZAR', name: 'South African Rand', country: 'Lesotho, Namibia, South Africa', fxPerUSD: 15.9862 },
-  aiZMW:   { ticker: 'aiZMW', decimals: 2, display: 'αιZMW', sign: 'K', iso: 'ZMW', name: 'Zambian Kwacha', country: 'Zambia', fxPerUSD: 19.1703 },
+  aiXOF:   { ticker: 'aiXOF', decimals: 2, display: 'αιXOF', sign: 'F CFA', iso: 'XOF', name: 'West African CFA Franc', country: 'Burkina Faso, Benin, Côte d’Ivoire, Guinea-Bissau, Mali, Niger, Senegal, Togo', fxPerUSD: 564.292 },
+  aiXPF:   { ticker: 'aiXPF', decimals: 2, display: 'αιXPF', sign: 'CFPF', iso: 'XPF', name: 'CFP Franc', country: 'New Caledonia, French Polynesia, Wallis & Futuna', fxPerUSD: 102.656 },
+  aiYER:   { ticker: 'aiYER', decimals: 2, display: 'αιYER', sign: 'ر.ي.‏', iso: 'YER', name: 'Yemeni Rial', country: 'Yemen', fxPerUSD: 236.935 },  // official rate — NEEDS REVIEW
+  aiZAR:   { ticker: 'aiZAR', decimals: 2, display: 'αιZAR', sign: 'R', iso: 'ZAR', name: 'South African Rand', country: 'Lesotho, Namibia, South Africa', fxPerUSD: 16.0002 },
+  aiZMW:   { ticker: 'aiZMW', decimals: 2, display: 'αιZMW', sign: 'K', iso: 'ZMW', name: 'Zambian Kwacha', country: 'Zambia', fxPerUSD: 19.2361 },
+  aiPRB:   { ticker: 'aiPRB', decimals: 2, display: 'αιPRB', sign: 'р.', iso: 'PRB', name: 'Transnistrian Ruble', country: 'Transnistria', fxPerUSD: null },  // no market yet — price comes from the first orders
+  aiSLS:   { ticker: 'aiSLS', decimals: 2, display: 'αιSLS', sign: 'Sl', iso: 'SLS', name: 'Somaliland Shilling', country: 'Somaliland', fxPerUSD: null },  // no market yet — price comes from the first orders
+  aiAPS:   { ticker: 'aiAPS', decimals: 2, display: 'αιAPS', sign: 'ა', iso: 'APS', name: 'Abkhazian Apsar', country: 'Abkhazia', fxPerUSD: null },  // no market yet — price comes from the first orders
+  aiKID:   { ticker: 'aiKID', decimals: 2, display: 'αιKID', sign: '$', iso: 'KID', name: 'Kiribati Dollar', country: 'Kiribati', fxPerUSD: null },  // no market yet — price comes from the first orders
+  aiTVD:   { ticker: 'aiTVD', decimals: 2, display: 'αιTVD', sign: '$', iso: 'TVD', name: 'Tuvaluan Dollar', country: 'Tuvalu', fxPerUSD: null },  // no market yet — price comes from the first orders
+  aiFOK:   { ticker: 'aiFOK', decimals: 2, display: 'αιFOK', sign: 'kr', iso: 'FOK', name: 'Faroese Króna', country: 'Faroe Islands', fxPerUSD: null },  // no market yet — price comes from the first orders
 };
 
 export const STABLE_TICKERS = Object.keys(ASSETS).filter(t => t !== 'DAI');
@@ -202,7 +211,14 @@ export const STABLE_TICKERS = Object.keys(ASSETS).filter(t => t !== 'DAI');
  * people transact at. Emitted with the official rate so the chain is complete;
  * a human must confirm or replace each before the genesis snapshot is built.
  */
-export const FX_NEEDS_REVIEW = ["AFN","ARS","BOB","CDF","HTG","KPW","LBP","LRD","MMK","NGN","SSP","SYP","YER"];
+export const FX_NEEDS_REVIEW = ["AFN","ARS","BOB","CDF","HTG","LBP","LRD","MMK","NGN","SSP","SYP","YER"];
+
+/**
+ * Currencies shipped with no rate. Their price is discovered from the first
+ * P2P orders; until then a fee quote in one of these reports no market rather
+ * than converting through an invented number.
+ */
+export const FX_NO_MARKET = ["CUC","KPW","PRB","SLS","APS","KID","TVD","FOK"];
 
 // ── Genesis supply ──────────────────────────────────────────────────────────
 // The treasury receives the entire initial stablecoin supply in the migration
@@ -219,8 +235,20 @@ export const FX_NEEDS_REVIEW = ["AFN","ARS","BOB","CDF","HTG","KPW","LBP","LRD",
 // changes gas pricing, never the supply of an already-launched chain.
 export const TREASURY_ADDRESS = 'dai977927faa8e24e3c7fad041d4468cacdd8c365c8';
 export const GENESIS_USD_PER_STABLE = 185_185;
+
+// Currencies shipped without a rate (FX_NO_MARKET) cannot be minted at equal
+// USD value, because there is no rate to convert with. They are minted at a
+// flat unit count instead. This is a sizing decision and NOT a price claim:
+// the mint says how many units exist, never what one is worth. Their price is
+// whatever the first orders on their book say it is.
+export const GENESIS_UNITS_NO_RATE = 185_185;
+
 export const INITIAL_STABLE_SUPPLY_RAW = Object.fromEntries(
-  STABLE_TICKERS.map(t => [t, Math.round(GENESIS_USD_PER_STABLE * ASSETS[t].fxPerUSD * 100)]),
+  STABLE_TICKERS.map(t => {
+    const fx = ASSETS[t].fxPerUSD;
+    const units = fx == null ? GENESIS_UNITS_NO_RATE : GENESIS_USD_PER_STABLE * fx;
+    return [t, Math.round(units * 100)];
+  }),
 );
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
