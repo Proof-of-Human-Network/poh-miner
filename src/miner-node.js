@@ -2485,6 +2485,27 @@ export class DAIMinerNode {
 
             if (url.pathname === '/api/chat') {
               const messages = chatMessages;
+
+              // Route through the tool/skill matcher before falling back to a
+              // bare model call.
+              //
+              // /api/chat is the Ollama-shaped passthrough the desktop chat
+              // uses, and it went straight to the LLM with no tools. So "what
+              // is the weather in astana?" -- which the catalog scores as a
+              // clear public-apis/weather hit -- reached a local model with no
+              // way to answer it, and the model correctly said it had no
+              // real-time data. The routing was working; nothing was asking it.
+              //
+              // Same helper /chat/ask and the compute board use, so there is
+              // one implementation. It is best-effort and never throws: no
+              // match, or a tool that fails, falls through to the model exactly
+              // as before.
+              const lastUser = [...(messages || [])].reverse().find(m => m?.role === 'user');
+              let routed = null;
+              if (lastUser?.content) {
+                try { routed = await this._routeComputePrompt(String(lastUser.content), model); }
+                catch { routed = null; }
+              }
               // Stream newline-delimited JSON when the client asks for it (Ollama shape +
               // what the Electron chat UI parses). Each token is one line; a final
               // {done:true} line closes it. Non-stream callers still get one JSON object.
@@ -2492,6 +2513,14 @@ export class DAIMinerNode {
                 res.statusCode = 200;
                 res.setHeader('Content-Type', 'application/x-ndjson');
                 const line = (obj) => { try { res.write(JSON.stringify(obj) + '\n'); } catch { /* client gone */ } };
+
+                // A tool answered — emit it in the same NDJSON shape the client
+                // already parses, so streaming behaviour is unchanged.
+                if (routed?.reply) {
+                  line({ model, message: { role: 'assistant', content: routed.reply }, done: false });
+                  line({ model, created_at: new Date().toISOString(), message: { role: 'assistant', content: '' }, done: true, skillId: routed.skillId || null });
+                  return res.end();
+                }
                 // Count what actually reached the client, so a run that streamed
                 // and then died is not reported as "produced no output" -- that
                 // sent people looking at QVAC when the model had in fact
@@ -2509,6 +2538,11 @@ export class DAIMinerNode {
                 }
                 line({ model, created_at: new Date().toISOString(), message: { role: 'assistant', content: '' }, done: true });
                 return res.end();
+              }
+              // Non-stream callers get the routed answer too, or the two
+              // shapes of this endpoint would disagree about what it can do.
+              if (routed?.reply) {
+                return sendJson(200, { model, created_at: new Date().toISOString(), message: { role: 'assistant', content: routed.reply }, done: true, skillId: routed.skillId || null });
               }
               const reply = await qvac.chat(messages, { model, timeLimit: 90_000 });
               if (reply == null) return sendJson(503, { error: `Model "${model}" produced no output (QVAC unavailable)` });
