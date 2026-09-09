@@ -56,26 +56,6 @@ const LAUNCHED = {
  */
 const NO_MARKET_RATE = new Set(['CUC', 'KPW', 'PRB', 'SLS', 'APS', 'KID', 'TVD', 'FOK']);
 
-/**
- * Currencies with no ISO 4217 code, so absent from the CLDR tender table.
- *
- * The first three are issued by unrecognised states and genuinely circulate at
- * their own rate. The last three are 1:1 local issues of a currency already in
- * the set (AUD, AUD, DKK) -- included because they are asked for by name, but
- * they are the same money under a local design, not a separate float.
- *
- * Codes are the widely-used unofficial ones; none of them can collide with ISO
- * 4217, which never assigns these.
- */
-const EXTRA_CURRENCIES = [
-  { iso: 'PRB', sign: 'р.',  name: 'Transnistrian Ruble',  countries: 'Transnistria' },
-  { iso: 'SLS', sign: 'Sl',  name: 'Somaliland Shilling',  countries: 'Somaliland' },
-  { iso: 'APS', sign: 'ა',   name: 'Abkhazian Apsar',      countries: 'Abkhazia' },
-  { iso: 'KID', sign: '$',   name: 'Kiribati Dollar',      countries: 'Kiribati' },
-  { iso: 'TVD', sign: '$',   name: 'Tuvaluan Dollar',      countries: 'Tuvalu' },
-  { iso: 'FOK', sign: 'kr',  name: 'Faroese Króna',        countries: 'Faroe Islands' },
-];
-
 // Managed / multiple-rate / active parallel market. Official feed rate is not
 // what people transact at, so these need a human before launch.
 const MANAGED = new Set([
@@ -85,25 +65,33 @@ const MANAGED = new Set([
 ]);
 
 const tickerFor = iso => (iso === 'KGS' ? 'KGST' : `ai${iso}`);
-const displayFor = iso => (iso === 'KGS' ? 'KGST' : `αι${iso}`);
+const displayFor = iso => (iso === 'KGS' ? 'KGST' : `\u03b1\u03b9${iso}`);
 
 function readTable() {
   const src = fs.readFileSync(TABLE_JS, 'utf8');
-  const rows = [];
+  const out = [];
   const re = /\[\s*'([A-Z]{3})'\s*,\s*'((?:\\'|[^'])*)'\s*,\s*'((?:\\'|[^'])*)'\s*,\s*'((?:\\'|[^'])*)'\s*\]/g;
   let m;
   while ((m = re.exec(src))) {
-    rows.push({ iso: m[1], sign: m[2].replace(/\\'/g, "'"), name: m[3].replace(/\\'/g, "'"), countries: m[4].replace(/\\'/g, "'") });
+    out.push({
+      iso: m[1],
+      sign: m[2].replace(/\\'/g, "'"),
+      name: m[3].replace(/\\'/g, "'"),
+      countries: m[4].replace(/\\'/g, "'"),
+    });
   }
-  return rows;
+  return out;
 }
 
 const rates = await (await fetch('https://open.er-api.com/v6/latest/USD', { signal: AbortSignal.timeout(30000) })).json();
 if (rates.result !== 'success') throw new Error('FX feed failed');
 const asOf = rates.time_last_update_utc;
 
-const rows = [...readTable(), ...EXTRA_CURRENCIES];
-const EXPECTED = 155 + EXTRA_CURRENCIES.length;
+// Every row, including the six with no ISO code, comes from the CLDR-derived
+// table in AIST. Keeping a second copy here is what lets the node and the
+// exchange disagree about which currencies exist.
+const rows = readTable();
+const EXPECTED = 161;
 if (rows.length !== EXPECTED) console.warn(`[assets] expected ${EXPECTED} rows, table has ${rows.length}`);
 
 const missing = [], review = [], drift = [], noRate = [];
