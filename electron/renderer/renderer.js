@@ -1254,11 +1254,26 @@ window.showPrivateKeyWarning = function() {
 
   if (!confirmed) return;
 
-  // For safety, we don't auto-expose the key from main process easily.
-  // In a real version we'd have a dedicated secure reveal flow.
-  alert("Private key reveal is not implemented for security reasons in this build.\n\n" +
-        "Your key is stored at: ~/.dai-miner/wallets/");
-  hideSettings();
+  const address = window._localWallet;
+  if (!address) { alert('No wallet is selected.'); return; }
+
+  const api = window.daiMinerAPI?.wallet;
+  if (!api?.revealKey) { alert('This build cannot reveal keys (no wallet bridge).'); return; }
+
+  api.revealKey(address).then(r => {
+    if (r?.ok) {
+      // Deliberately a prompt(): it renders the key selectable and copyable
+      // without writing it into the page, so it leaves no node behind in the
+      // DOM after the dialog closes.
+      window.prompt(`Private key for ${address}\n\nCopy it now and store it somewhere safe. Anyone with this key controls the wallet.`, r.privateKey);
+      hideSettings();
+      return;
+    }
+    // The failure IS the useful part: it used to point at ~/.dai-miner/wallets/
+    // as if the key were readable there, when the file is sealed and this node
+    // cannot open it.
+    alert(`Cannot reveal the private key for ${address}.\n\n${r?.message || 'Unknown error.'}`);
+  }).catch(e => alert(`Key reveal failed: ${e?.message || e}`));
 };
 
 // ── Skill audit rejection modal ───────────────────────────────────────────────

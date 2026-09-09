@@ -28,6 +28,11 @@ contextBridge.exposeInMainWorld('daiMinerAPI', {
     start: () => ipcRenderer.invoke('miner:start'),
   },
 
+  wallet: {
+    // Local IPC only — a private key must never travel over the node's HTTP API.
+    revealKey: (address) => ipcRenderer.invoke('wallet:reveal-key', address),
+  },
+
   // External AI providers (Claude, OpenAI, Grok, custom OpenAI-compatible)
   aiProviders: {
     get: () => ipcRenderer.invoke('ai-providers:get'),

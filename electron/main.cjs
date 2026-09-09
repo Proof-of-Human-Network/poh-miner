@@ -401,6 +401,57 @@ async function _chatCrypto() {
 ipcMain.handle('crypto:seal', async (_e, recipientPubB64, plaintext) => (await _chatCrypto()).seal(recipientPubB64, plaintext));
 ipcMain.handle('crypto:open', async (_e, envelope, privateKeyB64) => (await _chatCrypto()).open(envelope, privateKeyB64));
 ipcMain.handle('crypto:derive-keypair', async (_e, secret) => (await _chatCrypto()).deriveEncryptionKeypair(secret));
+// ── Private key reveal ────────────────────────────────────────────────────────
+// Local IPC only, never over the node's HTTP API — a key must not be reachable
+// from anything but this process. The renderer gates it behind a confirm.
+//
+// The failure path matters as much as the success path. Wallets are sealed with
+// ~/.dai-miner/.wallet-key (or DAI_WALLET_KEY when set), and if that secret is
+// not the one they were sealed with, nothing here can open them. Until now that
+// surfaced only as "no private key on this node" at signing time, long after the
+// fact, so this reports it directly and by name.
+async function _walletCrypto() {
+  return import(pathToFileURL(path.join(__dirname, '../src/security/wallet-crypto.js')).href);
+}
+
+ipcMain.handle('wallet:reveal-key', async (_e, address) => {
+  const addr = String(address || '').trim();
+  if (!/^dai[0-9a-f]{40}$/i.test(addr)) return { ok: false, reason: 'bad-address', message: 'Not a DAI address.' };
+
+  const file = path.join(os.homedir(), '.dai-miner', 'wallets', `${addr}.json`);
+  if (!fs.existsSync(file)) {
+    return { ok: false, reason: 'not-found', message: `No wallet file for ${addr} on this node.` };
+  }
+
+  let raw;
+  try { raw = JSON.parse(fs.readFileSync(file, 'utf8')); }
+  catch (err) { return { ok: false, reason: 'unreadable', message: `Wallet file is unreadable: ${err.message}` }; }
+
+  if (!raw.encrypted) {
+    const plain = raw.privateKey || raw.signingPrivateKey;
+    return plain
+      ? { ok: true, privateKey: plain, sealed: false }
+      : { ok: false, reason: 'no-key', message: 'This wallet file holds only a public key (externally registered).' };
+  }
+
+  const { unsealWalletData } = await _walletCrypto();
+  const data = unsealWalletData(raw);
+  const plain = data.privateKey || data.signingPrivateKey;
+  if (plain) return { ok: true, privateKey: plain, sealed: true };
+
+  const hasEnc = !!(raw.privateKeyEnc || raw.signingPrivateKeyEnc);
+  return {
+    ok: false,
+    reason: hasEnc ? 'sealed-wrong-key' : 'no-key',
+    message: hasEnc
+      ? 'This wallet is encrypted with a key this node does not have, so it cannot be opened here.\n\n'
+        + 'The key material is still in the file — what is missing is the secret that unseals it. '
+        + 'That secret is DAI_WALLET_KEY if it was set when the wallet was created, otherwise '
+        + '~/.dai-miner/.wallet-key. Restore the original and it will open.'
+      : 'This wallet file holds only a public key (externally registered), so there is no private key here to show.',
+  };
+});
+
 // ── Remote signer pairing ─────────────────────────────────────────────────────
 // Lets aist.exchange (or any site) ask this node to sign a P2P action. The
 // browser never holds a DAI key; it sends a request, the human approves it here,
