@@ -5054,9 +5054,22 @@ function skillsView(view) {
 
 window._skillsData = {};
 
-function showSkillDetail(id) {
-  const s = window._skillsData[id];
+async function showSkillDetail(id) {
+  let s = window._skillsData[id];
   if (!s) return;
+  // The list response omits `context` and `code` -- they were 659 KB of a
+  // 709 KB payload at 88 skills. Fetch the full skill only when one is opened.
+  if (s.context === undefined) {
+    try {
+      const port = window._minerApiPort || 3456;
+      const wallet = window._localWallet || '';
+      const r = await fetch(`http://localhost:${port}/api/skills/${encodeURIComponent(id)}?wallet=${encodeURIComponent(wallet)}`);
+      if (r.ok) {
+        const { skill } = await r.json();
+        if (skill) { s = Object.assign(window._skillsData[id], skill); }
+      }
+    } catch { /* fall through and render what the list gave us */ }
+  }
 
   document.getElementById('skill-detail-id').textContent    = s.id;
   document.getElementById('skill-detail-desc').innerHTML    = _mdParse(s.description || '');
@@ -5173,6 +5186,57 @@ function _stakeMsg(msg, color) {
   el.style.display = 'block';
 }
 
+
+/** How many cards to add per batch. Small enough to stay responsive on a slow box. */
+const SKILLS_BATCH = 24;
+
+/** Lowercase haystack per skill, built once per load rather than per keystroke. */
+function _skillHaystack(s) {
+  if (s._hay) return s._hay;
+  s._hay = [s.id, s.description, (s.triggers || []).join(' ')].filter(Boolean).join(' ').toLowerCase();
+  return s._hay;
+}
+
+/** Append the next batch for one bucket. One DOM write, no re-parse of what is already there. */
+function skillsRenderMore(bucket) {
+  const listEl = document.getElementById(`skills-${bucket}-list`);
+  const moreEl = document.getElementById(`skills-${bucket}-more`);
+  const items = window._skillsFiltered?.[bucket] || [];
+  const from = window._skillsShown[bucket] || 0;
+  const slice = items.slice(from, from + SKILLS_BATCH);
+  if (slice.length) {
+    listEl.insertAdjacentHTML('beforeend', slice.map(window._skillsCard).join(''));
+    window._skillsShown[bucket] = from + slice.length;
+  }
+  const left = items.length - window._skillsShown[bucket];
+  if (moreEl) {
+    moreEl.style.display = left > 0 ? 'block' : 'none';
+    moreEl.textContent = left > 0 ? `Show ${Math.min(left, SKILLS_BATCH)} more (${left} hidden)` : '';
+  }
+}
+
+/** Re-run the search filter and render the first batch of each bucket. */
+function skillsApplyFilter() {
+  const q = (document.getElementById('skills-search')?.value || '').trim().toLowerCase();
+  const buckets = window._skillsBuckets || { active: [], proposed: [] };
+  window._skillsFiltered = {
+    active:   q ? buckets.active.filter(s => _skillHaystack(s).includes(q))   : buckets.active,
+    proposed: q ? buckets.proposed.filter(s => _skillHaystack(s).includes(q)) : buckets.proposed,
+  };
+  for (const b of ['active', 'proposed']) {
+    const el = document.getElementById(`skills-${b}-list`);
+    if (el) el.innerHTML = '';
+    window._skillsShown[b] = 0;
+    skillsRenderMore(b);
+  }
+  const none = !window._skillsFiltered.active.length && !window._skillsFiltered.proposed.length;
+  const emptyEl = document.getElementById('skills-empty');
+  if (emptyEl) {
+    emptyEl.style.display = none ? 'block' : 'none';
+    if (none) emptyEl.textContent = q ? `No skill matches "${q}".` : 'No skills found';
+  }
+}
+
 async function loadSkills() {
   const port = window._minerApiPort || 3456;
   try {
@@ -5223,8 +5287,23 @@ async function loadSkills() {
         ${s.author ? `<div style="position:relative;font-size:10px;color:#333;margin-top:4px;">by ${s.author.slice(0, 20)}…</div>` : ''}
       </div>`;
     };
-    active.forEach(s => { activeEl.innerHTML += card(s); });
-    proposed.forEach(s => { proposedEl.innerHTML += card(s); });
+    // Render in batches, and build each batch as ONE string.
+    //
+    // This loop used to be `el.innerHTML += card(s)` per skill, which
+    // re-serialises and re-parses the whole accumulated list on every
+    // iteration -- O(n^2) work that also destroys and recreates every node
+    // already rendered. At 88 skills that was enough to hang a slow machine
+    // before a single card was interactive.
+    const searchEl = document.getElementById('skills-search');
+    if (searchEl && !searchEl.dataset.wired) {
+      searchEl.dataset.wired = '1';
+      let t = null;
+      searchEl.addEventListener('input', () => { clearTimeout(t); t = setTimeout(skillsApplyFilter, 120); });
+    }
+    window._skillsCard = card;
+    window._skillsBuckets = { active, proposed };
+    window._skillsShown = { active: 0, proposed: 0 };
+    skillsApplyFilter();
   } catch (e) {
     document.getElementById('skills-empty').style.display = 'block';
     document.getElementById('skills-empty').textContent = 'Could not reach miner API';

@@ -2756,10 +2756,21 @@ export class DAIMinerNode {
       // ── Skills API (/api/skills/*) ────────────────────────────────────────────
       if (req.method === 'GET' && url.pathname === '/api/skills') {
         const walletParam = url.searchParams?.get('wallet') || null;
+        // The list omits `context` and `code`: they are only read by the detail
+        // view, and at 88 skills they are 659 KB of the 709 KB response. The
+        // detail view fetches one skill from GET /api/skills/:id instead.
         const skills = skillsManager.getAllSkills().map(s => {
           const stakeInfo = this._skillStakes.get(s.id) || { total: 0, stakers: new Map() };
           const myStake = walletParam ? (stakeInfo.stakers?.get(walletParam) || 0) : 0;
-          return { ...s, totalStaked: stakeInfo.total || 0, myStake, enabled: this.isSkillEnabled(s.id) };
+          const { context, code, ...rest } = s;
+          return {
+            ...rest,
+            contextLength: context ? String(context).length : 0,
+            hasCode: !!code,
+            totalStaked: stakeInfo.total || 0,
+            myStake,
+            enabled: this.isSkillEnabled(s.id),
+          };
         });
         return res.end(JSON.stringify({
           skills,
@@ -2774,6 +2785,28 @@ export class DAIMinerNode {
       // ── Skill prefs: GET /api/skills/prefs ───────────────────────────────────
       if (req.method === 'GET' && url.pathname === '/api/skills/prefs') {
         return res.end(JSON.stringify({ enabled: [...this._skillPrefs] }));
+      }
+
+      // ── One skill in full: GET /api/skills/:skillId ──────────────────────────
+      // Matched after /prefs and restricted to a single path segment so it can
+      // shadow neither that nor the /:id/stakes and /:id/stake routes below.
+      {
+        const m = req.method === 'GET' && url.pathname.match(/^\/api\/skills\/([^/]+)$/);
+        if (m && m[1] !== 'prefs') {
+          const id = decodeURIComponent(m[1]);
+          const skill = skillsManager.getAllSkills().find(s => s.id === id);
+          if (!skill) { res.statusCode = 404; return res.end(JSON.stringify({ error: 'unknown skill' })); }
+          const stakeInfo = this._skillStakes.get(id) || { total: 0, stakers: new Map() };
+          const walletQ = url.searchParams?.get('wallet') || null;
+          return res.end(JSON.stringify({
+            skill: {
+              ...skill,
+              totalStaked: stakeInfo.total || 0,
+              myStake: walletQ ? (stakeInfo.stakers?.get(walletQ) || 0) : 0,
+              enabled: this.isSkillEnabled(id),
+            },
+          }));
+        }
       }
 
       // ── Skill enable/disable: POST /api/skills/:skillId/enable|disable ───────

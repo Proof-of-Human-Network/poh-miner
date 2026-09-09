@@ -1660,10 +1660,15 @@
 
           <!-- Browse view -->
           <div id="skills-browse-view">
+            <input id="skills-search" type="text" autocomplete="off"
+                   placeholder="Search skills by name, description or trigger"
+                   style="width:100%;box-sizing:border-box;margin-bottom:0.6rem;padding:6px 9px;border-radius:5px;border:1px solid #222;background:#0a0a0a;color:#ddd;font-family:monospace;font-size:11px;outline:none;">
             <div style="font-size:10px;color:#444;margin-bottom:0.5rem;letter-spacing:0.1em;" data-i18n="skills.active">ACTIVE SKILLS</div>
             <div id="skills-active-list" style="display:flex;flex-direction:column;gap:0.5rem;"></div>
+            <button id="skills-active-more" onclick="skillsRenderMore('active')" style="display:none;width:100%;margin-top:0.5rem;font-size:11px;padding:5px;border-radius:4px;border:1px solid #222;background:#0c0c0c;color:#666;cursor:pointer;font-family:monospace;"></button>
             <div style="font-size:10px;color:#444;margin:1rem 0 0.5rem;letter-spacing:0.1em;" data-i18n="skills.proposed">PROPOSED</div>
             <div id="skills-proposed-list" style="display:flex;flex-direction:column;gap:0.5rem;"></div>
+            <button id="skills-proposed-more" onclick="skillsRenderMore('proposed')" style="display:none;width:100%;margin-top:0.5rem;font-size:11px;padding:5px;border-radius:4px;border:1px solid #222;background:#0c0c0c;color:#666;cursor:pointer;font-family:monospace;"></button>
             <div id="skills-empty" style="color:#333;font-size:11px;text-align:center;padding:2rem 0;display:none;" data-i18n="skills.none">No skills found</div>
           </div>
 
