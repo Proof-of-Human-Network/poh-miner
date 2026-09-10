@@ -4904,10 +4904,88 @@ function syncHomeBalance() {
 }
 
 // Stablecoin rows on the home balance card — shown only when the wallet holds any.
-async function _refreshAssetList() {
+//
+// Searchable and paged: a wallet can hold well over a hundred once the currency
+// set expands, and a card that renders all of them is neither readable nor
+// cheap. Ten per page, filtered on ticker, ISO, name and country.
+const HOME_ASSETS_PER_PAGE = 10;
+let _homeAssets = [];      // [{ ticker, amount, meta, haystack }], largest first
+let _homeAssetPage = 0;
+
+function _renderHomeAssetPage() {
   const listEl = document.getElementById('home-asset-list');
+  const pagerEl = document.getElementById('home-asset-pager');
+  const countEl = document.getElementById('home-asset-count');
+  if (!listEl) return;
+
+  const q = (document.getElementById('home-asset-search')?.value || '').trim().toLowerCase();
+  const rows = q ? _homeAssets.filter(a => a.haystack.includes(q)) : _homeAssets;
+  const pages = Math.max(1, Math.ceil(rows.length / HOME_ASSETS_PER_PAGE));
+  if (_homeAssetPage > pages - 1) _homeAssetPage = pages - 1;
+  if (_homeAssetPage < 0) _homeAssetPage = 0;
+
+  const from = _homeAssetPage * HOME_ASSETS_PER_PAGE;
+  const slice = rows.slice(from, from + HOME_ASSETS_PER_PAGE);
+
+  if (!rows.length) {
+    listEl.innerHTML = `<div style="color:#555;padding:8px 0;">${q ? `No coin matches "${q}".` : 'No stablecoins held.'}</div>`;
+  } else {
+    // Two lines per row, matching the currency picker: display ticker above,
+    // currency name and country below. A column of greek-prefixed codes tells
+    // you nothing about what you hold once there are more than a handful.
+    listEl.innerHTML = slice.map(a => {
+      const sub = [a.meta.name, a.meta.country].filter(Boolean).join(' · ');
+      const dp = a.meta.decimals ?? 2;
+      return `<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:5px 0;border-bottom:1px solid rgba(255,255,255,.05);">` +
+             `<span style="min-width:0;">` +
+               `<span style="display:block;color:#ddd;">${a.meta.display}</span>` +
+               (sub ? `<span style="display:block;font-size:10px;color:#666;direction:ltr;">${sub}</span>` : '') +
+             `</span>` +
+             `<span style="white-space:nowrap;font-variant-numeric:tabular-nums;color:#ddd;">` +
+               `${a.amount.toLocaleString(undefined, { minimumFractionDigits: dp, maximumFractionDigits: dp })}` +
+               // RTL signs (ع.د, ل.د, ﷼) would otherwise reorder the amount.
+               (a.meta.sign ? ` <span style="color:#666;direction:ltr;">${a.meta.sign}</span>` : '') +
+             `</span></div>`;
+    }).join('');
+  }
+
+  // The pager is noise when everything already fits on one page.
+  if (pagerEl) {
+    pagerEl.style.display = rows.length > HOME_ASSETS_PER_PAGE ? 'flex' : 'none';
+    if (countEl) countEl.textContent = `${from + 1}–${Math.min(from + HOME_ASSETS_PER_PAGE, rows.length)} of ${rows.length}`;
+    const prev = document.getElementById('home-asset-prev');
+    const next = document.getElementById('home-asset-next');
+    if (prev) prev.disabled = _homeAssetPage === 0;
+    if (next) next.disabled = _homeAssetPage >= pages - 1;
+    if (prev) prev.style.opacity = prev.disabled ? '.35' : '1';
+    if (next) next.style.opacity = next.disabled ? '.35' : '1';
+  }
+}
+
+function _wireHomeAssetControls() {
+  const search = document.getElementById('home-asset-search');
+  if (search && !search.dataset.wired) {
+    search.dataset.wired = '1';
+    let t = null;
+    search.addEventListener('input', () => {
+      clearTimeout(t);
+      // A new query starts at the first page; keeping the offset shows blank.
+      t = setTimeout(() => { _homeAssetPage = 0; _renderHomeAssetPage(); }, 120);
+    });
+  }
+  for (const [id, step] of [['home-asset-prev', -1], ['home-asset-next', 1]]) {
+    const b = document.getElementById(id);
+    if (b && !b.dataset.wired) {
+      b.dataset.wired = '1';
+      b.onclick = () => { _homeAssetPage += step; _renderHomeAssetPage(); };
+    }
+  }
+}
+
+async function _refreshAssetList() {
+  const wrapEl = document.getElementById('home-assets');
   const addr = window._localWallet;
-  if (!listEl || !addr) return;
+  if (!wrapEl || !addr) return;
   try {
     const port = window._minerApiPort || 3456;
     const [reg, r] = await Promise.all([
@@ -4916,29 +4994,24 @@ async function _refreshAssetList() {
     ]);
     const data = await r.json();
     const held = Object.entries(data.assets || {}).filter(([, v]) => (v.raw || 0) > 0);
-    if (!held.length) { listEl.style.display = 'none'; listEl.innerHTML = ''; return; }
-    // Two lines per row, matching the currency picker: display ticker above,
-    // currency name and country below. A column of greek-prefixed codes tells
-    // you nothing about what you hold once there are more than a handful.
-    // Largest holding first, amounts group-separated and tabular so the decimal
-    // points line up down the column.
-    held.sort((x, y) => (y[1].display ?? y[1].raw) - (x[1].display ?? x[1].raw));
-    listEl.innerHTML = held.map(([t, v]) => {
-      const a = reg[t] || { display: t, sign: '', decimals: 2 };
-      const amount = (v.display ?? (v.raw / 10 ** (a.decimals ?? 2)));
-      const sub = [a.name, a.country].filter(Boolean).join(' · ');
-      return `<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:5px 0;border-bottom:1px solid rgba(255,255,255,.05);">` +
-             `<span style="min-width:0;">` +
-               `<span style="display:block;color:#ddd;">${a.display}</span>` +
-               (sub ? `<span style="display:block;font-size:10px;color:#666;direction:ltr;">${sub}</span>` : '') +
-             `</span>` +
-             `<span style="white-space:nowrap;font-variant-numeric:tabular-nums;color:#ddd;">` +
-               `${amount.toLocaleString(undefined, { minimumFractionDigits: a.decimals ?? 2, maximumFractionDigits: a.decimals ?? 2 })}` +
-               // RTL signs (ع.د, ل.د, ﷼) would otherwise reorder the amount.
-               (a.sign ? ` <span style="color:#666;direction:ltr;">${a.sign}</span>` : '') +
-             `</span></div>`;
-    }).join('');
-    listEl.style.display = '';
+    if (!held.length) { wrapEl.style.display = 'none'; return; }
+
+    _homeAssets = held.map(([t, v]) => {
+      const meta = reg[t] || { display: t, sign: '', decimals: 2 };
+      const amount = v.display ?? (v.raw / 10 ** (meta.decimals ?? 2));
+      return {
+        ticker: t,
+        amount,
+        meta,
+        // ticker, ISO, name and country all match, so "bhu", "BTN", "ngultrum"
+        // and "Bhutan" all find the same row.
+        haystack: [t, meta.display, meta.iso, meta.name, meta.country].filter(Boolean).join(' ').toLowerCase(),
+      };
+    }).sort((a, b) => b.amount - a.amount);
+
+    wrapEl.style.display = '';
+    _wireHomeAssetControls();
+    _renderHomeAssetPage();
   } catch { /* offline — leave as-is */ }
 }
 

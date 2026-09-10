@@ -1480,8 +1480,19 @@
               <span class="home-balance-dai">DAI</span>
             </div>
             <div class="home-balance-usd" id="home-balance-usd">≈ — USD</div>
-            <!-- Stablecoin holdings — one row per non-zero asset (αιGEL ₾, αιKGS…) -->
-            <div id="home-asset-list" style="display:none;margin-top:6px;border-top:1px solid rgba(255,255,255,.08);padding-top:6px;font-size:12px;"></div>
+            <!-- Stablecoin holdings — searchable and paged; a wallet can hold
+                 well over a hundred of these once the currency set expands. -->
+            <div id="home-assets" style="display:none;margin-top:6px;border-top:1px solid rgba(255,255,255,.08);padding-top:6px;">
+              <input id="home-asset-search" type="text" autocomplete="off"
+                     placeholder="Search your coins"
+                     style="width:100%;box-sizing:border-box;margin-bottom:5px;padding:4px 8px;border-radius:5px;border:1px solid #222;background:#0a0a0a;color:#ddd;font-family:monospace;font-size:11px;outline:none;">
+              <div id="home-asset-list" style="font-size:12px;"></div>
+              <div id="home-asset-pager" style="display:none;align-items:center;justify-content:space-between;gap:8px;margin-top:6px;font-size:11px;color:#666;font-family:monospace;">
+                <button id="home-asset-prev" style="padding:2px 8px;border-radius:4px;border:1px solid #222;background:#0c0c0c;color:#888;cursor:pointer;font-family:monospace;">←</button>
+                <span id="home-asset-count"></span>
+                <button id="home-asset-next" style="padding:2px 8px;border-radius:4px;border:1px solid #222;background:#0c0c0c;color:#888;cursor:pointer;font-family:monospace;">→</button>
+              </div>
+            </div>
             <div class="home-balance-addr" id="home-balance-addr">connecting…</div>
           </div>
           <div class="home-actions">
