@@ -4824,6 +4824,11 @@ async function _populateSendCurrencySelect() {
   }
   sel.value = [...sel.options].some(o => o.value === prev) ? prev : 'DAI';
   window._sendCurrency = sel.value;
+  // Same searchable picker as the P2P filter and the create-order selectors —
+  // 162 options in a native dropdown can only be typed-ahead by ticker, so
+  // "Bhutan" finds nothing.
+  _attachCurrencyPicker('send-currency');
+  sel._syncPickerLabel?.();
 }
 
 function syncSendWallet() {
@@ -4912,11 +4917,26 @@ async function _refreshAssetList() {
     const data = await r.json();
     const held = Object.entries(data.assets || {}).filter(([, v]) => (v.raw || 0) > 0);
     if (!held.length) { listEl.style.display = 'none'; listEl.innerHTML = ''; return; }
+    // Two lines per row, matching the currency picker: display ticker above,
+    // currency name and country below. A column of greek-prefixed codes tells
+    // you nothing about what you hold once there are more than a handful.
+    // Largest holding first, amounts group-separated and tabular so the decimal
+    // points line up down the column.
+    held.sort((x, y) => (y[1].display ?? y[1].raw) - (x[1].display ?? x[1].raw));
     listEl.innerHTML = held.map(([t, v]) => {
       const a = reg[t] || { display: t, sign: '', decimals: 2 };
-      return `<div style="display:flex;justify-content:space-between;padding:2px 0;">` +
-             `<span style="color:#9ca3af;">${a.display}</span>` +
-             `<span style="font-family:monospace;">${(v.display ?? (v.raw / 10 ** a.decimals)).toFixed(2)} ${a.sign || ''}</span></div>`;
+      const amount = (v.display ?? (v.raw / 10 ** (a.decimals ?? 2)));
+      const sub = [a.name, a.country].filter(Boolean).join(' · ');
+      return `<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:5px 0;border-bottom:1px solid rgba(255,255,255,.05);">` +
+             `<span style="min-width:0;">` +
+               `<span style="display:block;color:#ddd;">${a.display}</span>` +
+               (sub ? `<span style="display:block;font-size:10px;color:#666;direction:ltr;">${sub}</span>` : '') +
+             `</span>` +
+             `<span style="white-space:nowrap;font-variant-numeric:tabular-nums;color:#ddd;">` +
+               `${amount.toLocaleString(undefined, { minimumFractionDigits: a.decimals ?? 2, maximumFractionDigits: a.decimals ?? 2 })}` +
+               // RTL signs (ع.د, ل.د, ﷼) would otherwise reorder the amount.
+               (a.sign ? ` <span style="color:#666;direction:ltr;">${a.sign}</span>` : '') +
+             `</span></div>`;
     }).join('');
     listEl.style.display = '';
   } catch { /* offline — leave as-is */ }
