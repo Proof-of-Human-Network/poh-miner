@@ -4903,6 +4903,127 @@ function syncHomeBalance() {
   _refreshAssetList();
 }
 
+
+// ── Display currency ──────────────────────────────────────────────────────────
+// Purely presentational: balances are shown converted into a currency the user
+// picked. It never changes what is held or paid. Stored per device, because it
+// is a reading preference rather than node configuration.
+const DISPLAY_CCY_KEY = 'dai.displayCurrency';
+let _displayRates = null;      // { currency, perUnit, sources } | { unavailable }
+
+function getDisplayCurrency() {
+  try { return localStorage.getItem(DISPLAY_CCY_KEY) || 'USD'; } catch { return 'USD'; }
+}
+function setDisplayCurrency(c) {
+  try { localStorage.setItem(DISPLAY_CCY_KEY, c || 'USD'); } catch { /* private mode */ }
+}
+
+/** Options: USD plus every currency the chain mirrors, by ISO code. */
+function buildDisplayCurrencySelector(sel) {
+  if (!sel) return;
+  const reg = window._assetRegistry || {};
+  const seen = new Set(['USD']);
+  const rows = [{ code: 'USD', label: 'USD — US Dollar' }];
+  for (const a of Object.values(reg)) {
+    if (!a.iso || seen.has(a.iso)) continue;
+    seen.add(a.iso);
+    rows.push({ code: a.iso, label: `${a.iso} — ${a.name || a.display}` });
+  }
+  rows.sort((x, y) => (x.code === 'USD' ? -1 : y.code === 'USD' ? 1 : x.code.localeCompare(y.code)));
+  sel.innerHTML = rows.map(r => `<option value="${r.code}">${r.label}</option>`).join('');
+  sel.value = getDisplayCurrency();
+  if (!sel.dataset.wired) {
+    sel.dataset.wired = '1';
+    sel.addEventListener('change', async () => {
+      setDisplayCurrency(sel.value);
+      await refreshDisplayRates();
+      _renderHomeAssetPage();
+      _updateUsdBalanceDisplay();
+    });
+  }
+}
+
+/** Ask the node what a unit of each asset is worth in the chosen currency. */
+async function refreshDisplayRates() {
+  const cur = getDisplayCurrency();
+  try {
+    const port = window._minerApiPort || 3456;
+    const r = await fetch(`http://localhost:${port}/api/rates/display?currency=${encodeURIComponent(cur)}`);
+    _displayRates = await r.json();
+  } catch {
+    _displayRates = { unavailable: true, reason: 'offline' };
+  }
+  return _displayRates;
+}
+
+/** Converted value of one asset amount, or null when nothing honest can be shown. */
+function inDisplayCurrency(ticker, amount) {
+  if (!_displayRates || _displayRates.unavailable) return null;
+  const per = _displayRates.perUnit?.[ticker];
+  if (!(per > 0) || !(amount > 0)) return null;
+  return amount * per;
+}
+
+function formatDisplayCurrency(value) {
+  const cur = getDisplayCurrency();
+  try {
+    return value.toLocaleString(undefined, { style: 'currency', currency: cur, maximumFractionDigits: 2 });
+  } catch {
+    // Not an ISO code Intl knows (aiPRB and friends) — fall back to a plain number.
+    return `${value.toLocaleString(undefined, { maximumFractionDigits: 2 })} ${cur}`;
+  }
+}
+
+// ── Asset action sheet ────────────────────────────────────────────────────────
+// Tapping a holding should do something. Send, receive and trade are the three
+// things anyone wants from a balance, so they are one tap from it.
+function showAssetActions(ticker) {
+  const meta = (window._assetRegistry || {})[ticker] || { display: ticker };
+  const sub = [meta.name, meta.country].filter(Boolean).join(' · ');
+
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.82);z-index:10000;display:flex;align-items:center;justify-content:center;';
+  const panel = document.createElement('div');
+  panel.style.cssText = 'width:min(320px,88vw);background:#0a0a0a;border:1px solid #222;border-radius:10px;padding:16px;font-family:monospace;';
+
+  const close = () => overlay.remove();
+  overlay.onclick = e => { if (e.target === overlay) close(); };
+  document.addEventListener('keydown', function esc(e) {
+    if (e.key === 'Escape') { close(); document.removeEventListener('keydown', esc); }
+  });
+
+  panel.innerHTML =
+    `<div style="font-size:15px;color:#eee;">${meta.display}</div>` +
+    (sub ? `<div style="font-size:10px;color:#666;margin-top:2px;direction:ltr;">${sub}</div>` : '') +
+    `<div id="asset-actions-btns" style="display:flex;gap:8px;margin-top:14px;"></div>`;
+  overlay.appendChild(panel);
+  document.body.appendChild(overlay);
+
+  const btns = panel.querySelector('#asset-actions-btns');
+  const mk = (label, fn) => {
+    const b = document.createElement('button');
+    b.textContent = label;
+    b.style.cssText = 'flex:1;padding:9px 0;border-radius:6px;border:1px solid #1a3a27;background:#052e16;color:#22c55e;cursor:pointer;font-family:monospace;font-size:12px;';
+    b.onclick = () => { close(); fn(); };
+    btns.appendChild(b);
+  };
+
+  mk('Send', () => {
+    // Prefill the asset so the send screen opens on the coin that was tapped.
+    window._sendCurrency = ticker;
+    const sel = document.getElementById('send-currency');
+    if (sel) { sel.value = ticker; sel._syncPickerLabel?.(); sel.dispatchEvent(new Event('change', { bubbles: true })); }
+    switchTab('send'); showSendView();
+  });
+  mk('Receive', () => { switchTab('send'); showReceiveView(); });
+  mk('P2P', () => {
+    _p2pCurrency = ticker;
+    switchTab('p2p');
+    if (typeof p2pBuildCurrencyPicker === 'function') p2pBuildCurrencyPicker();
+    if (typeof p2pRenderOrders === 'function') p2pRenderOrders();
+  });
+}
+
 // Stablecoin rows on the home balance card — shown only when the wallet holds any.
 //
 // Searchable and paged: a wallet can hold well over a hundred once the currency

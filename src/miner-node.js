@@ -65,6 +65,7 @@ import { RewardClaimStore } from './storage/reward-claim-store.js';
 import { skillsManager } from './skills/manager.js';
 import { SKILL_CONTEXT_MAX, SKILL_JOB_CONTEXT_MAX } from './skills/limits.js';
 import { feeForLive } from './jobs/gas-price.js';
+import { displayRates } from './rates/display-rates.js';
 import { loadAllSkills, writeSkillFile } from './skills/loader.js';
 import { estimateTokens, estimateChatTokens, outputTokenCap, settleFee, timeoutFee, GAS } from './jobs/gas-estimator.js';
 import { ASSETS, STABLE_TICKERS, normalizeCurrency, isKnownAsset, decimalsOf, listAssets, fromRaw as assetFromRaw } from './assets.js';
@@ -1322,6 +1323,19 @@ export class DAIMinerNode {
           queueLength,
           reputation:    rep,
         }));
+      }
+
+      // ── Display-currency rates: GET /api/rates/display?currency=RUB ─────────
+      // What one unit of DAI and of every stablecoin is worth in the currency
+      // the user chose to read balances in. Shared by the desktop app and the
+      // phone so the two cannot show different numbers for the same wallet.
+      if (req.method === 'GET' && url.pathname === '/api/rates/display') {
+        const want = url.searchParams.get('currency') || this.config.displayCurrency || 'USD';
+        // Promise chain, not await: this handler is not async.
+        displayRates(want, { orderStore: this.p2pOrderStore })
+          .then(rates => res.end(JSON.stringify(rates)))
+          .catch(e => res.end(JSON.stringify({ unavailable: true, reason: 'error', message: e.message, currency: want })));
+        return;
       }
 
       // Asset registry — tickers, decimals, display names for every on-chain asset.

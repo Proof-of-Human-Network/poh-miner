@@ -216,6 +216,12 @@ export function getDefaultConfig() {
       plannerTimeoutMs: 20000,
     },
 
+    // Currency the UI converts balances into for display. Never affects what is
+    // held or paid — purely how a balance is shown. Empty means "no conversion".
+    // Resolved by src/rates/display-rates.js: traded rates first, forex second,
+    // and nothing at all when no DAI/USD market exists to anchor against.
+    displayCurrency: 'USD',
+
     // Shipped no-auth HTTP MCPs — none require a key, login or OAuth, and each
     // connects lazily on first use. Partner set: tandem, inside-ads, goji,
     // akari-trust, akari, ai-portal, airshelf. Public knowledge/docs set: deepwiki,
