@@ -81,7 +81,7 @@ export function buildPage(c, l) {
       <a href="#here">${esc(l.navCountry)}</a>
       <a href="../index.html">${esc(l.navDai)}</a>
       <a href="../wallet/">${esc(l.navWallet)}</a>
-      <a href="../explorer/">Explorer</a>
+      <a href="../explorer/">${esc(l.navExplorer)}</a>
       <a href="../miner.html">${esc(l.navMiner)}</a>
     </nav>
   </div>
@@ -158,7 +158,7 @@ export function buildPage(c, l) {
     <span>${esc(l.footTag)}</span>
     <span class="foot-links">
       <a href="../index.html">iamai.kg</a>
-      <a href="../explorer/">Explorer</a>
+      <a href="../explorer/">${esc(l.navExplorer)}</a>
       <a href="https://t.me/iamaihub" target="_blank" rel="noopener">Telegram</a>
     </span>
   </div>
