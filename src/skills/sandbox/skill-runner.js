@@ -44,6 +44,10 @@ globalThis.import = dynamicImport;
 globalThis.require = require;
 globalThis.process = _safeProcess;
 globalThis.Function = _BlockedFunction;
+globalThis.eval = _blocked;
+try { _OrigFunction.prototype.constructor = _BlockedFunction; } catch { /* frozen */ }
+try { Object.constructor = _BlockedFunction; } catch { /* frozen */ }
+try { Array.constructor = _BlockedFunction; } catch { /* frozen */ }
 
 // ── Patch fetch to enforce allowedEndpoints and count calls ───────────────────
 let _fetchCallCount = 0;

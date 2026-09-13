@@ -42,6 +42,8 @@
       'settings.rpc': 'RPC Providers', 'settings.etherscan': 'Etherscan API Key', 'settings.save': 'Save',
       'settings.close': 'Close', 'settings.language': 'Language',
       'settings.lang_desc': 'Choose your preferred language. Changes apply instantly.',
+      'settings.display_currency': 'Display currency',
+      'settings.display_currency_desc': 'Balances are shown converted into this currency. It never changes what you hold or what you pay.',
       'skill_modal.title': 'Skill Not Enabled',
       'skill_modal.desc': 'This skill is not active on your node. Enable it in the Skills tab, or let the community process the request.',
       'skill_modal.enable': 'Enable Skill', 'skill_modal.community': 'Proceed via Community',

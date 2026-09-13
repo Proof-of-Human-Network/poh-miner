@@ -54,10 +54,8 @@ export function makeP2PAuth(body, payload) {
  * Verify a gossiped P2P transition. Does not require the user's wallet file
  * to live on this node — only that the signature binds to the address.
  */
-export function verifyGossipedP2PTransition(t) {
-  if (!t || !P2P_TRANSITION_TYPES.has(t.type)) return { ok: false, reason: 'unknown type' };
-  if (!p2pTransitionKey(t)) return { ok: false, reason: 'unkeyed' };
-  const auth = t._auth;
+/** Verify a signed P2P auth blob (create-order, referral, …) without a local wallet file. */
+export function verifyP2PAuthBlob(auth) {
   if (!auth?.signature || !auth?.signingPublicKey || !auth?.payload || typeof auth.payload !== 'object') {
     return { ok: false, reason: 'missing auth' };
   }
@@ -75,4 +73,10 @@ export function verifyGossipedP2PTransition(t) {
     }
   }
   return { ok: false, reason: 'invalid signature' };
+}
+
+export function verifyGossipedP2PTransition(t) {
+  if (!t || !P2P_TRANSITION_TYPES.has(t.type)) return { ok: false, reason: 'unknown type' };
+  if (!p2pTransitionKey(t)) return { ok: false, reason: 'unkeyed' };
+  return verifyP2PAuthBlob(t._auth);
 }

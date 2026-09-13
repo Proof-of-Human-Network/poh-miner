@@ -1,5 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { JobBoard } from '../src/jobs/job-board.js';
+import { Wallet } from '../src/wallet/wallet.js';
+import { computeBoardJobPaymentHash } from '../src/jobs/board-payment.js';
 
 describe('JobBoard', () => {
   let board;
@@ -83,15 +85,31 @@ describe('JobBoard', () => {
     expect(board.submit({ type: 'verdict' }).jobId).toBeTruthy();
   });
 
-  it('accepts a fee job with payment + budget and carries it to pending-results', () => {
+  it('rejects a fee job with a garbage payment proof', () => {
     const r = board.submit({ id: 'f1', type: 'skill', skillId: 'x',
       requesterAddress: 'daireq', maxBudget: 1000, paymentTx: { txHash: 'h', signature: 's', nonce: 3 } });
-    expect(r.jobId).toBe('f1');
-    board.claim('f1', 'wkr');
-    board.postResult('f1', 'wkr', { type: 'skill', output: 42 });
+    expect(r.error).toBeTruthy();
+    expect(r.code).toMatch(/PAYMENT/);
+  });
+
+  it('accepts a fee job with a verified payment + budget and carries it to pending-results', () => {
+    const w = Wallet.generate();
+    const jobId = 'f1';
+    const nonce = 3;
+    const maxBudget = 1000;
+    const txHash = computeBoardJobPaymentHash({ jobId, requesterAddress: w.address, amount: maxBudget, nonce });
+    const signature = w.sign(txHash);
+    const r = board.submit({
+      id: jobId, type: 'skill', skillId: 'x',
+      requesterAddress: w.address, maxBudget, signingPublicKey: w.signingPublicKey,
+      paymentTx: { txHash, signature, nonce, signingPublicKey: w.signingPublicKey },
+    });
+    expect(r.jobId).toBe(jobId);
+    board.claim(jobId, 'wkr');
+    board.postResult(jobId, 'wkr', { type: 'skill', output: 42 });
     const [p] = board.takePendingResults();
-    expect(p).toMatchObject({ jobId: 'f1', worker: 'wkr', jobType: 'skill', requesterAddress: 'daireq', maxBudget: 1000 });
-    expect(p.paymentTx.nonce).toBe(3);
+    expect(p).toMatchObject({ jobId, worker: 'wkr', jobType: 'skill', requesterAddress: w.address, maxBudget });
+    expect(p.paymentTx.nonce).toBe(nonce);
   });
 
   it('takePendingResults leases a handed-out result (not re-offered within the lease)', () => {

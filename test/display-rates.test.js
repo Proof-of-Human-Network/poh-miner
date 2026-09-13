@@ -64,6 +64,14 @@ describe('rate resolution', () => {
     expect(isoForDisplay('USD')).toBe('USD');
     expect(isoForDisplay('rub')).toBe('RUB');
   });
+
+  it('finds a P2P quote booked under the chain ticker when display is the ISO', async () => {
+    const r = await displayRates('KGS', { orderStore: book({ 'DAI|USDT-ERC20': 0.5, 'DAI|KGST': 44 }), forex: FOREX });
+    expect(r.perUnit.DAI).toBe(44);
+    expect(r.sources.DAI).toBe('p2p-direct');
+    expect(r.perUnit.KGST).toBe(1);
+    expect(r.sources.KGST).toBe('identity');
+  });
 });
 
 describe('convertBalances', () => {

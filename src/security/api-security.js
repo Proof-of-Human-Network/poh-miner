@@ -5,7 +5,7 @@
 const LOCAL_ADDRS = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1']);
 
 /** POST paths reachable from remote peers (everything else is localhost-only). */
-const PUBLIC_POST_PATHS = new Set(['/gossip', '/api/mcp/execute']);
+const PUBLIC_POST_PATHS = new Set(['/gossip']);
 
 /**
  * Prefixes reachable from remote peers. Used where the path carries an id, so an
@@ -16,12 +16,41 @@ const PUBLIC_POST_PATHS = new Set(['/gossip', '/api/mcp/execute']);
  * and it carries only payloads sealed to a session key the relay cannot read.
  * Abuse is bounded inside PairingRelay (topic/message/size/TTL caps) rather than
  * by an identity check that cannot exist at this stage of the handshake.
+ *
+ * /api/mcp/execute is NOT public. Builtin tools (including onion-search) still
+ * run inside a paid /job; remote callers cannot use this node as a free proxy.
  */
 const PUBLIC_POST_PREFIXES = ['/api/pair/'];
 
+/** Origins a loopback admin UI is allowed to CORS-share with. Never https://evil. */
+function isTrustedLocalOrigin(origin) {
+  if (!origin || origin === 'null' || origin === 'file://') return true;
+  try {
+    const u = new URL(origin);
+    return u.protocol === 'file:'
+      || ((u.hostname === '127.0.0.1' || u.hostname === 'localhost' || u.hostname === '::1')
+          && (u.protocol === 'http:' || u.protocol === 'https:'));
+  } catch {
+    return false;
+  }
+}
+
 export function isLocalRequest(req) {
-  const remote = req.socket?.remoteAddress || '';
-  return LOCAL_ADDRS.has(remote);
+  const remote = (req.socket?.remoteAddress || '').replace(/^::ffff:/, '');
+  return remote === '127.0.0.1' || remote === '::1' || LOCAL_ADDRS.has(req.socket?.remoteAddress || '');
+}
+
+/**
+ * True only for requests originating on this machine and NOT relayed through a
+ * reverse proxy. nginx proxies to 127.0.0.1, so socket IP is loopback for every
+ * external request too. A real reverse proxy stamps X-Forwarded-For / X-Real-IP;
+ * a genuine local admin client does not.
+ */
+export function isTrulyLocalRequest(req) {
+  if (!isLocalRequest(req)) return false;
+  const h = req.headers || {};
+  if (h['x-forwarded-for'] || h['x-real-ip'] || h['forwarded']) return false;
+  return true;
 }
 
 export function isPublicPostPath(pathname) {
@@ -45,9 +74,13 @@ export function applyCorsHeaders(req, res) {
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   res.setHeader('Access-Control-Max-Age', '86400');
 
-  if (local && origin) {
-    res.setHeader('Access-Control-Allow-Origin', origin);
-    res.setHeader('Vary', 'Origin');
+  // Reflect Origin only for the local desktop/file UI. Reflecting an arbitrary
+  // https origin on loopback lets a malicious page CSRF /api/wallet/send.
+  if (local && isTrustedLocalOrigin(origin)) {
+    if (origin) {
+      res.setHeader('Access-Control-Allow-Origin', origin === 'null' ? 'null' : origin);
+      res.setHeader('Vary', 'Origin');
+    }
   } else if (!stateChanging) {
     // Read-only cross-origin GETs (e.g. peer discovery) — no ACAO needed for simple requests
   }

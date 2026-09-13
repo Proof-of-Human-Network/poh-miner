@@ -1,10 +1,20 @@
 import { describe, it, expect } from 'vitest';
 import { JobBoard } from '../src/jobs/job-board.js';
 import { settleFee, estimateChatTokens, outputTokenCap, GAS } from '../src/jobs/gas-estimator.js';
+import { Wallet } from '../src/wallet/wallet.js';
+import { computeBoardJobPaymentHash } from '../src/jobs/board-payment.js';
 
-// A signed paymentTx is required for paid board jobs.
-const PT = { txHash: 'h', signature: 's' };
-const paidJob = (id, maxBudget) => ({ id, type: 'compute', model: 'm', requesterAddress: 'daireq', maxBudget, paymentTx: PT });
+const paidJob = (id, maxBudget) => {
+  const w = Wallet.generate();
+  const nonce = 0;
+  const txHash = computeBoardJobPaymentHash({ jobId: id, requesterAddress: w.address, amount: maxBudget, nonce });
+  const signature = w.sign(txHash);
+  return {
+    id, type: 'compute', model: 'm',
+    requesterAddress: w.address, maxBudget, signingPublicKey: w.signingPublicKey,
+    paymentTx: { txHash, signature, nonce, signingPublicKey: w.signingPublicKey },
+  };
+};
 
 describe('no-refund settlement (change 1)', () => {
   it('takes the whole bid as the fee regardless of tokens used', () => {

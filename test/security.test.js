@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { isLocalRequest, rejectNonLocalStateChange, isPublicPostPath } from '../src/security/api-security.js';
+import { isLocalRequest, isTrulyLocalRequest, rejectNonLocalStateChange, isPublicPostPath, applyCorsHeaders } from '../src/security/api-security.js';
 import { normalizeSkillId } from '../src/security/skill-id.js';
 import { skillsManager } from '../src/skills/manager.js';
 import { validateCoinbase } from '../src/consensus/coinbase-validator.js';
@@ -24,7 +24,7 @@ describe('API security', () => {
 
   it('allows /gossip from remote but blocks wallet mutations', () => {
     expect(isPublicPostPath('/gossip')).toBe(true);
-    expect(isPublicPostPath('/api/mcp/execute')).toBe(true);
+    expect(isPublicPostPath('/api/mcp/execute')).toBe(false);
     const res = { statusCode: 200, end: () => {} };
     const remotePost = { method: 'POST', socket: { remoteAddress: '8.8.8.8' } };
     const blocked = rejectNonLocalStateChange(remotePost, res, '/api/tx/submit');
@@ -33,6 +33,22 @@ describe('API security', () => {
     res.statusCode = 200;
     const gossipAllowed = rejectNonLocalStateChange(remotePost, res, '/gossip');
     expect(gossipAllowed).toBe(false);
+  });
+
+  it('treats nginx-proxied loopback as NOT truly local', () => {
+    const proxied = { socket: { remoteAddress: '127.0.0.1' }, headers: { 'x-forwarded-for': '8.8.8.8' } };
+    expect(isTrulyLocalRequest(proxied)).toBe(false);
+    expect(isTrulyLocalRequest({ socket: { remoteAddress: '127.0.0.1' }, headers: {} })).toBe(true);
+  });
+
+  it('does not reflect an untrusted browser origin on loopback (CSRF)', () => {
+    const headers = {};
+    const res = { setHeader: (k, v) => { headers[k] = v; } };
+    applyCorsHeaders(
+      { method: 'POST', socket: { remoteAddress: '127.0.0.1' }, headers: { origin: 'https://evil.example' } },
+      res,
+    );
+    expect(headers['Access-Control-Allow-Origin']).toBeUndefined();
   });
 });
 

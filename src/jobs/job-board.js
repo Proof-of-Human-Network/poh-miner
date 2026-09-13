@@ -16,6 +16,9 @@
  * canonical record and are also pulled by block proposers to reward the worker.
  */
 
+import { Wallet } from '../wallet/wallet.js';
+import { computeBoardJobPaymentHash } from './board-payment.js';
+
 // Job types whose compute must be paid for (parity with the miner's /job fee gate).
 // Free 'verdict' (decentralized-artificial-intelligence) jobs are rewarded from coinbase instead.
 export const FEE_REQUIRED_BOARD_TYPES = new Set(['skill', 'compute']);
@@ -79,8 +82,29 @@ export class JobBoard {
       if (!job.requesterAddress || !(job.maxBudget > 0)) {
         return { error: `${job.type} jobs require requesterAddress and maxBudget > 0`, code: 'FEE_REQUIRED' };
       }
+      const spk = job.signingPublicKey || job.paymentTx.signingPublicKey;
+      if (!spk || !Wallet.isAddressBoundToSigningKey(job.requesterAddress, spk)) {
+        return { error: 'payment key does not match requesterAddress', code: 'PAYMENT_KEY' };
+      }
+      if (typeof job.paymentTx.nonce !== 'number') {
+        return { error: 'paymentTx.nonce required', code: 'PAYMENT_PROOF_REQUIRED' };
+      }
     }
     const jobId = job.id || `job-${this._now()}-${Math.random().toString(36).slice(2, 8)}`;
+    if (FEE_REQUIRED_BOARD_TYPES.has(job.type)) {
+      const expected = computeBoardJobPaymentHash({
+        jobId,
+        requesterAddress: job.requesterAddress,
+        amount: job.maxBudget,
+        nonce: job.paymentTx.nonce,
+      });
+      if (job.paymentTx.txHash !== expected) {
+        return { error: 'payment proof does not match this job', code: 'PAYMENT_PROOF_MISMATCH' };
+      }
+      if (!Wallet.verifySignature(job.signingPublicKey || job.paymentTx.signingPublicKey, expected, job.paymentTx.signature)) {
+        return { error: 'invalid payment signature', code: 'INVALID_PAYMENT_SIGNATURE' };
+      }
+    }
     if (this.jobs.has(jobId)) return { jobId }; // idempotent resubmit
     this._sweep();
     const openCount = [...this.jobs.values()].filter(e => e.status === 'open').length;

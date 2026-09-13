@@ -1107,6 +1107,10 @@ async function loadSettingsPanel() {
     buildLangSelector(document.getElementById('settings-language'));
   }
 
+  // Display-currency picker needs the asset registry (ISO codes + names).
+  try { await loadAssetRegistry(); } catch { /* picker still lists USD */ }
+  buildDisplayCurrencySelector(document.getElementById('settings-display-currency'));
+
   // Populate fields from status
   let status = null;
   try {
@@ -2265,7 +2269,14 @@ function _mdParse(text) {
       .replace(/\x02IMATH(\d+)\x03/g, (_, i) => `<span class="math-inline">${math[i]}</span>`);
 
   marked.setOptions({ breaks: true, gfm: true });
-  return restore(marked.parse(protect(text)));
+  // Drop raw HTML so a hostile chat/job reply cannot XSS the unsandboxed renderer
+  // and call wallet:reveal-key.
+  if (typeof marked.use === 'function') {
+    marked.use({ renderer: { html() { return ''; } } });
+  }
+  const html = restore(marked.parse(protect(text)));
+  return String(html).replace(/<script[\s\S]*?<\/script>/gi, '')
+    .replace(/\son\w+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '');
 }
 
 function _renderMath(el) {
@@ -4813,8 +4824,15 @@ async function _populateSendCurrencySelect() {
   const reg = await loadAssetRegistry();
   const tickers = Object.keys(reg);
   // Rebuild if empty or we only cached DAI before /api/assets came up.
-  if (sel.options.length && sel.options.length === tickers.length) return;
-  const prev = sel.value || window._sendCurrency;
+  if (sel.options.length && sel.options.length === tickers.length) {
+    const want = window._sendCurrency || sel.value;
+    if (want && [...sel.options].some(o => o.value === want)) {
+      sel.value = want;
+      sel._syncPickerLabel?.();
+    }
+    return;
+  }
+  const prev = window._sendCurrency || sel.value;
   sel.innerHTML = '';
   for (const a of Object.values(reg)) {
     const opt = document.createElement('option');
@@ -5011,9 +5029,16 @@ function showAssetActions(ticker) {
   mk('Send', () => {
     // Prefill the asset so the send screen opens on the coin that was tapped.
     window._sendCurrency = ticker;
-    const sel = document.getElementById('send-currency');
-    if (sel) { sel.value = ticker; sel._syncPickerLabel?.(); sel.dispatchEvent(new Event('change', { bubbles: true })); }
-    switchTab('send'); showSendView();
+    switchTab('send');
+    showSendView();
+    _populateSendCurrencySelect().then(() => {
+      const sel = document.getElementById('send-currency');
+      if (!sel) return;
+      sel.value = ticker;
+      window._sendCurrency = ticker;
+      sel._syncPickerLabel?.();
+      sel.dispatchEvent(new Event('change', { bubbles: true }));
+    }).catch(() => {});
   });
   mk('Receive', () => { switchTab('send'); showReceiveView(); });
   mk('P2P', () => {
@@ -5052,22 +5077,31 @@ function _renderHomeAssetPage() {
     listEl.innerHTML = `<div style="color:#555;padding:8px 0;">${q ? `No coin matches "${q}".` : 'No stablecoins held.'}</div>`;
   } else {
     // Two lines per row, matching the currency picker: display ticker above,
-    // currency name and country below. A column of greek-prefixed codes tells
-    // you nothing about what you hold once there are more than a handful.
+    // currency name and country below. Converted value (when a rate exists) is
+    // the big white figure; native units stay as a caption. Tapping opens
+    // send / receive / P2P for that coin.
     listEl.innerHTML = slice.map(a => {
       const sub = [a.meta.name, a.meta.country].filter(Boolean).join(' · ');
       const dp = a.meta.decimals ?? 2;
-      return `<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:5px 0;border-bottom:1px solid rgba(255,255,255,.05);">` +
+      const conv = inDisplayCurrency(a.ticker, a.amount);
+      const convLine = conv != null
+        ? `<span style="display:block;font-size:16px;color:#fff;font-variant-numeric:tabular-nums;text-align:right;">${formatDisplayCurrency(conv)}</span>`
+        : '';
+      const native = `${a.amount.toLocaleString(undefined, { minimumFractionDigits: dp, maximumFractionDigits: dp })}` +
+        (a.meta.sign ? ` <span style="color:#666;direction:ltr;">${a.meta.sign}</span>` : '');
+      return `<div class="home-asset-row" data-ticker="${a.ticker}" style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 0;border-bottom:1px solid rgba(255,255,255,.05);cursor:pointer;">` +
              `<span style="min-width:0;">` +
                `<span style="display:block;color:#ddd;">${a.meta.display}</span>` +
                (sub ? `<span style="display:block;font-size:10px;color:#666;direction:ltr;">${sub}</span>` : '') +
              `</span>` +
-             `<span style="white-space:nowrap;font-variant-numeric:tabular-nums;color:#ddd;">` +
-               `${a.amount.toLocaleString(undefined, { minimumFractionDigits: dp, maximumFractionDigits: dp })}` +
-               // RTL signs (ع.د, ل.د, ﷼) would otherwise reorder the amount.
-               (a.meta.sign ? ` <span style="color:#666;direction:ltr;">${a.meta.sign}</span>` : '') +
+             `<span style="white-space:nowrap;text-align:right;">` +
+               convLine +
+               `<span style="font-variant-numeric:tabular-nums;color:#888;font-size:12px;">${native}</span>` +
              `</span></div>`;
     }).join('');
+    listEl.querySelectorAll('.home-asset-row').forEach(el => {
+      el.addEventListener('click', () => showAssetActions(el.dataset.ticker));
+    });
   }
 
   // The pager is noise when everything already fits on one page.
@@ -5132,7 +5166,9 @@ async function _refreshAssetList() {
 
     wrapEl.style.display = '';
     _wireHomeAssetControls();
+    await refreshDisplayRates();
     _renderHomeAssetPage();
+    _updateUsdBalanceDisplay();
   } catch { /* offline — leave as-is */ }
 }
 
@@ -5720,11 +5756,8 @@ function _updateUsdBalanceDisplay() {
   const el = document.getElementById('home-balance-usd');
   if (!el) return;
   const dai = parseFloat(document.getElementById('home-balance-num')?.textContent || '0') || 0;
-  if (_p2pBestUsdRate != null && dai > 0) {
-    el.textContent = `≈ $${(dai * _p2pBestUsdRate).toFixed(2)} USD`;
-  } else {
-    el.textContent = '≈ — USD';
-  }
+  const conv = inDisplayCurrency('DAI', dai);
+  el.textContent = conv != null ? `≈ ${formatDisplayCurrency(conv)}` : '';
 }
 
 function _p2pQuoteIsOnchain(quote) {
@@ -6186,9 +6219,9 @@ async function p2pSelectOrder(orderId, pricePerDAI, quoteCurrency) {
   if (!daiAmount) { if (resultEl) { resultEl.style.display='block'; resultEl.style.color='#ef4444'; resultEl.textContent='Enter DAI amount'; } return; }
   if (resultEl) { resultEl.style.display='block'; resultEl.style.color='#888'; resultEl.textContent='Processing…'; }
   try {
-    const auth = await _p2pLocalAuth('select-order', { orderId, daiAmount, quoteAmount });
+    const auth = await _p2pLocalAuth('select-order', { orderId, daiAmount, quoteAmount, takerPayoutAddress: null });
     const data = await _p2pApiFetch(`/api/p2p/orders/${orderId}/select`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...auth, daiAmount, quoteAmount }),
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...auth, daiAmount, quoteAmount, takerPayoutAddress: null }),
     });
     if (data.error) throw new Error(data.error);
     if (data.atomic) {
@@ -6313,7 +6346,17 @@ async function p2pSubmitCreateOrder() {
       } catch { /* already bound / invalid code — don't block the order */ }
     }
     const orderFields = { side: 'sell', daiAmount: daiAmountRaw, baseAsset, baseDecimals: baseMeta.decimals, quoteCurrency: currency, pricePerDAI: price, minTrade: minT||0, maxTrade: maxT||daiAmt*price, paymentMethods: methods };
-    const auth = await _p2pLocalAuth('create-order', { side: 'sell', daiAmount: daiAmountRaw });
+    const auth = await _p2pLocalAuth('create-order', {
+      side: 'sell',
+      baseAsset: baseAsset || 'DAI',
+      quoteCurrency: currency,
+      daiAmount: daiAmountRaw,
+      pricePerDAI: price,
+      paymentMethods: methods || [],
+      minTrade: orderFields.minTrade ?? 0,
+      maxTrade: orderFields.maxTrade ?? null,
+      baseDecimals: baseMeta.decimals ?? null,
+    });
     const data = await _p2pApiFetch('/api/p2p/orders', {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...auth, ...orderFields }),
     });

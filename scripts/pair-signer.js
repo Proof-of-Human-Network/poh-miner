@@ -201,7 +201,20 @@ export class SignerSession {
     }
 
     // Key order is the contract: address, timestamp, action, then the fields.
-    const payload = JSON.stringify({ address: this.id.address, timestamp, action, ...fields });
+    const allow = {
+      'select-order': ['orderId', 'daiAmount', 'quoteAmount', 'takerPayoutAddress'],
+      'payment-sent': ['tradeId'],
+      'release': ['tradeId'],
+      'cancel': ['tradeId'],
+      'dispute': ['tradeId', 'reason'],
+      'create-order': ['side', 'baseAsset', 'quoteCurrency', 'daiAmount', 'pricePerDAI', 'paymentMethods', 'minTrade', 'maxTrade', 'baseDecimals'],
+      'cancel-order': ['orderId'],
+      'apply-referral': ['code'],
+    }[action] || [];
+    const src = fields && typeof fields === 'object' ? fields : {};
+    const picked = {};
+    for (const k of allow) if (src[k] !== undefined) picked[k] = src[k];
+    const payload = JSON.stringify({ address: this.id.address, timestamp, action, ...picked });
     return this._publish({
       t: 'signed', id,
       address: this.id.address,

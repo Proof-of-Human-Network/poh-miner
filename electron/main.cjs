@@ -327,6 +327,7 @@ app.on('window-all-closed', () => {
 
 // Open external URLs in a popup browser window with an injected "← DAI Miner" back button
 function openInAppBrowser(url) {
+  if (!/^https?:\/\//i.test(String(url || ''))) return;
   const popup = new BrowserWindow({
     width: 1100,
     height: 720,
@@ -334,6 +335,7 @@ function openInAppBrowser(url) {
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
+      sandbox: true,
     },
     title: url,
   });

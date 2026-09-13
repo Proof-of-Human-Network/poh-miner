@@ -65,7 +65,20 @@ export function isoForDisplay(display) {
   if (!d || d === 'USD') return 'USD';
   if (ASSETS[d]?.iso) return ASSETS[d].iso;        // aiBTN -> BTN, KGST -> KGS
   return d.toUpperCase();                          // already an ISO code
-};
+}
+
+/** P2P quotes the book might use for a display currency (ISO and chain ticker). */
+export function quotesForDisplay(display) {
+  const d = String(display || '').trim();
+  const iso = isoForDisplay(d);
+  const quotes = [];
+  if (d) quotes.push(d);
+  if (iso && iso !== d) quotes.push(iso);
+  for (const [t, a] of Object.entries(ASSETS)) {
+    if (a.iso && a.iso.toUpperCase() === iso) quotes.push(t);
+  }
+  return [...new Set(quotes)];
+}
 
 /** How many USD one DAI is worth, from the book. Null when nothing quotes it. */
 export function daiUsd(orderStore) {
@@ -99,10 +112,20 @@ export async function displayRates(display, { orderStore, forex = null } = {}) {
   const sources = {};
 
   const assets = ['DAI', ...STABLE_TICKERS];
+  const quoteAliases = quotesForDisplay(currency);
   for (const t of assets) {
-    // 1. Traded directly against the display currency.
-    const direct = t === currency ? 1 : price(orderStore, currency, t);
-    if (direct > 0) { perUnit[t] = direct; sources[t] = t === currency ? 'identity' : 'p2p-direct'; continue; }
+    // 1. Traded directly against the display currency (ISO or chain ticker).
+    //    KGST displayed in KGS is 1:1 by design — the coin is the currency.
+    if (t !== 'DAI' && isoForDisplay(t) === iso) {
+      perUnit[t] = 1; sources[t] = 'identity'; continue;
+    }
+    let direct = null;
+    for (const q of quoteAliases) {
+      if (q === t) continue;
+      const p = price(orderStore, q, t);
+      if (p > 0) { direct = p; break; }
+    }
+    if (direct > 0) { perUnit[t] = direct; sources[t] = 'p2p-direct'; continue; }
 
     // 2. Bridge through USD.
     if (usdToDisplay == null) continue;             // no forex leg for this currency

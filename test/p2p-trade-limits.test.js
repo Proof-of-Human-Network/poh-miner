@@ -44,8 +44,9 @@ describe('P2P trade limits', () => {
       orderId = store.createOrder({ ...base, minTrade: 20, maxTrade: 60 }).order.id;
     });
 
+    // 10 USDT/DAI → quote Q requires daiAmount = Q/10 DAI = Q/10 * 1e9 raw.
     const take = (quoteAmount) =>
-      store.selectOrder(orderId, { taker: 'daiTAKER', daiAmount: 1e9, quoteAmount });
+      store.selectOrder(orderId, { taker: 'daiTAKER', daiAmount: (quoteAmount / 10) * 1e9, quoteAmount });
 
     it('refuses an amount below the minimum', () => {
       expect(take(19.99).error).toMatch(/below the minimum trade of 20/);
@@ -55,10 +56,15 @@ describe('P2P trade limits', () => {
       expect(take(60.01).error).toMatch(/above the maximum trade of 60/);
     });
 
+    it('refuses a quote that does not match the advertised price', () => {
+      expect(store.selectOrder(orderId, { taker: 'daiCHEAP', daiAmount: 10e9, quoteAmount: 0.01 }).error)
+        .toMatch(/does not match price/);
+    });
+
     it('accepts the boundaries themselves', () => {
-      expect(store.selectOrder(orderId, { taker: 'daiT1', daiAmount: 1e9, quoteAmount: 20 }).trade).toBeTruthy();
+      expect(store.selectOrder(orderId, { taker: 'daiT1', daiAmount: 2e9, quoteAmount: 20 }).trade).toBeTruthy();
       const id2 = store.createOrder({ ...base, minTrade: 20, maxTrade: 60 }).order.id;
-      expect(store.selectOrder(id2, { taker: 'daiT2', daiAmount: 1e9, quoteAmount: 60 }).trade).toBeTruthy();
+      expect(store.selectOrder(id2, { taker: 'daiT2', daiAmount: 6e9, quoteAmount: 60 }).trade).toBeTruthy();
     });
 
     it('accepts an amount inside the range', () => {

@@ -44,7 +44,8 @@ describe('fee gate — paid vs unpaid compute jobs', () => {
     const r = board.submit({
       id: jobId, type: 'skill', skillId: 'web_search', payload: { query: 'x' },
       requesterAddress: requester.address, maxBudget: amount,
-      paymentTx: { txHash, signature, nonce },
+      signingPublicKey: requester.signingPublicKey,
+      paymentTx: { txHash, signature, nonce, signingPublicKey: requester.signingPublicKey },
     });
     expect(r.error).toBeUndefined();
     expect(r.jobId).toBe(jobId);

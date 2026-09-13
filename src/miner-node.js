@@ -47,7 +47,7 @@ import {
 } from './consensus/block-validator.js';
 import { replayChainLedger, replayChainLedgerAsync } from './consensus/tx-ledger.js';
 import { FINALITY_DEPTH, evaluateReorg, verifyCheckpoint, chainHonorsCheckpoint } from './consensus/finality.js';
-import { p2pTransitionKey, makeP2PAuth, verifyGossipedP2PTransition } from './p2p/transitions.js';
+import { p2pTransitionKey, makeP2PAuth, verifyGossipedP2PTransition, verifyP2PAuthBlob } from './p2p/transitions.js';
 import { autoForwardPort } from './net/port-forward.js';
 import { computeVerdictWithExistingDai } from './compute/dai-adapter.js';
 import { getBrain, getBrainDataDir, getQvacModels } from './compute/adapters/real-dai.js';
@@ -98,7 +98,8 @@ import { needsDatasetLookup, searchDatasets, disambiguateDataset } from './datas
 import { needsHfModelLookup, searchModelsWithFallback, pickRelevantModels, formatModelSuggestions } from './datasets/hf-model-search.js';
 import * as hfDatasetManager from './datasets/hf-dataset-manager.js';
 import { serveHfDataset, pullHfDatasetFromPeer } from './datasets/hf-dataset-peer-serve.js';
-import { applyCorsHeaders, rejectNonLocalStateChange } from './security/api-security.js';
+import { applyCorsHeaders, rejectNonLocalStateChange, isTrulyLocalRequest } from './security/api-security.js';
+import { readLimitedBody, MAX_BODY_BYTES } from './security/bootnode-auth.js';
 import { normalizeSkillId } from './security/skill-id.js';
 import { buildWalletJobContext, promptPreviewFromJob, jobToSearchDocument, buildAllSearchDocuments, PROMPT_PREVIEW_MAX } from './chain/chain-job-index.js';
 import { seal as sealChat } from './security/chat-crypto.js';
@@ -350,21 +351,7 @@ function computeJobPaymentHash({ jobId, requesterAddress, minerAddress, amount, 
 }
 
 
-/**
- * True only for requests originating on this machine and NOT relayed through a
- * reverse proxy. nginx proxies to 127.0.0.1:3456, so req.socket.remoteAddress is
- * loopback for every external request too — a loopback check alone is bypassed by
- * any proxied traffic. A real reverse proxy always stamps X-Forwarded-For /
- * X-Real-IP; a genuine local admin client (the node's own desktop/CLI UI) does not.
- * Guards endpoints that sign with on-disk keys or push notifications.
- */
-function isTrulyLocalRequest(req) {
-  const remote = (req.socket.remoteAddress || '').replace(/^::ffff:/, '');
-  const isLoopback = remote === '127.0.0.1' || remote === '::1';
-  if (!isLoopback) return false;
-  if (req.headers['x-forwarded-for'] || req.headers['x-real-ip'] || req.headers['forwarded']) return false;
-  return true;
-}
+// isTrulyLocalRequest lives in api-security.js (nginx-aware loopback check).
 
 // Well-known production bootnodes. Used when no bootnodes are configured
 // (e.g. fresh GUI onboarding). Individual users can override via config.bootnodes.
@@ -1294,6 +1281,15 @@ export class DAIMinerNode {
   startWalletApiServer(port = 3456) {
     const server = http.createServer((req, res) => {
       applyCorsHeaders(req, res);
+      // Hard cap every request body so a public :3456 cannot be memory-DoS'd.
+      // Handlers still concatenate chunks; destroy() stops the stream.
+      if (req.method !== 'GET' && req.method !== 'HEAD') {
+        let _bodyBytes = 0;
+        req.on('data', (chunk) => {
+          _bodyBytes += chunk.length;
+          if (_bodyBytes > MAX_BODY_BYTES) req.destroy();
+        });
+      }
 
       if (req.method === 'OPTIONS') {
         res.statusCode = 204;
@@ -1578,6 +1574,10 @@ export class DAIMinerNode {
       // Called by the mobile wallet's "Rebuild" action. The replay is expensive
       // (30-120s over 50k blocks) so it runs async and is rate-limited globally.
       if (req.method === 'POST' && url.pathname === '/api/wallet/rebuild') {
+        if (!isTrulyLocalRequest(req)) {
+          res.statusCode = 403;
+          return res.end(JSON.stringify({ error: 'This endpoint is restricted to localhost.' }));
+        }
         const now = Date.now();
         const COOLDOWN_MS = 10 * 60 * 1000;
         if (this._lastBalanceRebuildAt && now - this._lastBalanceRebuildAt < COOLDOWN_MS) {
@@ -1850,33 +1850,28 @@ export class DAIMinerNode {
               job._unverified    = false;
               job._escrowApplied = true;
             } else if (job.requesterAddress && job.maxBudget > 0) {
-              // Legacy lenient path (e.g. optionally paid 'verdict' jobs): balance-checked
-              // but allows an unverified signature when no signing key is registered yet.
-              let unverified = false;
-              if (paymentTx?.txHash && paymentTx?.signature) {
-                const senderWallet = this.walletManager.loadWallet(job.requesterAddress);
-                if (senderWallet?.signingPublicKey) {
-                  const sigOk = Wallet.verifySignature(senderWallet.signingPublicKey, paymentTx.txHash, paymentTx.signature);
-                  if (!sigOk) {
-                    res.statusCode = 403;
-                    return res.end(JSON.stringify({ error: 'Invalid payment signature' }));
-                  }
-                } else {
-                  unverified = true; // key not registered yet
-                }
-              } else {
-                unverified = true; // no sig provided
+              // Optional fee on a verdict job still cannot debit without a
+              // verified signature — the old "unverified" path let anyone who
+              // could reach this endpoint spend another address's balance.
+              const senderWallet = this.walletManager.loadWallet(job.requesterAddress);
+              if (!senderWallet?.signingPublicKey || !paymentTx?.signature || !paymentTx?.txHash) {
+                res.statusCode = 402;
+                return res.end(JSON.stringify({
+                  error: 'A signed fee payment is required to escrow a budget.',
+                  code: 'PAYMENT_PROOF_REQUIRED',
+                }));
               }
-
-              // Balance check — in the job's fee currency
+              if (!Wallet.verifySignature(senderWallet.signingPublicKey, paymentTx.txHash, paymentTx.signature)) {
+                res.statusCode = 403;
+                return res.end(JSON.stringify({ error: 'Invalid payment signature' }));
+              }
               const balance = this._confirmedBalance(job.requesterAddress, job.currency || 'DAI');
               if (balance < job.maxBudget) {
                 res.statusCode = 402;
                 return res.end(JSON.stringify({ error: 'Insufficient balance', balance, required: job.maxBudget, currency: job.currency || 'DAI' }));
               }
-
-              job._paymentTxHash = paymentTx?.txHash || null;
-              job._unverified    = unverified;
+              job._paymentTxHash = paymentTx.txHash;
+              job._unverified    = false;
             }
 
             // Skill jobs may not have an address — skip address-specific processing
@@ -3345,6 +3340,10 @@ export class DAIMinerNode {
       }
 
       if (req.method === 'POST' && url.pathname === '/api/skills/propose') {
+        if (!isTrulyLocalRequest(req)) {
+          res.statusCode = 403;
+          return res.end(JSON.stringify({ error: 'This endpoint is restricted to localhost.' }));
+        }
         let body = '';
         req.on('data', c => body += c);
         req.on('end', async () => {
@@ -3762,10 +3761,12 @@ export class DAIMinerNode {
               (server && t.server === server && t.tool === tool) || t.name === tool || t.name === `${server}__${tool}`
             );
             if (!listed) { res.statusCode = 404; return res.end(JSON.stringify({ error: 'unknown tool' })); }
-            const local = typeof isTrulyLocalRequest === 'function' && isTrulyLocalRequest(req);
-            if (payload._dispersed && listed.source !== 'builtin' && !local) {
+            // HTTP execute is localhost-only (nginx-aware). Builtin tools such as
+            // onion-search still run inside a paid /job on this process; they are
+            // not a free public proxy.
+            if (!isTrulyLocalRequest(req)) {
               res.statusCode = 403;
-              return res.end(JSON.stringify({ error: 'remote execution is limited to builtin tools' }));
+              return res.end(JSON.stringify({ error: 'MCP execute is restricted to localhost. Use a paid job to run tools.' }));
             }
             const result = await this.mcp.callTool(listed.name, args);
             return res.end(JSON.stringify({ result, via: listed.server, source: listed.source }));
@@ -3798,6 +3799,10 @@ export class DAIMinerNode {
       {
         const delMatch = url.pathname.match(/^\/api\/hf-dataset\/([^/]+)$/);
         if (req.method === 'DELETE' && delMatch) {
+          if (!isTrulyLocalRequest(req)) {
+            res.statusCode = 403;
+            return res.end(JSON.stringify({ error: 'This endpoint is restricted to localhost.' }));
+          }
           const brainDir = getBrainDataDir();
           const datasetId = decodeURIComponent(delMatch[1]);
           if (brainDir) hfDatasetManager.deleteDataset(brainDir, datasetId);
@@ -3908,11 +3913,7 @@ export class DAIMinerNode {
       // ── P2P Exchange API (/api/p2p/*) ─────────────────────────────────────────
 
       // Helper: read + parse body
-      const readBody = () => new Promise((resolve, reject) => {
-        let raw = '';
-        req.on('data', c => raw += c);
-        req.on('end', () => { try { resolve(JSON.parse(raw)); } catch (e) { reject(e); } });
-      });
+      const readBody = () => readLimitedBody(req, 64 * 1024).then((raw) => JSON.parse(raw || '{}'));
 
       // Helper: verify that caller owns `address` by checking their ed25519 signature
       // over JSON.stringify({address, timestamp, ...actionFields}) using signingPublicKey.
@@ -4078,6 +4079,9 @@ export class DAIMinerNode {
             daiAmount: orderFields.daiAmount,
             pricePerDAI: orderFields.pricePerDAI,
             paymentMethods: orderFields.paymentMethods || [],
+            minTrade: orderFields.minTrade ?? 0,
+            maxTrade: orderFields.maxTrade ?? null,
+            baseDecimals: orderFields.baseDecimals ?? null,
           });
           if (auth.error) { res.statusCode = 401; return res.end(JSON.stringify(auth)); }
           const ownerAddress = auth.address;
@@ -4115,9 +4119,13 @@ export class DAIMinerNode {
             daiAmount: orderFields.daiAmount,
             pricePerDAI: orderFields.pricePerDAI,
             paymentMethods: orderFields.paymentMethods || [],
+            minTrade: orderFields.minTrade ?? 0,
+            maxTrade: orderFields.maxTrade ?? null,
+            baseDecimals: orderFields.baseDecimals ?? null,
           };
-          this._queueP2PTransition({ type: 'p2p-order-created', ...result.order }, { auth: makeP2PAuth(body, createPayload) });
-          this.gossip.publish('p2p-order', result.order).catch(() => {});
+          const createAuth = makeP2PAuth(body, createPayload);
+          this._queueP2PTransition({ type: 'p2p-order-created', ...result.order }, { auth: createAuth });
+          this.gossip.publish('p2p-order', { ...result.order, _auth: createAuth }).catch(() => {});
           return res.end(JSON.stringify(result));
         }).catch(e => { res.statusCode = 400; res.end(JSON.stringify({ error: e.message })); });
         return;
@@ -4153,8 +4161,9 @@ export class DAIMinerNode {
             }
             // Refund escrow for buy orders where taker locked (handled in trade cancel)
             const cancelPayload = { address, timestamp, action: 'cancel-order', orderId };
-            this._queueP2PTransition({ type: 'p2p-order-cancelled', orderId, maker: ownerAddress, side: orderSide, escrowLocked: wasEscrowLocked, daiAmount: orderDAIAmount, ...(cancelBase !== 'DAI' ? { baseAsset: cancelBase } : {}), updatedAt: Date.now() }, { auth: makeP2PAuth(body, cancelPayload) });
-            this.gossip.publish('p2p-order', result.order).catch(() => {});
+            const cancelAuth = makeP2PAuth(body, cancelPayload);
+            this._queueP2PTransition({ type: 'p2p-order-cancelled', orderId, maker: ownerAddress, side: orderSide, escrowLocked: wasEscrowLocked, daiAmount: orderDAIAmount, ...(cancelBase !== 'DAI' ? { baseAsset: cancelBase } : {}), updatedAt: Date.now() }, { auth: cancelAuth });
+            this.gossip.publish('p2p-order', { ...result.order, _auth: cancelAuth }).catch(() => {});
             return res.end(JSON.stringify(result));
           }).catch(e => { res.statusCode = 400; res.end(JSON.stringify({ error: e.message })); });
           return;
@@ -4186,6 +4195,11 @@ export class DAIMinerNode {
             // dai… address on the order's payment method.
             if (order.side === 'sell' && isOnChainAsset(order.quoteCurrency)) {
               const quoteAsset = order.quoteCurrency;
+              const priceCheck = this.p2pOrderStore.quoteMatchesPrice(order, daiAmount, quoteAmount);
+              if (priceCheck.error) {
+                res.statusCode = 400;
+                return res.end(JSON.stringify(priceCheck));
+              }
               const takerQuoteBal = this._confirmedBalance(ownerAddress, quoteAsset);
               if (takerQuoteBal < quoteAmount) {
                 res.statusCode = 402;
@@ -4214,6 +4228,7 @@ export class DAIMinerNode {
                 maker: order.maker, taker: ownerAddress,
                 ...(baseAsset !== 'DAI' ? { baseAsset } : {}),
                 baseAmount: daiAmount, quoteAsset, quoteAmount,
+                pricePerDAI: order.pricePerDAI,
                 baseRecipient: ownerAddress, quoteRecipient,
                 referrer: referrer || null, referralFee,
                 updatedAt: Date.now(),
@@ -4400,7 +4415,10 @@ export class DAIMinerNode {
           if (auth.error) { res.statusCode = 401; return res.end(JSON.stringify(auth)); }
           const result = this.p2pReferral.applyReferral(auth.address, code);
           if (result.error) { res.statusCode = 400; return res.end(JSON.stringify(result)); }
-          this.gossip.publish('p2p-referral', { address: auth.address, referrer: result.referrer, code: String(code).toUpperCase() }).catch(() => {});
+          this.gossip.publish('p2p-referral', {
+            address: auth.address, referrer: result.referrer, code: String(code).toUpperCase(),
+            _auth: makeP2PAuth(body, { address, timestamp, action: 'apply-referral', code }),
+          }).catch(() => {});
           return res.end(JSON.stringify(result));
         }).catch(e => { res.statusCode = 400; res.end(JSON.stringify({ error: e.message })); });
         return;
@@ -5998,13 +6016,21 @@ export class DAIMinerNode {
 
     // P2P exchange order/trade sync
     this.gossip.subscribe('p2p-order', (order) => {
+      const v = verifyP2PAuthBlob(order?._auth);
+      if (!v.ok) return;
+      if (order.maker && order.maker !== v.address) return;
       try { this.p2pOrderStore.ingestGossipOrder(order); } catch { /* ignore malformed */ }
     });
     this.gossip.subscribe('p2p-trade', (trade) => {
+      const v = verifyP2PAuthBlob(trade?._auth);
+      if (!v.ok) return;
+      if (trade.taker && trade.taker !== v.address && trade.maker && trade.maker !== v.address) return;
       try { this.p2pOrderStore.ingestGossipTrade(trade); } catch { /* ignore malformed */ }
     });
     this.gossip.subscribe('p2p-referral', (m) => {
       if (!m?.address || !m?.referrer) return;
+      const v = verifyP2PAuthBlob(m._auth);
+      if (!v.ok || v.address !== m.address) return;
       try { this.p2pReferral.applyReferralFromGossip(m.address, m.referrer); } catch { /* ignore */ }
     });
     // Signed escrow movements — any miner can include these in the next block.
@@ -7334,6 +7360,14 @@ export class DAIMinerNode {
       const existing = this.jobResults?.get(rawJob.id);
       if (existing && (existing.status === 'done' || existing.status === 'computing')) return;
 
+      // Skill/compute gossip without a payment proof is free GPU. Origin already
+      // escrowed; peers still require the signed proof so a random envelope cannot
+      // enqueue paid work. Onion-search and other tools stay available via /job.
+      if (FEE_REQUIRED_JOB_TYPES.has(rawJob?.type) && !rawJob.paymentTx?.signature) {
+        console.warn(`[DAI-Miner] Ignoring gossip ${rawJob.type} job ${rawJob.id}: no payment proof`);
+        return;
+      }
+
       const job = this.jobQueue.addJob(rawJob);
       this._recordJob(job); // make status/result queryable even for network-originated jobs
 
@@ -7548,9 +7582,10 @@ export class DAIMinerNode {
     }
 
     if (includedJobIds.length) {
+      const ts = Date.now();
       await fetch(`${base}/jobboard/mark-included`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ jobIds: includedJobIds }),
+        body: JSON.stringify({ jobIds: includedJobIds, timestamp: ts, ...this._signBoardAction('mark-included', { jobIds: includedJobIds }, ts) }),
         signal: AbortSignal.timeout(10_000),
       }).catch(() => {});
     }
@@ -8492,12 +8527,11 @@ export class DAIMinerNode {
       }
     }
 
-    if (typeof nonce === 'number') {
-      const result = await this.walletManager.debitWithNonce(requesterAddress, amount, nonce, cur);
-      if (result !== true) return result.error || 'payment failed';
-    } else {
-      await this.walletManager.debit(requesterAddress, amount, cur);
+    if (typeof nonce !== 'number') {
+      return 'nonce-bound payment required to escrow';
     }
+    const result = await this.walletManager.debitWithNonce(requesterAddress, amount, nonce, cur);
+    if (result !== true) return result.error || 'payment failed';
 
     this._appliedEscrowJobIds.add(jobId);
     this.escrow.set(jobId, { amount, requesterAddress, minerAddress, currency: cur });

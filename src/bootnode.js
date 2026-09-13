@@ -658,7 +658,10 @@ const server = http.createServer(async (req, res) => {
     // A proposer confirms it included these results in a mined block.
     if (req.method === 'POST' && url.pathname === '/jobboard/mark-included') {
       const body = JSON.parse((await readLimitedBody(req, MAX_BODY_BYTES)) || '{}');
-      jobBoard.markResultsIncluded(Array.isArray(body.jobIds) ? body.jobIds : []);
+      const jobIds = Array.isArray(body.jobIds) ? body.jobIds : [];
+      const auth = verifyBoardAuth(body, 'mark-included', { jobIds });
+      if (auth.error) { res.statusCode = 401; return res.end(JSON.stringify(auth)); }
+      jobBoard.markResultsIncluded(jobIds);
       return res.end(JSON.stringify({ ok: true }));
     }
 

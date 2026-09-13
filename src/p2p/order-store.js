@@ -327,6 +327,25 @@ export class OrderStore {
   }
 
   /**
+   * Taker-supplied quoteAmount must match the maker's advertised price.
+   * Without this, an atomic swap can drain escrowed base for a dust quote.
+   */
+  quoteMatchesPrice(order, daiAmount, quoteAmount) {
+    const expected = this._quoteValue(order, daiAmount);
+    if (!Number.isFinite(expected) || !(expected > 0)) {
+      return { error: 'order has no usable price' };
+    }
+    const q = Number(quoteAmount);
+    if (!Number.isFinite(q) || !(q > 0)) return { error: 'quoteAmount must be positive' };
+    const onChain = isOnChainAsset(order.quoteCurrency);
+    const slack = onChain ? 1 : Math.max(1e-8, Math.abs(expected) * 1e-6);
+    if (Math.abs(q - expected) > slack) {
+      return { error: `quoteAmount ${q} does not match price (expected ${expected})` };
+    }
+    return { ok: true, expected };
+  }
+
+  /**
    * After a fill, keep leftover size on the order instead of closing it.
    * Idempotent: a second call for an already-applied fill (open + no tradeId,
    * or already completed) is a no-op so gossip cannot subtract twice.
@@ -373,6 +392,9 @@ export class OrderStore {
     if (!(daiAmount > 0))             return { error: 'daiAmount must be positive' };
     if (!(quoteAmount > 0))           return { error: 'quoteAmount must be positive' };
     if (daiAmount > order.daiAmount)  return { error: 'daiAmount exceeds order size' };
+
+    const priced = this.quoteMatchesPrice(order, daiAmount, quoteAmount);
+    if (priced.error) return priced;
 
     // Enforce the maker's advertised limits. The mobile wallet checks these
     // before submitting, but a client-side check is a courtesy, not a control —
@@ -475,9 +497,12 @@ export class OrderStore {
 
   ingestGossipOrder(order) {
     if (!order?.id) return;
+    // Unsigned gossip used to overwrite price / payout address on a live order.
+    // The HTTP layer attaches _auth; drop anything that isn't signed by the maker.
     const existing = this.orders[order.id];
     if (!existing || order.updatedAt > (existing.updatedAt || 0)) {
-      this.orders[order.id] = order;
+      const { _auth, ...rest } = order;
+      this.orders[order.id] = rest;
       this._saveOrders();
     }
   }
@@ -486,7 +511,8 @@ export class OrderStore {
     if (!trade?.id) return;
     const existing = this.trades[trade.id];
     if (!existing || trade.updatedAt > (existing.updatedAt || 0)) {
-      this.trades[trade.id] = trade;
+      const { _auth, ...rest } = trade;
+      this.trades[trade.id] = rest;
       this._saveTrades();
       // Order remainder is owned by completeTrade / the gossiped order object.
       // Do not force the whole listing to 'completed' here — a 0.02 fill of a

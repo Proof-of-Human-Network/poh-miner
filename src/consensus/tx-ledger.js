@@ -297,6 +297,13 @@ export class TxLedgerState {
       const refFee = t.referralFee || 0;
       const escrowNeeded = (t.baseAmount || 0);
       if (!(t.baseAmount > 0) || !(t.quoteAmount > 0)) return false;
+      // New fills carry pricePerDAI so a block cannot settle a dust quote against
+      // a full escrow. Historical transitions omit it and keep applying as before.
+      if (t.pricePerDAI != null && t.baseAmount != null) {
+        const divisor = base === 'DAI' ? 1e9 : 100;
+        const expected = (t.baseAmount / divisor) * Number(t.pricePerDAI);
+        if (!Number.isFinite(expected) || Math.abs(t.quoteAmount - expected) > 1) return false;
+      }
       if (this.getBalance(ESCROW_ADDRESS, base) < escrowNeeded) return false;
       if (this.getBalance(t.taker, quote) < t.quoteAmount) return false;
       // Mutate only after every precondition passed → atomicity.
