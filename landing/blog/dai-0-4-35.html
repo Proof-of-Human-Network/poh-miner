@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DAI 0.4.35 — every currency in the world, and a fee you can check</title>
+  <meta name="description" content="DAI Miner 0.4.35 ships 161 currencies, market-priced job fees, fully signed P2P orders, and the security holes we closed. Wallet and miner must update together.">
+  <meta property="og:title" content="DAI 0.4.35 — every currency in the world, and a fee you can check">
+  <meta property="og:description" content="161 currencies, a fee you can check, fully signed orders, and the security holes we closed. Update the wallet and the miner together.">
+  <meta property="og:type" content="article">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Iceland&display=swap" rel="stylesheet">
+  <link rel="icon" type="image/svg+xml" href="../dai-miner-on-light.svg">
+  <link rel="icon" type="image/png" sizes="32x32" href="../favicon-32.png">
+  <link rel="shortcut icon" href="../favicon.ico">
+  <script src="../i18n.js" defer></script>
+  <style>
+    :root { --bg: #f5f6f2; --ink: #171717; --muted: #525252; --accent: #16a34a; --card: #ffffff; --line: #e4e6e0; }
+    body { font-family: 'Iceland', sans-serif; background: var(--bg); color: var(--ink); line-height: 1.4; }
+    h1, h2, h3, .font-display { font-family: 'Iceland', sans-serif; font-weight: 400; }
+    .neon { color: #16a34a; }
+    .muted { color: var(--muted); }
+    html { font-size: 150%; }
+    @media (max-width: 767px) { html { font-size: 110%; } }
+    @media (max-width: 639px) { html { font-size: 100%; } }
+    .footer-text { font-size: 1.25rem !important; }
+
+    .nav-links { display: none; }
+    @media (min-width: 1024px) { .nav-links { display: flex; } }
+    .hamburger { display: flex; flex-direction: column; gap: 5px; cursor: pointer; padding: 4px; }
+    .hamburger span { display: block; width: 22px; height: 2px; background: #171717; border-radius: 2px; transition: 0.25s; }
+    .hamburger.open span:nth-child(1) { transform: translateY(7px) rotate(45deg); }
+    .hamburger.open span:nth-child(2) { opacity: 0; }
+    .hamburger.open span:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
+    @media (min-width: 1024px) { .hamburger { display: none; } }
+    .mobile-drawer {
+      display: none; position: fixed; top: 64px; left: 0; right: 0; z-index: 49;
+      background: #f5f6f2; border-bottom: 1px solid var(--line);
+      flex-direction: column; padding: 16px 24px 24px;
+    }
+    @media (min-width: 640px) { .mobile-drawer { top: 80px; } }
+    .mobile-drawer.open { display: flex; }
+    .mobile-drawer a { padding: 14px 0; font-size: 22px; color: #171717; border-bottom: 1px solid var(--line); text-decoration: none; }
+    .mobile-drawer a:last-child { border-bottom: none; }
+    @media (min-width: 1024px) { .mobile-drawer { display: none !important; } }
+    .dai-lang-select { background: #fff !important; color: #171717 !important; border: 1px solid #d4d6d0 !important; }
+
+    .prose p { font-size: 1.18rem; line-height: 1.55; margin-bottom: 1rem; color: #262626; }
+    .prose p:last-child { margin-bottom: 0; }
+    .prose strong { color: var(--ink); }
+    .prose ul, .prose ol { margin: 0.35rem 0 1.1rem; padding-inline-start: 1.35rem; }
+    .prose li { font-size: 1.18rem; line-height: 1.5; margin-bottom: 0.55rem; color: #262626; }
+    .prose li:last-child { margin-bottom: 0; }
+    .lede { font-size: 1.5rem !important; line-height: 1.4 !important; color: var(--ink) !important; }
+
+    .meta { font-size: 0.92rem; letter-spacing: 1px; text-transform: uppercase; color: var(--muted); }
+    .tag {
+      display: inline-block; border: 1px solid var(--line); border-radius: 999px;
+      padding: 2px 12px; font-size: 0.9rem; color: var(--accent);
+      background: rgba(22,163,74,0.07);
+    }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.86em; }
+
+    .jump { display: flex; align-items: baseline; flex-wrap: wrap; gap: 12px; }
+    .jump .from { font-size: 2rem; color: var(--muted); }
+    .jump .arrow { color: var(--accent); font-size: 1.4rem; }
+    .jump .to { font-size: 3.2rem; }
+
+    .item { border-top: 1px solid var(--line); padding: 2.4rem 0; }
+    .item-head { display: flex; gap: 1.1rem; align-items: baseline; }
+    .rank { font-size: 3rem; line-height: 1; color: var(--accent); min-width: 2.6rem; }
+    .item h2 { font-size: 2.1rem; line-height: 1.05; }
+    .kicker { font-size: 0.85rem; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); margin-bottom: 4px; }
+    @media (min-width: 768px) { .item-body { padding-inline-start: 3.7rem; } }
+    @media (max-width: 767px) {
+      .item-head { display: block; }
+      .rank { font-size: 2.2rem; margin-bottom: 2px; }
+    }
+
+    .facts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 1.2rem; }
+    .fact {
+      border: 1px solid var(--line); background: var(--card); border-radius: 4px;
+      padding: 5px 12px; font-size: 0.95rem; color: #333;
+    }
+    .fact b { color: var(--accent); font-weight: normal; }
+
+    .pull {
+      border-inline-start: 3px solid var(--accent); padding-inline-start: 1rem;
+      font-size: 1.35rem !important; line-height: 1.35 !important; color: var(--ink) !important;
+      margin: 1.3rem 0 !important;
+    }
+
+    .grid-also {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 8px;
+    }
+    .cell { background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: 1.2rem 1.15rem; }
+    .cell h3 { font-size: 1.4rem; margin-bottom: 4px; }
+    .cell p { font-size: 1rem; line-height: 1.4; color: var(--muted); }
+
+    .notice {
+      border: 1px solid var(--accent); border-inline-start-width: 4px;
+      background: rgba(22,163,74,0.07); border-radius: 4px; padding: 1.4rem 1.5rem;
+    }
+    .notice h3 { font-size: 1.6rem; margin-bottom: 8px; }
+
+    .cmd {
+      border: 1px solid var(--line); background: var(--card); border-radius: 4px;
+      padding: 12px 16px; overflow-x: auto; white-space: nowrap;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 0.92rem; color: #333;
+    }
+    .cmd .p { color: var(--accent); user-select: none; }
+  </style>
+</head>
+<body>
+
+  <nav class="border-b border-black/10 bg-[#f5f6f2]/85 backdrop-blur-xl fixed w-full z-50">
+    <div class="max-w-7xl mx-auto px-4 sm:px-8 h-16 sm:h-20 flex items-center justify-between">
+      <a href="../index.html" class="flex items-center gap-2">
+        <img src="../dai-miner-on-light.svg" alt="DAI Logo" width="36" height="36" class="sm:w-[48px] sm:h-[48px]" style="vertical-align: middle;" />
+      </a>
+      <div class="nav-links items-center gap-x-6 xl:gap-x-9 text-[17px] xl:text-[20px]">
+        <a href="../dai.html" class="hover:text-[#16a34a] transition whitespace-nowrap" data-i18n="nav.dai">DAI</a>
+        <a href="../framework.html" class="hover:text-[#16a34a] transition whitespace-nowrap" data-i18n="nav.framework">Framework</a>
+        <a href="../wallet/" class="hover:text-[#16a34a] transition whitespace-nowrap" data-i18n="nav.wallet">Wallet</a>
+        <a href="../explorer/" class="hover:text-[#16a34a] transition whitespace-nowrap" data-i18n="nav.explorer">Explorer</a>
+        <a href="./" class="text-[#16a34a] transition whitespace-nowrap" data-i18n="nav.blog">Blog</a>
+        <a href="https://aist.exchange" target="_blank" rel="noopener" class="px-3 lg:px-5 py-2 rounded-[4px] border border-[#16a34a] text-[#16a34a] hover:bg-[#16a34a] hover:text-white transition whitespace-nowrap" data-i18n="nav.p2p">P2P</a>
+        <a href="../miner.html#start" class="px-3 lg:px-5 py-2 rounded-[4px] bg-[#16a34a] text-white hover:bg-black transition whitespace-nowrap" data-i18n="nav.runminer">Run a miner</a>
+        <div data-i18n-switch></div>
+      </div>
+      <button class="hamburger" id="hamburger" aria-label="Open menu"><span></span><span></span><span></span></button>
+    </div>
+  </nav>
+
+  <div class="mobile-drawer" id="mobile-drawer">
+    <a href="../dai.html" data-i18n="nav.dai">DAI</a>
+    <a href="../framework.html" data-i18n="nav.framework">Framework</a>
+    <a href="../wallet/" data-i18n="nav.wallet">Wallet</a>
+    <a href="../explorer/" data-i18n="nav.explorer">Explorer</a>
+    <a href="./" data-i18n="nav.blog">Blog</a>
+    <a href="https://aist.exchange" target="_blank" rel="noopener" data-i18n="nav.p2p">P2P</a>
+    <a href="../miner.html#start" data-i18n="nav.runminer">Run a miner</a>
+    <div data-i18n-switch style="padding:14px 0"></div>
+  </div>
+
+  <main class="pt-16 sm:pt-20">
+    <article class="max-w-3xl mx-auto px-4 sm:px-8">
+      <header class="pt-10 sm:pt-16 pb-6">
+        <a href="./" class="meta hover:text-[#16a34a]" data-i18n="blog.back">← Blog</a>
+        <div class="flex flex-wrap items-center gap-3 mt-6 mb-5">
+          <span class="tag" data-i18n="blog.tag.release">Release</span>
+          <span class="tag" data-i18n="blog.tag.security">Security</span>
+          <span class="meta" data-i18n="blog.p2.date">13 September 2026 · v0.4.35</span>
+        </div>
+        <h1 class="text-[42px] sm:text-[64px] leading-[0.98]" data-i18n-html="blog.p2.title">
+          Every currency in the world. And a fee you can <span class="neon">check</span>.
+        </h1>
+        <div class="prose mt-6">
+          <p class="lede" data-i18n-html="blog.v35.lede">
+            Version 0.4.34 shipped with 14 regional stablecoins. Version 0.4.35 ships with <strong>161</strong>.
+            That is the headline. The more useful change is quieter: the network stopped guessing what things cost.
+          </p>
+        </div>
+
+        <div class="jump mt-9 pt-6 border-t border-black/10">
+          <span class="from">0.4.34</span>
+          <span class="arrow">→</span>
+          <span class="to">0.4.35</span>
+          <span class="meta ml-auto" style="text-transform:none;letter-spacing:0.5px" data-i18n="blog.v35.span">
+            Wallet and miner ship together
+          </span>
+        </div>
+      </header>
+
+      <section class="item">
+        <div class="item-head">
+          <div class="rank">01</div>
+          <div>
+            <div class="kicker" data-i18n="blog.v35.s1.k">Currencies</div>
+            <h2 data-i18n="blog.v35.s1.h">161 currencies, from one list</h2>
+          </div>
+        </div>
+        <div class="item-body prose mt-5">
+          <p data-i18n="blog.v35.s1.p1">The chain now mirrors every circulating currency: the Kyrgyz som, the Ethiopian birr and the Bhutanese ngultrum it already had, joined by the Indian rupee, the Brazilian real, the Nigerian naira, the Vietnamese dong and 140 others.</p>
+          <p data-i18n-html="blog.v35.s1.p2">Six of them have no ISO 4217 code at all, so no currency feed carries them: the <strong>Transnistrian ruble</strong>, <strong>Somaliland shilling</strong> and <strong>Abkhazian apsar</strong> — issued by states most of the world does not recognise, and circulating anyway — and the <strong>Kiribati dollar</strong>, <strong>Tuvaluan dollar</strong> and <strong>Faroese króna</strong>, local issues pegged one-to-one to the Australian dollar and Danish krone.</p>
+          <p data-i18n="blog.v35.s1.p3">They are on the chain because people use them, not because a committee approved them.</p>
+          <p data-i18n="blog.v35.s1.p4">All 161 come from a single table, and the miner, the wallet and the exchange are generated from it. Previously each kept its own copy, which is how ten currencies once ended up formatted with the wrong number of decimal places. One list now, one place to fix.</p>
+          <div class="facts">
+            <span class="fact" data-i18n-html="blog.v35.s1.f1"><b>161</b> currencies</span>
+            <span class="fact" data-i18n-html="blog.v35.s1.f2"><b>6</b> with no ISO code</span>
+            <span class="fact" data-i18n-html="blog.v35.s1.f3">One table → miner, wallet, exchange</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="item">
+        <div class="item-head">
+          <div class="rank">02</div>
+          <div>
+            <div class="kicker" data-i18n="blog.v35.s2.k">Honesty</div>
+            <h2 data-i18n="blog.v35.s2.h">Some currencies ship with no price — on purpose</h2>
+          </div>
+        </div>
+        <div class="item-body prose mt-5">
+          <p data-i18n="blog.v35.s2.p1">Eight of the 161 arrive with no exchange rate attached: the two Cuban pesos, the North Korean won, and the six unrecognised currencies.</p>
+          <p data-i18n="blog.v35.s2.p2">This is deliberate. The Cuban convertible peso was abolished in 2021 and has only its old peg. North Korea's official rate of 900 won to the dollar is roughly nine times away from what anyone actually trades at. Nobody quotes the rest.</p>
+          <p data-i18n="blog.v35.s2.p3">Rather than ship a number that looks authoritative and is fiction, the miner ships nothing and says so.</p>
+          <p class="pull" data-i18n-html="blog.v35.s2.pull">No DAI/aiKPW rate: nothing is quoted on the P2P book and no forex rate is available. <strong>Be the first to place an order.</strong></p>
+          <div class="facts">
+            <span class="fact" data-i18n-html="blog.v35.s2.f1"><b>8</b> ship with no rate</span>
+            <span class="fact" data-i18n="blog.v35.s2.f2">Price arrives when someone opens the market</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="item">
+        <div class="item-head">
+          <div class="rank">03</div>
+          <div>
+            <div class="kicker" data-i18n="blog.v35.s3.k">Fees</div>
+            <h2 data-i18n="blog.v35.s3.h">Job fees now come from the market</h2>
+          </div>
+        </div>
+        <div class="item-body prose mt-5">
+          <p data-i18n="blog.v35.s3.p1">This is the change most people will feel. Before, each currency had a fee rate written into the software — a number that was correct on the day it shipped and drifted from that moment on.</p>
+          <p data-i18n-html="blog.v35.s3.p2">Now the anchor is fixed and simple: <strong>one AI token costs one μDAI</strong>, and μDAI is the smallest unit there is, so that is also the floor. A job paid in DAI costs exactly the tokens it used.</p>
+          <p data-i18n="blog.v35.s3.p3">Paying in anything else is a conversion, and the network already knows the only rate that matters — the one people are trading at. It looks, in order:</p>
+          <ol>
+            <li data-i18n-html="blog.v35.s3.ol1"><strong>The order book.</strong> Is anyone quoting DAI against your currency? Use that.</li>
+            <li data-i18n-html="blog.v35.s3.ol2"><strong>A bridge.</strong> No direct market, but both sides trade against USDT, USDC, BTC, ETH or SOL? Go through it.</li>
+            <li data-i18n-html="blog.v35.s3.ol3"><strong>Forex.</strong> Nobody quotes it at all? Fall back to the published rate.</li>
+            <li data-i18n-html="blog.v35.s3.ol4"><strong>Nothing.</strong> Say so, and invite the first order.</li>
+          </ol>
+          <p data-i18n="blog.v35.s3.p4">You can see which of the four answered — the fee comes back labelled with its source. A price you can check beats a price you have to trust.</p>
+          <div class="facts">
+            <span class="fact" data-i18n-html="blog.v35.s3.f1">1 token = <b>1 μDAI</b></span>
+            <span class="fact" data-i18n="blog.v35.s3.f2">Source labelled on every fee</span>
+            <span class="fact" data-i18n="blog.v35.s3.f3">No invented rates</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="item">
+        <div class="item-head">
+          <div class="rank">04</div>
+          <div>
+            <div class="kicker" data-i18n="blog.v35.s4.k">P2P</div>
+            <h2 data-i18n="blog.v35.s4.h">Orders are properly signed now</h2>
+          </div>
+        </div>
+        <div class="item-body prose mt-5">
+          <p data-i18n="blog.v35.s4.p1">A real security fix, and a breaking one.</p>
+          <p data-i18n-html="blog.v35.s4.p2">When you created a sell order, your wallet only signed <em>which side</em> and <em>how much</em>. The price, the currency and the address your payment goes to all travelled unsigned. Anything sitting between your wallet and the node could rewrite the price, or swap the payout address for its own, and the signature still checked out.</p>
+          <p data-i18n="blog.v35.s4.p3">Taking an order had the same hole: the address your funds land on was not signed either.</p>
+          <p data-i18n-html="blog.v35.s4.p4">Both now sign the complete order. There is deliberately <strong>no fallback to the old format</strong> — accepting one would leave the same door open. <strong>The wallet and the miner must be updated together.</strong> An old wallet talking to a new node will be refused.</p>
+          <div class="facts">
+            <span class="fact" data-i18n="blog.v35.s4.f1">Full payload signed</span>
+            <span class="fact" data-i18n="blog.v35.s4.f2">No old-format fallback</span>
+            <span class="fact" data-i18n-html="blog.v35.s4.f3">Wallet + miner <b>together</b></span>
+          </div>
+        </div>
+      </section>
+
+      <section class="item">
+        <div class="item-head">
+          <div class="rank">05</div>
+          <div>
+            <div class="kicker" data-i18n="blog.v35.s5.k">Security</div>
+            <h2 data-i18n="blog.v35.s5.h">What we locked down</h2>
+          </div>
+        </div>
+        <div class="item-body prose mt-5">
+          <p data-i18n="blog.v35.s5.p1">A security pass on the miner and the phone wallet. In plain terms:</p>
+          <ul>
+            <li data-i18n-html="blog.v35.s5.l1"><strong>Nobody can reach into a miner's tools for free.</strong> A public endpoint used to run whatever the miner had plugged in — including shell tools — without paying. That door is closed. Search and other tools still run when you <strong>pay for a job</strong>.</li>
+            <li data-i18n-html="blog.v35.s5.l2"><strong>A P2P take has to pay the advertised price.</strong> Taking an on-chain order used to let the taker name any price. They could empty the seller's escrow for a token. The fill must now match the order.</li>
+            <li data-i18n-html="blog.v35.s5.l3"><strong>Gossip cannot rewrite the order book.</strong> Peers used to accept unsigned order updates, so a fake message could change the payout address or the price on a live listing. Unsigned copies are dropped.</li>
+            <li data-i18n-html="blog.v35.s5.l4"><strong>A webpage cannot spend your desktop wallet.</strong> The miner used to tell the browser any site may POST to localhost. CORS no longer reflects random websites.</li>
+            <li data-i18n-html="blog.v35.s5.l5"><strong>Balances cannot be debited on a name alone.</strong> Every debit now needs a signature bound to a nonce.</li>
+            <li data-i18n-html="blog.v35.s5.l6"><strong>The phone no longer trusts a random HTTP miner.</strong> Discovered peers must be HTTPS, sends do not fail over to a stranger, and skill fees ask before they sign.</li>
+          </ul>
+          <p data-i18n="blog.v35.s5.p2">Rotate any RPC keys that lived in a committed config.json. That file is no longer tracked.</p>
+        </div>
+      </section>
+
+      <section class="item">
+        <div class="item-head">
+          <div class="rank">06</div>
+          <div>
+            <div class="kicker" data-i18n="blog.v35.s6.k">Finding things</div>
+            <h2 data-i18n="blog.v35.s6.h">A search box, not a strip of 161 buttons</h2>
+          </div>
+        </div>
+        <div class="item-body prose mt-5">
+          <p data-i18n="blog.v35.s6.p1">A row of buttons works for 15 currencies. At 161 it is a strip you drag through, with no way to find Bhutan unless you already know it is αιBTN.</p>
+          <p data-i18n-html="blog.v35.s6.p2">Every currency selector — in the phone wallet, in the desktop app, on the exchange — is now a search box. It matches on ticker, country code, currency name and country, so <strong>“Bhutan”</strong>, <strong>“ngultrum”</strong>, <strong>“BTN”</strong> and <strong>“αιBTN”</strong> all find the same thing.</p>
+          <p data-i18n-html="blog.v35.s6.p3">The market list needed the same treatment. Every currency trades against every other, which took the number of markets from 360 to <strong>more than 25,000</strong> — about 3.8 MB if you send them all at once. The list is now paged: 72 KB by default, with filters for the pair you actually want.</p>
+          <div class="facts">
+            <span class="fact" data-i18n="blog.v35.s6.f1">Search by name, country, ticker</span>
+            <span class="fact" data-i18n-html="blog.v35.s6.f2"><b>25,000+</b> markets, paged</span>
+            <span class="fact" data-i18n-html="blog.v35.s6.f3">Default list <b>72 KB</b></span>
+          </div>
+        </div>
+      </section>
+
+      <section class="pt-10 pb-4">
+        <h2 class="text-[2.1rem] leading-tight" data-i18n="blog.v35.also.h">Also in this release</h2>
+        <p class="muted text-[1.1rem] mt-1 mb-6" data-i18n="blog.v35.also.sub">Skills, chat, and the desktop app.</p>
+        <div class="grid-also">
+          <div class="cell">
+            <h3 data-i18n="blog.v35.a1.h">Skills that fit the model</h3>
+            <p data-i18n="blog.v35.a1.p">52 of 72 shipped skills were being cut off mid-sentence. 182 pointers led to files that were never shipped. The tool picker no longer guesses when it fails.</p>
+          </div>
+          <div class="cell">
+            <h3 data-i18n="blog.v35.a2.h">16 new skills, no API keys</h3>
+            <p data-i18n="blog.v35.a2.p">Ritual Chain and MiniMax development skills, adapted to fit. The importer rejects anything that needs an account. Skills are found by description, not only by keyword.</p>
+          </div>
+          <div class="cell">
+            <h3 data-i18n="blog.v35.a3.h">Seven knowledge servers</h3>
+            <p data-i18n="blog.v35.a3.p">DeepWiki, Context7, GitMCP, Microsoft Learn, AWS, Cloudflare, Solana and Hugging Face. Every one was tested for anonymous access. None needs an account.</p>
+          </div>
+          <div class="cell">
+            <h3 data-i18n="blog.v35.a4.h">Chat actually finishes</h3>
+            <p data-i18n="blog.v35.a4.p">Output is capped, /no_think is not sent to models that do not understand it, raw reasoning no longer leaks, and chat checks for tools before guessing.</p>
+          </div>
+          <div class="cell">
+            <h3 data-i18n="blog.v35.a5.h">Skills tab does not freeze</h3>
+            <p data-i18n="blog.v35.a5.p">It used to re-parse the whole page for every skill. Now it loads 24 at a time from a 50 KB response, with a search box.</p>
+          </div>
+          <div class="cell">
+            <h3 data-i18n="blog.v35.a6.h">View Private Key works</h3>
+            <p data-i18n="blog.v35.a6.p">If the machine cannot decrypt the key, the app says so — instead of pointing at an encrypted file you cannot read.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="py-8">
+        <div class="notice">
+          <h3 data-i18n="blog.v35.note.h">Update the wallet and the miner together</h3>
+          <div class="prose">
+            <p data-i18n="blog.v35.note.p1">0.4.35 is a coordinated upgrade. Adding currencies changes the chain's starting state, so every node moves together — a node running the old currency list will reject transactions the new one accepts.</p>
+            <p data-i18n-html="blog.v35.note.p2">The signed-order change is breaking on its own. <strong>Update the wallet and the miner at the same time</strong>, or orders will be refused. Existing balances carry over.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="py-10 sm:py-14 border-t border-black/10">
+        <h2 class="text-[2.4rem] sm:text-[3rem] leading-[1.02]" data-i18n="blog.cta.h">Put an idle computer to work</h2>
+        <p class="muted text-[1.2rem] mt-3 max-w-xl" data-i18n="blog.cta.p">A Mac mini, an old gaming PC, a server with spare hours. Download it, pick a model, and it starts earning while you get on with your day.</p>
+        <div class="flex flex-wrap gap-3 mt-7 items-center">
+          <a href="../miner.html#start" class="px-6 py-3 rounded-[4px] bg-[#16a34a] text-white text-[1.25rem] hover:bg-black transition" data-i18n="blog.cta.b1">Download DAI Miner →</a>
+          <a href="../docs/" class="px-6 py-3 rounded-[4px] border border-[#16a34a] text-[#16a34a] text-[1.25rem] hover:bg-[#16a34a] hover:text-white transition" data-i18n="blog.cta.b2">Read the docs</a>
+        </div>
+        <div class="cmd mt-6"><span class="p">$</span> curl -fsSL https://miner.iamai.kg/scripts/easy-start.sh | bash</div>
+      </section>
+    </article>
+  </main>
+
+  <footer class="border-t border-black/10 py-8 footer-text muted">
+    <div class="max-w-7xl mx-auto px-4 sm:px-8 flex flex-col sm:flex-row gap-2 sm:justify-between">
+      <div data-i18n="idx.foot.tag">DAI — Decentralized AI compute, powered by local LLMs</div>
+      <div class="flex gap-x-4 gap-y-2 flex-wrap">
+        <a href="../miner.html" class="hover:text-[#171717]" data-i18n="idx.foot.miner">DAI Miner</a>
+        <a href="../wallet/" class="hover:text-[#171717]" data-i18n="nav.wallet">Wallet</a>
+        <a href="../docs/" class="hover:text-[#171717]" data-i18n="idx.foot.docs">Docs</a>
+        <a href="../explorer/" class="hover:text-[#171717]" data-i18n="nav.explorer">Explorer</a>
+        <a href="./" class="hover:text-[#171717]" data-i18n="nav.blog">Blog</a>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    const hamburger = document.getElementById('hamburger');
+    const drawer = document.getElementById('mobile-drawer');
+    if (hamburger && drawer) {
+      hamburger.addEventListener('click', () => { hamburger.classList.toggle('open'); drawer.classList.toggle('open'); });
+      drawer.querySelectorAll('a').forEach(a => a.addEventListener('click', () => { hamburger.classList.remove('open'); drawer.classList.remove('open'); }));
+    }
+  </script>
+</body>
+</html>
