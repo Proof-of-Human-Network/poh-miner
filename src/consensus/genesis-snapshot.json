@@ -1,21 +1,30 @@
 {
   "version": 1,
-  "sourceHeight": 749,
-  "tipHeight": 750,
-  "finalizedHeight": 650,
-  "snapshotHash": "6235e078a3136273ac51846d280e0493d1d96a9c14fefc922994f4e4de495cbb",
-  "totalMinted": 1422191075000,
-  "coinbaseDust": 0,
+  "sourceHeight": 20320,
+  "tipHeight": 20420,
+  "finalizedHeight": 20320,
+  "snapshotHash": "618d70aaae0e76175faca9257466b4308de9e5478bfac5e59bd831d399cf6af5",
+  "totalMinted": 2438191075000,
+  "coinbaseDust": 875000,
   "excludedBalance": 0,
   "excluded": [
     "daiaudit000000000000000000000000000000000001",
     "dai_p2p_escrow"
   ],
-  "sumBalances": 1422191075000,
-  "addressCount": 40,
-  "genesisTimestamp": 1788147864086,
-  "generatedAt": "2026-08-31T03:44:24.256Z",
+  "sumBalances": 2438190200000,
+  "addressCount": 51,
+  "escrowCredits": {
+    "daie86c4b3cc2668d78f6ad206f33bdaf75a3158852": 10000000,
+    "dai9dfa2b39e1d6cd98c0175b04f13a909782520f96": 10000000
+  },
+  "escrowCreditedTotal": 20000000,
+  "genesisTimestamp": 1789000000000,
+  "generatedAt": "2026-09-14T08:36:32.472Z",
   "balances": {
+    "dai0f7c8c62f97a90db30ec584f6454fd6f8f4d477f": {
+      "balance": 445000000,
+      "nonce": 0
+    },
     "dai11eedf721d3068feabafddfacb734a7cf0469ea0": {
       "balance": 10445000000,
       "nonce": 0
@@ -24,13 +33,20 @@
       "balance": 27037500000,
       "nonce": 0
     },
+    "dai2191a9572496692575c8383781671bc754e29ad4": {
+      "balance": 1360000000,
+      "nonce": 0
+    },
     "dai3099e0100531d9ef1dc50363eadefb67e5fe1489": {
       "balance": 115000000,
       "nonce": 0
     },
     "dai363a0afc59cdf97871058371b0ad3767fd3ea384": {
       "balance": 30000000,
-      "nonce": 0
+      "nonce": 0,
+      "assets": {
+        "aiEGP": 100000
+      }
     },
     "dai384d7936c860b1517cfd58b96d73512c0ab01422": {
       "balance": 1500000000,
@@ -45,7 +61,7 @@
       "nonce": 0
     },
     "dai3d459b3bc9c48a6695cae6b2ea4bc8f454bf00da": {
-      "balance": 359129825000,
+      "balance": 1366409825000,
       "nonce": 2
     },
     "dai40436108338303d415d89277bfa1768db88a8ebb": {
@@ -75,6 +91,10 @@
     "dai519905e0d26425f679796935988163e27698bd83": {
       "balance": 14000000,
       "nonce": 1
+    },
+    "dai52c2bcd4cf1f8cdeb641fe7124753ba0404c6d95": {
+      "balance": 5000000,
+      "nonce": 0
     },
     "dai541f40a648d989f229318247a586673bc9994866": {
       "balance": 3300000000,
@@ -112,6 +132,10 @@
       "balance": 860000000,
       "nonce": 0
     },
+    "dai827e6be356d5a1ddce8ac296cc078c4c339d2123": {
+      "balance": 145000000,
+      "nonce": 0
+    },
     "dai8a44712e67a1a0941fea7226b729755f095b16fe": {
       "balance": 38351250000,
       "nonce": 0
@@ -132,6 +156,10 @@
       "balance": 15165000000,
       "nonce": 0
     },
+    "dai934896d7bf41b34541569eec8f43eacccb4c3978": {
+      "balance": 895000000,
+      "nonce": 0
+    },
     "dai974a078a352ae493198264effb024f2f7589f2b8": {
       "balance": 300000000,
       "nonce": 0
@@ -140,24 +168,175 @@
       "balance": 1303750000,
       "nonce": 0,
       "assets": {
-        "KGST": 1611109500,
-        "aiAOA": 16944427500,
-        "aiBDT": 2259257000,
-        "aiBTN": 1555554000,
-        "aiCUP": 7407400000,
-        "aiEGP": 888888000,
-        "aiETB": 2370368000,
-        "aiIQD": 24259235000,
-        "aiIRR": 18518500000000,
-        "aiLYD": 101851750,
-        "aiPKR": 5222217000,
-        "aiPYG": 135185050000,
-        "aiSDG": 48148100000,
-        "aiVES": 4629625000
+        "KGST": 3222219000,
+        "aiAED": 68009191,
+        "aiAFN": 1199609912,
+        "aiALL": 1468833716,
+        "aiAMD": 6734567340,
+        "aiANG": 33148115,
+        "aiAOA": 33888855000,
+        "aiAPS": 18518500,
+        "aiARS": 27962935000,
+        "aiAUD": 25655900,
+        "aiAWG": 33148115,
+        "aiAZN": 31474783,
+        "aiBAM": 31157747,
+        "aiBBD": 37037000,
+        "aiBDT": 4518514000,
+        "aiBGN": 31157747,
+        "aiBHD": 6962956,
+        "aiBIF": 55666611000,
+        "aiBMD": 18518500,
+        "aiBND": 23424606,
+        "aiBOB": 230109029,
+        "aiBRL": 94482868,
+        "aiBSD": 18518500,
+        "aiBTN": 3111108000,
+        "aiBWP": 255251597,
+        "aiBYN": 57117721,
+        "aiBZD": 37037000,
+        "aiCAD": 25527197,
+        "aiCDF": 42629587000,
+        "aiCHF": 14992763,
+        "aiCLP": 17300204922,
+        "aiCNY": 124597098,
+        "aiCOP": 57907349500,
+        "aiCRC": 8399158268,
+        "aiCUC": 18518500,
+        "aiCUP": 14814800000,
+        "aiCVE": 1756594540,
+        "aiCZK": 385505170,
+        "aiDJF": 3291126339,
+        "aiDKK": 119162659,
+        "aiDOP": 1095830386,
+        "aiDZD": 2465645683,
+        "aiEGP": 1777776000,
+        "aiERN": 277777500,
+        "aiETB": 4740736000,
+        "aiEUR": 15931077,
+        "aiFJD": 40672367,
+        "aiFKP": 13675746,
+        "aiFOK": 18518500,
+        "aiGBP": 13675023,
+        "aiGEL": 48319396,
+        "aiGHS": 211247937,
+        "aiGIP": 13675746,
+        "aiGMD": 1380511582,
+        "aiGNF": 162666504000,
+        "aiGTQ": 141433933,
+        "aiGYD": 3873607238,
+        "aiHKD": 145208929,
+        "aiHNL": 496803207,
+        "aiHRK": 120029695,
+        "aiHTG": 2420275358,
+        "aiHUF": 5792031245,
+        "aiIDR": 326462636500,
+        "aiILS": 55893092,
+        "aiINR": 1756353799,
+        "aiIQD": 48518470000,
+        "aiIRR": 37037000000000,
+        "aiISK": 2237368133,
+        "aiJMD": 2932200772,
+        "aiJOD": 13129616,
+        "aiJPY": 2848478633,
+        "aiKES": 2396979085,
+        "aiKHR": 74722147500,
+        "aiKID": 18518500,
+        "aiKMF": 7837381052,
+        "aiKPW": 18518500,
+        "aiKRW": 24833308500,
+        "aiKWD": 5714217,
+        "aiKYD": 15432077,
+        "aiKZT": 8411602699,
+        "aiLAK": 411332922000,
+        "aiLBP": 1657405750000,
+        "aiLKR": 6079827254,
+        "aiLRD": 3239644909,
+        "aiLSL": 296271926,
+        "aiLYD": 203703500,
+        "aiMAD": 173843159,
+        "aiMDL": 319271903,
+        "aiMGA": 79981401500,
+        "aiMKD": 984267534,
+        "aiMMK": 38870331500,
+        "aiMNT": 67036970000,
+        "aiMOP": 149564110,
+        "aiMRU": 744641848,
+        "aiMUR": 869619501,
+        "aiMVR": 286008973,
+        "aiMWK": 32333301000,
+        "aiMXN": 313429316,
+        "aiMYR": 75206036,
+        "aiMZN": 1181302522,
+        "aiNAD": 296271926,
+        "aiNGN": 24481457000,
+        "aiNIO": 681217837,
+        "aiNOK": 171193903,
+        "aiNPR": 2809830524,
+        "aiNZD": 31629783,
+        "aiOMR": 7120308,
+        "aiPAB": 18518500,
+        "aiPEN": 62116975,
+        "aiPGK": 82085103,
+        "aiPHP": 1158213657,
+        "aiPKR": 10444434000,
+        "aiPLN": 68731413,
+        "aiPRB": 18518500,
+        "aiPYG": 270370100000,
+        "aiQAR": 67407340,
+        "aiRON": 83694546,
+        "aiRSD": 1869924056,
+        "aiRUB": 1600365066,
+        "aiRWF": 27314787500,
+        "aiSAR": 69444375,
+        "aiSBD": 146038558,
+        "aiSCR": 260183073,
+        "aiSDG": 96296200000,
+        "aiSEK": 177572971,
+        "aiSGD": 23424051,
+        "aiSHP": 13675746,
+        "aiSLL": 457573616500,
+        "aiSLS": 18518500,
+        "aiSOS": 10574970907,
+        "aiSRD": 703382630,
+        "aiSSP": 104648043500,
+        "aiSTN": 390301462,
+        "aiSYP": 2253757006,
+        "aiSZL": 296271926,
+        "aiTHB": 609264206,
+        "aiTJS": 170967051,
+        "aiTMT": 64815676,
+        "aiTND": 53784205,
+        "aiTOP": 43783660,
+        "aiTRY": 897569473,
+        "aiTTD": 125150060,
+        "aiTVD": 18518500,
+        "aiTWD": 583349417,
+        "aiTZS": 48981432500,
+        "aiUAH": 823147325,
+        "aiUGX": 69333264000,
+        "aiUSD": 18518500,
+        "aiUYU": 745101107,
+        "aiUZS": 218555337000,
+        "aiVES": 9259250000,
+        "aiVND": 480240260500,
+        "aiVUV": 2169923756,
+        "aiWST": 49648099,
+        "aiXAF": 10449841402,
+        "aiXCD": 49999950,
+        "aiXOF": 10449841402,
+        "aiXPF": 1901035136,
+        "aiYER": 4387680798,
+        "aiZAR": 296299704,
+        "aiZMW": 356223718
       }
     },
     "dai992454116ca7a5cfef9811703a37c04bc1b489a8": {
       "balance": 3742500000,
+      "nonce": 0
+    },
+    "dai9dfa2b39e1d6cd98c0175b04f13a909782520f96": {
+      "balance": 10000000,
       "nonce": 0
     },
     "dai9f43f4afe00630f5196409c73927ba6f88d4da8b": {
@@ -172,6 +351,14 @@
       "balance": 180000000,
       "nonce": 0
     },
+    "daiba3c4fb3005cb3d2bfbd2262361b272ce97d2b6a": {
+      "balance": 1745000000,
+      "nonce": 0
+    },
+    "daic7ffee3a8f99ca22e3a45db593ca1f2821be01b6": {
+      "balance": 2510000000,
+      "nonce": 0
+    },
     "daic9416d1d04bfb2a500337b6bca6e88e6004979bc": {
       "balance": 27682500000,
       "nonce": 0
@@ -180,16 +367,24 @@
       "balance": 56400000000,
       "nonce": 0
     },
+    "daidda18e12945715887b6cf26e7bdf8d471a0fe279": {
+      "balance": 530000000,
+      "nonce": 0
+    },
+    "daie1b16ec86061510b100435b4e6cd17b86961b664": {
+      "balance": 195000000,
+      "nonce": 0
+    },
     "daie86c4b3cc2668d78f6ad206f33bdaf75a3158852": {
-      "balance": 120000000,
-      "nonce": 0,
+      "balance": 704125000,
+      "nonce": 1,
       "assets": {
         "KGST": 1611109500,
         "aiAOA": 16944427500,
         "aiBDT": 2259257000,
         "aiBTN": 1555554000,
         "aiCUP": 7407400000,
-        "aiEGP": 888888000,
+        "aiEGP": 888788000,
         "aiETB": 2370368000,
         "aiIQD": 24259235000,
         "aiIRR": 18518500000000,
@@ -206,6 +401,10 @@
     },
     "daiec17befd1d9780c52daac57426e033ca5bdb1437": {
       "balance": 2000000000,
+      "nonce": 0
+    },
+    "daifac8d4e97982acaaebdef6c7669d3b9cb11a0ecf": {
+      "balance": 295000000,
       "nonce": 0
     }
   }

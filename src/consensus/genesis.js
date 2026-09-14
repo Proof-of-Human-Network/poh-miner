@@ -16,11 +16,15 @@ import { DAIBlock } from '../core/block.js';
 import { computeChainWork } from './chain-selection.js';
 
 // ── Active network genesis (migration pin) ───────────────────────────────────
-// v0.4.30 hard fork: balances from height 749 plus $185,185 of every stablecoin
-// minted to daie86c4… (local miner wallet). A node whose on-disk chain has a
-// DIFFERENT genesis auto-migrates (see miner-node _migrateChainIfStale).
+// v0.4.35 hard fork: balances + nonces carried from height 20320 of the v0.4.30
+// chain, with the initial supply of all 161 stablecoins minted to the treasury
+// (dai977927…). The 0.02 DAI that sat in the P2P escrow pool is credited back to
+// the two makers it belonged to — see `escrowCredits` in the snapshot, and
+// --credit-escrow in scripts/genesis/export-snapshot.mjs.
+// A node whose on-disk chain has a DIFFERENT genesis auto-migrates (see
+// miner-node _migrateChainIfStale), keeping its wallets and keys.
 // Set to null to disable the pin (dev / pre-migration builds).
-export const EXPECTED_GENESIS_HASH = '950fade83fe860ae852b745b5628282be25f0192702d825e3657d72f992cab5a';
+export const EXPECTED_GENESIS_HASH = 'a83d3955a5b36fa6b7154931d618effe31594ffdf389b248c523f135bc8dfb4a';
 
 /** Path to the snapshot bundled with the app (ships in the build), or null. */
 export function defaultMigrationSnapshot() {
