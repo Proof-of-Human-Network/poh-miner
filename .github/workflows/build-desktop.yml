@@ -38,9 +38,14 @@ jobs:
       - uses: actions/checkout@v4
 
       # Repo gitignores lockfiles → no `cache: npm`, and `npm install` (not `npm ci`).
+      # Node 22, not 20: with floating deps, bare-pack pulls a bare-module-lexer
+      # prebuild that needs the node_api_is_sharedarraybuffer Node-API symbol.
+      # Node 20 does not export it, so `bundle:qvac` died with
+      # "undefined symbol: node_api_is_sharedarraybuffer" (linux) and
+      # "missing symbol called" (macOS). 22.x has it, and matches production.
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
 
       - name: Install dependencies
         run: npm install --no-audit --no-fund
