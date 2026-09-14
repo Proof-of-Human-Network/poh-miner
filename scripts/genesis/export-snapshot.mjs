@@ -11,7 +11,8 @@
  *   node scripts/genesis/export-snapshot.mjs --data-dir ~/.dai-bootnode \
  *        [--height H] [--out snap.json] [--exclude addr1,addr2] [--include-system] \
  *        [--genesis-timestamp <ms>] \
- *        [--mint-stables] [--treasury <daiAddr>] [--force-abandon-escrow]
+ *        [--mint-stables] [--treasury <daiAddr>] [--force-abandon-escrow] \
+ *        [--credit-escrow addr:raw,addr:raw]
  *
  * --mint-stables adds the initial stablecoin supply (INITIAL_STABLE_SUPPLY_RAW
  * from src/assets.js) to the treasury row (--treasury overrides the address).
@@ -23,6 +24,13 @@
  *
  * Exits 3 if the P2P escrow pool still holds funds — those belong to open trades
  * whose records reset-node.sh wipes, so they must be settled before exporting.
+ *
+ * --credit-escrow is the third option, for when the open trades cannot be settled
+ * on the old chain (e.g. the makers' keys are not available to sign a cancel).
+ * It redistributes the locked pool back to the addresses it belongs to, as part of
+ * the snapshot, so the funds land with their owners at genesis instead of being
+ * stranded (--include-system) or destroyed (--force-abandon-escrow). The credits
+ * must sum to the pool EXACTLY, and are recorded in the output for audit.
  */
 import crypto from 'crypto';
 import fs from 'fs';
@@ -57,6 +65,7 @@ const outFile = arg('--out', null);
 const heightArg = arg('--height', null);
 const genesisTs = arg('--genesis-timestamp', null);
 const includeSystem = argv.includes('--include-system');
+const creditEscrowArg = arg('--credit-escrow', null);
 const exclude = new Set([
   ...(includeSystem ? [] : SYSTEM_ADDRESSES),
   ...String(arg('--exclude', '')).split(',').map(s => s.trim()).filter(Boolean),
@@ -89,13 +98,53 @@ async function main() {
   const escrowDai = ledger.balances.get(ESCROW_ADDRESS) || 0;
   const escrowAssets = ledger.getAssetBalances ? ledger.getAssetBalances(ESCROW_ADDRESS) : {};
   const escrowAssetTotal = Object.values(escrowAssets).reduce((a, b) => a + (Number(b) || 0), 0);
-  if ((escrowDai > 0 || escrowAssetTotal > 0) && !argv.includes('--force-abandon-escrow')) {
+  // --credit-escrow: hand the locked pool back to the addresses it belongs to.
+  // Parsed and validated before the refusal below, which it satisfies by
+  // emptying the pool rather than by overriding the guard.
+  const credits = new Map();
+  if (creditEscrowArg) {
+    for (const part of String(creditEscrowArg).split(',').map(s => s.trim()).filter(Boolean)) {
+      const idx = part.lastIndexOf(':');
+      const addr = part.slice(0, idx).trim();
+      const amt = Number(part.slice(idx + 1));
+      if (!addr || !Number.isFinite(amt) || amt <= 0 || !Number.isInteger(amt)) {
+        console.error(`[snapshot] --credit-escrow: bad entry "${part}" (expected addr:positiveInteger)`);
+        process.exit(2);
+      }
+      credits.set(addr, (credits.get(addr) || 0) + amt);
+    }
+    const creditTotal = [...credits.values()].reduce((a, b) => a + b, 0);
+    if (escrowAssetTotal > 0) {
+      console.error('[snapshot] --credit-escrow only redistributes DAI, but the pool also holds assets:');
+      console.error(`[snapshot]   ${JSON.stringify(escrowAssets)}`);
+      process.exit(3);
+    }
+    if (creditTotal !== escrowDai) {
+      console.error(`[snapshot] --credit-escrow must sum to the escrow pool EXACTLY.`);
+      console.error(`[snapshot]   credits: ${creditTotal}   pool: ${escrowDai}   delta: ${creditTotal - escrowDai}`);
+      process.exit(3);
+    }
+    // Empty the pool and move the funds onto the owners' rows before the entry
+    // loop, so conservation still balances: what left `excluded` reappears in
+    // sum(balances) rather than vanishing.
+    ledger.balances.set(ESCROW_ADDRESS, 0);
+    for (const [a, v] of credits) {
+      ledger.balances.set(a, (ledger.balances.get(a) || 0) + v);
+      addrs.add(a);
+    }
+    console.log(`[snapshot] credited escrow (${escrowDai}) back to ${credits.size} address(es):`);
+    for (const [a, v] of credits) console.log(`[snapshot]   ${a}  +${fmt(v)}`);
+  }
+  const escrowDaiAfter = ledger.balances.get(ESCROW_ADDRESS) || 0;
+
+  if ((escrowDaiAfter > 0 || escrowAssetTotal > 0) && !argv.includes('--force-abandon-escrow')) {
     console.error(`[snapshot] REFUSING: P2P escrow (${ESCROW_ADDRESS}) still holds funds.`);
-    console.error(`[snapshot]   DAI: ${escrowDai}${escrowAssetTotal ? `  assets: ${JSON.stringify(escrowAssets)}` : ''}`);
+    console.error(`[snapshot]   DAI: ${escrowDaiAfter}${escrowAssetTotal ? `  assets: ${JSON.stringify(escrowAssets)}` : ''}`);
     console.error('[snapshot]   reset-node.sh wipes p2p/orders.json + trades.json with the chain, so');
     console.error('[snapshot]   these funds would have no trade left to release them.');
     console.error('[snapshot]   Settle or cancel every open trade first, then re-export.');
-    console.error('[snapshot]   (--force-abandon-escrow discards them deliberately.)');
+    console.error('[snapshot]   (--credit-escrow addr:raw,… hands them back to their owners;');
+    console.error('[snapshot]    --force-abandon-escrow discards them deliberately.)');
     process.exit(3);
   }
 
@@ -155,6 +204,7 @@ async function main() {
       version: 1, sourceHeight: H, tipHeight, finalizedHeight,
       snapshotHash, totalMinted, coinbaseDust: dust, excludedBalance: excludedRaw,
       excluded: [...exclude], sumBalances, addressCount: entries.length,
+      ...(credits.size ? { escrowCredits: Object.fromEntries(credits), escrowCreditedTotal: escrowDai } : {}),
       genesisTimestamp: genesisTs != null ? Number(genesisTs) : undefined,
       generatedAt: new Date().toISOString(), balances: balancesObj,
     };
