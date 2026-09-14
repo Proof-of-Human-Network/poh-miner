@@ -128,7 +128,7 @@ async function generateIcons() {
   // Create a simple README for icons
   const readme = `# Icons
 
-This folder contains icons generated from the DAI wordmark (\`dai-miner-source.png\`).
+This folder contains icons generated from the DAI mark (\`dai-miner-source.png\`) — the folded-ribbon logomark.
 
 ## Files
 

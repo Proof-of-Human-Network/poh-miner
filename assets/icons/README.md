@@ -1,6 +1,6 @@
 # Icons
 
-This folder contains icons generated from the DAI wordmark (`dai-miner-source.png`) — Iceland-font "DAI", same style as the original POH mark.
+This folder contains icons generated from the DAI mark (`dai-miner-source.png`) — the folded-ribbon logomark, not the old Iceland-font wordmark.
 
 ## Files
 
