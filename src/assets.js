@@ -233,7 +233,7 @@ export const FX_NO_MARKET = ["CUC","KPW","PRB","SLS","APS","KID","TVD","FOK"];
 // this constant: buildMigrationGenesis bakes the resulting amounts into the
 // snapshot, and the snapshot fixes the genesis hash. Editing fxPerUSD later
 // changes gas pricing, never the supply of an already-launched chain.
-export const TREASURY_ADDRESS = 'dai977927faa8e24e3c7fad041d4468cacdd8c365c8';
+export const TREASURY_ADDRESS = 'dai2bb70f8ad9303815679b38292bd1c483b78e5e76';
 export const GENESIS_USD_PER_STABLE = 185_185;
 
 // Currencies shipped without a rate (FX_NO_MARKET) cannot be minted at equal
