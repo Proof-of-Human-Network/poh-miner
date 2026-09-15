@@ -1266,10 +1266,14 @@ window.showPrivateKeyWarning = function() {
 
   api.revealKey(address).then(r => {
     if (r?.ok) {
-      // Deliberately a prompt(): it renders the key selectable and copyable
-      // without writing it into the page, so it leaves no node behind in the
-      // DOM after the dialog closes.
-      window.prompt(`Private key for ${address}\n\nCopy it now and store it somewhere safe. Anyone with this key controls the wallet.`, r.privateKey);
+      // This used to be window.prompt(), chosen because it shows the key
+      // selectable and copyable without leaving a node in the DOM. Electron
+      // does not implement prompt() -- it throws "prompt() is and will not be
+      // supported", which the catch below turned into "Key reveal failed", so
+      // the reveal appeared broken even though the key had been read fine.
+      // showPrivateKeyModal keeps the original property by deleting the node
+      // (and the string in it) when the dialog closes.
+      showPrivateKeyModal(address, r.privateKey);
       hideSettings();
       return;
     }
@@ -1279,6 +1283,116 @@ window.showPrivateKeyWarning = function() {
     alert(`Cannot reveal the private key for ${address}.\n\n${r?.message || 'Unknown error.'}`);
   }).catch(e => alert(`Key reveal failed: ${e?.message || e}`));
 };
+
+// ── Text prompt modal ─────────────────────────────────────────────────────────
+
+/**
+ * Ask for a line of text. Stands in for window.prompt(), which Electron does
+ * not implement -- calling it throws "prompt() is and will not be supported",
+ * so every caller silently did nothing.
+ *
+ * Resolves with the string, or null if dismissed, matching prompt()'s contract
+ * so callers can keep their `if (!value) return;` shape.
+ */
+function promptText(message, { placeholder = '', okLabel = 'OK' } = {}) {
+  return new Promise(resolve => {
+    document.getElementById('text-prompt-modal')?.remove();
+
+    const modal = document.createElement('div');
+    modal.id = 'text-prompt-modal';
+    modal.className = 'fixed inset-0 bg-black/80 z-[200] flex items-center justify-center';
+    modal.innerHTML = `
+      <div class="glass w-full max-w-sm rounded-3xl p-6">
+        <p class="text-sm text-zinc-300 mb-3" id="text-prompt-message"></p>
+        <input id="text-prompt-input" type="text"
+               class="w-full bg-black/60 border border-white/15 rounded-xl px-3 py-2.5 text-sm text-zinc-200 mb-4"/>
+        <div class="flex gap-2">
+          <button id="text-prompt-cancel" class="flex-1 py-2.5 border border-white/20 rounded-2xl text-sm">Cancel</button>
+          <button id="text-prompt-ok" class="flex-1 py-2.5 border border-white/20 rounded-2xl text-sm"></button>
+        </div>
+      </div>`;
+    document.body.appendChild(modal);
+
+    document.getElementById('text-prompt-message').textContent = message;
+    document.getElementById('text-prompt-ok').textContent = okLabel;
+    const input = document.getElementById('text-prompt-input');
+    input.placeholder = placeholder;
+    input.focus();
+
+    let done = false;
+    const finish = value => { if (done) return; done = true; modal.remove(); resolve(value); };
+    document.getElementById('text-prompt-ok').onclick = () => finish(input.value);
+    document.getElementById('text-prompt-cancel').onclick = () => finish(null);
+    modal.onclick = e => { if (e.target === modal) finish(null); };
+    input.onkeydown = e => {
+      if (e.key === 'Enter') finish(input.value);
+      if (e.key === 'Escape') finish(null);
+    };
+  });
+}
+
+// ── Private key reveal modal ──────────────────────────────────────────────────
+
+/**
+ * Show a revealed private key. Replaces window.prompt(), which Electron does
+ * not implement.
+ *
+ * The key is put in a readonly <input> rather than interpolated into innerHTML:
+ * a private key is hex, but building markup out of secret material is a habit
+ * worth not having. Closing removes the whole modal, so the only DOM node that
+ * ever held the key goes with it.
+ */
+function showPrivateKeyModal(address, privateKey) {
+  document.getElementById('private-key-modal')?.remove();
+
+  const modal = document.createElement('div');
+  modal.id = 'private-key-modal';
+  modal.className = 'fixed inset-0 bg-black/80 z-[200] flex items-center justify-center';
+  modal.innerHTML = `
+    <div class="glass w-full max-w-md rounded-3xl p-6 border border-red-900/50">
+      <div class="text-3xl mb-3 text-center">🔑</div>
+      <h3 class="font-display text-lg mb-2 text-red-400 text-center">Private Key</h3>
+      <p class="text-xs text-zinc-400 mb-3 text-center break-all" id="private-key-address"></p>
+      <input id="private-key-value" type="text" readonly
+             class="w-full bg-black/60 border border-white/15 rounded-xl px-3 py-2.5 text-xs font-mono text-zinc-200 mb-3"
+             onclick="this.select()"/>
+      <p class="text-xs text-zinc-500 mb-5 text-center">
+        Copy it now and store it somewhere safe. Anyone with this key controls the wallet.
+      </p>
+      <div class="flex gap-2">
+        <button id="private-key-copy" class="flex-1 py-2.5 border border-white/20 rounded-2xl text-sm">Copy</button>
+        <button id="private-key-close" class="flex-1 py-2.5 border border-white/20 rounded-2xl text-sm">Close</button>
+      </div>
+    </div>`;
+  document.body.appendChild(modal);
+
+  document.getElementById('private-key-address').textContent = address;
+  const field = document.getElementById('private-key-value');
+  field.value = privateKey;
+  field.focus();
+  field.select();
+
+  const close = () => modal.remove();
+  document.getElementById('private-key-close').onclick = close;
+  // Click the backdrop to dismiss, but not a click inside the card.
+  modal.onclick = e => { if (e.target === modal) close(); };
+  document.addEventListener('keydown', function esc(e) {
+    if (e.key === 'Escape') { close(); document.removeEventListener('keydown', esc); }
+  });
+
+  document.getElementById('private-key-copy').onclick = async () => {
+    const btn = document.getElementById('private-key-copy');
+    try {
+      await navigator.clipboard.writeText(privateKey);
+      btn.textContent = 'Copied';
+    } catch {
+      // Clipboard can be denied; selecting the field still lets them copy by hand.
+      field.select();
+      btn.textContent = 'Press Ctrl+C';
+    }
+    setTimeout(() => { if (btn.isConnected) btn.textContent = 'Copy'; }, 2000);
+  };
+}
 
 // ── Skill audit rejection modal ───────────────────────────────────────────────
 
@@ -6307,7 +6421,13 @@ async function _p2pTradeAction(tradeId, action, extraFields = {}) {
 function p2pMarkPaymentSent(tradeId) { _p2pTradeAction(tradeId, 'payment-sent'); }
 function p2pReleaseTrade(tradeId)    { _p2pTradeAction(tradeId, 'release'); }
 function p2pCancelTrade(tradeId)     { _p2pTradeAction(tradeId, 'cancel'); }
-function p2pDisputeTrade(tradeId)    { const r = prompt('Dispute reason:'); if (r) _p2pTradeAction(tradeId, 'dispute', { reason: r }); }
+async function p2pDisputeTrade(tradeId) {
+  // The reason is signed and gossiped network-wide, so it has to come from the
+  // user rather than default to something. prompt() threw here under Electron,
+  // which made DISPUTE a button that did nothing at all.
+  const r = await promptText('Dispute reason:', { placeholder: 'What went wrong?', okLabel: 'Open dispute' });
+  if (r) _p2pTradeAction(tradeId, 'dispute', { reason: r });
+}
 
 async function p2pSubmitCreateOrder() {
   const resultEl  = document.getElementById('p2p-create-result');
