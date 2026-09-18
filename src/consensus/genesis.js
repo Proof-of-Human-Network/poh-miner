@@ -16,15 +16,21 @@ import { DAIBlock } from '../core/block.js';
 import { computeChainWork } from './chain-selection.js';
 
 // ── Active network genesis (migration pin) ───────────────────────────────────
-// v0.4.35 hard fork: balances + nonces carried from height 20320 of the v0.4.30
-// chain, with the initial supply of all 161 stablecoins minted to the treasury
-// (dai977927…). The 0.02 DAI that sat in the P2P escrow pool is credited back to
-// the two makers it belonged to — see `escrowCredits` in the snapshot, and
-// --credit-escrow in scripts/genesis/export-snapshot.mjs.
+// v0.4.36 hard fork: balances + nonces carried from height 1846 of the v0.4.35
+// chain, with the initial supply of all 161 stablecoins minted to the treasury.
+//
+// 0.4.35 minted that supply to the TREASURY_ADDRESS constant, which still held
+// its Aug-29 value — an address with no key in any keystore, only an empty
+// placeholder record. The supply was therefore unspendable. This fork repoints
+// the treasury at dai2bb70f8ad… and re-mints to it, and EXCLUDES the old
+// address: its 161 assets are already on-chain, so carrying them over while
+// minting a fresh set would have doubled the supply. Its 1.3037 DAI goes with
+// it — nobody can sign for that address either.
+//
 // A node whose on-disk chain has a DIFFERENT genesis auto-migrates (see
 // miner-node _migrateChainIfStale), keeping its wallets and keys.
 // Set to null to disable the pin (dev / pre-migration builds).
-export const EXPECTED_GENESIS_HASH = 'a83d3955a5b36fa6b7154931d618effe31594ffdf389b248c523f135bc8dfb4a';
+export const EXPECTED_GENESIS_HASH = '65d201ec5791c0dd9af6d6892d4fc3ee5543f6d32177c3b2a08a66ebb720fc67';
 
 /** Path to the snapshot bundled with the app (ships in the build), or null. */
 export function defaultMigrationSnapshot() {
