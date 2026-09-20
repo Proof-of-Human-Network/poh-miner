@@ -1,3 +1,5 @@
+import { formatAmount } from '../assets.js';
+
 // System wallet address that holds escrowed assets during active P2P trades.
 // Funds flow: maker/taker → ESCROW_ADDRESS on lock, ESCROW_ADDRESS → recipient on release.
 // The pooled pseudo-address holds per-asset balances (DAI + stablecoins) — the
@@ -7,12 +9,19 @@ export const ESCROW_ADDRESS = 'dai_p2p_escrow';
 export class EscrowManager {
   // Lock `amount` raw units of `currency` from `fromAddress` into escrow.
   // Returns true on success, or { error } string on failure.
+  //
+  // Callers must bring the per-wallet file up to the canonical ledger first
+  // (MinerNode._reconcileWalletToLedger) — this reads the file, which on a node
+  // that has never credited the address is a stub at 0.
   lock(walletManager, fromAddress, amount, currency = 'DAI') {
     const balance = currency === 'DAI'
       ? walletManager.getBalance(fromAddress)
       : walletManager.getAssetBalance(fromAddress, currency);
     if (balance < amount) {
-      return { error: `insufficient balance: have ${balance} ${currency}, need ${amount} ${currency}` };
+      // Display units, not raw. Raw read as a wrong number to anyone holding the
+      // coins — 100 αιIRR escrows as 10000 raw units, and the error said "need
+      // 10000 aiIRR", which looks like the form multiplied the amount by 100.
+      return { error: `insufficient balance: have ${formatAmount(currency, balance)}, need ${formatAmount(currency, amount)}` };
     }
     walletManager.debit(fromAddress, amount, currency);
     walletManager.credit(ESCROW_ADDRESS, amount, currency);
@@ -29,7 +38,7 @@ export class EscrowManager {
       ? (snap.balance || 0)
       : ((snap.assets || {})[currency] || 0);
     if (escrowBal < amount) {
-      return { error: `escrow insufficient: have ${escrowBal} ${currency}, need ${amount} ${currency}` };
+      return { error: `escrow insufficient: have ${formatAmount(currency, escrowBal)}, need ${formatAmount(currency, amount)}` };
     }
     walletManager.debit(ESCROW_ADDRESS, amount, currency);
     walletManager.credit(toAddress, amount, currency);

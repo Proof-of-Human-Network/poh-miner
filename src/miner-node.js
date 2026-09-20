@@ -68,7 +68,7 @@ import { feeForLive } from './jobs/gas-price.js';
 import { displayRates } from './rates/display-rates.js';
 import { loadAllSkills, writeSkillFile } from './skills/loader.js';
 import { estimateTokens, estimateChatTokens, outputTokenCap, settleFee, timeoutFee, GAS } from './jobs/gas-estimator.js';
-import { ASSETS, STABLE_TICKERS, normalizeCurrency, isKnownAsset, decimalsOf, listAssets, fromRaw as assetFromRaw } from './assets.js';
+import { ASSETS, STABLE_TICKERS, normalizeCurrency, isKnownAsset, decimalsOf, listAssets, fromRaw as assetFromRaw, formatAmount as assetFormatAmount } from './assets.js';
 import { feedbackStore } from './jobs/feedback-store.js';
 
 // Max length of a free-text feedback comment. Mirrored by the Electron and
@@ -4053,7 +4053,7 @@ export class DAIMinerNode {
 
       // POST /api/p2p/orders — create order
       if (req.method === 'POST' && url.pathname === '/api/p2p/orders') {
-        readBody().then(body => {
+        readBody().then(async body => {
           const { address, signingPublicKey, signature, timestamp, ...orderFields } = body;
           /* Every field that defines the deal is signed.
              Until 0.4.35 only `side` and `daiAmount` were, so `pricePerDAI`,
@@ -4098,6 +4098,11 @@ export class DAIMinerNode {
 
           // For sell orders: lock the BASE asset in escrow now
           if (orderFields.side === 'sell') {
+            // The escrow lock reads the per-wallet FILE, which on a node that has
+            // never credited this address is a stub at 0 — a wallet funded elsewhere
+            // (every mobile wallet) was rejected as "insufficient balance" while
+            // /api/wallet/balance showed the coins. Reconcile the file to the ledger first.
+            await this._reconcileWalletToLedger(ownerAddress, baseAsset);
             const lockResult = this.p2pEscrow.lock(this.walletManager, ownerAddress, orderFields.daiAmount, baseAsset);
             if (lockResult !== true) { res.statusCode = 400; return res.end(JSON.stringify(lockResult)); }
           }
@@ -4171,7 +4176,7 @@ export class DAIMinerNode {
 
         // POST /api/p2p/orders/:id/select — taker selects order
         if (action === 'select') {
-          readBody().then(body => {
+          readBody().then(async body => {
             const { address, signingPublicKey, signature, timestamp, daiAmount, quoteAmount, takerPayoutAddress } = body;
             /* takerPayoutAddress decides where the taker's funds land and was
                not signed before 0.4.35 — a tampered request could redirect the
@@ -4200,10 +4205,13 @@ export class DAIMinerNode {
                 res.statusCode = 400;
                 return res.end(JSON.stringify(priceCheck));
               }
+              // Both legs move through the wallet FILES below, so both sides of the
+              // swap need the file caught up to the ledger first (see _reconcileWalletToLedger).
+              await this._reconcileWalletToLedger(ownerAddress, quoteAsset);
               const takerQuoteBal = this._confirmedBalance(ownerAddress, quoteAsset);
               if (takerQuoteBal < quoteAmount) {
                 res.statusCode = 402;
-                return res.end(JSON.stringify({ error: `insufficient ${quoteAsset} balance: have ${takerQuoteBal}, need ${quoteAmount}`, currency: quoteAsset }));
+                return res.end(JSON.stringify({ error: `insufficient ${quoteAsset} balance: have ${assetFormatAmount(quoteAsset, takerQuoteBal)}, need ${assetFormatAmount(quoteAsset, quoteAmount)}`, currency: quoteAsset }));
               }
 
               const result = this.p2pOrderStore.selectOrder(orderId, { taker: ownerAddress, daiAmount, quoteAmount, takerPayoutAddress });
@@ -4244,6 +4252,7 @@ export class DAIMinerNode {
             // ── Manual flow (off-chain quote) ───────────────────────────────────
             // For buy orders: taker is selling the base, so lock taker's base in escrow
             if (order.side === 'buy') {
+              await this._reconcileWalletToLedger(ownerAddress, baseAsset);
               const lockResult = this.p2pEscrow.lock(this.walletManager, ownerAddress, daiAmount, baseAsset);
               if (lockResult !== true) { res.statusCode = 400; return res.end(JSON.stringify(lockResult)); }
             }
@@ -8489,6 +8498,38 @@ export class DAIMinerNode {
   }
 
   /**
+   * Bring an address's per-wallet FILE balance up to the canonical ledger for one
+   * currency, so a file-based debit (job escrow, P2P escrow lock, atomic-swap quote
+   * leg) sees the balance /api/wallet/balance reports.
+   *
+   * On a sync-only (follower) node the wallet file is a stale stub at 0 while the
+   * txLedger holds the true confirmed balance — every file debit then rejected a
+   * funded wallet with "insufficient balance". Bump-UP only, and once per session
+   * per address+currency: a second bump would restore an amount the wallet has
+   * already moved into escrow (the ledger only drops it once the transition lands
+   * in a block), which is a double-spend. A session that never bumps (ledger still
+   * syncing, so ledgerBal is 0) is NOT marked, so it retries on the next attempt
+   * instead of being pinned to the stub for the whole session.
+   *
+   * The nonce is deliberately untouched — it is validated against the file value
+   * the client signed.
+   */
+  async _reconcileWalletToLedger(address, currency = 'DAI') {
+    const cur = normalizeCurrency(currency);
+    if (!this.txLedger || !address) return;
+    if (!this._escrowReconciled) this._escrowReconciled = new Set();
+    const key = `${address}:${cur}`;
+    if (this._escrowReconciled.has(key)) return;
+    const ledgerBal = this.txLedger.getBalance(address, cur);
+    if (!(ledgerBal > 0)) return;
+    // Must be awaited before the debit that follows: raiseBalanceTo runs on the
+    // wallet's per-address lock, so the file is only on disk once it resolves.
+    if (await this.walletManager.raiseBalanceTo(address, ledgerBal, cur)) {
+      this._escrowReconciled.add(key);
+    }
+  }
+
+  /**
    * Apply a 'job-escrow' transition: debit the requester and hold the amount in
    * local escrow pending settlement. Returns `true` on success, or an error
    * string/falsy value on failure.
@@ -8505,27 +8546,7 @@ export class DAIMinerNode {
     if (!requesterAddress || !amount) return 'missing requesterAddress/amount';
     if (this._appliedEscrowJobIds.has(jobId)) return true; // block replay — already debited locally
 
-    // Canonical-ledger reconcile before the (file-based) debit. On a sync-only
-    // (follower) node the per-wallet FILE balance is a stale stub (0) while the
-    // txLedger — the same source /api/wallet/balance reports — holds the true
-    // confirmed balance. Without this the debit sees 0 and rejects a funded wallet
-    // with "insufficient balance". Reconcile the requester's file up to the ledger
-    // once per session before its first escrow debit (balance only; the nonce is
-    // validated against the file value the client signed). Bump-up only, so it
-    // never erases a locally-decremented (escrow-in-progress) balance.
-    if (!this._escrowReconciled) this._escrowReconciled = new Set();
-    if (this.txLedger && !this._escrowReconciled.has(`${requesterAddress}:${cur}`)) {
-      const w = this.walletManager.loadWallet(requesterAddress);
-      const ledgerBal = this.txLedger.getBalance(requesterAddress, cur);
-      if (w && ledgerBal > WalletManager._getBal(w, cur)) {
-        WalletManager._setBal(w, cur, ledgerBal);
-        this.walletManager.saveWallet(w);
-        // Mark reconciled ONLY after a real bump — so a wallet touched before the
-        // ledger finished syncing (ledgerBal still 0) is retried on the next job
-        // instead of being stuck at the stale stub balance for the whole session.
-        this._escrowReconciled.add(`${requesterAddress}:${cur}`);
-      }
-    }
+    await this._reconcileWalletToLedger(requesterAddress, cur);
 
     if (typeof nonce !== 'number') {
       return 'nonce-bound payment required to escrow';
@@ -9179,6 +9200,7 @@ export class DAIMinerNode {
       if (this._appliedP2PIds.has(`order-${transition.id}`)) return;
       this.p2pOrderStore.ingestGossipOrder(transition);
       if (transition.side === 'sell' && transition.escrowLocked) {
+        await this._reconcileWalletToLedger(transition.maker, transition.baseAsset || 'DAI');
         this.p2pEscrow.lock(this.walletManager, transition.maker, transition.daiAmount, transition.baseAsset || 'DAI');
       }
       return;
@@ -9198,6 +9220,7 @@ export class DAIMinerNode {
       if (this._appliedP2PIds.has(`trade-${transition.id}`)) return;
       this.p2pOrderStore.ingestGossipTrade(transition);
       if (transition.orderSide === 'buy') {
+        await this._reconcileWalletToLedger(transition.taker, transition.baseAsset || 'DAI');
         this.p2pEscrow.lock(this.walletManager, transition.taker, transition.daiAmount, transition.baseAsset || 'DAI');
       }
       return;

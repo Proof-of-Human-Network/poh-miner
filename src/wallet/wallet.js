@@ -466,6 +466,29 @@ export class WalletManager {
     });
   }
 
+  /**
+   * Raise an address's balance for one currency to `target`, never lower it.
+   * Returns true if the file changed.
+   *
+   * Runs on the per-address lock like credit/debit, so it can never land between
+   * a queued debit's read and write — a plain loadWallet/saveWallet pair here
+   * would undo an escrow lock that had not yet flushed.
+   *
+   * Creates the keyless stub when no file exists (an address this node has never
+   * credited). privateKey/publicKey stay null so loadWallet never mints a keypair
+   * for it — that would rebind the file to a different address.
+   */
+  raiseBalanceTo(address, target, currency = 'DAI') {
+    return this._withLock(address, () => {
+      const wallet = this.loadWallet(address)
+        || new Wallet({ address, privateKey: null, publicKey: null, createdAt: Date.now() });
+      if (WalletManager._getBal(wallet, currency) >= target) return false;
+      WalletManager._setBal(wallet, currency, target);
+      this.saveWallet(wallet);
+      return true;
+    });
+  }
+
   // Transfer between two local wallets (for testing / future full tx system)
   transfer(fromAddress, toAddress, amount, currency = 'DAI') {
     if (!this.debit(fromAddress, amount, currency)) return false;
