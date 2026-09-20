@@ -1,4 +1,4 @@
-// Per-country facts for the regional landing pages (landing/<slug>/index.html).
+// Per-country facts for the regional landing pages (landing/regions/<slug>/index.html).
 //
 // `slug` is the directory name and follows the existing convention of naming the
 // folder after the local compute coin (kgs, etb, btn …). `lang` drives both the

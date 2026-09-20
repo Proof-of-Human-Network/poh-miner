@@ -1,5 +1,8 @@
 // Page template for the regional landing pages.
 //
+// Pages are written to landing/regions/<slug>/index.html, so every link back to
+// the site root is two levels up (../../index.html, ../../miner.html …).
+//
 // Emits a small self-contained document that links the two shared stylesheets
 // (regions-fonts.css, regions-page.css) rather than inlining ~420KB of base64
 // fonts per country, and carries only the per-country palette inline.
@@ -51,9 +54,9 @@ export function buildPage(c, l) {
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>${esc(l.heroTitle)} — iamai.kg</title>
 <meta name="description" content="${esc(l.heroLede)}">
-<link rel="icon" type="image/svg+xml" href="../dai-miner-on-light.svg">
-<link rel="stylesheet" href="../regions-fonts.css">
-<link rel="stylesheet" href="../regions-page.css">
+<link rel="icon" type="image/svg+xml" href="../../dai-miner-on-light.svg">
+<link rel="stylesheet" href="../../regions-fonts.css">
+<link rel="stylesheet" href="../../regions-page.css">
 <style>
   :root{
     --sky-top:${pal.skyTop}; --sky-mid:${pal.skyMid}; --sky-low:${pal.skyLow};
@@ -74,15 +77,15 @@ export function buildPage(c, l) {
   <div class="veil"></div>
 
   <div class="topbar">
-    <a class="brand" href="../index.html"><span class="dot"></span> iamai.kg</a>
+    <a class="brand" href="../../index.html"><span class="dot"></span> iamai.kg</a>
     <nav class="nav">
       <a href="#compute">${esc(l.navCompute)}</a>
       <a href="#coin">${esc(l.navCoin)}</a>
       <a href="#here">${esc(l.navCountry)}</a>
-      <a href="../index.html">${esc(l.navDai)}</a>
-      <a href="../wallet/">${esc(l.navWallet)}</a>
-      <a href="../explorer/">${esc(l.navExplorer)}</a>
-      <a href="../miner.html">${esc(l.navMiner)}</a>
+      <a href="../../index.html">${esc(l.navDai)}</a>
+      <a href="../../wallet/">${esc(l.navWallet)}</a>
+      <a href="../../explorer/">${esc(l.navExplorer)}</a>
+      <a href="../../miner.html">${esc(l.navMiner)}</a>
     </nav>
   </div>
 
@@ -147,8 +150,8 @@ export function buildPage(c, l) {
     <h2>${esc(l.s6Title)}</h2>
     <p class="lede narrow">${esc(l.s6Lede)}</p>
     <p class="cta-row">
-      <a class="btn primary" href="../miner.html#start">${esc(l.s6a)}</a>
-      <a class="btn" href="../docs/">${esc(l.s6b)}</a>
+      <a class="btn primary" href="../../miner.html#start">${esc(l.s6a)}</a>
+      <a class="btn" href="../../docs/">${esc(l.s6b)}</a>
     </p>
   </div>
 </section>
@@ -157,8 +160,8 @@ export function buildPage(c, l) {
   <div class="wrap foot-inner">
     <span>${esc(l.footTag)}</span>
     <span class="foot-links">
-      <a href="../index.html">iamai.kg</a>
-      <a href="../explorer/">${esc(l.navExplorer)}</a>
+      <a href="../../index.html">iamai.kg</a>
+      <a href="../../explorer/">${esc(l.navExplorer)}</a>
       <a href="https://t.me/iamaihub" target="_blank" rel="noopener">Telegram</a>
     </span>
   </div>

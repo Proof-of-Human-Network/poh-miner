@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-/* Generates the regional landing pages into landing/<slug>/index.html.
+/* Generates the regional landing pages into landing/regions/<slug>/index.html.
  *
  *   node regions/build-pages.mjs           # write all countries
  *   node regions/build-pages.mjs kgs etb   # write just these
@@ -15,7 +15,7 @@ import { COUNTRIES } from './pages/data.mjs';
 import { L } from './pages/strings.mjs';
 import { buildPage } from './pages/template.mjs';
 
-const landing = join(dirname(fileURLToPath(import.meta.url)), '..');
+const regionsDir = dirname(fileURLToPath(import.meta.url));
 const only = new Set(process.argv.slice(2));
 const targets = only.size ? COUNTRIES.filter(c => only.has(c.slug)) : COUNTRIES;
 
@@ -27,7 +27,7 @@ if (!targets.length) {
 let total = 0;
 for (const c of targets) {
   const html = buildPage(c, L(c.lang, c));
-  const dir = join(landing, c.slug);
+  const dir = join(regionsDir, c.slug);
   mkdirSync(dir, { recursive: true });
   writeFileSync(join(dir, 'index.html'), html, 'utf8');
   total += Buffer.byteLength(html);

@@ -1,3 +1,20 @@
+# Regions
+
+This folder holds everything regional: the fourteen published stablecoin landing
+pages (`kgs/`, `etb/`, `btn/` … one directory per compute coin, served at
+`iamai.kg/regions/<slug>/`) and the two generators that write them.
+
+```
+node build-pages.mjs        # rewrites <slug>/index.html for all fourteen
+node build-pages.mjs kgs    # …or just one
+```
+
+Copy lives in `pages/strings.mjs`, country facts in `pages/data.mjs`, the
+landmark drawings in `pages/scenes.mjs`. The pages are checked in, so re-run
+`build-pages.mjs` after editing any of those and commit the result. They link
+the two shared stylesheets at the landing root (`../../regions-page.css`,
+`../../regions-fonts.css`) rather than inlining the fonts per country.
+
 # Country programme materials
 
 Generated collateral for five countries: **Georgia, Armenia, Kyrgyzstan, Ethiopia, Bhutan**.
