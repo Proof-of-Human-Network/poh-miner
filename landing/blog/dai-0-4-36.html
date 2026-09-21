@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DAI 0.4.36 — we minted a supply nobody could spend</title>
+  <meta name="description" content="DAI Miner 0.4.35 minted 161 stablecoins to an address whose private key was never generated. 0.4.36 re-forks the genesis onto a treasury we hold, and fixes two bugs in the desktop app.">
+  <meta property="og:title" content="DAI 0.4.36 — we minted a supply nobody could spend">
+  <meta property="og:description" content="One constant pointed at an address with no private key, so 161 stablecoins were minted unspendable. Here is the fix, the cost, and what changed about how we work.">
+  <meta property="og:type" content="article">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Iceland&display=swap" rel="stylesheet">
+  <link rel="icon" type="image/svg+xml" href="../dai-miner-on-light.svg">
+  <link rel="icon" type="image/png" sizes="32x32" href="../favicon-32.png">
+  <link rel="shortcut icon" href="../favicon.ico">
+  <script src="../i18n.js" defer></script>
+  <style>
+    :root { --bg: #f5f6f2; --ink: #171717; --muted: #525252; --accent: #16a34a; --card: #ffffff; --line: #e4e6e0; }
+    body { font-family: 'Iceland', sans-serif; background: var(--bg); color: var(--ink); line-height: 1.4; }
+    h1, h2, h3, .font-display { font-family: 'Iceland', sans-serif; font-weight: 400; }
+    .neon { color: #16a34a; }
+    .muted { color: var(--muted); }
+    html { font-size: 150%; }
+    @media (max-width: 767px) { html { font-size: 110%; } }
+    @media (max-width: 639px) { html { font-size: 100%; } }
+    .footer-text { font-size: 1.25rem !important; }
+
+    .nav-links { display: none; }
+    @media (min-width: 1024px) { .nav-links { display: flex; } }
+    .hamburger { display: flex; flex-direction: column; gap: 5px; cursor: pointer; padding: 4px; }
+    .hamburger span { display: block; width: 22px; height: 2px; background: #171717; border-radius: 2px; transition: 0.25s; }
+    .hamburger.open span:nth-child(1) { transform: translateY(7px) rotate(45deg); }
+    .hamburger.open span:nth-child(2) { opacity: 0; }
+    .hamburger.open span:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
+    @media (min-width: 1024px) { .hamburger { display: none; } }
+    .mobile-drawer {
+      display: none; position: fixed; top: 64px; left: 0; right: 0; z-index: 49;
+      background: #f5f6f2; border-bottom: 1px solid var(--line);
+      flex-direction: column; padding: 16px 24px 24px;
+    }
+    @media (min-width: 640px) { .mobile-drawer { top: 80px; } }
+    .mobile-drawer.open { display: flex; }
+    .mobile-drawer a { padding: 14px 0; font-size: 22px; color: #171717; border-bottom: 1px solid var(--line); text-decoration: none; }
+    .mobile-drawer a:last-child { border-bottom: none; }
+    @media (min-width: 1024px) { .mobile-drawer { display: none !important; } }
+    .dai-lang-select { background: #fff !important; color: #171717 !important; border: 1px solid #d4d6d0 !important; }
+
+    .prose p { font-size: 1.18rem; line-height: 1.55; margin-bottom: 1rem; color: #262626; }
+    .prose p:last-child { margin-bottom: 0; }
+    .prose strong { color: var(--ink); }
+    .prose ul, .prose ol { margin: 0.35rem 0 1.1rem; padding-inline-start: 1.35rem; }
+    .prose li { font-size: 1.18rem; line-height: 1.5; margin-bottom: 0.55rem; color: #262626; }
+    .prose li:last-child { margin-bottom: 0; }
+    .lede { font-size: 1.5rem !important; line-height: 1.4 !important; color: var(--ink) !important; }
+
+    .meta { font-size: 0.92rem; letter-spacing: 1px; text-transform: uppercase; color: var(--muted); }
+    .tag {
+      display: inline-block; border: 1px solid var(--line); border-radius: 999px;
+      padding: 2px 12px; font-size: 0.9rem; color: var(--accent);
+      background: rgba(22,163,74,0.07);
+    }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.86em; }
+
+    .jump { display: flex; align-items: baseline; flex-wrap: wrap; gap: 12px; }
+    .jump .from { font-size: 2rem; color: var(--muted); }
+    .jump .arrow { color: var(--accent); font-size: 1.4rem; }
+    .jump .to { font-size: 3.2rem; }
+
+    .item { border-top: 1px solid var(--line); padding: 2.4rem 0; }
+    .item-head { display: flex; gap: 1.1rem; align-items: baseline; }
+    .rank { font-size: 3rem; line-height: 1; color: var(--accent); min-width: 2.6rem; }
+    .item h2 { font-size: 2.1rem; line-height: 1.05; }
+    .kicker { font-size: 0.85rem; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); margin-bottom: 4px; }
+    @media (min-width: 768px) { .item-body { padding-inline-start: 3.7rem; } }
+    @media (max-width: 767px) {
+      .item-head { display: block; }
+      .rank { font-size: 2.2rem; margin-bottom: 2px; }
+    }
+
+    .facts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 1.2rem; }
+    .fact {
+      border: 1px solid var(--line); background: var(--card); border-radius: 4px;
+      padding: 5px 12px; font-size: 0.95rem; color: #333;
+    }
+    .fact b { color: var(--accent); font-weight: normal; }
+
+    .pull {
+      border-inline-start: 3px solid var(--accent); padding-inline-start: 1rem;
+      font-size: 1.35rem !important; line-height: 1.35 !important; color: var(--ink) !important;
+      margin: 1.3rem 0 !important;
+    }
+
+    .grid-also {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 8px;
+    }
+    .cell { background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: 1.2rem 1.15rem; }
+    .cell h3 { font-size: 1.4rem; margin-bottom: 4px; }
+    .cell p { font-size: 1rem; line-height: 1.4; color: var(--muted); }
+
+    .notice {
+      border: 1px solid var(--accent); border-inline-start-width: 4px;
+      background: rgba(22,163,74,0.07); border-radius: 4px; padding: 1.4rem 1.5rem;
+    }
+    .notice h3 { font-size: 1.6rem; margin-bottom: 8px; }
+
+    .cmd {
+      border: 1px solid var(--line); background: var(--card); border-radius: 4px;
+      padding: 12px 16px; overflow-x: auto; white-space: nowrap;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 0.92rem; color: #333;
+    }
+    .cmd .p { color: var(--accent); user-select: none; }
+  </style>
+</head>
+<body>
+
+  <nav class="border-b border-black/10 bg-[#f5f6f2]/85 backdrop-blur-xl fixed w-full z-50">
+    <div class="max-w-7xl mx-auto px-4 sm:px-8 h-16 sm:h-20 flex items-center justify-between">
+      <a href="../index.html" class="flex items-center gap-2">
+        <img src="../dai-miner-on-light.svg" alt="DAI Logo" width="36" height="36" class="sm:w-[48px] sm:h-[48px]" style="vertical-align: middle;" />
+      </a>
+      <div class="nav-links items-center gap-x-6 xl:gap-x-9 text-[17px] xl:text-[20px]">
+        <a href="../dai.html" class="hover:text-[#16a34a] transition whitespace-nowrap" data-i18n="nav.dai">DAI</a>
+        <a href="../framework.html" class="hover:text-[#16a34a] transition whitespace-nowrap" data-i18n="nav.framework">Framework</a>
+        <a href="../wallet/" class="hover:text-[#16a34a] transition whitespace-nowrap" data-i18n="nav.wallet">Wallet</a>
+        <a href="../explorer/" class="hover:text-[#16a34a] transition whitespace-nowrap" data-i18n="nav.explorer">Explorer</a>
+        <a href="./" class="text-[#16a34a] transition whitespace-nowrap" data-i18n="nav.blog">Blog</a>
+        <a href="https://aist.exchange" target="_blank" rel="noopener" class="px-3 lg:px-5 py-2 rounded-[4px] border border-[#16a34a] text-[#16a34a] hover:bg-[#16a34a] hover:text-white transition whitespace-nowrap" data-i18n="nav.p2p">P2P</a>
+        <a href="../miner.html#start" class="px-3 lg:px-5 py-2 rounded-[4px] bg-[#16a34a] text-white hover:bg-black transition whitespace-nowrap" data-i18n="nav.runminer">Run a miner</a>
+        <div data-i18n-switch></div>
+      </div>
+      <button class="hamburger" id="hamburger" aria-label="Open menu"><span></span><span></span><span></span></button>
+    </div>
+  </nav>
+
+  <div class="mobile-drawer" id="mobile-drawer">
+    <a href="../dai.html" data-i18n="nav.dai">DAI</a>
+    <a href="../framework.html" data-i18n="nav.framework">Framework</a>
+    <a href="../wallet/" data-i18n="nav.wallet">Wallet</a>
+    <a href="../explorer/" data-i18n="nav.explorer">Explorer</a>
+    <a href="./" data-i18n="nav.blog">Blog</a>
+    <a href="https://aist.exchange" target="_blank" rel="noopener" data-i18n="nav.p2p">P2P</a>
+    <a href="../miner.html#start" data-i18n="nav.runminer">Run a miner</a>
+    <div data-i18n-switch style="padding:14px 0"></div>
+  </div>
+
+  <main class="pt-16 sm:pt-20">
+    <article class="max-w-3xl mx-auto px-4 sm:px-8">
+      <header class="pt-10 sm:pt-16 pb-6">
+        <a href="./" class="meta hover:text-[#16a34a]" data-i18n="blog.back">← Blog</a>
+        <div class="flex flex-wrap items-center gap-3 mt-6 mb-5">
+          <span class="tag" data-i18n="blog.tag.release">Release</span>
+          <span class="tag" data-i18n="blog.tag.postmortem">Post-mortem</span>
+          <span class="meta" data-i18n="blog.p3.date">18 September 2026 · v0.4.36</span>
+        </div>
+        <h1 class="text-[42px] sm:text-[64px] leading-[0.98]" data-i18n-html="blog.p3.title">
+          We minted a supply nobody could <span class="neon">spend</span>.
+        </h1>
+        <div class="prose mt-6">
+          <p class="lede" data-i18n-html="blog.v36.lede">
+            Version 0.4.35 created 161 stablecoins and sent the entire initial supply to an address
+            whose private key does not exist. Not lost. Not on a broken laptop. <strong>Never generated.</strong>
+          </p>
+          <p data-i18n="blog.v36.lede2">0.4.36 fixes it. Here is what happened, what we did, and the two user-facing bugs that came along for the ride.</p>
+        </div>
+
+        <div class="jump mt-9 pt-6 border-t border-black/10">
+          <span class="from">0.4.35</span>
+          <span class="arrow">→</span>
+          <span class="to">0.4.36</span>
+          <span class="meta ml-auto" style="text-transform:none;letter-spacing:0.5px" data-i18n="blog.v36.span">
+            Coordinated hard fork
+          </span>
+        </div>
+      </header>
+
+      <section class="item">
+        <div class="item-head">
+          <div class="rank">01</div>
+          <div>
+            <div class="kicker" data-i18n="blog.v36.s1.k">The mistake</div>
+            <h2 data-i18n="blog.v36.s1.h">One constant, pointing at nobody</h2>
+          </div>
+        </div>
+        <div class="item-body prose mt-5">
+          <p data-i18n="blog.v36.s1.p1">The chain mints each stablecoin's opening supply to a treasury address, set by a single constant in the code.</p>
+          <p data-i18n="blog.v36.s1.p2">Weeks before the 0.4.35 fork, that constant was filled in with a placeholder-replacement address. A script was later added to generate a proper treasury wallet — one whose key lives in the node's keystore, exportable to the wallet app. It was run. Seven wallets came out of it.</p>
+          <p class="pull" data-i18n-html="blog.v36.s1.pull">The constant was <strong>never updated</strong> to point at any of them.</p>
+          <p data-i18n="blog.v36.s1.p3">So the fork did exactly what the code told it to: it minted 161 currencies to the original address. That address had no key in any keystore on any machine — only an empty bookkeeping record the node writes when it needs to track a balance for an address it has never seen a key for.</p>
+          <p data-i18n="blog.v36.s1.p4">The supply existed. It was visible on-chain. And nobody could sign a transaction to move a unit of it.</p>
+          <div class="facts">
+            <span class="fact" data-i18n-html="blog.v36.s1.f1"><b>161</b> currencies minted</span>
+            <span class="fact" data-i18n-html="blog.v36.s1.f2"><b>0</b> spendable</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="item">
+        <div class="item-head">
+          <div class="rank">02</div>
+          <div>
+            <div class="kicker" data-i18n="blog.v36.s2.k">How it surfaced</div>
+            <h2 data-i18n="blog.v36.s2.h">Not an audit. A command that failed.</h2>
+          </div>
+        </div>
+        <div class="item-body prose mt-5">
+          <p data-i18n="blog.v36.s2.p1">Placing sell orders as the treasury returned:</p>
+          <div class="cmd"><span class="p">!</span> dai977927… has no private key on this node (externally registered key)</div>
+          <p class="mt-4" data-i18n="blog.v36.s2.p2">That error is precise and it was telling the truth. Chasing it down — through both machines' keystores, the generated wallet exports, and the git history of the constant — produced the answer: the address was never anybody's to sign for.</p>
+          <p data-i18n-html="blog.v36.s2.p3">The tooling deserves credit here. The error did not say “signing failed”. It said <em>why</em>, and the reason turned out to be the whole story.</p>
+        </div>
+      </section>
+
+      <section class="item">
+        <div class="item-head">
+          <div class="rank">03</div>
+          <div>
+            <div class="kicker" data-i18n="blog.v36.s3.k">The fix</div>
+            <h2 data-i18n="blog.v36.s3.h">Re-fork the genesis onto a treasury we hold</h2>
+          </div>
+        </div>
+        <div class="item-body prose mt-5">
+          <p data-i18n="blog.v36.s3.p1">0.4.36 re-forks the genesis onto a treasury we hold the key to.</p>
+          <p data-i18n="blog.v36.s3.p2">Every balance and nonce carries forward from height 1846 of the 0.4.35 chain. Fifty-three allocations, 2,529.1865 DAI, conservation verified — the sum of balances plus dust plus exclusions equals total minted, exactly.</p>
+          <p data-i18n-html="blog.v36.s3.p3">One subtlety mattered. The old treasury already held those 161 assets <strong>on-chain</strong>, and the exporter carries existing asset balances forward while adding a fresh mint to the treasury row. Re-running it naively would have carried the old supply over <em>and</em> minted a new one — doubling every stablecoin in existence.</p>
+          <p data-i18n="blog.v36.s3.p4">So the old address is excluded outright. Its assets go, and its 1.3 DAI goes with them, because nobody can sign for that either.</p>
+          <p class="meta mt-5" style="text-transform:none;letter-spacing:0.5px" data-i18n="blog.v36.s3.gen">New genesis</p>
+          <div class="cmd">65d201ec5791c0dd9af6d6892d4fc3ee5543f6d32177c3b2a08a66ebb720fc67</div>
+          <div class="facts">
+            <span class="fact" data-i18n-html="blog.v36.s3.f1">Forked from height <b>1846</b></span>
+            <span class="fact" data-i18n-html="blog.v36.s3.f2"><b>53</b> allocations carried</span>
+            <span class="fact" data-i18n-html="blog.v36.s3.f3"><b>2,529.1865</b> DAI, conservation verified</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="item">
+        <div class="item-head">
+          <div class="rank">04</div>
+          <div>
+            <div class="kicker" data-i18n="blog.v36.s4.k">What it cost</div>
+            <h2 data-i18n="blog.v36.s4.h">Almost nothing, because of when it was caught</h2>
+          </div>
+        </div>
+        <div class="item-body prose mt-5">
+          <p data-i18n="blog.v36.s4.p1">Not one order had been placed against that supply. No trades, no escrow, no counterparties. The network was still small enough that a coordinated restart was a few minutes of downtime rather than a migration event.</p>
+          <p data-i18n="blog.v36.s4.p2">Catching this after 600 sell orders were live — or after a real exchange had listed against it — would have been a different article.</p>
+        </div>
+      </section>
+
+      <section class="item">
+        <div class="item-head">
+          <div class="rank">05</div>
+          <div>
+            <div class="kicker" data-i18n="blog.v36.s5.k">Desktop app</div>
+            <h2 data-i18n="blog.v36.s5.h">The bug that hid in plain sight</h2>
+          </div>
+        </div>
+        <div class="item-body prose mt-5">
+          <p data-i18n="blog.v36.s5.p1">“View Private Key” in the desktop app had been failing with:</p>
+          <div class="cmd"><span class="p">!</span> Key reveal failed: prompt() is and will not be supported</div>
+          <p class="mt-4" data-i18n-html="blog.v36.s5.p2">The reveal was never broken. It read the key perfectly, then died <em>displaying</em> it. Electron does not implement <span class="mono">window.prompt()</span>, and the error handler relabelled that as a reveal failure.</p>
+          <p data-i18n="blog.v36.s5.p3">The original choice was deliberate — a prompt shows a key selectable and copyable without leaving it in the page. The replacement keeps that property: a modal that removes itself, and the key inside it, when you close it.</p>
+          <p data-i18n-html="blog.v36.s5.p4">The same bug was in the P2P <strong>DISPUTE</strong> button. <span class="mono">prompt('Dispute reason:')</span>, with no error handling at all, so it threw silently and the button did nothing. Both are fixed.</p>
+        </div>
+      </section>
+
+      <section class="item">
+        <div class="item-head">
+          <div class="rank">06</div>
+          <div>
+            <div class="kicker" data-i18n="blog.v36.s6.k">New</div>
+            <h2 data-i18n="blog.v36.s6.h">Importing a key you already have</h2>
+          </div>
+        </div>
+        <div class="item-body prose mt-5">
+          <p data-i18n-html="blog.v36.s6.p1">When the wallet app registers with a node, the node stores the <strong>public</strong> key only. Such a record cannot sign. The error message says so accurately — but until now there was no way to fix it, because the only key tooling generates fresh keys and refuses to touch an address that already exists.</p>
+          <p data-i18n-html="blog.v36.s6.p2"><span class="mono">import-wallet-key.mjs</span> is the missing half. Give it the private key an address was created from and it derives, seals and installs it so the node can sign.</p>
+          <p data-i18n="blog.v36.s6.p3">Handling is deliberate:</p>
+          <ul>
+            <li data-i18n-html="blog.v36.s6.l1">The key is read from a file or environment variable, <strong>never from the command line</strong> — <span class="mono">ps</span> exposes that, and your shell records it</li>
+            <li data-i18n="blog.v36.s6.l2">A wallet-app JSON export is accepted whole, so nobody has to fish the field out</li>
+            <li data-i18n-html="blog.v36.s6.l3">It is never printed, including on error; a bad key reports its <em>length</em>, not its value</li>
+            <li data-i18n-html="blog.v36.s6.l4"><span class="mono">--expect &lt;address&gt;</span> is mandatory and verified before anything is written</li>
+            <li data-i18n="blog.v36.s6.l5">A record that already holds a private key is never overwritten</li>
+          </ul>
+        </div>
+      </section>
+
+      <section class="pt-10 pb-4">
+        <h2 class="text-[2.1rem] leading-tight" data-i18n="blog.v36.also.h">Also in this release</h2>
+        <p class="muted text-[1.1rem] mt-1 mb-6" data-i18n="blog.v36.also.sub">One change, and it is the build.</p>
+        <div class="grid-also">
+          <div class="cell">
+            <h3 data-i18n="blog.v36.a1.h">Builds run on Node 22</h3>
+            <p data-i18n="blog.v36.a1.p">The bundler started pulling a prebuild that calls a Node-API symbol Node 20 does not export, which killed every platform build at once. CI now matches what production runs.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="py-8">
+        <div class="notice">
+          <h3 data-i18n="blog.v36.note.h">Update the wallet and the miner together</h3>
+          <div class="prose">
+            <p data-i18n="blog.v36.note.p1">0.4.36 is a coordinated hard fork. Adding and moving a treasury changes the chain's starting state, so every node moves together — a node on the old genesis will be rejected by the new network rather than silently corrupted.</p>
+            <p data-i18n-html="blog.v36.note.p2"><strong>Update the wallet and the miner at the same time.</strong> Existing balances carry over.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="pt-10 pb-2 border-t border-black/10">
+        <h2 class="text-[2.1rem] leading-tight" data-i18n="blog.v36.end.h">What we changed about how we work</h2>
+        <div class="prose mt-5">
+          <p data-i18n="blog.v36.end.p1">A constant pointing at the wrong address is a small bug. It produced an unspendable money supply.</p>
+          <p data-i18n="blog.v36.end.p2">The gap was not the typo — it was that nothing verified the treasury could sign before minting to it. A fork is a one-way door, and we walked through it without checking the handle on the other side.</p>
+          <p class="pull" data-i18n="blog.v36.end.p3">That check now happens before the mint, not after the first failed order.</p>
+        </div>
+      </section>
+
+      <section class="py-10 sm:py-14 border-t border-black/10">
+        <h2 class="text-[2.4rem] sm:text-[3rem] leading-[1.02]" data-i18n="blog.cta.h">Put an idle computer to work</h2>
+        <p class="muted text-[1.2rem] mt-3 max-w-xl" data-i18n="blog.cta.p">A Mac mini, an old gaming PC, a server with spare hours. Download it, pick a model, and it starts earning while you get on with your day.</p>
+        <div class="flex flex-wrap gap-3 mt-7 items-center">
+          <a href="../miner.html#start" class="px-6 py-3 rounded-[4px] bg-[#16a34a] text-white text-[1.25rem] hover:bg-black transition" data-i18n="blog.cta.b1">Download DAI Miner →</a>
+          <a href="../docs/" class="px-6 py-3 rounded-[4px] border border-[#16a34a] text-[#16a34a] text-[1.25rem] hover:bg-[#16a34a] hover:text-white transition" data-i18n="blog.cta.b2">Read the docs</a>
+        </div>
+        <div class="cmd mt-6"><span class="p">$</span> curl -fsSL https://miner.iamai.kg/scripts/easy-start.sh | bash</div>
+      </section>
+    </article>
+  </main>
+
+  <footer class="border-t border-black/10 py-8 footer-text muted">
+    <div class="max-w-7xl mx-auto px-4 sm:px-8 flex flex-col sm:flex-row gap-2 sm:justify-between">
+      <div data-i18n="idx.foot.tag">DAI — Decentralized AI compute, powered by local LLMs</div>
+      <div class="flex gap-x-4 gap-y-2 flex-wrap">
+        <a href="../miner.html" class="hover:text-[#171717]" data-i18n="idx.foot.miner">DAI Miner</a>
+        <a href="../wallet/" class="hover:text-[#171717]" data-i18n="nav.wallet">Wallet</a>
+        <a href="../docs/" class="hover:text-[#171717]" data-i18n="idx.foot.docs">Docs</a>
+        <a href="../explorer/" class="hover:text-[#171717]" data-i18n="nav.explorer">Explorer</a>
+        <a href="./" class="hover:text-[#171717]" data-i18n="nav.blog">Blog</a>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    const hamburger = document.getElementById('hamburger');
+    const drawer = document.getElementById('mobile-drawer');
+    if (hamburger && drawer) {
+      hamburger.addEventListener('click', () => { hamburger.classList.toggle('open'); drawer.classList.toggle('open'); });
+      drawer.querySelectorAll('a').forEach(a => a.addEventListener('click', () => { hamburger.classList.remove('open'); drawer.classList.remove('open'); }));
+    }
+  </script>
+</body>
+</html>

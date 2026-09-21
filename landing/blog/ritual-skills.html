@@ -1,0 +1,361 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Your miner just learned to build on Ritual — nine Ritual Chain skills in DAI Miner</title>
+  <meta name="description" content="DAI Miner ships nine Ritual Chain skill documents — precompiles, on-chain LLM inference, the scheduler, x402. Knowledge, not a connection, and no API key needed.">
+  <meta property="og:title" content="Your miner just learned to build on Ritual">
+  <meta property="og:description" content="Nine Ritual Chain skills, 88 KB of real reference material, no API key. What the integration is — and what it is not.">
+  <meta property="og:type" content="article">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Iceland&display=swap" rel="stylesheet">
+  <link rel="icon" type="image/svg+xml" href="../dai-miner-on-light.svg">
+  <link rel="icon" type="image/png" sizes="32x32" href="../favicon-32.png">
+  <link rel="shortcut icon" href="../favicon.ico">
+  <script src="../i18n.js" defer></script>
+  <style>
+    :root { --bg: #f5f6f2; --ink: #171717; --muted: #525252; --accent: #16a34a; --card: #ffffff; --line: #e4e6e0; }
+    body { font-family: 'Iceland', sans-serif; background: var(--bg); color: var(--ink); line-height: 1.4; }
+    h1, h2, h3, .font-display { font-family: 'Iceland', sans-serif; font-weight: 400; }
+    .neon { color: #16a34a; }
+    .muted { color: var(--muted); }
+    html { font-size: 150%; }
+    @media (max-width: 767px) { html { font-size: 110%; } }
+    @media (max-width: 639px) { html { font-size: 100%; } }
+    .footer-text { font-size: 1.25rem !important; }
+
+    .nav-links { display: none; }
+    @media (min-width: 1024px) { .nav-links { display: flex; } }
+    .hamburger { display: flex; flex-direction: column; gap: 5px; cursor: pointer; padding: 4px; }
+    .hamburger span { display: block; width: 22px; height: 2px; background: #171717; border-radius: 2px; transition: 0.25s; }
+    .hamburger.open span:nth-child(1) { transform: translateY(7px) rotate(45deg); }
+    .hamburger.open span:nth-child(2) { opacity: 0; }
+    .hamburger.open span:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
+    @media (min-width: 1024px) { .hamburger { display: none; } }
+    .mobile-drawer {
+      display: none; position: fixed; top: 64px; left: 0; right: 0; z-index: 49;
+      background: #f5f6f2; border-bottom: 1px solid var(--line);
+      flex-direction: column; padding: 16px 24px 24px;
+    }
+    @media (min-width: 640px) { .mobile-drawer { top: 80px; } }
+    .mobile-drawer.open { display: flex; }
+    .mobile-drawer a { padding: 14px 0; font-size: 22px; color: #171717; border-bottom: 1px solid var(--line); text-decoration: none; }
+    .mobile-drawer a:last-child { border-bottom: none; }
+    @media (min-width: 1024px) { .mobile-drawer { display: none !important; } }
+    .dai-lang-select { background: #fff !important; color: #171717 !important; border: 1px solid #d4d6d0 !important; }
+
+    .prose p { font-size: 1.18rem; line-height: 1.55; margin-bottom: 1rem; color: #262626; }
+    .prose p:last-child { margin-bottom: 0; }
+    .prose strong { color: var(--ink); }
+    .prose ul, .prose ol { margin: 0.35rem 0 1.1rem; padding-inline-start: 1.35rem; }
+    .prose li { font-size: 1.18rem; line-height: 1.5; margin-bottom: 0.55rem; color: #262626; }
+    .prose li:last-child { margin-bottom: 0; }
+    .lede { font-size: 1.5rem !important; line-height: 1.4 !important; color: var(--ink) !important; }
+
+    .meta { font-size: 0.92rem; letter-spacing: 1px; text-transform: uppercase; color: var(--muted); }
+    .tag {
+      display: inline-block; border: 1px solid var(--line); border-radius: 999px;
+      padding: 2px 12px; font-size: 0.9rem; color: var(--accent);
+      background: rgba(22,163,74,0.07);
+    }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.86em; }
+
+    .jump { display: flex; align-items: baseline; flex-wrap: wrap; gap: 12px; }
+    .jump .from { font-size: 2rem; color: var(--muted); }
+    .jump .arrow { color: var(--accent); font-size: 1.4rem; }
+    .jump .to { font-size: 3.2rem; }
+
+    .item { border-top: 1px solid var(--line); padding: 2.4rem 0; }
+    .item-head { display: flex; gap: 1.1rem; align-items: baseline; }
+    .rank { font-size: 3rem; line-height: 1; color: var(--accent); min-width: 2.6rem; }
+    .item h2 { font-size: 2.1rem; line-height: 1.05; }
+    .kicker { font-size: 0.85rem; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); margin-bottom: 4px; }
+    @media (min-width: 768px) { .item-body { padding-inline-start: 3.7rem; } }
+    @media (max-width: 767px) {
+      .item-head { display: block; }
+      .rank { font-size: 2.2rem; margin-bottom: 2px; }
+    }
+
+    .facts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 1.2rem; }
+    .fact {
+      border: 1px solid var(--line); background: var(--card); border-radius: 4px;
+      padding: 5px 12px; font-size: 0.95rem; color: #333;
+    }
+    .fact b { color: var(--accent); font-weight: normal; }
+
+    .pull {
+      border-inline-start: 3px solid var(--accent); padding-inline-start: 1rem;
+      font-size: 1.35rem !important; line-height: 1.35 !important; color: var(--ink) !important;
+      margin: 1.3rem 0 !important;
+    }
+
+    .grid-also {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 8px;
+    }
+    .cell { background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: 1.2rem 1.15rem; }
+    .cell h3 { font-size: 1.4rem; margin-bottom: 4px; }
+    .cell p { font-size: 1rem; line-height: 1.4; color: var(--muted); }
+
+    .notice {
+      border: 1px solid var(--accent); border-inline-start-width: 4px;
+      background: rgba(22,163,74,0.07); border-radius: 4px; padding: 1.4rem 1.5rem;
+    }
+    .notice h3 { font-size: 1.6rem; margin-bottom: 8px; }
+
+    .cmd {
+      border: 1px solid var(--line); background: var(--card); border-radius: 4px;
+      padding: 12px 16px; overflow-x: auto; white-space: nowrap;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 0.92rem; color: #333;
+    }
+    .cmd .p { color: var(--accent); user-select: none; }
+
+    .tbl-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 6px; background: var(--card); }
+    .tbl { width: 100%; border-collapse: collapse; font-size: 1.02rem; }
+    .tbl th {
+      text-align: start; font-weight: normal; text-transform: uppercase;
+      letter-spacing: 1px; font-size: 0.8rem; color: var(--muted);
+      padding: 10px 14px; border-bottom: 1px solid var(--line);
+    }
+    .tbl td { padding: 10px 14px; border-bottom: 1px solid var(--line); color: #262626; vertical-align: top; }
+    .tbl tr:last-child td { border-bottom: none; }
+    .tbl td:first-child { color: var(--accent); white-space: nowrap; }
+  </style>
+</head>
+<body>
+
+  <nav class="border-b border-black/10 bg-[#f5f6f2]/85 backdrop-blur-xl fixed w-full z-50">
+    <div class="max-w-7xl mx-auto px-4 sm:px-8 h-16 sm:h-20 flex items-center justify-between">
+      <a href="../index.html" class="flex items-center gap-2">
+        <img src="../dai-miner-on-light.svg" alt="DAI Logo" width="36" height="36" class="sm:w-[48px] sm:h-[48px]" style="vertical-align: middle;" />
+      </a>
+      <div class="nav-links items-center gap-x-6 xl:gap-x-9 text-[17px] xl:text-[20px]">
+        <a href="../dai.html" class="hover:text-[#16a34a] transition whitespace-nowrap" data-i18n="nav.dai">DAI</a>
+        <a href="../framework.html" class="hover:text-[#16a34a] transition whitespace-nowrap" data-i18n="nav.framework">Framework</a>
+        <a href="../wallet/" class="hover:text-[#16a34a] transition whitespace-nowrap" data-i18n="nav.wallet">Wallet</a>
+        <a href="../explorer/" class="hover:text-[#16a34a] transition whitespace-nowrap" data-i18n="nav.explorer">Explorer</a>
+        <a href="./" class="text-[#16a34a] transition whitespace-nowrap" data-i18n="nav.blog">Blog</a>
+        <a href="https://aist.exchange" target="_blank" rel="noopener" class="px-3 lg:px-5 py-2 rounded-[4px] border border-[#16a34a] text-[#16a34a] hover:bg-[#16a34a] hover:text-white transition whitespace-nowrap" data-i18n="nav.p2p">P2P</a>
+        <a href="../miner.html#start" class="px-3 lg:px-5 py-2 rounded-[4px] bg-[#16a34a] text-white hover:bg-black transition whitespace-nowrap" data-i18n="nav.runminer">Run a miner</a>
+        <div data-i18n-switch></div>
+      </div>
+      <button class="hamburger" id="hamburger" aria-label="Open menu"><span></span><span></span><span></span></button>
+    </div>
+  </nav>
+
+  <div class="mobile-drawer" id="mobile-drawer">
+    <a href="../dai.html" data-i18n="nav.dai">DAI</a>
+    <a href="../framework.html" data-i18n="nav.framework">Framework</a>
+    <a href="../wallet/" data-i18n="nav.wallet">Wallet</a>
+    <a href="../explorer/" data-i18n="nav.explorer">Explorer</a>
+    <a href="./" data-i18n="nav.blog">Blog</a>
+    <a href="https://aist.exchange" target="_blank" rel="noopener" data-i18n="nav.p2p">P2P</a>
+    <a href="../miner.html#start" data-i18n="nav.runminer">Run a miner</a>
+    <div data-i18n-switch style="padding:14px 0"></div>
+  </div>
+
+  <main class="pt-16 sm:pt-20">
+    <article class="max-w-3xl mx-auto px-4 sm:px-8">
+      <header class="pt-10 sm:pt-16 pb-6">
+        <a href="./" class="meta hover:text-[#16a34a]" data-i18n="blog.back">← Blog</a>
+        <div class="flex flex-wrap items-center gap-3 mt-6 mb-5">
+          <span class="tag" data-i18n="blog.tag.skills">Skills</span>
+          <span class="tag" data-i18n="blog.tag.integration">Integration</span>
+          <span class="meta" data-i18n="blog.p4.date">21 September 2026 · 9 skills</span>
+        </div>
+        <h1 class="text-[42px] sm:text-[64px] leading-[0.98]" data-i18n-html="blog.p4.title">
+          Your miner just learned to build on <span class="neon">Ritual</span>.
+        </h1>
+        <div class="prose mt-6">
+          <p class="lede" data-i18n="blog.rit.lede">
+            DAI Miner ships with nine skill documents from Ritual Chain. Ask your node how to call an
+            on-chain LLM precompile, and it knows the answer — the address, the execution model, the
+            shape of the data that comes back.
+          </p>
+          <p data-i18n="blog.rit.lede2">Here is what that is, and just as importantly, what it is not.</p>
+        </div>
+
+        <div class="jump mt-9 pt-6 border-t border-black/10">
+          <span class="from" data-i18n="blog.rit.from">Ritual Chain</span>
+          <span class="arrow">→</span>
+          <span class="to" data-i18n="blog.rit.to">9 skills</span>
+          <span class="meta ml-auto" style="text-transform:none;letter-spacing:0.5px" data-i18n="blog.rit.span">
+            No API key, no signup
+          </span>
+        </div>
+      </header>
+
+      <section class="item">
+        <div class="item-head">
+          <div class="rank">01</div>
+          <div>
+            <div class="kicker" data-i18n="blog.rit.s1.k">What it is</div>
+            <h2 data-i18n="blog.rit.s1.h">Knowledge, not a connection</h2>
+          </div>
+        </div>
+        <div class="item-body prose mt-5">
+          <p data-i18n-html="blog.rit.s1.p1">This is the part worth being clear about up front: <strong>the node does not talk to Ritual Chain.</strong></p>
+          <p data-i18n="blog.rit.s1.p2">There is no RPC endpoint for it, no bridge, no precompile implementation. Nothing in the miner reaches out to Ritual at runtime.</p>
+          <p data-i18n-html="blog.rit.s1.p3">What shipped is documentation the model can read. Your node became <em>knowledgeable</em> about Ritual, not <em>connected</em> to it. If you are building a Ritual dApp, that is the difference between an assistant that guesses and one that knows <span class="mono">0x0802</span> is the LLM precompile.</p>
+          <p class="pull" data-i18n-html="blog.rit.s1.pull">Plenty of “integrations” in this industry are a logo on a slide. This one is <strong>88 KB</strong> of real reference material, and it earns its keep the moment you ask a question it covers.</p>
+        </div>
+      </section>
+
+      <section class="item">
+        <div class="item-head">
+          <div class="rank">02</div>
+          <div>
+            <div class="kicker" data-i18n="blog.rit.s2.k">The set</div>
+            <h2 data-i18n="blog.rit.s2.h">The nine skills</h2>
+          </div>
+        </div>
+        <div class="item-body prose mt-5">
+          <div class="tbl-wrap">
+            <table class="tbl">
+              <thead>
+                <tr><th data-i18n="blog.rit.s2.th1">Skill</th><th data-i18n="blog.rit.s2.th2">What it covers</th></tr>
+              </thead>
+              <tbody>
+                <tr><td class="mono">ritual_overview</td><td data-i18n="blog.rit.s2.r1">Chain architecture, the transaction lifecycle</td></tr>
+                <tr><td class="mono">ritual_precompiles</td><td data-i18n="blog.rit.s2.r2">The complete precompile ABI reference</td></tr>
+                <tr><td class="mono">ritual_contracts</td><td data-i18n="blog.rit.s2.r3">System contract addresses, ABI encoding</td></tr>
+                <tr><td class="mono">ritual_llm</td><td data-i18n-html="blog.rit.s2.r4">On-chain inference via the <span class="mono">0x0802</span> precompile</td></tr>
+                <tr><td class="mono">ritual_scheduler</td><td data-i18n="blog.rit.s2.r5">Time-triggered operations</td></tr>
+                <tr><td class="mono">ritual_wallet</td><td data-i18n="blog.rit.s2.r6">Fee deposits, RitualWallet integration</td></tr>
+                <tr><td class="mono">ritual_x402</td><td data-i18n="blog.rit.s2.r7">Micropayment and paid-API patterns</td></tr>
+                <tr><td class="mono">ritual_deploy</td><td data-i18n="blog.rit.s2.r8">Deployment and chain configuration</td></tr>
+                <tr><td class="mono">ritual_block_time</td><td data-i18n="blog.rit.s2.r9">Block-time estimation and conversion</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p class="mt-5" data-i18n-html="blog.rit.s2.p1">They come from <span class="mono">ritual-foundation/ritual-dapp-skills</span> under the Clear BSD licence, and every file carries its source and licence at the foot.</p>
+        </div>
+      </section>
+
+      <section class="item">
+        <div class="item-head">
+          <div class="rank">03</div>
+          <div>
+            <div class="kicker" data-i18n="blog.rit.s3.k">Budget</div>
+            <h2 data-i18n="blog.rit.s3.h">Why they are condensed</h2>
+          </div>
+        </div>
+        <div class="item-body prose mt-5">
+          <p data-i18n="blog.rit.s3.p1">Upstream skills are written for an agent with no context budget — one that can open bundled files whenever it likes.</p>
+          <p data-i18n="blog.rit.s3.p2">A miner node is not that. It injects one truncated block into whatever local model the operator happens to be running, which might be a 1.7B model on a home machine.</p>
+          <p data-i18n-html="blog.rit.s3.p3">So each skill is cut to a section boundary that fits the injection budget, then footed with a pointer to fetch the untruncated original through the <span class="mono">gitmcp</span> MCP. Depth stays one request away without shipping 898 KB of skill text to every node on the network.</p>
+          <p data-i18n="blog.rit.s3.p4">There is a test that enforces this. If a skill grows past the budget, the build tells you.</p>
+          <div class="facts">
+            <span class="fact" data-i18n-html="blog.rit.s3.f1"><b>88 KB</b> shipped</span>
+            <span class="fact" data-i18n-html="blog.rit.s3.f2"><b>898 KB</b> upstream</span>
+            <span class="fact" data-i18n="blog.rit.s3.f3">Full text one request away</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="item">
+        <div class="item-head">
+          <div class="rank">04</div>
+          <div>
+            <div class="kicker" data-i18n="blog.rit.s4.k">No credentials</div>
+            <h2 data-i18n="blog.rit.s4.h">Why none of them need an API key</h2>
+          </div>
+        </div>
+        <div class="item-body prose mt-5">
+          <p data-i18n="blog.rit.s4.p1">The importer rejects any skill that is inert without an operator credential.</p>
+          <p data-i18n-html="blog.rit.s4.p2">That rule cost us one: <span class="mono">ritual-dapp-da</span> covers data availability, and it needs GCS, HuggingFace or Pinata keys to do anything. It was dropped automatically.</p>
+          <p data-i18n-html="blog.rit.s4.p3">That gate is the reason the shipped set needs <strong>no API key at all</strong>. Download the miner, and all nine work immediately — no signup, no dashboard, no free tier that expires.</p>
+          <p data-i18n-html="blog.rit.s4.p4">The trade-off is honest: <span class="mono">ritual_llm</span> describes conversation history living on a DA provider, and the skill that covers that provider is not in the box. You get the inference patterns; you bring your own storage story.</p>
+        </div>
+      </section>
+
+      <section class="item">
+        <div class="item-head">
+          <div class="rank">05</div>
+          <div>
+            <div class="kicker" data-i18n="blog.rit.s5.k">Retrieval</div>
+            <h2 data-i18n="blog.rit.s5.h">Finding the right skill</h2>
+          </div>
+        </div>
+        <div class="item-body prose mt-5">
+          <p data-i18n="blog.rit.s5.p1">Triggers are hand-written, one list per skill.</p>
+          <p data-i18n="blog.rit.s5.p2">That sounds like a detail until you see what happens without it. Retrieval scores on trigger overlap, so a generated trigger list produces skills that technically ship and are never found — dead weight in the bundle.</p>
+          <p data-i18n-html="blog.rit.s5.p3">Descriptions count too. Ask <em>“help me with conversation history and streaming text generation”</em> and <span class="mono">ritual_llm</span> surfaces, even though that phrasing appears in no trigger list.</p>
+          <p data-i18n="blog.rit.s5.p4">Ask a conversational question and nothing fires at all, which is the behaviour you want — a router that stays quiet beats one that injects a precompile reference into small talk.</p>
+        </div>
+      </section>
+
+      <section class="item">
+        <div class="item-head">
+          <div class="rank">06</div>
+          <div>
+            <div class="kicker" data-i18n="blog.rit.s6.k">Try it</div>
+            <h2 data-i18n="blog.rit.s6.h">Three commands on your own node</h2>
+          </div>
+        </div>
+        <div class="item-body prose mt-5">
+          <p data-i18n="blog.rit.s6.p1">List them:</p>
+          <div class="cmd"><span class="p">$</span> curl -s "http://127.0.0.1:3456/api/skills?q=ritual&amp;limit=24"</div>
+          <p class="mt-4" data-i18n-html="blog.rit.s6.p2">Nine results, out of <strong>88</strong> skills the node carries.</p>
+          <p data-i18n="blog.rit.s6.p3">Ask something only the skill knows:</p>
+          <div class="cmd"><span class="p">$</span> curl -s -X POST http://127.0.0.1:3456/api/chat -H 'Content-Type: application/json' -d '{"message":"how do I call the LLM precompile from a Ritual dApp?"}'</div>
+          <p class="mt-4" data-i18n-html="blog.rit.s6.p4">A working answer knows <span class="mono">0x0802</span>, knows the call is async, and knows you read the settled output from the transaction receipt rather than registering a callback. Those specifics exist in one place: <span class="mono">ritual_llm.md</span>.</p>
+          <p data-i18n="blog.rit.s6.p5">Run the suite:</p>
+          <div class="cmd"><span class="p">$</span> npx vitest run test/skill-portability.test.js</div>
+          <p class="mt-4" data-i18n="blog.rit.s6.p6">Nine tests. Every skill parses, declares triggers, fits the budget, points at no file that does not ship, and is reachable from a question phrased outside its trigger list.</p>
+        </div>
+      </section>
+
+      <section class="py-8 pt-12">
+        <div class="notice">
+          <h3 data-i18n="blog.rit.note.h">One honest caveat</h3>
+          <div class="prose">
+            <p data-i18n-html="blog.rit.note.p1">If your node runs a small local model, a correct skill can still produce a muddled answer. The skill being <em>injected</em> and the answer being <em>good</em> are two different things.</p>
+            <p data-i18n="blog.rit.note.p2">Check the logs for the skill id when you are testing. That tells you retrieval worked. Whether the model did something sensible with it is a separate question, and it depends on the model you chose.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="pt-6 pb-2">
+        <div class="prose">
+          <p class="pull" data-i18n="blog.rit.end">Ritual is one of two upstreams in this release — sixteen skills arrived from Ritual Chain and MiniMax together. The same importer, the same budget rule, the same no-credentials gate applies to both.</p>
+        </div>
+      </section>
+
+      <section class="py-10 sm:py-14 border-t border-black/10">
+        <h2 class="text-[2.4rem] sm:text-[3rem] leading-[1.02]" data-i18n="blog.cta.h">Put an idle computer to work</h2>
+        <p class="muted text-[1.2rem] mt-3 max-w-xl" data-i18n="blog.cta.p">A Mac mini, an old gaming PC, a server with spare hours. Download it, pick a model, and it starts earning while you get on with your day.</p>
+        <div class="flex flex-wrap gap-3 mt-7 items-center">
+          <a href="../miner.html#start" class="px-6 py-3 rounded-[4px] bg-[#16a34a] text-white text-[1.25rem] hover:bg-black transition" data-i18n="blog.cta.b1">Download DAI Miner →</a>
+          <a href="../docs/" class="px-6 py-3 rounded-[4px] border border-[#16a34a] text-[#16a34a] text-[1.25rem] hover:bg-[#16a34a] hover:text-white transition" data-i18n="blog.cta.b2">Read the docs</a>
+        </div>
+        <div class="cmd mt-6"><span class="p">$</span> curl -fsSL https://miner.iamai.kg/scripts/easy-start.sh | bash</div>
+      </section>
+    </article>
+  </main>
+
+  <footer class="border-t border-black/10 py-8 footer-text muted">
+    <div class="max-w-7xl mx-auto px-4 sm:px-8 flex flex-col sm:flex-row gap-2 sm:justify-between">
+      <div data-i18n="idx.foot.tag">DAI — Decentralized AI compute, powered by local LLMs</div>
+      <div class="flex gap-x-4 gap-y-2 flex-wrap">
+        <a href="../miner.html" class="hover:text-[#171717]" data-i18n="idx.foot.miner">DAI Miner</a>
+        <a href="../wallet/" class="hover:text-[#171717]" data-i18n="nav.wallet">Wallet</a>
+        <a href="../docs/" class="hover:text-[#171717]" data-i18n="idx.foot.docs">Docs</a>
+        <a href="../explorer/" class="hover:text-[#171717]" data-i18n="nav.explorer">Explorer</a>
+        <a href="./" class="hover:text-[#171717]" data-i18n="nav.blog">Blog</a>
+      </div>
+    </div>
+  </footer>
+
+  <script>
+    const hamburger = document.getElementById('hamburger');
+    const drawer = document.getElementById('mobile-drawer');
+    if (hamburger && drawer) {
+      hamburger.addEventListener('click', () => { hamburger.classList.toggle('open'); drawer.classList.toggle('open'); });
+      drawer.querySelectorAll('a').forEach(a => a.addEventListener('click', () => { hamburger.classList.remove('open'); drawer.classList.remove('open'); }));
+    }
+  </script>
+</body>
+</html>
