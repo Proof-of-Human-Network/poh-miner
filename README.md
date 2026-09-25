@@ -299,6 +299,40 @@ A `compute` job looks like:
 The SDKs build and sign `paymentTx` for you — see `runCompute()` /
 `submitJob()` in `sdk-js`.
 
+### Fee estimation (`/api/estimate`)
+
+The `eth_estimateGas` of DAI jobs. Send the same fields a job or chat request carries and get
+back the AI tokens the whole pipeline will use, the minimum fee this node accepts, and a
+recommended budget — before you sign or escrow anything. Read-only: no skill, MCP tool or model
+runs, and attachments are sized, not stored.
+
+```bash
+curl -s localhost:3456/api/estimate -d '{
+  "prompt": "summarise the attached report and compare it with the latest news",
+  "attachments": [{ "name": "report.md", "text": "…" }],
+  "currency": "DAI"
+}'
+# GET works for quick prompts: /api/estimate?prompt=…&currency=DAI&mcp=shop__search
+```
+
+| Field | Meaning |
+|---|---|
+| `prompt` / `messages` | A compute job's prompt, or an OpenAI-style `messages[]` (`type: "chat"`, floors at the prompt alone) |
+| `history`, `requesterAddress` | Prior turns; with an address the on-chain public turns the executor merges in are counted too |
+| `attachments` | Same shapes as chat (`text`, `contentBase64`, `dataUrl`). Text is inlined and measured; images are not metered |
+| `skillId`, `type: "skill"` | A specific skill (else the router picks one from the prompt, as a job would) |
+| `mcp` | MCP tool names (`server__tool`) to run in a cascade |
+| `dataset` | An installed Hugging Face dataset — the exact rows the job would inject are measured |
+| `currency`, `maxOutputTokens`, `route`, `model`, `address` | Fee currency (quoted off the live P2P book), output reserve, `false` to skip routing, model, `/job` address |
+
+The response has `tokens` (`prompt`, `output`, `skillCompute`, `total`, each `{min, max}`),
+`calls` (every model call the pipeline makes), a `breakdown` per contributor tagged
+`measured` / `bounded` / `assumed`, `fees.minimum` (what the node rejects below) and
+`fees.recommended` (`max` of that and the pipeline's worst case), `outputCap`, and `warnings`.
+Anything whose size only exists after running — what a skill fetched, what an MCP tool
+returned — is bounded by the executor's own caps rather than guessed. Routed plans are
+*predicted* from the deterministic router; the live model-planner may choose differently.
+
 ### Skills
 
 Skills are on-demand agent modules that extend what miners can compute. Builtin skills include `dai_identity`, `read_farcaster`, `read_zora`, `read_paragraph`, `code_audit`, and `web_search`.

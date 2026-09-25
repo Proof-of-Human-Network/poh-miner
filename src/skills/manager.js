@@ -18,6 +18,11 @@ const TOKENS_PER_FETCH  = 50;   // per outbound API call
 const TOKENS_PER_100MS  = 5;    // compute time cost
 const TOKENS_BASE       = 10;   // minimum per skill execution
 
+/** The metering constants above, for the fee estimator (which must not re-derive them). */
+export const SKILL_TOKEN_COSTS = Object.freeze({
+  BASE: TOKENS_BASE, PER_FETCH: TOKENS_PER_FETCH, PER_100MS: TOKENS_PER_100MS, TIMEOUT_MS: SKILL_TIMEOUT_MS,
+});
+
 export class SkillsManager {
   constructor() {
     // skillId → { manifest, code, context, status, proposedAt, txHash }

@@ -52,6 +52,8 @@ import { autoForwardPort } from './net/port-forward.js';
 import { computeVerdictWithExistingDai } from './compute/dai-adapter.js';
 import { getBrain, getBrainDataDir, getQvacModels } from './compute/adapters/real-dai.js';
 import { createOpenAIHandler } from './api/openai-compat.js';
+import { estimateJob, EstimateError } from './jobs/estimate.js';
+import { DIRECT_SYSTEM_PROMPT, datasetJobSystemPrompt, knowledgeSkillSystemPrompt, skillJobSystemPrompt } from './jobs/prompts.js';
 import { BrainSync } from './brain/brain-sync.js';
 import { DAITransaction, TxMempool } from './core/transaction.js';
 import { BalanceJournal } from './storage/balance-journal.js';
@@ -1088,7 +1090,10 @@ export class DAIMinerNode {
   // ordered stages of parallel tasks (see src/ai/task-cascade.js). Preserves
   // legacy single-skill / cascade / sequence / dataset / hf-model shapes for
   // the Electron UI while exposing a unified `tasks` plan for execution.
-  async _routeMessage(message) {
+  // `opts.llm` / `opts.plannerTimeoutMs` let the fee estimator run the real router
+  // with a stub planner (it captures the planner prompt and throws, so routing
+  // falls back to the deterministic plan) — no model call, same routing code.
+  async _routeMessage(message, { llm = null, plannerTimeoutMs = null } = {}) {
     const allSkills = skillsManager.getAllSkills().filter(s => s.context && (s.status === 'active' || s.status === 'proposed'));
 
     // Enrich skill inputs with global address/username when present
@@ -1119,13 +1124,13 @@ export class DAIMinerNode {
       maxTasks: catalogCfg.maxTasks || 6,
       maxStages: catalogCfg.maxStages || 3,
       maxParallelPerStage: catalogCfg.maxParallelPerStage || 4,
-      plannerTimeoutMs: catalogCfg.plannerTimeoutMs || 20_000,
+      plannerTimeoutMs: plannerTimeoutMs || catalogCfg.plannerTimeoutMs || 20_000,
     };
     if (planOpts.plannerEnabled) {
-      planOpts.llm = async (prompt) => this._llmChat(
+      planOpts.llm = llm || (async (prompt) => this._llmChat(
         [{ role: 'user', content: prompt }],
         { model: catalogCfg.plannerModel || this.config.model, timeoutMs: planOpts.plannerTimeoutMs },
-      );
+      ));
     }
     const plan = await planCatalogCascade(message, planOpts);
 
@@ -1272,6 +1277,63 @@ export class DAIMinerNode {
     return m;
   }
 
+  /**
+   * Fee estimate for a job/chat request — see jobs/estimate.js. Read-only: routing runs
+   * the real router with a stub planner, files are sized not staged, and no skill, MCP
+   * tool or model is executed.
+   */
+  async _estimateJob(input) {
+    const qvac = await getQvacModels().catch(() => null);
+    // The node's own token metering (qvac.estimateMessagesTokens); mirrored only so the
+    // estimate still works when the inference backend is disabled on this device.
+    const localEst = (messages, systemPrompt) => {
+      const rows = [...(messages || [])];
+      if (systemPrompt) rows.push({ content: systemPrompt });
+      let chars = 0;
+      for (const m of rows) chars += (m?.content?.length || 0) + 4;
+      return Math.ceil(chars / 4);
+    };
+    return estimateJob(input, {
+      qvac: { estimateMessagesTokens: qvac?.estimateMessagesTokens || localEst },
+      config: this.config,
+      maxAttachmentBytes: MAX_ATTACHMENT_BYTES,
+      resolveModel: (m, opts) => this._resolveRequestModel(m || this.config.model, opts),
+      normalizeCurrency,
+      isKnownCurrency: isKnownAsset,
+      quoteFee: (tokens, currency) => feeForLive(tokens, currency, { orderStore: this.p2pOrderStore, config: this.config }),
+      getSkill: (id) => skillsManager.getSkill(id),
+      isSkillEnabled: (id) => this.isSkillEnabled(id),
+      route: async (prompt) => {
+        let plannerPrompt = null;
+        const route = await this._routeMessage(prompt, {
+          plannerTimeoutMs: 1,
+          llm: async (p) => { plannerPrompt = p; throw new Error('estimate-dry-run'); },
+        });
+        return { route, plannerPrompt };
+      },
+      datasetSlice: async (datasetId, prompt) => {
+        const dir = getBrainDataDir();
+        if (!dir || !hfDatasetManager.isInstalled(dir, datasetId)) return { installed: false, slice: null };
+        return { installed: true, slice: hfDatasetManager.loadRelevantSlice(dir, datasetId, prompt) };
+      },
+      history: async (requesterAddress, clientHistory) => {
+        let history = Array.isArray(clientHistory) ? clientHistory : [];
+        if (requesterAddress) {
+          const localRecords = this.jobResults ? Array.from(this.jobResults.values()) : [];
+          const ctx = buildWalletJobContext(this.chain, requesterAddress, { limit: 20, localRecords, chatTurnLimit: 8, decryptKey: this._encKeyFor(requesterAddress) });
+          history = _mergeHistoryWithChainTurns(history, ctx.chatTurns);
+        }
+        return history;
+      },
+      feedbackGuidance: () => this._feedbackGuidance(),
+      skillSystemPrompt: _skillLlmSystemPrompt,
+      socialSkillIds: SOCIAL_SKILL_IDS,
+      mcpToolExists: this.mcp?.listTools
+        ? (tool) => (this.mcp.listTools() || []).some(t => t.name === tool || `${t.server}__${t.tool}` === tool)
+        : undefined,
+    });
+  }
+
   _openFirewallPort(port) {
     const p = process.platform;
     const bin = process.execPath;
@@ -1322,6 +1384,45 @@ export class DAIMinerNode {
       // Health probe used by SDK node-discovery (HEAD or GET /healthz)
       if (url.pathname === '/healthz') {
         return res.end(JSON.stringify({ status: 'ok', node: 'dai-miner' }));
+      }
+
+      // ── Fee estimate: POST/GET /api/estimate ─────────────────────────────────
+      // The eth_estimateGas analog. Body = the job/chat fields (prompt, messages, history,
+      // attachments, skillId, mcp, dataset, currency, maxOutputTokens, …); returns the AI
+      // tokens the pipeline will use, the minimum fee this node accepts, and a recommended
+      // budget. Read-only — nothing is executed or paid. See src/jobs/estimate.js.
+      if (url.pathname === '/api/estimate' && (req.method === 'POST' || req.method === 'GET')) {
+        const answer = async (input) => {
+          try {
+            return res.end(JSON.stringify(await this._estimateJob(input)));
+          } catch (e) {
+            if (e instanceof EstimateError) {
+              res.statusCode = e.status;
+              return res.end(JSON.stringify({ error: e.message, code: e.code, ...(e.param ? { param: e.param } : {}) }));
+            }
+            console.warn('[estimate] failed:', e.message);
+            res.statusCode = 500;
+            return res.end(JSON.stringify({ error: 'estimate failed: ' + e.message, code: 'estimate_failed' }));
+          }
+        };
+        if (req.method === 'GET') {
+          const q = url.searchParams;
+          const input = {};
+          for (const k of ['prompt', 'type', 'model', 'currency', 'skillId', 'dataset', 'requesterAddress', 'address']) if (q.has(k)) input[k] = q.get(k);
+          if (q.has('maxOutputTokens')) input.maxOutputTokens = Number(q.get('maxOutputTokens'));
+          if (q.has('mcp')) input.mcp = q.getAll('mcp').flatMap(v => v.split(',')).filter(Boolean);
+          if (q.get('route') === 'false') input.route = false;
+          return answer(input);
+        }
+        let body = '';
+        req.on('data', c => body += c);
+        req.on('end', () => {
+          let input;
+          try { input = body ? JSON.parse(body) : {}; }
+          catch { res.statusCode = 400; return res.end(JSON.stringify({ error: 'Request body must be JSON', code: 'invalid_json' })); }
+          answer(input);
+        });
+        return;
       }
 
       if (req.method === 'GET' && url.pathname === '/api/miner/info') {
@@ -1803,6 +1904,7 @@ export class DAIMinerNode {
                 return res.end(JSON.stringify({ error: quote.message, currency: quote.currency, pairUnavailable: true }));
               }
               const minFee = quote.raw;
+              const gasPrice = this.config.gasPrice || GAS.DEFAULT_GAS_PRICE;
               if (job.maxBudget < minFee) {
                 res.statusCode = 402;
                 return res.end(JSON.stringify({
@@ -7812,11 +7914,7 @@ export class DAIMinerNode {
       }
       // Knowledge-only skill: answer from its reference context (no fetch).
       if (skillEntry.private === true && !skillEntry.code && skillEntry.context) {
-        const systemContent = [
-          'You are a helpful assistant with access to specialized reference documentation.',
-          'Answer using the reference material below. Be specific and practical. Write clear Markdown.',
-          `\nReference documentation (${route.skillId}):\n${skillEntry.context.slice(0, SKILL_CONTEXT_MAX)}`,
-        ].join('\n');
+        const systemContent = knowledgeSkillSystemPrompt(route.skillId, skillEntry.context);
         const reply = (await this._llmChat(
           [{ role: 'system', content: systemContent }, { role: 'user', content: prompt }],
           { model, timeoutMs: 40_000 },
@@ -7895,7 +7993,7 @@ export class DAIMinerNode {
           const slice = hfDatasetManager.loadRelevantSlice(brainDataDir, dataset, prompt);
           messages.push({
             role: 'system',
-            content: `You are a helpful assistant answering using data from a Hugging Face dataset.\nUse the dataset rows below to answer the user's request. Write in clear, human-readable Markdown.\n\nDataset: ${dataset}\nRelevant rows:\n${slice || '(no matching rows found in the installed dataset)'}`,
+            content: datasetJobSystemPrompt(dataset, slice),
           });
           datasetUsed = dataset;
         }
@@ -7926,7 +8024,7 @@ export class DAIMinerNode {
         const usage = await qvac.chat(messages, {
           model,
           timeLimit: 90_000,
-          systemPrompt: datasetUsed ? undefined : 'You are a helpful, concise assistant. Answer in clear Markdown.',
+          systemPrompt: datasetUsed ? undefined : DIRECT_SYSTEM_PROMPT,
           withUsage: true,
           hardTokenCap: hardCap,
         });
@@ -7995,11 +8093,7 @@ export class DAIMinerNode {
           try {
             const skillEntry = skillsManager.getSkill(job.skillId);
             const skillCtx = skillEntry?.context || '';
-            const systemContent = [
-              'You are an AI assistant with access to real-time data fetched by a skill.',
-              'Answer the user\'s question using only the provided data. Be concise and specific.',
-              skillCtx ? `\n\nSkill context (how to interpret this data):\n${skillCtx}` : '',
-            ].join('');
+            const systemContent = skillJobSystemPrompt(skillCtx);
             const dataStr = JSON.stringify(output, null, 2).slice(0, 10000);
             const userContent = `Fetched data:\n\`\`\`json\n${dataStr}\n\`\`\`\n\nUser question: ${userQuestion}`;
             nlResponse = (await this._llmChat(
@@ -8145,7 +8239,7 @@ export class DAIMinerNode {
             const slice = hfDatasetManager.loadRelevantSlice(brainDataDir, dataset, prompt);
             messages.push({
               role: 'system',
-              content: `You are a helpful assistant answering using data from a Hugging Face dataset.\nUse the dataset rows below to answer the user's request. Write in clear, human-readable Markdown.\n\nDataset: ${dataset}\nRelevant rows:\n${slice || '(no matching rows found in the installed dataset)'}`,
+              content: datasetJobSystemPrompt(dataset, slice),
             });
             datasetUsed = dataset;
           }
@@ -8184,7 +8278,7 @@ export class DAIMinerNode {
           const usage = await qvac.chat(messages, {
             model,
             timeLimit: 90_000,
-            systemPrompt: datasetUsed ? undefined : 'You are a helpful, concise assistant. Answer in clear Markdown.',
+            systemPrompt: datasetUsed ? undefined : DIRECT_SYSTEM_PROMPT,
             withUsage: true,
             hardTokenCap: hardCap,
             shouldStop: () => this._supersededJobs.has(job.id),  // bail if a peer wins mid-generation

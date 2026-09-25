@@ -24,7 +24,7 @@ const HF_RESOLVE_BASE = 'https://huggingface.co/datasets';
 // full dataset training. These are intentionally conservative v1 defaults.
 const MAX_ROWS = 5000;
 const MAX_SIBLING_FILE_BYTES = 50 * 1024 * 1024;
-const MAX_SLICE_CHARS = 6000;
+export const MAX_SLICE_CHARS = 6000;
 
 function safeDirName(datasetId) {
   return datasetId.replace(/[^a-zA-Z0-9._-]/g, '__');

@@ -59,18 +59,7 @@ export function attachmentsDir() {
   return dir;
 }
 
-/**
- * Normalize one client attachment into a server-side form.
- *
- * Accepted shapes:
- *   { name, content }                    — plain text (legacy)
- *   { name, mime?, text }                — plain text
- *   { name, mime?, contentBase64 }       — binary (image or text-as-bytes)
- *   { name, mime?, dataUrl }             — data:<mime>;base64,...
- *
- * Returns { kind, name, mime, text?, path?, bytes } or throws.
- */
-export function materializeAttachment(raw, { maxBytes = MAX_ATTACHMENT_BYTES } = {}) {
+function decodeAttachment(raw, { maxBytes = MAX_ATTACHMENT_BYTES } = {}) {
   if (!raw || typeof raw !== 'object') throw new Error('Invalid attachment');
   const name = String(raw.name || 'file').replace(/[^\w.\- ()[\]]+/g, '_').slice(0, 180) || 'file';
   let mime = raw.mime || raw.type || '';
@@ -107,10 +96,28 @@ export function materializeAttachment(raw, { maxBytes = MAX_ATTACHMENT_BYTES } =
   if (kind === 'text') {
     if (text == null) text = buf.toString('utf8');
     if (text.length > MAX_TEXT_INLINE_CHARS) text = text.slice(0, MAX_TEXT_INLINE_CHARS);
-    return { kind: 'text', name, mime: mime || 'text/plain', text, bytes: buf.length };
+    return { kind: 'text', name, mime: mime || 'text/plain', text, buf };
   }
+  return { kind: 'image', name, mime, buf };
+}
+
+/**
+ * Normalize one client attachment into a server-side form.
+ *
+ * Accepted shapes:
+ *   { name, content }                    — plain text (legacy)
+ *   { name, mime?, text }                — plain text
+ *   { name, mime?, contentBase64 }       — binary (image or text-as-bytes)
+ *   { name, mime?, dataUrl }             — data:<mime>;base64,...
+ *
+ * Returns { kind, name, mime, text?, path?, bytes } or throws.
+ */
+export function materializeAttachment(raw, { maxBytes = MAX_ATTACHMENT_BYTES } = {}) {
+  const d = decodeAttachment(raw, { maxBytes });
+  if (d.kind === 'text') return { kind: 'text', name: d.name, mime: d.mime, text: d.text, bytes: d.buf.length };
 
   // Image → real file path for QVAC multimodal attachments.
+  const { name, mime, buf } = d;
   const id = crypto.randomBytes(8).toString('hex');
   const safeExt = IMAGE_EXT.has(extOf(name)) ? extOf(name) : '.png';
   const filePath = path.join(attachmentsDir(), `${Date.now()}-${id}${safeExt}`);
@@ -125,6 +132,29 @@ export function materializeAttachment(raw, { maxBytes = MAX_ATTACHMENT_BYTES } =
     path: filePath,
     bytes: buf.length,
   };
+}
+
+/**
+ * Decode + validate one attachment exactly as materializeAttachment does, but
+ * without touching the disk: images come back with `path: null`. Used by the fee
+ * estimator, which must size a prompt without staging files for a request that
+ * may never be paid for.
+ */
+export function measureAttachment(raw, { maxBytes = MAX_ATTACHMENT_BYTES } = {}) {
+  const d = decodeAttachment(raw, { maxBytes });
+  if (d.kind === 'text') return { kind: 'text', name: d.name, mime: d.mime, text: d.text, bytes: d.buf.length };
+  return { kind: 'image', name: d.name, mime: d.mime || 'image/png', path: null, bytes: d.buf.length };
+}
+
+/** measureAttachment over a list; same soft-fail contract as materializeAttachments. */
+export function measureAttachments(list, opts = {}) {
+  const arr = Array.isArray(list) ? list.slice(0, MAX_ATTACHMENTS) : [];
+  const files = [];
+  const errors = [];
+  for (const raw of arr) {
+    try { files.push(measureAttachment(raw, opts)); } catch (e) { errors.push(e.message); }
+  }
+  return { files, errors };
 }
 
 /**

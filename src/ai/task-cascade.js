@@ -484,6 +484,32 @@ async function runOneTask(task, runners, userMessage, priorContext, priorSnippet
   }
 }
 
+/** Max characters of one specialist result the aggregator will read. */
+export const AGGREGATOR_BLOCK_MAX_CHARS = 5000;
+
+/**
+ * The aggregator's system + user prompt. Exported so the fee estimator sizes the
+ * exact text the model will get instead of a hand-copied guess that would drift.
+ * `blocks` is the already-joined "### id (kind)\nbody" section.
+ */
+export function buildAggregatorPrompt(userMessage, blocks, plan = {}) {
+  const system = [
+    'You are the aggregator in a multi-agent task cascade (mixture-of-agents style).',
+    'Specialist tools/skills/MCPs already ran. Synthesize ONE clear final answer for the user.',
+    'Rules:',
+    '- Write clear Markdown. Be specific — names, numbers, prices, links, temperatures.',
+    '- When multiple shops/MCPs returned data, compare them (price, availability, description).',
+    '- When a step searched the web and another asked for an image, include the facts AND a ready-to-use image prompt that embeds the key numbers (e.g. temperature).',
+    '- If a specialist failed, work with what you have and note the gap briefly.',
+    '- Do not invent tool results that were not provided.',
+    '- Cite forecast facts and tool outputs; never fabricate weather or place data.',
+    plan.synthesisNotes ? `- Synthesis guidance: ${String(plan.synthesisNotes).slice(0, 400)}` : '',
+  ].filter(Boolean).join('\n');
+
+  const user = `User request:\n${userMessage}\n\nSpecialist results:\n${blocks}\n\nProduce the final answer now.`;
+  return { system, user };
+}
+
 async function aggregateResults(userMessage, results, priorContext, runners, plan = {}) {
   // Fast path: single successful text-like result
   if (results.length === 1 && results[0].ok) {
@@ -504,23 +530,10 @@ async function aggregateResults(userMessage, results, priorContext, runners, pla
       else body = JSON.stringify(r.output, null, 2);
     } else if (typeof r.output === 'string') body = r.output;
     else body = JSON.stringify(r.output, null, 2);
-    return `### ${r.id} (${r.kind}${r.skillId ? ':' + r.skillId : ''}${r.server ? ' @' + r.server : ''})\n${String(body).slice(0, 5000)}`;
+    return `### ${r.id} (${r.kind}${r.skillId ? ':' + r.skillId : ''}${r.server ? ' @' + r.server : ''})\n${String(body).slice(0, AGGREGATOR_BLOCK_MAX_CHARS)}`;
   }).join('\n\n');
 
-  const system = [
-    'You are the aggregator in a multi-agent task cascade (mixture-of-agents style).',
-    'Specialist tools/skills/MCPs already ran. Synthesize ONE clear final answer for the user.',
-    'Rules:',
-    '- Write clear Markdown. Be specific — names, numbers, prices, links, temperatures.',
-    '- When multiple shops/MCPs returned data, compare them (price, availability, description).',
-    '- When a step searched the web and another asked for an image, include the facts AND a ready-to-use image prompt that embeds the key numbers (e.g. temperature).',
-    '- If a specialist failed, work with what you have and note the gap briefly.',
-    '- Do not invent tool results that were not provided.',
-    '- Cite forecast facts and tool outputs; never fabricate weather or place data.',
-    plan.synthesisNotes ? `- Synthesis guidance: ${String(plan.synthesisNotes).slice(0, 400)}` : '',
-  ].filter(Boolean).join('\n');
-
-  const user = `User request:\n${userMessage}\n\nSpecialist results:\n${blocks}\n\nProduce the final answer now.`;
+  const { system, user } = buildAggregatorPrompt(userMessage, blocks, plan);
 
   try {
     const reply = await runners.llm(
