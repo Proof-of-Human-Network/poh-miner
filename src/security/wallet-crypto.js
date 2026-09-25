@@ -80,9 +80,30 @@ export function encryptField(plaintext) {
   };
 }
 
+/**
+ * Every secret this machine could have sealed a wallet with. Electron onboarding
+ * re-seals wallets under DAI_WALLET_KEY (the backup key) but a CLI/start.js run,
+ * a genesis tool, or an older build seals under ~/.dai-miner/.wallet-key, so one
+ * wallets directory routinely holds both. Decrypt must accept all of them, or a
+ * wallet sealed by the "other" process reads as keyless and the node mints a new
+ * one. Encryption still uses only the primary key (loadOrCreateKey).
+ */
+function candidateKeys() {
+  const keys = [loadOrCreateKey()];
+  const add = (k) => { if (k && !keys.some(x => x.equals(k))) keys.push(k); };
+  try {
+    if (fs.existsSync(KEY_FILE)) {
+      const k = fs.readFileSync(KEY_FILE);
+      if (k.length >= 32) add(k.subarray(0, 32));
+    }
+  } catch { /* unreadable key file — fall through to the other candidates */ }
+  add(legacyMachineKey());
+  return keys;
+}
+
 export function decryptField(blob) {
   if (!blob || typeof blob !== 'object' || !blob.data) return null;
-  for (const key of [loadOrCreateKey(), legacyMachineKey()]) {
+  for (const key of candidateKeys()) {
     try {
       return decryptWithKey(blob, key);
     } catch { /* try next key */ }

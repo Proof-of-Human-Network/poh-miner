@@ -516,7 +516,17 @@ export class DAIMinerNode {
 
     // Try to load an existing native wallet; fall through to create if missing or stub (no privateKey).
     let resolvedWallet = candidateAddr ? this.walletManager.loadWallet(candidateAddr) : null;
-    if (resolvedWallet && !resolvedWallet.privateKey) resolvedWallet = null; // stub wallet — no signing power
+    if (resolvedWallet && !resolvedWallet.privateKey) {
+      // A file with sealed key material we cannot open is NOT a stub. Minting a new
+      // wallet here silently swaps the user's identity; refuse and say why instead.
+      if (this.walletManager.hasSealedKey(candidateAddr)) {
+        throw new Error(
+          `Wallet ${candidateAddr} is encrypted with a key this node does not have. ` +
+          'Restore the original DAI_WALLET_KEY (or ~/.dai-miner/.wallet-key) — refusing to create a new wallet.'
+        );
+      }
+      resolvedWallet = null; // stub wallet — no signing power
+    }
 
     if (!resolvedWallet) {
       // Look for any existing native wallet on disk

@@ -294,6 +294,20 @@ export class WalletManager {
     const file = path.join(this.walletsDir, `${wallet.address}.json`);
     const tmp  = file + '.tmp';
     const sealed = sealWalletData(wallet.toJSON());
+    // A wallet whose keys could not be decrypted loads with no private key. Saving
+    // it as-is would overwrite the sealed blobs with nothing — permanently
+    // destroying a key that is still recoverable with the right secret. Carry the
+    // on-disk ciphertext over instead.
+    if (!sealed.privateKeyEnc || !sealed.signingPrivateKeyEnc) {
+      try {
+        const onDisk = JSON.parse(fs.readFileSync(file, 'utf8'));
+        if (!sealed.privateKeyEnc && !wallet.privateKey && onDisk.privateKeyEnc) sealed.privateKeyEnc = onDisk.privateKeyEnc;
+        if (!sealed.signingPrivateKeyEnc && !wallet.signingPrivateKey && onDisk.signingPrivateKeyEnc) {
+          sealed.signingPrivateKeyEnc = onDisk.signingPrivateKeyEnc;
+        }
+        if (sealed.privateKeyEnc || sealed.signingPrivateKeyEnc) sealed.encrypted = true;
+      } catch { /* no existing file — nothing to preserve */ }
+    }
     fs.writeFileSync(tmp, JSON.stringify(sealed, null, 2));
     fs.renameSync(tmp, file);
     return file;
@@ -348,6 +362,14 @@ export class WalletManager {
       this.saveWallet(w);
     }
     return this.ensureCanonicalAddress(w);
+  }
+
+  /** True when the wallet file carries sealed key material (whether or not we can open it). */
+  hasSealedKey(address) {
+    try {
+      const raw = JSON.parse(fs.readFileSync(path.join(this.walletsDir, `${address}.json`), 'utf8'));
+      return !!(raw.privateKeyEnc || raw.signingPrivateKeyEnc);
+    } catch { return false; }
   }
 
   listWallets() {

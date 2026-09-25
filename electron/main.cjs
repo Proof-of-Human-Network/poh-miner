@@ -937,7 +937,8 @@ ipcMain.handle('onboarding:generate-wallet-backup-key', async () => {
   const wm = new WalletManager();
   for (const addr of wm.listWallets()) {
     const w = wm.loadWallet(addr);
-    if (w) wm.saveWallet(w);
+    // Skip wallets whose keys did not open: re-sealing them would write no key at all.
+    if (w && (w.privateKey || w.signingPrivateKey || !wm.hasSealedKey(addr))) wm.saveWallet(w);
   }
 
   return { walletBackupKey };
