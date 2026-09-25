@@ -27,7 +27,7 @@ import { computeBoardJobPaymentHash } from '../src/jobs/board-payment.js';
 import { seal, open, isEnvelope } from '../src/security/chat-crypto.js';
 
 const BOARD   = process.env.BOARD  || 'https://miner.iamai.kg';
-const BUDGET  = parseInt(process.env.BUDGET || '10', 10);   // μDAI (maxBudget)
+const BUDGET  = parseInt(process.env.BUDGET || '1000000', 10);   // μDAI (maxBudget)
 const PROMPT  = process.env.PROMPT;
 const DRY     = process.argv.includes('--dry');
 const PLAIN   = process.argv.includes('--plain');   // opt out of encryption
@@ -74,7 +74,9 @@ const job = {
   },
   requesterAddress: wallet.address,
   maxBudget: amount,               // must equal the signed `amount`
-  paymentTx: { txHash, signature, nonce },
+  // The board checks this key against requesterAddress and verifies the proof
+  // with it — without it every submit is rejected with PAYMENT_KEY.
+  paymentTx: { txHash, signature, nonce, signingPublicKey: wallet.signingPublicKey },
   createdAt: Date.now(),
 };
 
