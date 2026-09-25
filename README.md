@@ -333,6 +333,8 @@ Anything whose size only exists after running — what a skill fetched, what an 
 returned — is bounded by the executor's own caps rather than guessed. Routed plans are
 *predicted* from the deterministic router; the live model-planner may choose differently.
 
+SDKs: `estimate()` in the JS, Python, Rust, Kotlin and Swift SDKs wraps this endpoint (typed results; works against remote nodes without a local node).
+
 ### Skills
 
 Skills are on-demand agent modules that extend what miners can compute. Builtin skills include `dai_identity`, `read_farcaster`, `read_zora`, `read_paragraph`, `code_audit`, and `web_search`.

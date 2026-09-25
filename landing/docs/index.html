@@ -452,6 +452,31 @@ run();</div>
           </div>
 
           <div class="endpoint-card">
+            <div class="mb-2"><span class="method method-post">POST</span> <code class="text-[#171717]">/api/estimate</code> <span class="text-[#525252] text-[14px]">&nbsp;·&nbsp; <span class="method method-get">GET</span> <code class="text-[#171717]">/api/estimate?prompt=…</code></span></div>
+            <p class="text-[#525252] text-[18px]" data-i18n-html="doc.jobs.estimate">Estimate a job's fee <em>before</em> you sign it — the <code>eth_estimateGas</code> of DAI. Send the same fields you would submit; the node sizes the whole pipeline (attachment text, skill and MCP output, dataset rows, planner and synthesis calls) and returns the AI tokens it will use, the <strong>minimum fee it accepts</strong> and a <strong>recommended budget</strong>. Read-only — nothing runs and nothing is paid. Amounts are raw units of the fee currency (μDAI for DAI; 1&nbsp;DAI&nbsp;=&nbsp;1e9&nbsp;μDAI).</p>
+            <div class="code-block mt-3">{
+  "prompt": "Summarize the report and compare it with the latest news",
+  "attachments": [{ "name": "report.md", "content": "..." }],
+  "skillId": "web_search",        // optional — else routed from the prompt, as a job would
+  "mcp": ["shop__search"],        // optional MCP tools
+  "dataset": "some-org/some-dataset", // optional, must be installed
+  "currency": "DAI",              // or a stablecoin — quoted off the live P2P book
+  "maxOutputTokens": 512, "route": true
+}</div>
+            <div class="code-block mt-3">{
+  "route":  { "mode": "routed-skill", "predicted": true, "skillId": "web_search" },
+  "tokens": { "prompt": {"min":542,"max":2042}, "output": {"min":1,"max":512},
+              "skillCompute": {"min":10,"max":1050}, "total": {"min":553,"max":3604} },
+  "breakdown": [{ "id": "skill:web_search", "kind": "skill", "tokens": {"min":0,"max":1500}, "basis": "bounded" }],
+  "fees": { "minimum":     { "tokens": 990,  "raw": 990,  "currency": "DAI", "gate": "/job" },
+            "recommended": { "tokens": 3604, "raw": 3604, "currency": "DAI" } },
+  "outputCap": { "budgetCapApplies": false },
+  "warnings": ["routing is predicted from the deterministic planner"]
+}</div>
+            <p class="text-[#525252] text-[16px] mt-3" data-i18n-html="doc.jobs.estimate.basis">Each contributor is tagged <code>measured</code> (counted exactly — prompt, attachment text, dataset rows), <code>bounded</code> (what a skill fetched or an MCP tool returned is capped by the executing code, so it is a <code>{min,max}</code> range) or <code>assumed</code>. <code>fees.minimum</code> is what the node rejects below; <code>fees.recommended</code> covers the worst case. A currency nobody quotes on the P2P book is reported <code>unavailable</code> rather than priced. Errors: <code>422 dataset_not_installed</code>, <code>404 skill_not_found</code>, <code>400</code> for bad input. Available on nodes newer than 0.4.36.</p>
+          </div>
+
+          <div class="endpoint-card">
             <div class="mb-2"><span class="method method-get">GET</span> <code class="text-[#171717]">/job/:id/status</code></div>
             <p class="text-[#525252] text-[18px]" data-i18n-html="doc.jobs.status">Poll job state: <code>queued</code>, <code>computing</code>, <code>done</code>, <code>error</code>.</p>
           </div>
@@ -798,7 +823,7 @@ run();</div>
             <p data-i18n-html="doc.errors.json">Responses are JSON. Errors return <code>{ "error": "message" }</code> with an appropriate HTTP status (400, 401, 402, 404, 500).</p>
             <p data-i18n-html="doc.errors.payment"><strong class="text-[#171717]">Payment-required (402):</strong> skill/compute jobs without a valid signed <code>paymentTx</code> are rejected before execution.</p>
             <p data-i18n-html="doc.errors.signing"><strong class="text-[#171717]">Signing:</strong> register your ed25519 key via <code>/api/wallet/register-key</code>, then sign payment proofs binding <code>jobId + minerWallet + maxBudget + nonce</code>.</p>
-            <p data-i18n-html="doc.errors.sdks"><strong class="text-[#171717]">SDKs:</strong> use <code>runCompute()</code> / <code>submitJob()</code> in <a href="https://github.com/Proof-of-Human-Network/poh-miner" class="neon hover:underline">dai-miner SDK</a> to handle signing automatically.</p>
+            <p data-i18n-html="doc.errors.sdks"><strong class="text-[#171717]">SDKs:</strong> use <code>runCompute()</code> / <code>submitJob()</code> in <a href="https://github.com/Proof-of-Human-Network/poh-miner" class="neon hover:underline">dai-miner SDK</a> to handle signing automatically, and <code>estimate()</code> to price a job first.</p>
           </div>
         </section>
 
