@@ -51,6 +51,7 @@ import { p2pTransitionKey, makeP2PAuth, verifyGossipedP2PTransition, verifyP2PAu
 import { autoForwardPort } from './net/port-forward.js';
 import { computeVerdictWithExistingDai } from './compute/dai-adapter.js';
 import { getBrain, getBrainDataDir, getQvacModels } from './compute/adapters/real-dai.js';
+import { createOpenAIHandler } from './api/openai-compat.js';
 import { BrainSync } from './brain/brain-sync.js';
 import { DAITransaction, TxMempool } from './core/transaction.js';
 import { BalanceJournal } from './storage/balance-journal.js';
@@ -1311,6 +1312,12 @@ export class DAIMinerNode {
       const url = new URL(req.url, `http://${req.headers.host}`);
 
       if (rejectNonLocalStateChange(req, res, url.pathname)) return;
+
+      // OpenAI-compatible API (/openai/v1/*) — self-contained, does not touch /v1 or /api/chat.
+      if (url.pathname === '/openai' || url.pathname.startsWith('/openai/')) {
+        this._openaiHandler ||= createOpenAIHandler(this, { getQvacModels, isTrulyLocalRequest, materializeAttachments, maxAttachmentBytes: MAX_ATTACHMENT_BYTES });
+        return this._openaiHandler(req, res, url);
+      }
 
       // Health probe used by SDK node-discovery (HEAD or GET /healthz)
       if (url.pathname === '/healthz') {
@@ -8430,7 +8437,7 @@ export class DAIMinerNode {
    * work delivered — same as a job timeout). Returns { text, usage, fee, gasPrice }
    * on success, or { status, code, error } on any rejection.
    */
-  async _runPaidCompute({ jobId, requesterAddress, maxBudget, paymentTx, messages, model, systemPrompt }) {
+  async _runPaidCompute({ jobId, requesterAddress, maxBudget, paymentTx, messages, model, systemPrompt, maxTokens, onToken }) {
     const qvac = await getQvacModels();
     if (!qvac || !qvac.ENABLED) return { status: 503, code: 'QVAC_UNAVAILABLE', error: 'Inference backend (QVAC) is unavailable' };
     if (!jobId)            return { status: 400, code: 'JOBID_REQUIRED',     error: 'a client-generated jobId (the value signed by paymentTx) is required' };
@@ -8469,7 +8476,9 @@ export class DAIMinerNode {
     // Run capped at the budget (no-refund ⇒ budget is the hard token allowance),
     // then meter the actual tokens and settle.
     const hardCap = outputTokenCap(maxBudget, gasPrice, promptEst);
-    const usage = await qvac.chat(messages, { model, timeLimit: 90_000, systemPrompt, withUsage: true, hardTokenCap: hardCap });
+    // maxTokens/onToken are optional (the OpenAI-compat API's max_tokens and SSE
+    // streaming); omitted, this is exactly the previous call.
+    const usage = await qvac.chat(messages, { model, timeLimit: 90_000, systemPrompt, withUsage: true, hardTokenCap: hardCap, ...(maxTokens ? { maxTokens } : {}), ...(onToken ? { onToken } : {}) });
     if (usage == null || usage.text == null) {
       const timeout = { type: 'job-timeout', jobId, requesterAddress, minerAddress: this.config.wallet, reservationFee: 0, refund: maxBudget, completedAt: Date.now() };
       this.pendingBrainTransitions.push(timeout);
