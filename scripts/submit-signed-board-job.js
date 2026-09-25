@@ -42,7 +42,9 @@ const addr = process.env.WALLET || wm.listWallets()[0];
 if (!addr) { console.error('No wallet found in ~/.dai-miner/wallets'); process.exit(1); }
 const wallet = wm.loadWallet(addr);
 if (!wallet?.signingPrivateKey) {
-  console.error(`Wallet ${addr} has no signing private key (externally registered?) — can't sign.`);
+  console.error(wallet && wm.hasSealedKey(addr)
+    ? `Wallet ${addr} is encrypted with a key this machine does not have (set DAI_WALLET_KEY to the backup key) — can't sign.`
+    : `Wallet ${addr} has no signing private key (externally registered?) — can't sign.`);
   process.exit(1);
 }
 
@@ -63,7 +65,7 @@ const signature = wallet.sign(txHash);
 const job = {
   id: jobId,
   type: 'compute',                 // fee-gated type
-  model: 'qwen3-1.7b',
+  model: 'qwen3-0.6b',
   payload: {
     prompt: PROMPT,
     // Enabling encryption: the miner seals the reply (and on-chain prompt) to this key.

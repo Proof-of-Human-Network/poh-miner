@@ -8,13 +8,14 @@ import path from 'path';
 // (Electron onboarding's backup key). Whichever process runs next must open both —
 // otherwise a keyed wallet reads as a stub and the miner mints a new identity.
 describe('wallets sealed under a different key than the one in use', () => {
-  const realHome = process.env.HOME;
   const realKey = process.env.DAI_WALLET_KEY;
   let home, WalletManager, Wallet, crypto;
 
   beforeAll(async () => {
     home = fs.mkdtempSync(path.join(os.tmpdir(), 'walkey-'));
-    process.env.HOME = home;
+    // process.env.HOME is not seen by os.homedir() inside a vitest worker; spy on it so
+    // .wallet-key and config.json resolve into the sandbox, never the developer's real ~/.dai-miner.
+    vi.spyOn(os, 'homedir').mockReturnValue(home);
     delete process.env.DAI_WALLET_KEY;
     vi.resetModules();
     ({ WalletManager, Wallet } = await import('../src/wallet/wallet.js'));
@@ -22,7 +23,7 @@ describe('wallets sealed under a different key than the one in use', () => {
   });
 
   afterAll(() => {
-    process.env.HOME = realHome;
+    vi.restoreAllMocks();
     if (realKey === undefined) delete process.env.DAI_WALLET_KEY; else process.env.DAI_WALLET_KEY = realKey;
     fs.rmSync(home, { recursive: true, force: true });
   });
@@ -46,7 +47,7 @@ describe('wallets sealed under a different key than the one in use', () => {
     // Env key gone: the file-key wallet still opens. The backup-key wallet cannot —
     // that secret lives nowhere on disk — but its ciphertext must stay intact.
     expect(wm.loadWallet(a.address).signingPrivateKey).toBe(a.signingPrivateKey);
-    expect(wm.loadWallet(b.address).signingPrivateKey).toBeNull();
+    expect(wm.loadWallet(b.address).signingPrivateKey).toBeNull();   // (no config.json backup key in this sandbox)
     expect(wm.hasSealedKey(b.address)).toBe(true);
   });
 
@@ -71,5 +72,20 @@ describe('wallets sealed under a different key than the one in use', () => {
     expect(wm.hasSealedKey(w.address)).toBe(true);
     delete process.env.DAI_WALLET_KEY;
     crypto.resetKeyCache();
+  });
+
+  it('opens a wallet sealed under the config.json walletBackupKey with no env var set', () => {
+    const wm = new WalletManager(path.join(home, 'wallets3'));
+    process.env.DAI_WALLET_KEY = 'onboarding-backup-key-value';   // what Electron exports
+    crypto.resetKeyCache();
+    const w = Wallet.generate();
+    wm.saveWallet(w);
+    delete process.env.DAI_WALLET_KEY;                            // a script / CLI run
+    crypto.resetKeyCache();
+    expect(wm.loadWallet(w.address).signingPrivateKey).toBeNull();
+
+    fs.mkdirSync(path.join(home, '.dai-miner'), { recursive: true });
+    fs.writeFileSync(path.join(home, '.dai-miner', 'config.json'), JSON.stringify({ walletBackupKey: 'onboarding-backup-key-value' }));
+    expect(wm.loadWallet(w.address).signingPrivateKey).toBe(w.signingPrivateKey);
   });
 });

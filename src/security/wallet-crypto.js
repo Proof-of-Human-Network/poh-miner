@@ -14,6 +14,7 @@ import path from 'path';
 const ALGO = 'aes-256-gcm';
 const SALT = 'dai-miner-wallet-v1';
 const KEY_FILE = path.join(os.homedir(), '.dai-miner', '.wallet-key');
+const CONFIG_FILE = path.join(os.homedir(), '.dai-miner', 'config.json');
 
 let _cachedKey = null;
 
@@ -97,6 +98,15 @@ function candidateKeys() {
       if (k.length >= 32) add(k.subarray(0, 32));
     }
   } catch { /* unreadable key file — fall through to the other candidates */ }
+  // Electron onboarding stores the backup key in config.json and only exports it as
+  // DAI_WALLET_KEY inside its own process. Scripts and the CLI never see that env
+  // var, so wallets it re-sealed would be unreadable to them without this.
+  try {
+    const cfg = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8'));
+    if (typeof cfg.walletBackupKey === 'string' && cfg.walletBackupKey.length >= 16) {
+      add(crypto.createHash('sha256').update(cfg.walletBackupKey).digest());
+    }
+  } catch { /* no config, or not JSON — nothing to add */ }
   add(legacyMachineKey());
   return keys;
 }
