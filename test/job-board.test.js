@@ -36,6 +36,24 @@ describe('JobBoard', () => {
     expect(r.error).toMatch(/already claimed/);
   });
 
+  it('keeps a finished job until a block includes it', () => {
+    board.submit({ id: 'j1', type: 'verdict' });
+    board.claim('j1', 'workerA');
+    expect(board.postResult('j1', 'workerA', { verdict: 'OK' }).ok).toBe(true);
+    const start = Date.now();
+    const realNow = Date.now;
+    try {
+      Date.now = () => start + 11 * 60_000;
+      board.listOpen();
+      expect(board.get('j1')?.status).toBe('done');
+      board.markResultsIncluded(['j1']);
+      board.listOpen();
+      expect(board.get('j1')).toBeNull();
+    } finally {
+      Date.now = realNow;
+    }
+  });
+
   it('reclaims a job after the lease expires', async () => {
     board.submit({ id: 'j1' });
     board.claim('j1', 'workerA');

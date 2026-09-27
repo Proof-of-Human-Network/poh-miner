@@ -24,7 +24,8 @@ import { computeBoardJobPaymentHash } from './board-payment.js';
 export const FEE_REQUIRED_BOARD_TYPES = new Set(['skill', 'compute']);
 
 export const CLAIM_LEASE_MS = 90_000;   // reclaim a job if no result within this
-const DONE_TTL_MS           = 10 * 60_000; // keep results this long for polling
+const DONE_TTL_MS           = 10 * 60_000; // after the result is on chain, keep it this long for polling
+const DONE_PENDING_TTL_MS  = 24 * 60 * 60_000; // not yet included — don't drop the only copy
 const HANDOUT_LEASE_MS      = 120_000;  // re-offer a result to a proposer if not confirmed included
 const MAX_OPEN_JOBS         = 5_000;    // backpressure cap
 
@@ -283,6 +284,13 @@ export class JobBoard {
         requesterAddress: e.job.requesterAddress || null,
         maxBudget: e.job.maxBudget || 0,
         paymentTx: e.job.paymentTx || null,
+        // So the proposer can write job-submitted + the sealed reply onto the
+        // chain. Workers already see this prompt via /jobboard/open.
+        encPub: e.job.payload?.requesterEncryptionPublicKey || null,
+        prompt: e.job.payload?.prompt || e.job.payload?.message || e.job.payload?.question || null,
+        model: e.job.model || null,
+        skillId: e.job.skillId || e.result?.skillId || null,
+        dataset: e.job.dataset || e.job.datasetId || null,
       });
       if (out.length >= limit) break;
     }
@@ -299,7 +307,12 @@ export class JobBoard {
   _sweep() {
     const now = this._now();
     for (const [id, e] of this.jobs) {
-      if (e.status === 'done' && now - e.resultAt > DONE_TTL_MS) this.jobs.delete(id);
+      if (e.status !== 'done') continue;
+      // A completed board job used to vanish after 10 minutes even when no block
+      // had stored it, so both status URLs 404'd. Keep it until it is included,
+      // then for the short poll window.
+      const ttl = e.resultIncluded ? DONE_TTL_MS : DONE_PENDING_TTL_MS;
+      if (now - e.resultAt > ttl) this.jobs.delete(id);
     }
     // Expired cooldowns carry no meaning — drop them so the map tracks only
     // recently-active workers.

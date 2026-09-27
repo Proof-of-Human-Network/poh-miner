@@ -37,6 +37,7 @@ import { envelopeSignPayload } from './network/p2p-gossip.js';
 import { Wallet } from './wallet/wallet.js';
 import { IPFSStore } from './storage/ipfs-store.js';
 import { JobBoard } from './jobs/job-board.js';
+import { findJobRecord } from './chain/chain-job-index.js';
 
 const ipfsStore = new IPFSStore();
 
@@ -670,8 +671,25 @@ const server = http.createServer(async (req, res) => {
       const jobId = url.searchParams.get('jobId');
       if (!jobId) { res.statusCode = 400; return res.end(JSON.stringify({ error: 'jobId required' })); }
       const s = jobBoard.get(jobId);
-      if (!s) { res.statusCode = 404; return res.end(JSON.stringify({ error: 'job not found' })); }
-      return res.end(JSON.stringify(s));
+      if (s) return res.end(JSON.stringify(s));
+      // The board is a queue. Once a proposer includes the job, the chain is the
+      // record — the reply stays sealed (profile.replyCipher) and is still listed.
+      const rec = findJobRecord(chain, jobId);
+      if (!rec) { res.statusCode = 404; return res.end(JSON.stringify({ error: 'job not found' })); }
+      const done = !!(rec.profile || rec.verdict);
+      return res.end(JSON.stringify({
+        jobId,
+        status: done ? 'done' : 'submitted',
+        result: done ? {
+          verdict: rec.verdict || null,
+          profile: rec.profile || null,
+          reasoning: rec.reasoning || null,
+          minerWallet: rec.minerWallet || null,
+          modelUsed: rec.modelUsed || rec.model || null,
+        } : null,
+        worker: rec.minerWallet || null,
+        source: 'chain',
+      }));
     }
 
     if (url.pathname === '/chain/blocks') {

@@ -109,6 +109,15 @@ export function mergeWithLocalJobs(chainJobs, localRecords, requesterAddress, li
   return [...byId.values()].sort((a, b) => (b.submittedAt || 0) - (a.submittedAt || 0)).slice(0, limit);
 }
 
+/** One job by id, from job-submitted plus its mined scanResult, if either exists. */
+export function findJobRecord(chain, jobId) {
+  if (!jobId) return null;
+  const submitted = buildJobSubmittedIndex(chain).get(jobId) || null;
+  const result = buildResultsIndex(chain).get(jobId) || null;
+  if (!submitted && !result) return null;
+  return { jobId, ...(submitted || {}), ...(result || {}), mined: !!result };
+}
+
 export function getWalletJobHistory(chain, requesterAddress, opts = {}) {
   const { limit = 20, localRecords = [] } = opts;
   if (!requesterAddress) return [];

@@ -476,14 +476,24 @@ run();</div>
             <p class="text-[#525252] text-[16px] mt-3" data-i18n-html="doc.jobs.estimate.basis">Each contributor is tagged <code>measured</code> (counted exactly — prompt, attachment text, dataset rows), <code>bounded</code> (what a skill fetched or an MCP tool returned is capped by the executing code, so it is a <code>{min,max}</code> range) or <code>assumed</code>. <code>fees.minimum</code> is what the node rejects below; <code>fees.recommended</code> covers the worst case. A currency nobody quotes on the P2P book is reported <code>unavailable</code> rather than priced. Errors: <code>422 dataset_not_installed</code>, <code>404 skill_not_found</code>, <code>400</code> for bad input. Available on nodes newer than 0.4.36.</p>
           </div>
 
+          <div class="glass rounded-[4px] p-5 mb-6 text-[17px] text-[#525252]">
+            <div class="neon mb-2 text-[20px]" data-i18n="doc.jobs.sealed.title">Sealed replies</div>
+            <p data-i18n-html="doc.jobs.sealed">A public job can set <code>payload.requesterEncryptionPublicKey</code> (the requester's X25519 key). The chain then stores the prompt as <code>promptCipher</code> and the reply as <code>profile.replyCipher</code>, with <code>computeOutput</code> null. The job is still listed — encryption does not remove it. Only that key opens the text. Poll <code>GET /job/:id/status</code> (this miner, then the board, then the chain) or <code>GET /api/wallet/jobs?address=</code>. <code>GET /jobboard/status?jobId=</code> is the live queue: it keeps a finished job until a block includes it, then for 10 minutes.</p>
+          </div>
+
+          <div class="endpoint-card">
+            <div class="mb-2"><span class="method method-post">POST</span> <code class="text-[#171717]">/jobboard/submit</code></div>
+            <p class="text-[#525252] text-[18px]" data-i18n-html="doc.jobs.board">Same body as <code>POST /job</code>, sent to a bootnode so any miner can pull the work. The payment hash is <code>sha256</code> of <code>JSON.stringify({ jobId, requesterAddress, amount, nonce })</code> — no <code>minerAddress</code>, because the worker is not known yet. Poll <code>GET /jobboard/status?jobId=</code> while it is queued. After inclusion the same job is on <code>GET /job/:id/status</code> and in the wallet job list.</p>
+          </div>
+
           <div class="endpoint-card">
             <div class="mb-2"><span class="method method-get">GET</span> <code class="text-[#171717]">/job/:id/status</code></div>
-            <p class="text-[#525252] text-[18px]" data-i18n-html="doc.jobs.status">Poll job state: <code>queued</code>, <code>computing</code>, <code>done</code>, <code>error</code>.</p>
+            <p class="text-[#525252] text-[18px]" data-i18n-html="doc.jobs.status">Poll job state: <code>queued</code>, <code>computing</code>, <code>done</code>, <code>error</code>. A miss in this process's memory is looked up on the job board and then on chain, so a board job stays visible after the queue drops it.</p>
           </div>
 
           <div class="endpoint-card">
             <div class="mb-2"><span class="method method-get">GET</span> <code class="text-[#171717]">/job/:id/result</code></div>
-            <p class="text-[#525252] text-[18px]" data-i18n="doc.jobs.result">Full result when the job is done.</p>
+            <p class="text-[#525252] text-[18px]" data-i18n-html="doc.jobs.result">Full result when the job is done. Cleartext replies are in <code>profile.computeOutput</code>. Sealed replies are in <code>profile.replyCipher</code> (<code>computeOutput</code> is null) — open that envelope with the requester's X25519 key.</p>
           </div>
 
           <div class="endpoint-card">

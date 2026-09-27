@@ -104,7 +104,7 @@ import { serveHfDataset, pullHfDatasetFromPeer } from './datasets/hf-dataset-pee
 import { applyCorsHeaders, rejectNonLocalStateChange, isTrulyLocalRequest } from './security/api-security.js';
 import { readLimitedBody, MAX_BODY_BYTES } from './security/bootnode-auth.js';
 import { normalizeSkillId } from './security/skill-id.js';
-import { buildWalletJobContext, promptPreviewFromJob, jobToSearchDocument, buildAllSearchDocuments, PROMPT_PREVIEW_MAX } from './chain/chain-job-index.js';
+import { buildWalletJobContext, promptPreviewFromJob, jobToSearchDocument, buildAllSearchDocuments, findJobRecord, PROMPT_PREVIEW_MAX } from './chain/chain-job-index.js';
 import { seal as sealChat } from './security/chat-crypto.js';
 import { ChatHistorySearch } from './search/chat-history-search.js';
 import { ensureMeilisearch, getMeilisearchMasterKey, resolveMeilisearchUrl } from './search/meilisearch-server.js';
@@ -1213,7 +1213,11 @@ export class DAIMinerNode {
   async _runTaskCascade(plan, { model, message } = {}) {
     const mcpIds = [...new Set((plan.stages || []).flat().filter(t => t.kind === 'mcp').map(t => t.server).filter(Boolean))];
     let assignment = null;
-    if (mcpIds.length && this.config.mcpCatalog?.disperse !== false) {
+    // /api/mcp/execute is localhost-only, so a remote peer either refuses the
+    // connection ("fetch failed") or returns 403. Default dispersal just delayed
+    // every tool and then ran it here. Opt in with mcpCatalog.disperse === true
+    // only on a network where that route is actually reachable.
+    if (mcpIds.length && this.config.mcpCatalog?.disperse === true) {
       const peers = await this._getComputePeers().catch(() => []);
       assignment = assignMcpToPeers(mcpIds, peers);
       this._mcpAssignment = assignment;
@@ -2107,8 +2111,33 @@ export class DAIMinerNode {
               note: 'limited info from legacy history; full result may be in chain or logs'
             }));
           }
-          res.statusCode = 404;
-          return res.end(JSON.stringify({ error: 'job not found', jobId }));
+          // Board jobs never land in this process's map. The bootnode queue and,
+          // once included, the chain are the records /job/:id has to read.
+          this._lookupExternalJob(jobId).then(found => {
+            if (!found) {
+              res.statusCode = 404;
+              return res.end(JSON.stringify({ error: 'job not found', jobId }));
+            }
+            if (action === 'status') return res.end(JSON.stringify(found.statusBody));
+            if (action === 'result') {
+              if (!found.resultBody) {
+                res.statusCode = 202;
+                return res.end(JSON.stringify({
+                  jobId,
+                  status: found.statusBody.status,
+                  message: 'not ready yet',
+                  poll: `/job/${jobId}/status`,
+                }));
+              }
+              return res.end(JSON.stringify(found.resultBody));
+            }
+            res.statusCode = 404;
+            return res.end(JSON.stringify({ error: 'unknown job action', jobId, action }));
+          }).catch(() => {
+            res.statusCode = 404;
+            return res.end(JSON.stringify({ error: 'job not found', jobId }));
+          });
+          return;
         }
 
         if (action === 'status') {
@@ -7666,15 +7695,21 @@ export class DAIMinerNode {
     if (!results?.length) return;
 
     const includedJobIds = [];
-    for (const { jobId, worker, result, jobType, requesterAddress, maxBudget, paymentTx } of results) {
+    for (const row of results) {
+      const { jobId, worker, result, jobType, requesterAddress, maxBudget, paymentTx } = row;
       if (!worker || !result || this.minedRequestIds.has(jobId)) continue;
       if (this.pendingValidResults.some(pr => pr.requestId === jobId)) continue;
 
       // Fee-required jobs (skill/compute): settle the escrowed fee to the worker
       // via job-escrow + job-settled transitions instead of a coinbase reward.
+      // Also queue job-submitted + the (sealed) result so the job stays on the
+      // chain after the board drops its in-memory copy.
       if (FEE_REQUIRED_JOB_TYPES.has(jobType)) {
         const settled = await this._settleBoardFeeJob({ jobId, worker, requesterAddress, maxBudget, paymentTx });
-        if (settled) console.log(`[DAI-Miner] Settled board fee job ${jobId} → worker ${worker.slice(0, 12)}… (${maxBudget} μDAI)`);
+        if (settled) {
+          console.log(`[DAI-Miner] Settled board fee job ${jobId} → worker ${worker.slice(0, 12)}… (${maxBudget} μDAI)`);
+          this._queueBoardJobRecord(row);
+        }
         includedJobIds.push(jobId); // consume regardless (invalid payment shouldn't loop forever)
         continue;
       }
@@ -7760,6 +7795,121 @@ export class DAIMinerNode {
     this._applySettlement(settled);
     this.pendingBrainTransitions.push(settled);
     return true;
+  }
+
+  /**
+   * Put a finished board job on the chain: a job-submitted transition (prompt
+   * sealed when the requester sent an encryption key) and a scan result whose
+   * profile holds replyCipher or skillOutput. That is what /job/:id and
+   * /api/wallet/jobs read after the board forgets the job.
+   */
+  _queueBoardJobRecord(row) {
+    const { jobId, worker, result, jobType, requesterAddress, maxBudget, encPub, prompt, model, skillId, dataset } = row || {};
+    if (!jobId || this.minedRequestIds.has(jobId)) return;
+    if (!this._gossipedJobTransitions.has(`${jobId}:job-submitted`)) {
+      const text = prompt ? String(prompt) : '';
+      const encrypted = !!encPub;
+      const submitted = {
+        type: 'job-submitted',
+        jobId,
+        jobType: jobType || 'compute',
+        skillId: skillId || result?.skillId || null,
+        requesterAddress: requesterAddress || null,
+        maxBudget: maxBudget || 0,
+        promptPreview: encrypted ? null : (text.slice(0, PROMPT_PREVIEW_MAX) || null),
+        promptCipher: encrypted && text ? sealChat(encPub, text) : null,
+        encrypted,
+        model: model || result?.modelUsed || result?.profile?.model || null,
+        dataset: dataset || null,
+        timestamp: Date.now(),
+      };
+      this.pendingBrainTransitions.push(submitted);
+      this._gossipedJobTransitions.add(`${jobId}:job-submitted`);
+      this._persistPendingTransitions();
+      this.gossip?.publish?.('job-transition', submitted).catch(() => {});
+    }
+    if (this.pendingValidResults.some(pr => pr.requestId === jobId)) return;
+
+    let profile = result?.profile || null;
+    let verdict = result?.verdict || null;
+    if (!profile && (result?.type === 'skill' || jobType === 'skill') && result?.output != null) {
+      profile = { skillOutput: result.output, skillId: result.skillId || skillId || null };
+      verdict = 'SKILL_RESULT';
+    }
+    if (!profile && !verdict) return;
+    if (!verdict) verdict = jobType === 'skill' ? 'SKILL_RESULT' : 'COMPUTE_RESULT';
+
+    const sr = new ScanResult({
+      requestId: jobId,
+      address: result?.address || 'compute-job',
+      verdict,
+      confidence: result?.confidence ?? 1,
+      reasoning: result?.reasoning || `Board ${jobType || 'compute'} job`,
+      signalsUsed: result?.signalsUsed || [],
+      modelUsed: result?.modelUsed || model || null,
+      computationTimeMs: result?.computationTimeMs || 1,
+      minerWallet: worker,
+      methodsHash: result?.methodsHash || 'compute',
+      methodsCount: result?.methodsCount || 0,
+      realDAIUsed: false,
+      profile,
+    });
+    this.pendingValidResults.push(sr);
+    this._persistPendingResults();
+  }
+
+  /** Status/result bodies for a job that lives on the board or the chain, not in this process. */
+  _externalJobBodies(jobId, status, rec) {
+    const profile = rec?.profile || null;
+    const done = status === 'done' && !!(profile || rec?.verdict);
+    return {
+      statusBody: {
+        jobId,
+        status: done ? 'done' : status,
+        address: rec?.address || undefined,
+        source: rec?.source || (rec?.mined ? 'chain' : 'board'),
+      },
+      resultBody: done ? {
+        jobId,
+        address: rec?.address || null,
+        verdict: rec?.verdict || null,
+        confidence: rec?.confidence ?? null,
+        reasoning: rec?.reasoning || null,
+        profile,
+        evidence: null,
+        minerWallet: rec?.minerWallet || null,
+      } : null,
+    };
+  }
+
+  async _lookupExternalJob(jobId) {
+    const chainRec = findJobRecord(this.chain, jobId);
+    if (chainRec?.profile || chainRec?.verdict) {
+      return this._externalJobBodies(jobId, 'done', { ...chainRec, source: 'chain' });
+    }
+    for (const bootnode of (this.config.bootnodes || [])) {
+      try {
+        const base = String(bootnode).replace(/\/$/, '');
+        const r = await fetch(`${base}/jobboard/status?jobId=${encodeURIComponent(jobId)}`, { signal: AbortSignal.timeout(6000) });
+        if (!r.ok) continue;
+        const s = await r.json();
+        if (!s || s.error || !s.status) continue;
+        const status = s.status === 'done' ? 'done' : (s.status === 'claimed' ? 'computing' : 'queued');
+        const result = s.result || {};
+        const profile = result.profile
+          || (result.output != null ? { skillOutput: result.output, skillId: result.skillId || null } : null);
+        return this._externalJobBodies(jobId, status, {
+          verdict: result.verdict || null,
+          profile,
+          reasoning: result.reasoning || null,
+          minerWallet: s.worker || result.minerWallet || null,
+          address: result.address || null,
+          source: s.source || 'board',
+        });
+      } catch { /* next bootnode */ }
+    }
+    if (chainRec) return this._externalJobBodies(jobId, 'queued', { ...chainRec, source: 'chain' });
+    return null;
   }
 
   // ── Durable pending-transition queue ────────────────────────────────────────

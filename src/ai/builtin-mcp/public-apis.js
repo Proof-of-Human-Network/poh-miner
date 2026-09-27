@@ -334,9 +334,19 @@ export const PUBLIC_APIS_TOOLS = [
     inputSchema: schema({ word: { type: 'string' }, query: { type: 'string' } }),
     cardId: 'public-apis/dictionary',
     async run(args) {
-      const word = str(args.word || args.query);
+      let word = str(args.word || args.query);
       if (!word) throw new Error('word required');
-      const data = await fetchJson(`https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(word)}`);
+      // Blind calls pass the whole sentence. The dictionary wants one word;
+      // a long path is what was aborting on the upstream timeout.
+      word = word.replace(/[?!.,]+$/g, '').trim();
+      word = word.replace(/^(?:please\s+)?(?:can you\s+)?(?:define|definition of|meaning of|what does|what is the meaning of)\s+/i, '');
+      word = word.replace(/\s+mean\??$/i, '').trim();
+      const parts = word.split(/\s+/).filter(Boolean);
+      if (parts.length > 2) word = parts[parts.length - 1];
+      const data = await fetchJson(
+        `https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(word)}`,
+        { timeoutMs: 20_000 },
+      );
       const entry = Array.isArray(data) ? data[0] : data;
       const meanings = (entry.meanings || []).slice(0, 4).map(m => ({
         partOfSpeech: m.partOfSpeech,

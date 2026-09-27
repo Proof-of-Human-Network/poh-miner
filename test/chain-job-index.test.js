@@ -8,6 +8,7 @@ import {
   extractChatTurns,
   mergeWithLocalJobs,
   promptPreviewFromJob,
+  findJobRecord,
   PROMPT_PREVIEW_MAX,
 } from '../src/chain/chain-job-index.js';
 
@@ -109,6 +110,14 @@ describe('chain-job-index', () => {
     const merged = mergeWithLocalJobs([], local, WALLET, 5);
     expect(merged[0].jobId).toBe('job-local');
     expect(merged[0].profile.computeOutput).toBe('local reply');
+  });
+
+  it('finds one job on chain after the board has dropped it', () => {
+    const rec = findJobRecord(makeChain(), 'job-1');
+    expect(rec.jobId).toBe('job-1');
+    expect(rec.mined).toBe(true);
+    expect(rec.requesterAddress).toBe(WALLET);
+    expect(findJobRecord(makeChain(), 'missing')).toBeNull();
   });
 
   it('truncates prompt preview', () => {

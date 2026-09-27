@@ -421,14 +421,49 @@ export function resolveTaskArgs(task, priorById, userMessage) {
  * the model, which is what the _mcpChat tool loop is for; this only stops calls
  * that could never have succeeded.
  */
-const MCP_TEXT_KEYS = ['query', 'q', 'search', 'search_query', 'keyword', 'keywords',
-  'text', 'message', 'prompt', 'input', 'question', 'term'];
+const MCP_TEXT_KEYS = ['query', 'q', 'search', 'search_query', 'search_phrase', 'keyword', 'keywords',
+  'text', 'message', 'prompt', 'input', 'question', 'term', 'product', 'need',
+  'libraryName', 'library', 'repoName', 'word', 'title', 'slug', 'category',
+  'owner', 'repo', 'path', 'name', 'resource_type'];
+
+// Structured inputs a whole sentence cannot fill. Calling them blind is how
+// "indexes required" / "expected string, received undefined" replies happened.
+const MCP_NEVER_BLIND = new Set([
+  'indexes', 'latitude', 'longitude', 'lat', 'lon', 'lng',
+  'operations', 'requests', 'repo_ids', 'slugs', 'code',
+]);
+
+function schemaProps(tool) {
+  const props = tool?.inputSchema?.properties;
+  if (!props || typeof props !== 'object') return null;
+  const keys = Object.keys(props).filter((k) => Object.prototype.hasOwnProperty.call(props, k));
+  return keys.length ? props : null;
+}
 
 export function buildMcpArgs(tool, text) {
-  const props = (tool && tool.inputSchema && tool.inputSchema.properties) || null;
+  const props = schemaProps(tool);
+  const argKeys = Array.isArray(tool?.argKeys)
+    ? tool.argKeys.filter((k) => typeof k === 'string' && k && !Object.prototype.hasOwnProperty.call(Object.prototype, k))
+    : [];
+
+  // Catalog cards publish argKeys and no JSON schema. Fill every text-shaped
+  // key — some tools require two (query AND libraryName). A single required
+  // string is filled even when its name is not in the text list. A tool whose
+  // only inputs are structured is skipped instead of being called and rejected.
+  if (!props && argKeys.length) {
+    const args = {};
+    for (const key of argKeys) {
+      if (MCP_TEXT_KEYS.includes(key)) args[key] = text;
+    }
+    if (!Object.keys(args).length && argKeys.length === 1 && !MCP_NEVER_BLIND.has(argKeys[0])) {
+      args[argKeys[0]] = text;
+    }
+    return Object.keys(args).length ? args : null;
+  }
+
   // No schema published: fall back to the old generic shape rather than refusing
   // to call a tool that may well accept it.
-  if (!props || Object.keys(props).length === 0) {
+  if (!props) {
     return { query: text, message: text, q: text };
   }
   for (const key of MCP_TEXT_KEYS) {

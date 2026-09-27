@@ -77,4 +77,16 @@ describe('Result Validator', () => {
     expect(validation.isValid).toBe(false);
     expect(validation.errors.some(e => e.includes('Insufficient work'))).toBe(true);
   });
+
+  it('accepts a compute result that carries a sealed profile and no signal scan', async () => {
+    const validation = await validateResultWork({
+      verdict: 'COMPUTE_RESULT',
+      profile: { replyCipher: { v: 1 }, encrypted: true, model: 'qwen3-0.6b' },
+      reasoning: 'Compute job routed to cascade',
+      methodsHash: 'compute',
+      signalsUsed: [],
+      computationTimeMs: 800,
+    });
+    expect(validation.isValid).toBe(true);
+  });
 });

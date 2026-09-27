@@ -41,4 +41,17 @@ describe('buildMcpArgs', () => {
   it('ignores inherited object keys rather than matching Object.prototype', () => {
     expect(buildMcpArgs(schema({ constructor: {} }), 'hi')).toBeNull();
   });
+
+  it('fills catalog argKeys when the card has no JSON schema', () => {
+    expect(buildMcpArgs({ argKeys: ['question'] }, 'how do I transfer SOL?'))
+      .toEqual({ question: 'how do I transfer SOL?' });
+    expect(buildMcpArgs({ argKeys: ['resource_type'] }, 'AWS::Lambda::Function'))
+      .toEqual({ resource_type: 'AWS::Lambda::Function' });
+    expect(buildMcpArgs({ argKeys: ['query', 'libraryName'] }, 'react hooks'))
+      .toEqual({ query: 'react hooks', libraryName: 'react hooks' });
+  });
+
+  it('does not call a catalog tool whose only arg is structured', () => {
+    expect(buildMcpArgs({ argKeys: ['indexes'] }, 'search the onion')).toBeNull();
+  });
 });

@@ -91,8 +91,9 @@ function filterApplicableSignals(liveSignals, chains) {
  * Validates that a ScanResult represents honest, full work.
  */
 export async function validateResultWork(result, request = {}) {
-  // Skill jobs return arbitrary JSON — still require timing sanity and reject sim hashes
-  if (result.verdict === 'SKILL_RESULT') {
+  // Skill and compute jobs return a profile, not a signal scan. Require timing
+  // sanity and reject sim hashes; do not apply the identity-scan coverage floor.
+  if (result.verdict === 'SKILL_RESULT' || result.verdict === 'COMPUTE_RESULT') {
     const errors = [];
     if (result.methodsHash && String(result.methodsHash).startsWith('sim-')) {
       errors.push('sim- methodsHash not accepted for skill results');
