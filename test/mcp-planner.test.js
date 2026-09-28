@@ -188,6 +188,23 @@ describe('executor arg resolution', () => {
     expect(args.longitude).toBe(41.64);
   });
 
+  it('does not let the model swap a leading tool phrase for a different server', async () => {
+    const cards = defaultHttpSeedCards();
+    const p = await planCatalogCascade('aws docs. Answer briefly with a fact from the tool, not a guess.', {
+      catalogCards: cards,
+      skills: [],
+      llm: async () => JSON.stringify({
+        intent: 'shopping',
+        stages: [{ tasks: [{ kind: 'mcp', cardId: 'airshelf/find_products', tool: 'find_products', arguments: { query: 'aws docs' } }] }],
+      }),
+    });
+    const flat = p.stages.flat();
+    expect(flat).toHaveLength(1);
+    expect(flat[0].tool).toBe('aws-knowledge__aws___search_documentation');
+    expect(flat[0].arguments.search_phrase).toMatch(/aws docs/);
+    expect(flat[0].arguments.query).toBeUndefined();
+  });
+
   it('keeps planner-supplied city and does not replace it with the full sentence', () => {
     const args = resolveTaskArgs({
       arguments: { city: 'Batumi' },

@@ -28,7 +28,7 @@ export const DEFAULT_HTTP_MCPS = {
     triggers: ['telegram ads', 'ad campaign', 'inside ads'],
     tools: [
       { name: 'estimate_campaign', summary: 'Estimate Telegram ad reach, clicks and cost', triggers: ['ad estimate', 'campaign cost', 'telegram reach'], argKeys: ['product'] },
-      { name: 'create_campaign_draft', summary: 'Draft a Telegram ad campaign without an account', triggers: ['create campaign', 'ad draft'], argKeys: ['product'] },
+      { name: 'create_campaign_draft', summary: 'Draft a Telegram ad campaign without an account', triggers: ['create campaign', 'ad draft'], argKeys: ['product', 'url'] },
     ],
   },
   goji: {
@@ -215,7 +215,10 @@ export function defaultHttpSeedCards({ disabled = [] } = {}) {
         qualified: `${id}__${t.name}`,
         summary: t.summary || s.summary,
         tags: [...(s.tags || []), ...(t.tags || [])],
-        triggers: [...new Set([...(s.triggers || []), ...(t.triggers || []), t.name, id])],
+        // Tool triggers only. Copying the server's triggers onto every tool made
+        // "aws" or "tandem docs" match the whole server, so the planner could
+        // answer a bitcoin question with the AWS docs tool.
+        triggers: [...new Set([...(t.triggers || []), t.name, id])],
         tools: [t.name],
         source: 'default-http',
         argKeys: t.argKeys || [],

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { planTaskCascade, executeTaskCascade } from '../src/ai/task-cascade.js';
+import { planTaskCascade, executeTaskCascade, resolveTaskArgs } from '../src/ai/task-cascade.js';
 
 const webSearch = {
   id: 'web_search',
@@ -59,6 +59,74 @@ describe('planTaskCascade', () => {
     const mcpTasks = p.stages.flat().filter(t => t.kind === 'mcp');
     expect(mcpTasks.length).toBe(3);
     expect(new Set(mcpTasks.map(t => t.server)).size).toBe(3);
+  });
+
+  it('a named skill is that skill, even when the description mentions other tools', () => {
+    const p = planTaskCascade(
+      'Use the code_audit skill (Mentions aws docs, product catalog, and solana). Give one concrete fact a user can check.',
+      {
+        skills: [audit, webSearch],
+        catalogCards: [
+          { id: 'aws/search', mcpId: 'aws-knowledge', tool: 'aws___search_documentation', qualified: 'aws-knowledge__aws___search_documentation', triggers: ['aws docs'], argKeys: ['search_phrase'], summary: 'Search AWS docs' },
+          { id: 'air/find', mcpId: 'airshelf', tool: 'find_products', qualified: 'airshelf__find_products', triggers: ['find products'], argKeys: ['need'], summary: 'Find products' },
+        ],
+      },
+    );
+    const flat = p.stages.flat();
+    expect(flat).toHaveLength(1);
+    expect(flat[0].kind).toBe('skill');
+    expect(flat[0].skillId).toBe('code_audit');
+  });
+
+  it('a message that starts with a tool trigger calls that tool by its real argument', () => {
+    const p = planTaskCascade('aws docs. Answer briefly with a fact from the tool, not a guess.', {
+      skills: [webSearch],
+      catalogCards: [
+        { id: 'aws/search', mcpId: 'aws-knowledge', tool: 'aws___search_documentation', qualified: 'aws-knowledge__aws___search_documentation', triggers: ['aws docs', 'aws how to'], argKeys: ['search_phrase'], summary: 'Search AWS docs' },
+        { id: 'air/find', mcpId: 'airshelf', tool: 'find_products', qualified: 'airshelf__find_products', triggers: ['find products', 'buyer need'], argKeys: ['need'], summary: 'Find products' },
+      ],
+    });
+    const flat = p.stages.flat();
+    expect(flat).toHaveLength(1);
+    expect(flat[0].tool).toBe('aws-knowledge__aws___search_documentation');
+    expect(flat[0].arguments).toEqual({ search_phrase: 'aws docs' });
+  });
+
+  it('moves a planner query onto the argument the tool declared', () => {
+    const args = resolveTaskArgs({
+      arguments: { query: 'how do I transfer SOL?' },
+      argKeys: ['question'],
+      segment: 'how do I transfer SOL?',
+    }, {}, 'how do I transfer SOL?');
+    expect(args).toEqual({ question: 'how do I transfer SOL?' });
+  });
+
+  it('skips a tool whose only argument cannot be filled from a sentence', () => {
+    expect(resolveTaskArgs({
+      arguments: { query: 'search the onion' },
+      argKeys: ['indexes'],
+    }, {}, 'search the onion')).toBeNull();
+  });
+
+  it('does not call a different tool when the named tool has nothing to send', () => {
+    const p = planTaskCascade('reverse geocode. Answer briefly with real data.', {
+      skills: [],
+      catalogCards: [
+        { id: 'geo-rev', mcpId: 'public-apis', tool: 'public_geo_reverse', qualified: 'public-apis__public_geo_reverse', triggers: ['reverse geocode'], argKeys: ['latitude', 'longitude'], summary: 'reverse' },
+        { id: 'aws/search', mcpId: 'aws-knowledge', tool: 'aws___search_documentation', qualified: 'aws-knowledge__aws___search_documentation', triggers: ['aws docs'], argKeys: ['search_phrase'], summary: 'Search AWS docs' },
+      ],
+    });
+    expect(p.type).toBe('chat');
+  });
+
+  it('extracts a city and drops the instruction tail', () => {
+    const p = planTaskCascade('weather in Paris. Answer briefly with real data.', {
+      skills: [],
+      catalogCards: [
+        { id: 'public-apis/weather', mcpId: 'public-apis', tool: 'public_weather_forecast', qualified: 'public-apis__public_weather_forecast', triggers: ['weather'], argKeys: ['city'], summary: 'forecast' },
+      ],
+    });
+    expect(p.stages.flat()[0].arguments).toEqual({ city: 'Paris' });
   });
 
   it('sequence: create then knowledge skill', () => {

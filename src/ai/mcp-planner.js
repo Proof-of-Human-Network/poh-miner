@@ -7,8 +7,8 @@
  * failure falls back to the heuristic cascade.
  */
 
-import { isConversational, retrieveCandidates } from './mcp-catalog.js';
-import { planTaskCascade } from './task-cascade.js';
+import { isConversational, retrieveCandidates, pinnedCards } from './mcp-catalog.js';
+import { planTaskCascade, directPlan, hasMultipleIntents } from './task-cascade.js';
 
 export const PLANNER_DEFAULTS = {
   retrieveK: 12,
@@ -145,6 +145,9 @@ function convertOne(t, ctx) {
   const args = (t.arguments && typeof t.arguments === 'object' && !Array.isArray(t.arguments))
     ? { ...t.arguments }
     : {};
+  const argKeys = (Array.isArray(card.argKeys) && card.argKeys.length)
+    ? card.argKeys
+    : (meta?.inputSchema?.properties ? Object.keys(meta.inputSchema.properties).slice(0, 8) : []);
   return {
     kind: 'mcp',
     id: `mcp:${qualified}`,
@@ -153,6 +156,7 @@ function convertOne(t, ctx) {
     bareTool: card.tool,
     cardId: card.id,
     arguments: args,
+    argKeys,
     inputSchema: meta?.inputSchema || card.inputSchema,
     segment: '',
     dependsOn: asIdList(t.dependsOn),
@@ -266,8 +270,17 @@ export async function planCatalogCascade(message, ctx = {}) {
   if (!full) return { type: 'chat' };
   if (isConversational(full)) return { type: 'chat' };
 
+  const direct = directPlan(full, ctx);
+  if (direct) return direct;
+
   const plannerOn = ctx.plannerEnabled !== false && typeof ctx.llm === 'function';
   if (!plannerOn) return planTaskCascade(message, ctx);
+
+  // The message opened with a tool phrase that matches several tools of one
+  // server ("solana. …"). The model may choose among those, not the rest of
+  // the catalog.
+  const openedWith = hasMultipleIntents(full) ? [] : pinnedCards(ctx.catalogCards || [], full);
+  if (openedWith.length >= 1) ctx = { ...ctx, catalogCards: openedWith };
 
   const retrieveK = ctx.retrieveK || PLANNER_DEFAULTS.retrieveK;
   const retrieved = retrieveCandidates(full, {

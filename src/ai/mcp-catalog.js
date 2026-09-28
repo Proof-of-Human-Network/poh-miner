@@ -54,6 +54,46 @@ export function allCards({ disabled = [], tools = [] } = {}) {
 
 export const USE_MCP_RE = /\b(?:use|ask|call|with)\s+([a-z0-9._/-]+)\s+mcp\b/i;
 
+/** "Use the code_audit skill ..." — the id the user named, or null. */
+export function explicitSkillRequest(message) {
+  const m = String(message || '').match(/\buse the ([a-z0-9_-]+) skill\b/i);
+  return m ? m[1] : null;
+}
+
+/**
+ * Cards whose trigger is the way the message starts ("aws docs. …", "bitcoin. …").
+ * A phrase later in the sentence does not count, so a travel question that merely
+ * mentions "best places" is not forced onto the geo tool.
+ * One-word triggers shorter than 3 characters, and filler words, do not pin.
+ */
+export function pinnedCards(cards, message) {
+  const q = String(message || '').toLowerCase().trim();
+  if (!q || !cards?.length) return [];
+  let bestLen = 0;
+  const hits = [];
+  for (const c of cards) {
+    for (const raw of c.triggers || []) {
+      const t = String(raw).toLowerCase().trim();
+      const words = t.split(/\s+/).filter(Boolean);
+      if (!t) continue;
+      if (words.length < 2 && (t.length < 3 || STOP.has(t))) continue;
+      if (!q.startsWith(t)) continue;
+      const next = q[t.length];
+      if (next && !/[\s.,;:!?)]/.test(next)) continue;
+      if (t.length > bestLen) {
+        bestLen = t.length;
+        hits.length = 0;
+        hits.push(c);
+      } else if (t.length === bestLen) {
+        hits.push(c);
+      }
+    }
+  }
+  const byId = new Map();
+  for (const c of hits) if (c?.id && !byId.has(c.id)) byId.set(c.id, c);
+  return [...byId.values()];
+}
+
 export function searchCards(cards, query, k = 8) {
   const q = String(query || '').toLowerCase().trim();
   if (!q || !cards?.length) return [];

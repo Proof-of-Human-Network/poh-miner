@@ -380,10 +380,8 @@ export class McpManager {
     const disabled = cfg.mcpBuiltin?.disabled || [];
     const builtin = (cfg.mcpBuiltin?.enabled === false) ? [] : listBuiltinCards({ disabled });
     const live = [];
-    const liveMcpIds = new Set();
     for (const t of this.listTools()) {
       if (t.source === 'builtin') continue;
-      liveMcpIds.add(t.server);
       live.push({
         id: `${t.server}/${t.tool}`,
         mcpId: t.server,
@@ -394,11 +392,27 @@ export class McpManager {
         triggers: [t.server, t.tool],
         tools: [t.tool],
         source: t.source || 'user',
+        inputSchema: t.inputSchema,
       });
     }
-    const seed = this._defaultHttpEnabled()
-      ? defaultHttpSeedCards({ disabled: this._defaultHttpDisabled() }).filter(c => !liveMcpIds.has(c.mcpId))
+    // Keep the seed's triggers and argument names after the server connects.
+    // Live tools/list replaces the seed, and its triggers are only the server
+    // id and the tool name, so "aws docs" would no longer pin that tool.
+    const seedCards = this._defaultHttpEnabled()
+      ? defaultHttpSeedCards({ disabled: this._defaultHttpDisabled() })
       : [];
+    const seedByQualified = new Map(seedCards.map(c => [c.qualified, c]));
+    for (const card of live) {
+      const seed = seedByQualified.get(card.qualified);
+      if (!seed) continue;
+      card.id = seed.id || card.id;
+      card.summary = seed.summary || card.summary;
+      card.tags = seed.tags || [];
+      card.triggers = seed.triggers;
+      card.argKeys = seed.argKeys || [];
+    }
+    const seededQualified = new Set(live.map(c => c.qualified));
+    const seed = seedCards.filter(c => !seededQualified.has(c.qualified));
     return [
       ...builtin.map(c => ({ ...c, source: 'builtin', qualified: `${c.mcpId}__${c.tool}` })),
       ...seed,

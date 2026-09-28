@@ -100,6 +100,7 @@ export const ONION_SEARCH_CARDS = [
     summary: 'Anonymous web search via Tor (DuckDuckGo). Falls back to clearnet if Tor is down.',
     tags: ['search', 'tor', 'onion', 'web'],
     triggers: ['onion search', 'tor search', 'anonymous search', 'search via tor', 'dark web search'],
+    argKeys: ['query'],
   },
   {
     id: 'onion-search/fetch_pages',
@@ -109,6 +110,7 @@ export const ONION_SEARCH_CARDS = [
     summary: 'Fetch pages from the last onion-search result list by index.',
     tags: ['search', 'tor', 'fetch'],
     triggers: ['fetch pages', 'open search result'],
+    argKeys: ['indexes'],
   },
   {
     id: 'onion-search/fetch_specific_page',
@@ -118,6 +120,7 @@ export const ONION_SEARCH_CARDS = [
     summary: 'Fetch a specific URL through Tor when available.',
     tags: ['fetch', 'tor'],
     triggers: ['fetch this url', 'open this link via tor'],
+    argKeys: ['url'],
   },
 ];
 

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildMcpArgs } from '../src/ai/task-cascade.js';
+import { buildMcpArgs, resolveTaskArgs } from '../src/ai/task-cascade.js';
 
 /**
  * Blind MCP calls used to spray the whole user message into { query, message, q }
@@ -53,5 +53,35 @@ describe('buildMcpArgs', () => {
 
   it('does not call a catalog tool whose only arg is structured', () => {
     expect(buildMcpArgs({ argKeys: ['indexes'] }, 'search the onion')).toBeNull();
+  });
+
+  it('strips the instruction tail and extracts the value the field wants', () => {
+    expect(buildMcpArgs({ argKeys: ['search_phrase'] }, 'aws docs. Answer briefly with a fact from the tool, not a guess.'))
+      .toEqual({ search_phrase: 'aws docs' });
+    expect(buildMcpArgs({ argKeys: ['city'] }, 'weather in Paris. Answer briefly with real data.'))
+      .toEqual({ city: 'Paris' });
+    expect(buildMcpArgs({ argKeys: ['word'] }, 'define serendipity')).toEqual({ word: 'serendipity' });
+    expect(buildMcpArgs({ argKeys: ['word'] }, 'dictionary. Answer briefly with real data.')).toBeNull();
+    expect(buildMcpArgs({ argKeys: ['repoName', 'question'] }, 'tell me about iamai.kg')).toBeNull();
+    expect(buildMcpArgs({ argKeys: ['repoName', 'question'] }, 'ask about repo torvalds/linux what is the license'))
+      .toEqual({
+        repoName: 'torvalds/linux',
+        question: 'ask about repo torvalds/linux what is the license',
+      });
+    expect(buildMcpArgs({ argKeys: ['name'] }, 'npm package express')).toEqual({ name: 'express' });
+    expect(buildMcpArgs({ argKeys: ['name'] }, 'dns example.com')).toEqual({ name: 'example.com' });
+    expect(buildMcpArgs({ argKeys: ['keywords'] }, 'running shoes')).toEqual({ keywords: ['running', 'shoes'] });
+    expect(buildMcpArgs({ argKeys: ['product', 'url'] }, 'draft https://iamai.kg for shoes')).toMatchObject({ url: 'https://iamai.kg' });
+    expect(buildMcpArgs({ argKeys: ['product', 'url'] }, 'draft a campaign for shoes')).toBeNull();
+    expect(buildMcpArgs({ argKeys: ['from', 'to'] }, 'usd to eur')).toEqual({ from: 'USD', to: 'EUR' });
+    expect(buildMcpArgs({ argKeys: [] }, 'hacker news')).toEqual({});
+  });
+
+  it('does not keep a sentence the model put on repoName', () => {
+    expect(resolveTaskArgs({
+      arguments: { query: 'tell me about iamai.kg' },
+      argKeys: ['repoName', 'question'],
+      segment: 'tell me about iamai.kg',
+    }, {}, 'tell me about iamai.kg')).toBeNull();
   });
 });

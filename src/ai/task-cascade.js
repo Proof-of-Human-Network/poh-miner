@@ -23,11 +23,17 @@
 import { needsDatasetLookup, searchDatasets, disambiguateDataset } from '../datasets/hf-dataset-search.js';
 import { needsHfModelLookup, searchModelsWithFallback, pickRelevantModels, formatModelSuggestions } from '../datasets/hf-model-search.js';
 import * as hfDatasetManager from '../datasets/hf-dataset-manager.js';
-import { searchCards } from './mcp-catalog.js';
+import { searchCards, explicitSkillRequest, pinnedCards } from './mcp-catalog.js';
+import { argsMayBeEmpty, missingRequiredArgs, shapeArgValue } from './mcp-arg-value.js';
 
 const MAX_MCP_FANOUT = 8;
 
 const SPLIT_RE = /\s*\b(?:and also|as well as|as well|and then|then|and|also|plus|additionally|, then)\b\s*[,;]?\s*/i;
+
+/** True when the sentence asks for more than one job ("… and then …"). */
+export function hasMultipleIntents(message) {
+  return SPLIT_RE.test(String(message || ''));
+}
 const CONVERSATIONAL_RE = /^(hi|hello|hey|thanks|thank you|ok|okay|yes|no|sure|great|cool|got it|makes sense|sounds good|nice|perfect|good|bye|see you|lol|haha|awesome|interesting|are you|what is your|what's your|how are you)\b/i;
 const CREATION_RE = /\b(?:create|write|generate|build|implement|draft|code up|code me)\b/i;
 const BUY_RE = /\b(?:where (?:do|can) i (?:buy|get|find)|buy|purchase|price of|cheapest|compare prices?|best (?:deal|price)|shop for|order)\b/i;
@@ -53,6 +59,68 @@ function scoreSkill(skill, segLower) {
   return score;
 }
 
+function skillOnlyPlan(skill, message) {
+  const task = {
+    kind: 'skill',
+    id: `skill:${skill.id}`,
+    skillId: skill.id,
+    input: { message, query: message },
+    skillContext: skill.context || null,
+    segment: message,
+  };
+  return {
+    type: 'tasks',
+    stages: [[task]],
+    reason: `skill:${skill.id}`,
+    legacy: { type: 'skill', skillId: skill.id, input: task.input, skillContext: task.skillContext },
+  };
+}
+
+function mcpOnlyPlan(card, args, message) {
+  const qualified = card.qualified || `${card.mcpId}__${card.tool}`;
+  return {
+    type: 'tasks',
+    stages: [[{
+      kind: 'mcp',
+      id: `mcp:${qualified}`,
+      server: card.mcpId,
+      tool: qualified,
+      bareTool: card.tool,
+      cardId: card.id,
+      arguments: args,
+      argKeys: card.argKeys || [],
+      inputSchema: card.inputSchema,
+      segment: message,
+    }]],
+    reason: `mcp:${qualified}`,
+  };
+}
+
+/**
+ * A request that already names its tool does not go through the model planner.
+ * "Use the code_audit skill" is that skill. A message that starts with a tool
+ * trigger ("aws docs. …", "bitcoin. …") is that tool, with its real arguments.
+ * Returns null when the message is ordinary free text.
+ */
+export function directPlan(message, ctx = {}) {
+  const full = String(message || '').trim();
+  if (!full) return null;
+  const namedId = explicitSkillRequest(full);
+  if (namedId) {
+    const skill = (ctx.skills || []).find(s => s.id === namedId);
+    if (skill) return skillOnlyPlan(skill, full);
+  }
+  // "weather yesterday and generate an image" is two jobs. Don't pin the first phrase.
+  if (SPLIT_RE.test(full)) return null;
+  const pinned = pinnedCards(ctx.catalogCards || [], full);
+  if (pinned.length !== 1) return null;
+  const args = buildMcpArgs(pinned[0], full);
+  // The message named one tool, and that tool cannot be called from this text.
+  // Falling through would pick a different tool and fail it with the same sentence.
+  if (!args) return { type: 'chat', reason: `unfilled:${pinned[0].qualified || pinned[0].tool}` };
+  return mcpOnlyPlan(pinned[0], args, full);
+}
+
 /**
  * Plan a cascade from a user message.
  *
@@ -69,6 +137,9 @@ export function planTaskCascade(message, ctx = {}) {
   const catalogCards = ctx.catalogCards || [];
   const full = String(message || '').trim();
   if (!full) return { type: 'chat' };
+
+  const direct = directPlan(full, ctx);
+  if (direct) return direct;
 
   const segments = full.split(SPLIT_RE).map(s => s.trim()).filter(Boolean);
   const segs = segments.length ? segments : [full];
@@ -101,6 +172,8 @@ export function planTaskCascade(message, ctx = {}) {
           tool: c.qualified || `${c.mcpId}__${c.tool}`,
           bareTool: c.tool,
           arguments: cardArgs,
+          argKeys: c.argKeys || [],
+          inputSchema: c.inputSchema,
           segment,
         });
       }
@@ -289,18 +362,23 @@ export async function executeTaskCascade(plan, runners, userMessage) {
 
   for (let si = 0; si < plan.stages.length; si++) {
     const stage = plan.stages[si];
-    const stageResults = await Promise.all(stage.map(async (task) => {
+    const stageResults = (await Promise.all(stage.map(async (task) => {
       const started = Date.now();
-      const resolved = task.kind === 'mcp'
-        ? { ...task, arguments: resolveTaskArgs(task, priorById, userMessage) }
-        : task;
+      let resolved = task;
+      if (task.kind === 'mcp') {
+        const args = resolveTaskArgs(task, priorById, userMessage);
+        // No declared argument could be filled. Calling the tool would only
+        // produce "missing required field", which is not an answer.
+        if (args == null) return null;
+        resolved = { ...task, arguments: args };
+      }
       try {
         const out = await runOneTask(resolved, runners, userMessage, priorContext, priorSnippets);
         return { ...resolved, ok: true, output: out, ms: Date.now() - started };
       } catch (e) {
         return { ...resolved, ok: false, error: e.message || String(e), ms: Date.now() - started };
       }
-    }));
+    }))).filter(Boolean);
     allResults.push(...stageResults);
 
     for (const r of stageResults) {
@@ -326,6 +404,7 @@ export async function executeTaskCascade(plan, runners, userMessage) {
       + `\n\n[structured]\n${structured.slice(0, 6000)}`;
   }
 
+  if (!allResults.length) return { reply: null, results: [], stages: plan.stages.length, reason: plan.reason };
   const reply = await aggregateResults(userMessage, allResults, priorContext, runners, plan);
   return { reply, results: allResults, stages: plan.stages.length, reason: plan.reason };
 }
@@ -378,26 +457,80 @@ function collectedPriorFields(task, priorById) {
   return extracted;
 }
 
+function declaredArgKeys(task) {
+  if (Array.isArray(task?.argKeys) && task.argKeys.length) {
+    return task.argKeys.filter(k => typeof k === 'string' && k);
+  }
+  const props = task?.inputSchema?.properties;
+  if (props && typeof props === 'object') {
+    return Object.keys(props).filter(k => Object.prototype.hasOwnProperty.call(props, k));
+  }
+  return [];
+}
+
 /**
- * Prefer arguments the planner already filled. Only fall back to text-key
- * filling when the plan left args empty. Then map prior outputs into any
- * remaining placeholder / missing required fields.
+ * Prefer arguments the planner already filled, but only under names the tool
+ * declared. A model that always sends `query` used to miss `search_phrase`,
+ * `question`, or `repoName`, and the tool rejected the call. Values the model
+ * did put on a real key are kept. Anything else is filled from the user text,
+ * then from earlier steps (lat/lon, city). Returns null when the tool listed
+ * its arguments and none of them could be filled — the caller skips it.
  */
 export function resolveTaskArgs(task, priorById, userMessage) {
+  const text = task.segment || userMessage;
+  const allowed = declaredArgKeys(task);
   let args = (task.arguments && typeof task.arguments === 'object') ? { ...task.arguments } : {};
-  const concrete = Object.entries(args).filter(([, v]) => !isPlaceholder(v));
-  if (!concrete.length) {
-    const filled = buildMcpArgs({ inputSchema: task.inputSchema }, task.segment || userMessage);
-    if (filled) args = { ...filled, ...Object.fromEntries(concrete) };
+  const stray = [];
+  if (allowed.length) {
+    const kept = {};
+    for (const [k, v] of Object.entries(args)) {
+      if (isPlaceholder(v)) continue;
+      if (!allowed.includes(k)) {
+        if (typeof v === 'string') stray.push(v);
+        continue;
+      }
+      if (typeof v === 'string') {
+        const shaped = shapeArgValue(k, v);
+        if (shaped == null || shaped === '') continue;
+        kept[k] = shaped;
+      } else {
+        kept[k] = v;
+      }
+    }
+    if (Object.keys(kept).length) {
+      args = { ...kept };
+    } else {
+      args = { ...(buildMcpArgs({ argKeys: allowed, inputSchema: task.inputSchema }, text) || {}) };
+    }
+    if (stray.length) {
+      const strayVal = stray.slice().sort((a, b) => a.length - b.length)[0];
+      for (const k of allowed) {
+        if (kept[k] != null) continue;
+        if (!MCP_TEXT_KEYS.includes(k)) continue;
+        const shaped = shapeArgValue(k, strayVal);
+        if (shaped == null || shaped === '') continue;
+        if (args[k] == null || args[k] === text) args[k] = shaped;
+      }
+    }
+    for (const k of Object.keys(args)) if (!allowed.includes(k)) delete args[k];
+  } else {
+    const concrete = Object.entries(args).filter(([, v]) => !isPlaceholder(v));
+    if (!concrete.length) {
+      const filled = buildMcpArgs({ inputSchema: task.inputSchema }, text);
+      if (filled) args = { ...filled };
+    }
   }
   const extracted = collectedPriorFields(task, priorById);
   for (const [k, v] of Object.entries(args)) {
     if (isPlaceholder(v) && extracted[k] != null) args[k] = extracted[k];
   }
-  if (args.latitude == null && extracted.latitude != null) args.latitude = extracted.latitude;
-  if (args.longitude == null && extracted.longitude != null) args.longitude = extracted.longitude;
-  if (isPlaceholder(args.city) && extracted.city) args.city = extracted.city;
-  if (isPlaceholder(args.query) && extracted.query) args.query = extracted.query;
+  if (args.latitude == null && extracted.latitude != null && (!allowed.length || allowed.includes('latitude'))) args.latitude = extracted.latitude;
+  if (args.longitude == null && extracted.longitude != null && (!allowed.length || allowed.includes('longitude'))) args.longitude = extracted.longitude;
+  if (isPlaceholder(args.city) && extracted.city && (!allowed.length || allowed.includes('city'))) args.city = extracted.city;
+  if (isPlaceholder(args.query) && extracted.query && (!allowed.length || allowed.includes('query'))) args.query = extracted.query;
+  const concrete = Object.entries(args).filter(([, v]) => !isPlaceholder(v));
+  if (allowed.length && !concrete.length) return null;
+  if (allowed.length && missingRequiredArgs(allowed, args, task.inputSchema)) return null;
   return args;
 }
 
@@ -412,26 +545,15 @@ export function resolveTaskArgs(task, priorById, userMessage) {
  * local fallback. And spraying three synonyms meant a tool reading any of them
  * got the same value under a key it never asked for.
  *
- * Now only declared properties are filled, one canonical text field rather than
- * three. A tool with no text-shaped input cannot be called blind at all, so it
- * is skipped instead of being called and rejected.
- *
- * Note this does not make the VALUE correct: a tool whose text field wants a
- * place name still receives the whole sentence. Extracting the right value needs
- * the model, which is what the _mcpChat tool loop is for; this only stops calls
- * that could never have succeeded.
+ * Now only declared properties are filled. Search fields keep the sentence with
+ * the instruction tail removed. A word, hostname, owner/repo, city, or currency
+ * is extracted, and a tool whose required value is not in the sentence is
+ * skipped instead of being called and rejected.
  */
 const MCP_TEXT_KEYS = ['query', 'q', 'search', 'search_query', 'search_phrase', 'keyword', 'keywords',
   'text', 'message', 'prompt', 'input', 'question', 'term', 'product', 'need',
   'libraryName', 'library', 'repoName', 'word', 'title', 'slug', 'category',
   'owner', 'repo', 'path', 'name', 'resource_type'];
-
-// Structured inputs a whole sentence cannot fill. Calling them blind is how
-// "indexes required" / "expected string, received undefined" replies happened.
-const MCP_NEVER_BLIND = new Set([
-  'indexes', 'latitude', 'longitude', 'lat', 'lon', 'lng',
-  'operations', 'requests', 'repo_ids', 'slugs', 'code',
-]);
 
 function schemaProps(tool) {
   const props = tool?.inputSchema?.properties;
@@ -440,34 +562,63 @@ function schemaProps(tool) {
   return keys.length ? props : null;
 }
 
+function assignShaped(args, key, text, prop) {
+  if (prop?.type === 'number' || prop?.type === 'integer' || prop?.type === 'boolean') return;
+  if (prop?.type === 'array' || key === 'keywords') {
+    const words = shapeArgValue('keywords', text);
+    if (Array.isArray(words) && words.length) args[key] = words;
+    return;
+  }
+  const value = shapeArgValue(key, text);
+  if (value == null || value === '') return;
+  args[key] = value;
+}
+
+function finishBlindArgs(argKeys, args, schema) {
+  if (missingRequiredArgs(argKeys, args, schema)) return null;
+  if (Object.keys(args).length) return args;
+  if (argsMayBeEmpty(argKeys)) return {};
+  return null;
+}
+
 export function buildMcpArgs(tool, text) {
   const props = schemaProps(tool);
-  const argKeys = Array.isArray(tool?.argKeys)
+  const hasArgKeys = Array.isArray(tool?.argKeys);
+  const argKeys = hasArgKeys
     ? tool.argKeys.filter((k) => typeof k === 'string' && k && !Object.prototype.hasOwnProperty.call(Object.prototype, k))
     : [];
 
-  // Catalog cards publish argKeys and no JSON schema. Fill every text-shaped
-  // key — some tools require two (query AND libraryName). A single required
-  // string is filled even when its name is not in the text list. A tool whose
-  // only inputs are structured is skipped instead of being called and rejected.
-  if (!props && argKeys.length) {
+  // Catalog cards publish argKeys and no JSON schema. Fill every key the card
+  // listed, with a value that key can accept. An empty argKeys list is a tool
+  // that takes no text (Hacker News, NASA, a trust receipt) and is called as {}.
+  if (!props && hasArgKeys) {
     const args = {};
-    for (const key of argKeys) {
-      if (MCP_TEXT_KEYS.includes(key)) args[key] = text;
-    }
-    if (!Object.keys(args).length && argKeys.length === 1 && !MCP_NEVER_BLIND.has(argKeys[0])) {
-      args[argKeys[0]] = text;
-    }
-    return Object.keys(args).length ? args : null;
+    for (const key of argKeys) assignShaped(args, key, text, null);
+    return finishBlindArgs(argKeys, args, null);
   }
 
   // No schema published: fall back to the old generic shape rather than refusing
-  // to call a tool that may well accept it.
+  // to call a tool that never declared its inputs. The instruction tail is still
+  // stripped so the tool does not search for "Answer briefly…".
   if (!props) {
-    return { query: text, message: text, q: text };
+    const q = shapeArgValue('query', text) || text;
+    return { query: q, message: q, q };
+  }
+  if (argKeys.length) {
+    const args = {};
+    for (const key of argKeys) assignShaped(args, key, text, props[key]);
+    const required = Array.isArray(tool.inputSchema?.required) ? tool.inputSchema.required : [];
+    for (const key of required) {
+      if (args[key] != null && args[key] !== '') continue;
+      assignShaped(args, key, text, props[key]);
+    }
+    return finishBlindArgs(argKeys, args, tool.inputSchema);
   }
   for (const key of MCP_TEXT_KEYS) {
-    if (Object.prototype.hasOwnProperty.call(props, key)) return { [key]: text };
+    if (!Object.prototype.hasOwnProperty.call(props, key)) continue;
+    const args = {};
+    assignShaped(args, key, text, props[key]);
+    if (Object.keys(args).length) return args;
   }
   return null;   // nothing text-shaped to fill — not callable blind
 }

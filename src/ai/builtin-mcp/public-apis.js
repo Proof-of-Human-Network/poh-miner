@@ -6,19 +6,16 @@
  */
 
 import { fetchJson, compact, num, str, UA } from './fetch.js';
+import { placeQuery, shapeArgValue, stripInstruction } from '../mcp-arg-value.js';
 
 const GEO_HEADERS = { 'User-Agent': UA, Accept: 'application/json' };
 
 /** Blind MCP calls pass the whole user sentence as city/query. Nominatim returns
- *  [] for "weather in sao paulo" but finds the city once the fluff is stripped. */
+ *  [] for "weather in sao paulo" but finds the city once the fluff is stripped.
+ *  An instruction with no place ("weather. Answer briefly…") is empty, so the
+ *  caller fails before any geocode request. */
 export function normalizePlaceQuery(query) {
-  let q = str(query);
-  if (!q) return '';
-  q = q.replace(/[?!.,]+$/g, '').trim();
-  q = q.replace(/^(?:please\s+)?(?:can you\s+|could you\s+)?(?:tell me\s+|give me\s+|show(?:\s+me)?\s+|get\s+)?(?:what(?:'s|s| is)\s+|how(?:'s|s| is)\s+)?(?:the\s+)?(?:current\s+)?(?:weather|forecast|temperature|temps?)\s+(?:like\s+)?(?:(?:right now|today|tomorrow|yesterday|this week|next week)\s+)?(?:in|for|at|of)\s+/i, '');
-  q = q.replace(/^(?:the\s+)?(?:current\s+)?(?:weather|forecast|temperature|temps?)\s+/i, '');
-  q = q.replace(/\s+(?:weather|forecast|temperature|temps?|right now|today|tomorrow)$/i, '');
-  return q.trim();
+  return placeQuery(str(query));
 }
 
 async function geoNominatim(q) {
@@ -39,21 +36,17 @@ async function geoOpenMeteo(q) {
 }
 
 async function geoForward(query) {
-  const raw = str(query);
-  const cleaned = normalizePlaceQuery(raw) || raw;
+  const cleaned = normalizePlaceQuery(query);
   if (!cleaned) return null;
-  const tries = cleaned === raw ? [cleaned] : [cleaned, raw];
-  for (const q of tries) {
-    try {
-      const g = await geoNominatim(q);
-      if (g) return g;
-    } catch { /* Nominatim rate-limits; Open-Meteo is the fallback */ }
-    try {
-      const g = await geoOpenMeteo(q);
-      if (g) return g;
-    } catch { /* next candidate */ }
+  try {
+    const g = await geoNominatim(cleaned);
+    if (g) return g;
+  } catch { /* Nominatim rate-limits; Open-Meteo is the fallback */ }
+  try {
+    return await geoOpenMeteo(cleaned);
+  } catch {
+    return null;
   }
-  return null;
 }
 
 function card(partial) {
@@ -65,28 +58,28 @@ function card(partial) {
 }
 
 export const PUBLIC_APIS_CARDS = [
-  card({ id: 'public-apis/weather', tool: 'public_weather_forecast', summary: '7-day forecast from city name or lat/lon (Open-Meteo)', tags: ['weather', 'forecast'], triggers: ['weather', 'forecast', 'temperature', 'celsius', 'fahrenheit', 'will it rain', 'jacket'] }),
-  card({ id: 'public-apis/crypto-price', tool: 'public_crypto_price', summary: 'Current cryptocurrency price (CoinGecko)', tags: ['crypto', 'price'], triggers: ['bitcoin', 'btc', 'eth', 'ethereum', 'crypto price', 'coin price'] }),
-  card({ id: 'public-apis/crypto-search', tool: 'public_crypto_search', summary: 'Search CoinGecko coins by name or symbol', tags: ['crypto', 'search'], triggers: ['crypto search', 'coin search', 'token search'] }),
-  card({ id: 'public-apis/forex', tool: 'public_forex_rates', summary: 'FX rates from Frankfurter (ECB)', tags: ['forex', 'fx', 'currency'], triggers: ['forex', 'exchange rate', 'usd to', 'eur to', 'fx rate'] }),
-  card({ id: 'public-apis/geo', tool: 'public_geo_lookup', summary: 'Place name → lat/lon (Nominatim/OSM)', tags: ['geo', 'map', 'travel'], triggers: ['where is', 'coordinates', 'lat lon', 'geocode', 'places to visit', 'best places', 'visit in', 'attractions', 'sightseeing'] }),
-  card({ id: 'public-apis/geo-reverse', tool: 'public_geo_reverse', summary: 'Lat/lon → place name (Nominatim/OSM)', tags: ['geo', 'map'], triggers: ['reverse geocode', 'what city'] }),
-  card({ id: 'public-apis/country', tool: 'public_country_info', summary: 'Country facts from REST Countries', tags: ['country'], triggers: ['country', 'capital of', 'population of', 'iso code'] }),
-  card({ id: 'public-apis/hackernews', tool: 'public_hackernews_top', summary: 'Top Hacker News stories', tags: ['news', 'hn'], triggers: ['hacker news', 'hackernews', 'hn top'] }),
-  card({ id: 'public-apis/ip', tool: 'public_ip_lookup', summary: 'IP geolocation via ipapi.co', tags: ['ip', 'geo'], triggers: ['ip lookup', 'ip address', 'whois ip', 'my ip'] }),
-  card({ id: 'public-apis/nasa', tool: 'public_nasa_apod', summary: 'NASA Astronomy Picture of the Day', tags: ['nasa', 'space'], triggers: ['nasa', 'apod', 'astronomy picture'] }),
-  card({ id: 'public-apis/sun', tool: 'public_sun_times', summary: 'Sunrise/sunset times (Sunrise-Sunset.org)', tags: ['sun', 'sunrise'], triggers: ['sunrise', 'sunset', 'dawn', 'dusk'] }),
-  card({ id: 'public-apis/earthquakes', tool: 'public_earthquakes_recent', summary: 'Recent earthquakes (USGS)', tags: ['earthquake'], triggers: ['earthquake', 'quakes', 'seismic'] }),
-  card({ id: 'public-apis/holidays', tool: 'public_holidays', summary: 'Public holidays (Nager.Date)', tags: ['holiday'], triggers: ['holiday', 'public holiday', 'bank holiday'] }),
-  card({ id: 'public-apis/dictionary', tool: 'public_dictionary_lookup', summary: 'English dictionary (Free Dictionary)', tags: ['dictionary'], triggers: ['define', 'definition', 'meaning of', 'dictionary'] }),
-  card({ id: 'public-apis/wikipedia', tool: 'public_wikipedia_summary', summary: 'Wikipedia page summary', tags: ['wikipedia'], triggers: ['wikipedia', 'wiki'] }),
-  card({ id: 'public-apis/npm', tool: 'public_npm_package', summary: 'npm package metadata', tags: ['npm', 'js'], triggers: ['npm package', 'npm info'] }),
-  card({ id: 'public-apis/github', tool: 'public_github_repo', summary: 'GitHub repository metadata', tags: ['github'], triggers: ['github repo', 'github repository'] }),
-  card({ id: 'public-apis/dns', tool: 'public_dns_lookup', summary: 'DNS lookup via Google DNS', tags: ['dns'], triggers: ['dns', 'dns lookup', 'mx record', 'a record'] }),
-  card({ id: 'public-apis/qrcode', tool: 'public_qrcode_generate', summary: 'QR code image URL (goqr.me)', tags: ['qr'], triggers: ['qr code', 'qrcode'] }),
-  card({ id: 'public-apis/meal', tool: 'public_meal_search', summary: 'Recipe search (TheMealDB)', tags: ['food', 'recipe'], triggers: ['recipe', 'meal', 'cook'] }),
-  card({ id: 'public-apis/brewery', tool: 'public_brewery_search', summary: 'Brewery search (Open Brewery DB)', tags: ['brewery', 'beer'], triggers: ['brewery', 'breweries', 'beer'] }),
-  card({ id: 'public-apis/book', tool: 'public_book_search', summary: 'Book search (Open Library)', tags: ['book'], triggers: ['book', 'isbn', 'open library'] }),
+  card({ id: 'public-apis/weather', tool: 'public_weather_forecast', summary: '7-day forecast from city name or lat/lon (Open-Meteo)', tags: ['weather', 'forecast'], triggers: ['weather', 'forecast', 'temperature', 'celsius', 'fahrenheit', 'will it rain', 'jacket'], argKeys: ['city'] }),
+  card({ id: 'public-apis/crypto-price', tool: 'public_crypto_price', summary: 'Current cryptocurrency price (CoinGecko)', tags: ['crypto', 'price'], triggers: ['bitcoin', 'btc', 'eth', 'ethereum', 'crypto price', 'coin price'], argKeys: ['coin'] }),
+  card({ id: 'public-apis/crypto-search', tool: 'public_crypto_search', summary: 'Search CoinGecko coins by name or symbol', tags: ['crypto', 'search'], triggers: ['crypto search', 'coin search', 'token search'], argKeys: ['query'] }),
+  card({ id: 'public-apis/forex', tool: 'public_forex_rates', summary: 'FX rates from Frankfurter (ECB)', tags: ['forex', 'fx', 'currency'], triggers: ['forex', 'exchange rate', 'usd to', 'eur to', 'fx rate'], argKeys: ['from', 'to'] }),
+  card({ id: 'public-apis/geo', tool: 'public_geo_lookup', summary: 'Place name → lat/lon (Nominatim/OSM)', tags: ['geo', 'map', 'travel'], triggers: ['where is', 'coordinates', 'lat lon', 'geocode', 'places to visit', 'best places', 'visit in', 'attractions', 'sightseeing'], argKeys: ['query'] }),
+  card({ id: 'public-apis/geo-reverse', tool: 'public_geo_reverse', summary: 'Lat/lon → place name (Nominatim/OSM)', tags: ['geo', 'map'], triggers: ['reverse geocode', 'what city'], argKeys: ['latitude', 'longitude'] }),
+  card({ id: 'public-apis/country', tool: 'public_country_info', summary: 'Country facts from REST Countries', tags: ['country'], triggers: ['country', 'capital of', 'population of', 'iso code'], argKeys: ['country'] }),
+  card({ id: 'public-apis/hackernews', tool: 'public_hackernews_top', summary: 'Top Hacker News stories', tags: ['news', 'hn'], triggers: ['hacker news', 'hackernews', 'hn top'], argKeys: [] }),
+  card({ id: 'public-apis/ip', tool: 'public_ip_lookup', summary: 'IP geolocation via ipapi.co', tags: ['ip', 'geo'], triggers: ['ip lookup', 'ip address', 'whois ip', 'my ip'], argKeys: ['ip'] }),
+  card({ id: 'public-apis/nasa', tool: 'public_nasa_apod', summary: 'NASA Astronomy Picture of the Day', tags: ['nasa', 'space'], triggers: ['nasa', 'apod', 'astronomy picture'], argKeys: [] }),
+  card({ id: 'public-apis/sun', tool: 'public_sun_times', summary: 'Sunrise/sunset times (Sunrise-Sunset.org)', tags: ['sun', 'sunrise'], triggers: ['sunrise', 'sunset', 'dawn', 'dusk'], argKeys: ['city'] }),
+  card({ id: 'public-apis/earthquakes', tool: 'public_earthquakes_recent', summary: 'Recent earthquakes (USGS)', tags: ['earthquake'], triggers: ['earthquake', 'quakes', 'seismic'], argKeys: [] }),
+  card({ id: 'public-apis/holidays', tool: 'public_holidays', summary: 'Public holidays (Nager.Date)', tags: ['holiday'], triggers: ['holiday', 'public holiday', 'bank holiday'], argKeys: ['country'] }),
+  card({ id: 'public-apis/dictionary', tool: 'public_dictionary_lookup', summary: 'English dictionary (Free Dictionary)', tags: ['dictionary'], triggers: ['define', 'definition', 'meaning of', 'dictionary'], argKeys: ['word'] }),
+  card({ id: 'public-apis/wikipedia', tool: 'public_wikipedia_summary', summary: 'Wikipedia page summary', tags: ['wikipedia'], triggers: ['wikipedia', 'wiki'], argKeys: ['title'] }),
+  card({ id: 'public-apis/npm', tool: 'public_npm_package', summary: 'npm package metadata', tags: ['npm', 'js'], triggers: ['npm package', 'npm info'], argKeys: ['name'] }),
+  card({ id: 'public-apis/github', tool: 'public_github_repo', summary: 'GitHub repository metadata', tags: ['github'], triggers: ['github repo', 'github repository'], argKeys: ['repo'] }),
+  card({ id: 'public-apis/dns', tool: 'public_dns_lookup', summary: 'DNS lookup via Google DNS', tags: ['dns'], triggers: ['dns', 'dns lookup', 'mx record', 'a record'], argKeys: ['name'] }),
+  card({ id: 'public-apis/qrcode', tool: 'public_qrcode_generate', summary: 'QR code image URL (goqr.me)', tags: ['qr'], triggers: ['qr code', 'qrcode'], argKeys: ['text'] }),
+  card({ id: 'public-apis/meal', tool: 'public_meal_search', summary: 'Recipe search (TheMealDB)', tags: ['food', 'recipe'], triggers: ['recipe', 'meal', 'cook'], argKeys: ['query'] }),
+  card({ id: 'public-apis/brewery', tool: 'public_brewery_search', summary: 'Brewery search (Open Brewery DB)', tags: ['brewery', 'beer'], triggers: ['brewery', 'breweries', 'beer'], argKeys: ['query'] }),
+  card({ id: 'public-apis/book', tool: 'public_book_search', summary: 'Book search (Open Library)', tags: ['book'], triggers: ['book', 'isbn', 'open library'], argKeys: ['query'] }),
 ];
 
 function schema(properties, required = []) {
@@ -107,7 +100,7 @@ export const PUBLIC_APIS_TOOLS = [
     async run(args) {
       let lat = num(args.latitude ?? args.lat);
       let lon = num(args.longitude ?? args.lon ?? args.lng);
-      let place = str(args.city || args.query || args.location);
+      let place = normalizePlaceQuery(str(args.city || args.query || args.location));
       if ((lat == null || lon == null) && place) {
         const g = await geoForward(place);
         if (!g) throw new Error(`could not geocode "${place}"`);
@@ -129,7 +122,7 @@ export const PUBLIC_APIS_TOOLS = [
     }),
     cardId: 'public-apis/crypto-price',
     async run(args) {
-      let id = str(args.coin || args.id || args.query).toLowerCase();
+      let id = shapeArgValue('coin', str(args.coin || args.id || args.query)) || '';
       if (!id) throw new Error('coin required');
       const vs = (str(args.vs) || 'usd').toLowerCase();
       // Resolve symbol → id when needed
@@ -152,7 +145,7 @@ export const PUBLIC_APIS_TOOLS = [
     inputSchema: schema({ query: { type: 'string' }, q: { type: 'string' } }),
     cardId: 'public-apis/crypto-search',
     async run(args) {
-      const q = str(args.query || args.q || args.coin);
+      const q = stripInstruction(str(args.query || args.q || args.coin));
       if (!q) throw new Error('query required');
       const data = await fetchJson(`https://api.coingecko.com/api/v3/search?query=${encodeURIComponent(q)}`);
       const coins = (data.coins || []).slice(0, 8).map(c => ({ id: c.id, name: c.name, symbol: c.symbol, rank: c.market_cap_rank }));
@@ -169,8 +162,9 @@ export const PUBLIC_APIS_TOOLS = [
     }),
     cardId: 'public-apis/forex',
     async run(args) {
-      const from = (str(args.from || args.base) || 'USD').toUpperCase();
-      const to = str(args.to || args.quote).toUpperCase();
+      const blob = str(args.query || `${args.from || ''} ${args.to || args.quote || ''}`);
+      const from = (shapeArgValue('from', str(args.from || args.base)) || shapeArgValue('from', blob) || 'USD').toUpperCase();
+      const to = (shapeArgValue('to', str(args.to || args.quote)) || shapeArgValue('to', blob) || '').toUpperCase();
       const amount = num(args.amount, 1);
       const u = new URL('https://api.frankfurter.app/latest');
       u.searchParams.set('from', from);
@@ -185,8 +179,7 @@ export const PUBLIC_APIS_TOOLS = [
     inputSchema: schema({ query: { type: 'string' }, city: { type: 'string' }, q: { type: 'string' } }),
     cardId: 'public-apis/geo',
     async run(args) {
-      const raw = str(args.query || args.city || args.q || args.location);
-      const q = normalizePlaceQuery(raw) || raw;
+      const q = normalizePlaceQuery(str(args.query || args.city || args.q || args.location));
       if (!q) throw new Error('query required');
       const url = `https://nominatim.openstreetmap.org/search?format=json&limit=5&q=${encodeURIComponent(q)}`;
       const data = await fetchJson(url, { headers: GEO_HEADERS });
@@ -215,7 +208,7 @@ export const PUBLIC_APIS_TOOLS = [
     inputSchema: schema({ country: { type: 'string' }, query: { type: 'string' } }),
     cardId: 'public-apis/country',
     async run(args) {
-      const q = str(args.country || args.query || args.name);
+      const q = shapeArgValue('country', str(args.country || args.query || args.name)) || '';
       if (!q) throw new Error('country required');
       const data = await fetchJson(`https://restcountries.com/v3.1/name/${encodeURIComponent(q)}?fields=name,capital,region,subregion,population,currencies,languages,cca2,cca3,area`);
       return compact(Array.isArray(data) ? data.slice(0, 3) : data);
@@ -246,7 +239,7 @@ export const PUBLIC_APIS_TOOLS = [
     inputSchema: schema({ ip: { type: 'string' } }),
     cardId: 'public-apis/ip',
     async run(args) {
-      const ip = str(args.ip || args.query);
+      const ip = shapeArgValue('ip', str(args.ip || args.query)) || '';
       const url = ip ? `https://ipapi.co/${encodeURIComponent(ip)}/json/` : 'https://ipapi.co/json/';
       return compact(await fetchJson(url));
     },
@@ -277,7 +270,7 @@ export const PUBLIC_APIS_TOOLS = [
     async run(args) {
       let lat = num(args.latitude ?? args.lat);
       let lon = num(args.longitude ?? args.lon);
-      const place = str(args.city || args.query);
+      const place = normalizePlaceQuery(str(args.city || args.query));
       if ((lat == null || lon == null) && place) {
         const g = await geoForward(place);
         if (!g) throw new Error(`could not geocode "${place}"`);
@@ -322,7 +315,8 @@ export const PUBLIC_APIS_TOOLS = [
     }),
     cardId: 'public-apis/holidays',
     async run(args) {
-      const country = (str(args.country || args.code) || 'US').toUpperCase();
+      const named = shapeArgValue('country', str(args.country || args.code || args.query));
+      const country = (named || 'US').toUpperCase();
       const year = num(args.year, new Date().getUTCFullYear());
       const data = await fetchJson(`https://date.nager.at/api/v3/PublicHolidays/${year}/${encodeURIComponent(country)}`);
       return compact({ country, year, holidays: data });
@@ -334,15 +328,8 @@ export const PUBLIC_APIS_TOOLS = [
     inputSchema: schema({ word: { type: 'string' }, query: { type: 'string' } }),
     cardId: 'public-apis/dictionary',
     async run(args) {
-      let word = str(args.word || args.query);
+      const word = shapeArgValue('word', str(args.word || args.query));
       if (!word) throw new Error('word required');
-      // Blind calls pass the whole sentence. The dictionary wants one word;
-      // a long path is what was aborting on the upstream timeout.
-      word = word.replace(/[?!.,]+$/g, '').trim();
-      word = word.replace(/^(?:please\s+)?(?:can you\s+)?(?:define|definition of|meaning of|what does|what is the meaning of)\s+/i, '');
-      word = word.replace(/\s+mean\??$/i, '').trim();
-      const parts = word.split(/\s+/).filter(Boolean);
-      if (parts.length > 2) word = parts[parts.length - 1];
       const data = await fetchJson(
         `https://api.dictionaryapi.dev/api/v2/entries/en/${encodeURIComponent(word)}`,
         { timeoutMs: 20_000 },
@@ -361,7 +348,7 @@ export const PUBLIC_APIS_TOOLS = [
     inputSchema: schema({ title: { type: 'string' }, query: { type: 'string' } }),
     cardId: 'public-apis/wikipedia',
     async run(args) {
-      const title = str(args.title || args.query);
+      const title = shapeArgValue('title', str(args.title || args.query)) || '';
       if (!title) throw new Error('title required');
       const data = await fetchJson(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(title)}`);
       return compact({
@@ -378,7 +365,7 @@ export const PUBLIC_APIS_TOOLS = [
     inputSchema: schema({ name: { type: 'string' }, query: { type: 'string' } }),
     cardId: 'public-apis/npm',
     async run(args) {
-      const name = str(args.name || args.package || args.query);
+      const name = shapeArgValue('name', str(args.name || args.package || args.query)) || '';
       if (!name) throw new Error('package name required');
       const data = await fetchJson(`https://registry.npmjs.org/${encodeURIComponent(name)}`);
       const latest = data['dist-tags']?.latest;
@@ -404,11 +391,13 @@ export const PUBLIC_APIS_TOOLS = [
     }),
     cardId: 'public-apis/github',
     async run(args) {
-      let owner = str(args.owner);
-      let name = str(args.name || args.repo);
-      const q = str(args.repo || args.query);
-      if (q.includes('/')) {
-        const [o, n] = q.replace(/^https?:\/\/github.com\//, '').split('/');
+      const packed = shapeArgValue('repo', str(args.repo || args.query || `${args.owner || ''}/${args.name || ''}`)) || '';
+      const ownerArg = str(args.owner);
+      const nameArg = str(args.name);
+      let owner = ownerArg && !/[\s/]/.test(ownerArg) ? ownerArg : '';
+      let name = nameArg && !/[\s/]/.test(nameArg) ? nameArg : '';
+      if (packed.includes('/')) {
+        const [o, n] = packed.replace(/^https?:\/\/github\.com\//, '').split('/');
         owner = owner || o;
         name = n || name;
       }
@@ -438,8 +427,8 @@ export const PUBLIC_APIS_TOOLS = [
     }),
     cardId: 'public-apis/dns',
     async run(args) {
-      const name = str(args.name || args.query || args.host);
-      if (!name) throw new Error('name required');
+      const name = shapeArgValue('name', str(args.name || args.query || args.host)) || '';
+      if (!name || !name.includes('.')) throw new Error('hostname required');
       const type = str(args.type) || 'A';
       const data = await fetchJson(`https://dns.google/resolve?name=${encodeURIComponent(name)}&type=${encodeURIComponent(type)}`);
       return compact({ name, type, Status: data.Status, Answer: data.Answer });
@@ -451,7 +440,7 @@ export const PUBLIC_APIS_TOOLS = [
     inputSchema: schema({ text: { type: 'string' }, query: { type: 'string' } }),
     cardId: 'public-apis/qrcode',
     async run(args) {
-      const text = str(args.text || args.query || args.data);
+      const text = stripInstruction(str(args.text || args.query || args.data));
       if (!text) throw new Error('text required');
       const url = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(text)}`;
       return compact({ text, imageUrl: url });
@@ -463,7 +452,7 @@ export const PUBLIC_APIS_TOOLS = [
     inputSchema: schema({ query: { type: 'string' }, q: { type: 'string' } }),
     cardId: 'public-apis/meal',
     async run(args) {
-      const q = str(args.query || args.q || args.name);
+      const q = stripInstruction(str(args.query || args.q || args.name));
       if (!q) throw new Error('query required');
       const data = await fetchJson(`https://www.themealdb.com/api/json/v1/1/search.php?s=${encodeURIComponent(q)}`);
       const meals = (data.meals || []).slice(0, 5).map(m => ({
@@ -480,8 +469,8 @@ export const PUBLIC_APIS_TOOLS = [
     inputSchema: schema({ query: { type: 'string' }, city: { type: 'string' } }),
     cardId: 'public-apis/brewery',
     async run(args) {
-      const q = str(args.query || args.q || args.name);
-      const city = str(args.city);
+      const q = stripInstruction(str(args.query || args.q || args.name));
+      const city = normalizePlaceQuery(str(args.city));
       const u = new URL('https://api.openbrewerydb.org/v1/breweries');
       if (q) u.searchParams.set('by_name', q);
       if (city) u.searchParams.set('by_city', city);
@@ -501,7 +490,7 @@ export const PUBLIC_APIS_TOOLS = [
     cardId: 'public-apis/book',
     async run(args) {
       const isbn = str(args.isbn);
-      const q = str(args.query || args.q || args.title);
+      const q = stripInstruction(str(args.query || args.q || args.title));
       if (isbn) {
         const data = await fetchJson(`https://openlibrary.org/isbn/${encodeURIComponent(isbn)}.json`);
         return compact({ isbn, title: data.title, publishers: data.publishers, publish_date: data.publish_date });
