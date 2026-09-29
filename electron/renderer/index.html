@@ -69,15 +69,6 @@
       transition: width 0.22s ease, min-width 0.22s ease;
     }
     .left-sidebar.sb-hidden { width: 0 !important; min-width: 0 !important; overflow: hidden !important; border: none !important; }
-    /* Right sidebar */
-    .right-sidebar {
-      width: 260px; min-width: 260px;
-      background: #0d0d0d; border-left: 1px solid #1c1c1c;
-      display: flex; flex-direction: column;
-      overflow-y: auto; flex-shrink: 0;
-      transition: width 0.22s ease, min-width 0.22s ease;
-    }
-    .right-sidebar.sb-hidden { width: 0 !important; min-width: 0 !important; overflow: hidden !important; border: none !important; }
     /* Center content */
     .content-area { flex: 1; display: flex; flex-direction: column; min-width: 0; background: #0a0a0a; }
 
@@ -100,9 +91,7 @@
     }
     .sb-toggle:hover { background: #252525; color: #9ca3af; }
     #left-sb-toggle  { left: 203px; border-radius: 0 4px 4px 0; }
-    #right-sb-toggle { right: 253px; border-radius: 4px 0 0 4px; }
     #left-sb-toggle.sb-collapsed  { left: 0; }
-    #right-sb-toggle.sb-collapsed { right: 0; }
 
     /* Sidebar atoms */
     .sidebar-section-label {
@@ -275,13 +264,8 @@
     .send-summary-val { font-family: monospace; font-size: 11px; color: #e5e7eb; }
     .send-summary-val.dim { color: #374151; font-size: 10px; }
 
-    /* Brain (right) sidebar */
     .brain-signal-row { display: flex; justify-content: space-between; align-items: center; padding: 3px 0; font-family: monospace; font-size: 10px; color: #9ca3af; border-bottom: 1px solid #111; }
     .brain-weight { color: #22c55e; }
-    .brain-status-row { display: flex; align-items: center; gap: 8px; padding: 5px 18px; }
-    .bdot { width: 7px; height: 7px; border-radius: 50%; background: #374151; flex-shrink: 0; }
-    .bdot.on { background: #22c55e; animation: dot-pulse 2s ease-in-out infinite; }
-    .bstatus { font-family: monospace; font-size: 10px; color: #6b7280; }
 
     .chat-messages {
       flex: 1;
@@ -1399,7 +1383,6 @@
   <div id="main-app" class="hidden">
   <div class="app-layout">
     <button class="sb-toggle" id="left-sb-toggle"  onclick="toggleLeftSidebar()"  title="Toggle left panel">‹</button>
-    <button class="sb-toggle" id="right-sb-toggle" onclick="toggleRightSidebar()" title="Toggle right panel">›</button>
 
     <!-- ─── LEFT: Node Status ─── -->
     <div class="left-sidebar">
@@ -1443,6 +1426,8 @@
         <div class="sb-label" data-i18n="sidebar.peers">PEERS</div>
         <div class="sb-val lg grn" id="sidebar-peers">—</div>
       </div>
+
+      <button class="sb-settings-btn" onclick="switchTab('settings')" data-i18n="sidebar.settings">⚙ Settings</button>
 
       <div class="sb-mining">
         <span class="mining-dot" id="mining-dot"></span>
@@ -2096,38 +2081,6 @@
       </div>
     </div>
 
-    <!-- ─── RIGHT: AI Brain ─── -->
-    <div class="right-sidebar">
-      <div class="sidebar-section-label" data-i18n="brain.title">AI BRAIN</div>
-
-      <div class="sb-field">
-        <div class="sb-label" data-i18n="brain.model">MODEL</div>
-        <button id="brain-model" onclick="openModelPicker()"
-                style="background:none;border:1px solid #222;border-radius:6px;padding:3px 8px;font-size:11px;font-family:monospace;color:#9ca3af;cursor:pointer;text-align:left;width:100%;transition:border-color .15s;"
-                onmouseenter="this.style.borderColor='#444'" onmouseleave="this.style.borderColor='#222'">
-          qwen2.5:1.5b
-        </button>
-      </div>
-
-      <button class="sb-settings-btn" onclick="switchTab('settings')" data-i18n="sidebar.settings">⚙ Settings</button>
-
-      <div class="sb-field">
-        <div class="sb-label" data-i18n="brain.consolidation">NEXT CONSOLIDATION</div>
-        <div class="sb-val lg" id="brain-consolidation">—</div>
-      </div>
-
-      <div style="margin-top:8px;">
-        <div class="brain-status-row">
-          <span class="bdot" id="brain-ollama-dot"></span>
-          <span class="bstatus" id="brain-ollama-status">Checking…</span>
-        </div>
-        <div class="brain-status-row">
-          <span class="bdot" id="brain-sync-dot"></span>
-          <span class="bstatus" data-i18n="brain.syncing">Syncing brain events</span>
-        </div>
-      </div>
-    </div>
-
   </div>
   </div>
 
@@ -2208,13 +2161,6 @@
       const collapsed = sb.classList.toggle('sb-hidden');
       btn.classList.toggle('sb-collapsed', collapsed);
       btn.textContent = collapsed ? '›' : '‹';
-    }
-    function toggleRightSidebar() {
-      const sb  = document.querySelector('.right-sidebar');
-      const btn = document.getElementById('right-sb-toggle');
-      const collapsed = sb.classList.toggle('sb-hidden');
-      btn.classList.toggle('sb-collapsed', collapsed);
-      btn.textContent = collapsed ? '‹' : '›';
     }
   </script>
 

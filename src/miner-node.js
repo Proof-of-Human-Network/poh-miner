@@ -104,7 +104,7 @@ import { serveHfDataset, pullHfDatasetFromPeer } from './datasets/hf-dataset-pee
 import { applyCorsHeaders, rejectNonLocalStateChange, isTrulyLocalRequest } from './security/api-security.js';
 import { readLimitedBody, MAX_BODY_BYTES } from './security/bootnode-auth.js';
 import { normalizeSkillId } from './security/skill-id.js';
-import { buildWalletJobContext, promptPreviewFromJob, jobToSearchDocument, buildAllSearchDocuments, findJobRecord, PROMPT_PREVIEW_MAX } from './chain/chain-job-index.js';
+import { buildWalletJobContext, promptPreviewFromJob, jobToSearchDocument, buildAllSearchDocuments, findJobRecord, extractReplyText, PROMPT_PREVIEW_MAX } from './chain/chain-job-index.js';
 import { seal as sealChat } from './security/chat-crypto.js';
 import { ChatHistorySearch } from './search/chat-history-search.js';
 import { ensureMeilisearch, getMeilisearchMasterKey, resolveMeilisearchUrl } from './search/meilisearch-server.js';
@@ -2187,6 +2187,17 @@ export class DAIMinerNode {
             return;
           }
           const r = rec.result; // ScanResult
+          // A paid public-compute reply is sealed to the requester's key on the wire
+          // (profile.replyCipher, computeOutput: null) so no third-party miner or the
+          // chain ever sees cleartext. This endpoint is loopback-only and, when this
+          // node IS the requester (it pays itself), it already holds that private key
+          // — so decrypt here for the local UI rather than leaving it ciphertext-only.
+          let profile = r.profile || null;
+          if (profile?.encrypted && profile?.replyCipher && !profile?.computeOutput) {
+            const decryptKey = this._encKeyFor(rec.job?.requesterAddress);
+            const plaintext = decryptKey ? extractReplyText({ profile }, decryptKey) : '';
+            if (plaintext) profile = { ...profile, computeOutput: plaintext };
+          }
           // Return shape friendly for frontends: verdict + profile + evidence (signals etc)
           return res.end(JSON.stringify({
             jobId: rec.id,
@@ -2194,7 +2205,7 @@ export class DAIMinerNode {
             verdict: r.verdict,
             confidence: r.confidence,
             reasoning: r.reasoning,
-            profile: r.profile || null,
+            profile,
             farcasterData: r.profile?.farcasterData || null,
             paragraphData: r.profile?.paragraphData || null,
             zoraData:      r.profile?.zoraData      || null,
@@ -7512,10 +7523,12 @@ export class DAIMinerNode {
     console.log('[DAI-Miner] Listening for jobs (with geo awareness)...');
 
     this.onNewJob = (rawJob) => {
-      // Skip if we already completed or are computing this job (prevents duplicate runs
-      // when our own gossip echoes back through bootnodes)
+      // Skip if we already know this job in any status (prevents duplicate runs when
+      // our own gossip echoes back through bootnodes — the local /job POST handler
+      // already recorded + escrowed + enqueued it directly before this echo arrives,
+      // so re-processing here is always redundant, not just for done/computing).
       const existing = this.jobResults?.get(rawJob.id);
-      if (existing && (existing.status === 'done' || existing.status === 'computing')) return;
+      if (existing) return;
 
       // Skill/compute gossip without a payment proof is free GPU. Origin already
       // escrowed; peers still require the signed proof so a random envelope cannot
@@ -7860,7 +7873,15 @@ export class DAIMinerNode {
 
   /** Status/result bodies for a job that lives on the board or the chain, not in this process. */
   _externalJobBodies(jobId, status, rec) {
-    const profile = rec?.profile || null;
+    let profile = rec?.profile || null;
+    // Same loopback decrypt as the local-job path: a paid reply computed by a peer
+    // miner is sealed to the requester's key on the chain/board. If this node holds
+    // that key (it's the requester, paying itself), open it for the local UI.
+    if (profile?.encrypted && profile?.replyCipher && !profile?.computeOutput) {
+      const decryptKey = this._encKeyFor(rec?.requesterAddress);
+      const plaintext = decryptKey ? extractReplyText({ profile }, decryptKey) : '';
+      if (plaintext) profile = { ...profile, computeOutput: plaintext };
+    }
     const done = status === 'done' && !!(profile || rec?.verdict);
     return {
       statusBody: {
