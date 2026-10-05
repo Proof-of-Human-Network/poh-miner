@@ -28,7 +28,7 @@ jobs:
         include:
           - os: ubuntu-latest
             platform: linux
-          - os: macos-14       # Apple Silicon runner — builds arm64 + x64 dmg
+          - os: macos-15       # Apple Silicon runner — builds arm64 + x64 dmg
             platform: mac
           - os: windows-latest
             platform: win
